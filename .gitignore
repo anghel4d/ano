@@ -1,0 +1,49 @@
+# macOS metadata
+.DS_Store
+
+# Python artifacts
+*.pyc
+__pycache__/
+
+# Doc-generated pdfs
+docs/*.pdf
+docs/references/*.pdf
+docs/artifacts/*
+
+# IDE-specific directories
+.vscode/
+.idea/
+.openclaw/
+.agents/
+.codex/
+.gemini/
+.idx/
+.antigravity/
+.cursorrules
+.windsurfrules
+.github/copilot-instructions.md
+.aider.conf.yml
+.aider.models.yml
+AGENTS.override.md
+llms-full.txt
+llms.txt
+openclaw.json
+CLAUDE.md
+AGENTS.md
+SKILL.md
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# Scratchpad
+scratch/
+
+# Exceptions
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+!.claude/skills/**
+!.claude/hooks/
+!.claude/hooks/**
