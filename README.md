@@ -1,3 +1,5 @@
+考案: Anghel (Anghel4d)
+
 # ano
 
 あの — forays into a new embedded scripting language, and a language-research foray into its accidental isomorphism with Japanese grammar.

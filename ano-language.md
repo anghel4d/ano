@@ -1,3 +1,5 @@
+考案: Anghel (Anghel4d)
+
 # Ano (あの)
 
 The Japanese distal demonstrative あの ("that one over there").

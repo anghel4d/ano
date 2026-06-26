@@ -1,3 +1,5 @@
+考案: Anghel (Anghel4d)
+
 # ano 日本語 — a Japanese surface mode
 
 ano's canonical surface is ASCII. This document defines a second concrete surface where Japanese grammatical particles stand in for the operators: a tokenizer skin over the same AST.
