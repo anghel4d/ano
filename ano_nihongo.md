@@ -193,57 +193,57 @@ Every sentence is the が-engine joining a carriage to a predicate, and the pred
 
 Here's what ano looks like if it leans all the way into Japanese grammar. Each example is a real grammatical Japanese sentence that *is also a program*, followed by ascii ano lang right under.
 
-### 1. Gold to the mighty (the canonical)
+### 1. Gold to the mighty
 
-```text
-両手が六十を超える北に、金を千与える。
-```
-```text
+``両手が六十を超える北に、金を千与える。``
+
+```haskell
 Nord & TwoHanded > 60 , Gold += 1000
 ```
-Reads as "to the Nords whose two-handed exceeds sixty, give a thousand gold." The `WHERE` is a relative clause (両手が六十を超える), `に` is the `+=` target, the 、 is the comma. The selection is literally a Japanese subordinate clause.
+
+Reads as "to the Nords whose two-handed exceeds sixty, give a thousand gold." The WHERE is a relative clause (両手が六十を超える), に is the += target, the 、 is the comma. The selection is literally a Japanese subordinate clause.
 
 ### 2. The fallen master
 
-```text
-師匠が死んだ北は、訓練を失う。
-```
-```text
+``師匠が死んだ北は、訓練を失う。``
+
+```haskell
 Nord & mentor.Dead , -Trained
 ```
-Reads as "Nords whose master has died lose their training." The dotted hop `mentor.Dead` is the relative clause 師匠が死んだ — "master-[が]-died" modifying 北. The foreign-key join is just a subordinate clause. `は` sets the topic, `を失う` is the effect.
+
+Reads as "Nords whose master has died lose their training." The dotted hop mentor.Dead is the relative clause 師匠が死んだ — "master-[が]-died" modifying 北. The foreign-key join is just... a subordinate clause. は sets the topic, を失う is the effect.
 
 ### 3. The county's wealth (a fold)
 
-```text
-北全員の金の総和。
-```
-```text
+``北全員の金の総和。``
+
+```haskell
 +/ Gold @ Nord
 ```
-Reads as "the grand total of all Nords' gold." A pure noun phrase. Each `の` is a gather-hop (全員 の 金 = everyone's gold), and 総和 is the `+/` reduction. The fold is a named thing here, which is exactly what a reduction is.
+
+Reads as "the grand total of all Nords' gold." A pure noun phrase. Each の is a gather-hop (全員 の 金 = everyone's gold), and 総和 is the +/ reduction. The fold isn't a verb here — it's a thing you name, which is exactly what a reduction is.
 
 ### 4. Fibonacci down the row (spatial generation)
 
-```text
-升目の列で、各升の高さは前の二升の和となる。
-```
-```text
+``升目の列で、各升の高さは前の二升の和となる。``
+
+```haskell
 Cell @ row , Height = prev.Height + prev.prev.Height
 ```
-Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." `で` scopes to the lattice, `は` distributes over each cell (pervasion), the recurrence is 前の二升の和 ("the sum of the previous two squares"), and `となる` is the becoming, a structural generation.
+
+Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." で scopes to the lattice, は distributes over each cell (pervasion), the recurrence is 前の二升の和 ("the sum of the previous two squares"), and となる is the becoming — a structural generation, not a mutation.
 
 ### 5. The cellar (counters + becoming)
 
-```text
-蔵で三ヶ月より熟成したチーズは、値が倍になる。
-```
-```text
+``蔵で三ヶ月より熟成したチーズは、値が倍になる。``
+
+```haskell
 Cheese @ cellar & Aged > 3mo , Price *= 2
 ```
-Reads as "cheese aged in the cellar longer than three months — its price doubles." This is the magnificent one: 三ヶ月 is a **frame-typed numeral** (the ヶ月 counter *is* the `3mo` unit, checked by the grammar), 熟成した is the selection-clause, and 値が倍になる is the value effect via なる. The coordinate-frame open question and the action both fall out of ordinary counting and ordinary becoming.
 
-The thing that makes these sing: in every one, the program parses as a sentence and the sentence parses as a program. The relative clause is the selection, `の` is the join, the counter is the type, `に` is the assignment target, `なる` is the structural effect, 、 is the comma. The discovery underneath: a 1000-year-old grammar was already a query-and-update language, and nobody noticed.
+Reads as "cheese aged in the cellar longer than three months — its price doubles." This is the magnificent one: 三ヶ月 is a frame-typed numeral (the ヶ月 counter is the 3mo unit, checked by the grammar), 熟成した is the selection-clause, and 値が倍になる is the value effect via なる. The coordinate-frame open question and the action both fall out of ordinary counting and ordinary becoming.
+
+The thing that makes these sing: in every one, the program parses as a sentence and the sentence parses as a program. The relative clause is the selection, の is the join, the counter is the type, に is the assignment target, なる is the structural effect, 、 is the comma. The discovery underneath: a 1000-year-old grammar was already a query-and-update language, and nobody noticed.
 
 ## Citations
 
