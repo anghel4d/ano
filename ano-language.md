@@ -54,7 +54,7 @@ Bandit & !Dead & Faction == Bandit , Faction = Hostile
 or, scoped to a region:
 
 ```haskell
-Merchant @ cell(Whiterun) , Gold += 5000
+Merchant @ Whiterun , Gold += 5000
 ```
 
 ### 2. Targeting aliases
@@ -232,9 +232,9 @@ reduce(threat) Damage @ Enemies
 Accumulate a column along an ordered selection. Returns a column of equal length.
 
 ```haskell
-+\ Weight @ path(A, B)       -- cumulative movement cost along a route
-*\ Multiplier @ comboChain   -- running combo multiplier
-max\ Height @ ray(Eye, fwd)  -- running peak along a sightline (occlusion)
++\ Weight @ (↕steps |> route A B)   -- cumulative movement cost along a route
+*\ Multiplier @ comboChain          -- running combo multiplier
+max\ Height @ (Eye + ↕n * fwd)      -- running peak along a sightline (occlusion)
 ```
 
 or, with an explicit ordering:
@@ -302,7 +302,7 @@ Nest    , spawn Egg * Fertility      -- counts from a per-source column
 or, exposing the flat-map:
 
 ```haskell
-Spawner |> expand Count , spawn Minion at pos
+Spawner |> expand Count , spawn Minion
 ```
 
 ### 16. Reshape (`⍴`)
@@ -312,18 +312,12 @@ Spawner |> expand Count , spawn Minion at pos
 4 16 ⍴ army       ⍝ same army, 4 ranks of 16
 ```
 
-Pour a flat selection into a spatial arrangement. The inverse of generation.
+Pour a flat selection into a spatial arrangement, the inverse of generation; the surface spells it `to`, the allative.
 
 ```haskell
-arrange Soldier into grid 8 8    -- form into an 8×8 block
-arrange Soldier into ranks 4     -- 4 rows, width inferred
-arrange Archer into line 20      -- one rank of 20
-```
-
-or, the bare-grid shorthand:
-
-```haskell
-Soldier , pos = reshape 8 8
+Soldier , pos = to 8 8           -- form into an 8×8 block
+Soldier , pos = to 4 _           -- 4 rows, width inferred
+Archer  , pos = to 20            -- one rank of 20
 ```
 
 ### 17. Named column transforms (`def` for fields)
@@ -355,7 +349,7 @@ Composed, the array operations chain:
 
 ## Part IV — Space
 
-Space is the same calculus with the raggedness removed. A lattice is dense and rectangular, so every operator above applies, and most are more natural here. `grid w h` carries `x y` per cell. `region(...)`, `path(...)`, `ray(...)` are spatial sources.
+Space is the same calculus with the raggedness removed. A lattice is dense and rectangular, so every operator above applies, and most are more natural here. There is no spatial keyword: a numeric shape in the source slot is the generator, `w h` carrying `x y` per cell. Acting on cells that already exist is a predicate on the position column; generating cells that hold nothing is the shape, the one job a predicate cannot do, since a filter cannot invent a key. A named region is a scope (`@ Frontier`); a path or sightline is an ordered index line (`↕` plus arithmetic).
 
 ### 18. Patterns from the coordinate lattice (outer product)
 
@@ -365,14 +359,14 @@ Space is the same calculus with the raggedness removed. A lattice is dense and r
 (⍳8) ∘.≤ ⍳8       ⍝ upper-triangular mask
 ```
 
-A grid is `⍳` crossed with `⍳`. Every regular pattern is a predicate on the coordinate columns. Change the operator, change the pattern.
+The lattice is `⍳` crossed with `⍳`. Every regular pattern is a predicate on the coordinate columns. Change the operator, change the pattern.
 
 ```haskell
-grid 8 8 & (x + y) % 2 == 0 , spawn Wheat  at (x, y)   -- checkerboard
-grid 8 8 & (x + y) % 2 == 1 , spawn Barley at (x, y)
-grid 8 8 & x == y , spawn Pillar at (x, y)              -- diagonal
-grid 8 8 & x + y < 8 , +Buildable                       -- triangle
-grid 8 8 & x % 3 == 0 , spawn Fence at (x, y)           -- stripes
+8 8 & (x + y) % 2 == 0 , spawn Wheat     -- checkerboard
+8 8 & (x + y) % 2 == 1 , spawn Barley
+8 8 & x == y , spawn Pillar              -- diagonal
+8 8 & x + y < 8 , +Buildable             -- triangle
+8 8 & x % 3 == 0 , spawn Fence           -- stripes
 ```
 
 ### 19. Generation along a computed lattice (Fibonacci, spiral)
@@ -382,19 +376,19 @@ grid 8 8 & x % 3 == 0 , spawn Fence at (x, y)           -- stripes
 n × 137.5         ⍝ golden-angle per index
 ```
 
-`fib n` and `range n` are scalar index sources. A coordinate transform turns the index into a position. `Player.pos +` lifts into world-space.
+A line of `n` is the bare shape `n`; its index becomes a position under a coordinate transform, and `Player.pos +` lifts into world-space. A computed sequence like Fibonacci is a recurrence over that line: a two-back shift through `prev` and `prev.prev`, carried by the line's order.
 
 ```haskell
-fib 12 , spawn Cheese at Player.pos + (n, 0)                 -- fib gaps along a line
-fib 12 , spawn Cheese at Player.pos + polar(n, n * 137.5)    -- phyllotaxis spiral
-range 8 , spawn Pillar at Player.pos + (n * 2, 0)           -- evenly spaced row
+12 , offset = prev.offset + prev.prev.offset
+   , spawn Cheese at Player.pos + (offset, 0)                 -- fib gaps along a line
+12 , spawn Cheese at Player.pos + polar(index, index * 137.5) -- phyllotaxis spiral
+8  , spawn Pillar at Player.pos + (index * 2, 0)              -- evenly spaced row
 ```
 
-or, reshape an existing set onto the computed lattice:
+or, assign the computed positions onto an existing set:
 
 ```haskell
-arrange Coin onto spiral(137.5)
-arrange Seed onto fib_line
+Coin , pos = Player.pos + polar(index, index * 137.5)   -- spiral, assigned from the iota
 ```
 
 ### 20. Reduction and scan over space
@@ -406,10 +400,10 @@ arrange Seed onto fib_line
 ```
 
 ```haskell
-+/ Elevation @ grid 64 64           -- total elevation of the map
-max/ Threat @ region(Frontier)      -- hottest cell in a zone
-+\ Cost @ grid 64 64                -- summed-area table over a cost field
-max\ Height @ ray(Eye, north)       -- occlusion test along a sightline
++/ Elevation @ 64 64                 -- total elevation of the map
+max/ Threat @ Frontier               -- hottest cell in a zone
++\ Cost @ 64 64                      -- summed-area table over a cost field
+max\ Height @ (Eye + ↕n * north)     -- occlusion test along a sightline
 ```
 
 ### 21. Grade over space (best cells)
@@ -419,8 +413,8 @@ max\ Height @ ray(Eye, north)       -- occlusion test along a sightline
 ```
 
 ```haskell
-top 8 (grade desc Safety @ grid 64 64) , spawn Sentry at pos   -- 8 safest cells
-grid 64 64 |> order by Resource desc |> take 5 , +MiningNode    -- 5 richest tiles
+top 8 (grade desc Safety @ 64 64) , spawn Sentry          -- 8 safest cells
+64 64 & top 5 (grade desc Resource) , +MiningNode         -- 5 richest tiles
 ```
 
 ### 22. Replicate over space (density fields)
@@ -430,8 +424,8 @@ counts / cells    ⍝ per-cell multiplicity → a population
 ```
 
 ```haskell
-grid 64 64 , spawn Tree * Density                    -- per-cell count from a field
-grid 64 64 & Fertility > 0 , spawn Crop * Fertility  -- richer cells grow more
+64 64 , spawn Tree * Density                    -- per-cell count from a field
+64 64 & Fertility > 0 , spawn Crop * Fertility  -- richer cells grow more
 ```
 
 ### 23. Named fields (`def` over coordinates)
@@ -447,9 +441,9 @@ def ridge = sin(x / 8) + sin(y / 8)        -- a heightmap field
 def basin = ridge < 0                       -- a derived spatial predicate
 def slope = abs(Height - neighbor.Height)   -- local gradient via the neighbor
 
-grid 64 64 & ridge > 0.5 , spawn Peak at (x, y)   -- spawn on the ridges
-grid 64 64 & basin , Water = 100                  -- flood the basins
-grid 64 64 & slope > 30 , +Cliff                  -- steep cells become cliffs
+64 64 & ridge > 0.5 , spawn Peak     -- spawn on the ridges
+64 64 & basin , Water = 100          -- flood the basins
+64 64 & slope > 30 , +Cliff          -- steep cells become cliffs
 ```
 
 ### 24. Source code that looks like the result (board literal)
@@ -461,8 +455,8 @@ grid 64 64 & slope > 30 , +Cliff                  -- steep cells become cliffs
 A string literal becomes a glyph lattice carrying a `char` per cell. A registered lookup maps each glyph to a spawn type.
 
 ```haskell
-board "RNBQKBNR/PPPPPPPP/......../......../......../......../pppppppp/rnbqkbnr"
-  , spawn (pieceOf char) at (x, y)
+"RNBQKBNR/PPPPPPPP/......../......../......../......../pppppppp/rnbqkbnr"
+  to 8 8 , spawn (pieceOf char)
 ```
 
 ---
@@ -470,30 +464,32 @@ board "RNBQKBNR/PPPPPPPP/......../......../......../......../pppppppp/rnbqkbnr"
 ## Part V — The two habitats
 
 ```haskell
-                  over entities                 over space
-reduce      +/ Gold @ Nord              +/ Elevation @ grid 64 64
-scan        +\ Damage @ sorted          +\ Cost @ path(A,B)
-grade       top 5 (grade Threat)        top 8 (grade Safety @ grid)
-outer       [f | a<-A, b<-B]            grid w h & (x+y)%2==0
-replicate   spawn Minion * Count        grid & spawn Tree * Density
-reshape     arrange Unit into grid      arrange Soldier into ranks 4
-def         def threat = Dmg*Spd/Rng    def ridge = sin(x/8)+sin(y/8)
+                  over entities (rank 1)        over space (rank 2)
+generator   n            (↕n)             w h          (↕ w‿h)
+reduce      +/ Gold @ Nord               +/ Elevation @ 64 64
+scan        +\ Damage @ graded           +\ Cost @ 64 64
+grade       top 5 (grade Threat)         top 8 (grade Safety @ 64 64)
+outer       [f | a<-A, b<-B]             64 64 & (x+y)%2==0
+replicate   spawn Minion * Count         spawn Tree * Density
+reshape     to Unit                      to Soldier 4 _
+recurrence  prev.X       (shift »)       neighbor.X   (shift «/»)
+def         def threat = Dmg*Spd/Rng     def ridge = sin(x/8)+sin(y/8)
 ```
 
-Over entities the operation joins across ragged components and leans on the archetype index. Over space it runs on a dense lattice with no join. The grammar `source & predicate , effect` holds across both.
+Over entities the operation joins across ragged components and leans on the archetype index. Over space it runs on a dense lattice with no join. The grammar `source & predicate , effect` holds across both. It is one generator read at two ranks: the entity key at rank 1, the cell index at rank 2.
 
 ---
 
 ## A farm interlude
 
 ```haskell
-grid 16 16 & (x + y) % 2 == 0 , spawn Wheat at (x, y)        -- checkerboard field
+16 16 & (x + y) % 2 == 0 , spawn Wheat                       -- checkerboard field
 Pen , Headcount = #/ (livestock & Cattle)                   -- count cattle per pen
 Cow & Weight < avg/ Weight @ Cow , +Marked                  -- below-average weight
 Cow , pos.x = grade(Milk) * spacing                         -- line the herd by yield
 Plot & !Planted & #/(neighbors & Planted) >= 2 , +Planted   -- crops spread
 Plot , Moisture = avg/ Moisture @ neighbors                 -- irrigation diffusion
-Crop & Growth >= 100 , spawn Produce at pos ; ~             -- harvest the ripe
+Crop & Growth >= 100 , spawn Produce ; ~                    -- harvest the ripe
 Farm & Acreage < avg/ Acreage @ Farm , Gold += 500          -- subsidy to small holdings
 Gold , Gold = Gold * 1.05                                   -- 5% interest, world-wide
 ```
@@ -568,16 +564,27 @@ The selection sublanguage is relational algebra: selection (σ) by predicate, jo
   filtered-pairs case. Whether ano lets a script hold a materialized N×M matrix
   (`cross f A B`) as a first-class value is open.
 
-- Coordinate frames. Sources declare a frame (cell, scalar, world); `at`
-  consumes it. Enforcement that a world-space `at` cannot silently consume a
-  cell-space coordinate is specified but not mechanized.
+- Space operations and their spelling. Working (see ano-converge.md). Three
+  primitives cover Part IV: filter (`/`, keep existing cells), generate (`↕`,
+  a bare numeric shape, mint a lattice where nothing exists), reshape (`⥊`,
+  fold existing data into a shape, spelled `to`). The generate-vs-reshape
+  boundary is decided by whether the operands already exist. The reshape
+  spelling (`to` vs the `⥊` glyph) and whether `to` (a shape) and the locative
+  `at` (a point) stay separate are unsettled.
 
-- Scan ordering. Scan requires an ordered selection. The rule for an unordered
-  selection (error vs. implicit `along`) is open.
+- Coordinate frames. Resolved (see ano-converge.md). A position is the affine
+  column pos = φ(k) = o + S·k; the frame (o, S) is set by the @scope and
+  defaults to the cursor's raycast. The counter check is the unit consistency
+  of φ, and the こそあど deixis carries the origin: @cursor proximal, @world
+  distal.
 
-- Effect commutativity. `;`-batched effects must commute for the one-barrier
-  semantics. Whether the compiler verifies commutativity from registered
-  footprints or trusts the author is open.
+- Scan ordering. Resolved. Scan runs along the leading axis. Over space the
+  lattice supplies that order; over entities there is none, so an unordered
+  scan must supply a grade (⍋) to manufacture one.
+
+- Effect commutativity. Resolved. `;`-batched effects commute iff their
+  write-footprints are disjoint, which the registered footprints already
+  record. The compiler checks it.
 
 - Bootstrap host. The first compiler may be written in APL, Haskell, or OCaml
   before the self-hosted toolchain. The bytecode VM and JIT target are fixed;

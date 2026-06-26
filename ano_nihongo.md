@@ -99,9 +99,9 @@ The structural reading of Japanese here follows Cure Dolly, who taught Japanese 
 
 読んだ本 = "read book" = "the book that I read." A full clause sits in front of a noun and restricts it. No relativizer, no that, no WHERE, no lambda — juxtaposition is the filter. This is precisely "the predicate is the entity reference," and Japanese proves the form works with zero syntax. Attributive position means restriction, and entering it needs no keyword. ano can lean harder on this: any predicate adjacent to a component name restricts it, full stop.
 
-### 2. する vs なる — value effects vs structural effects
+### 2. する vs なる — agentive (imperative) vs spontaneous (declarative)
 
-する is do-something-to-a-thing (agentive, mutate a value). なる is become (change of state/identity). ano already splits value effects (`Gold += 1000`) from structural effects (archetype change, despawn). Japanese has the exact verb pair: する-effects write columns, なる-effects change which archetype an entity is. This is the most exact mapping in the set, two native verbs for the two effect kinds ano already has. They could be the literal effect markers.
+する is do-something-to-a-thing: an actor performs the change. なる is become: the world settles into a state on its own. The split is voice. Both verbs reach either a value or an identity — 値を倍にする makes the value double, 値が倍になる has it become double, the same column either way. So the pair maps imperative vs declarative: する is an effect the script performs now, なる is a state a rule computes, the reactive register. The value-vs-structural split (column-write vs archetype-change) runs on a separate axis, carried by different verbs: 与える give, 失う lose, 生成 spawn. する/なる are the voice markers — する on a performed effect, なる on a reactive rule.
 
 ### 3. Counters/classifiers — frame-typed numerals
 
@@ -126,6 +126,12 @@ Japanese omits any subject that context supplies; the が is frequently invisibl
 ### 8. て-form — the sequencing/pipe operator
 
 食べて寝る = eat-then-sleep: a connective that chains clauses into one flow sharing a subject. That is ano's sequenced effects (`;`-batched, one barrier) exactly — chain effects over a shared selection, then the barrier. て is the native "and then."
+
+### 9. こそあど — deixis is the alias system and the frame origin
+
+Japanese demonstratives are one engine indexed by one axis: こ proximal (near speaker), そ medial (near listener), あ distal (far from both), ど interrogative. これ/それ/あれ/どれ, ここ/そこ/あそこ/どこ, この/その/あの/どの — one mechanism, different referent by deictic distance. ano's target aliases are this engine: @cursor, @observer, @world, dore are one deictic pointer indexed by referent. The rule it sets: aliases proliferate freely, one mechanism resolved per evaluation, while an operation stays in the calculus. @cursor and @world desugar to the same resolve with a different referent, so they are aliases; the old grid and fib desugar to different expressions, so they are operations wearing nouns.
+
+The deictic axis is the coordinate frame. A generated lattice needs an origin, and the demonstrative supplies it: @cursor is こ proximal, origin where the pointer meets the world; @observer/@player is そ medial, origin at the subject; @world is あ distal, the absolute world origin, "that one over there"; dore is ど, the query form, the ano/dore pair. The frame's origin is which demonstrative the selection points with. The language is named あの, the distal — address-by-description, the default for selecting things out there. Generation, being hands-on, defaults to この, proximal, anchored at the cursor.
 
 ## The engine underneath
 
@@ -183,7 +189,7 @@ The logical particles が, を, に, へ, で mark structural roles, and a singl
 
 ### Transitivity comes in regular pairs
 
-Japanese pairs a self-move intransitive with an other-move transitive for the same event, and the pair is derived by regular law: 開く and 開ける for opening, 上がる and 上げる for rising and raising, 閉まる and 閉める for closing, 出る and 出す for leaving and taking out. The self-move family descends from ある, the other-move family from する, and stem shape predicts which is which. ano derives the value-effect form and the structural-effect form of an operation from one root by a regular transform.
+Japanese pairs a self-move intransitive with an other-move transitive for the same event, and the pair is derived by regular law: 開く and 開ける for opening, 上がる and 上げる for rising and raising, 閉まる and 閉める for closing, 出る and 出す for leaving and taking out. The self-move family descends from ある, the other-move family from する, and stem shape predicts which is which. ano derives the spontaneous (declarative) form and the agentive (imperative) form of an operation from one root by a regular transform — the same voice pairing as point 2.
 
 ### Three terminals behind one engine
 
