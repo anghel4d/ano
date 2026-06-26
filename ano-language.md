@@ -636,10 +636,29 @@ gold +↩ 1000 × nord ∧ 60 < twoH
 +´ gold × nord
 ```
 
-### BQN (Despawn)
-```bqn
-(¬dead) / entities
+### あの, kanji (Canonical)
+```text
+北 と 両手 六十 より 、 金 に 千 たす
 ```
+ano's `predicate , effect` form transliterated. 北 Nord, と &, 両手 Two-Handed, 六十 より is > 60, 、 the comma, 金 に 千 たす is Gold += 1000. Kanji are ideographic, so tokens read as themselves.
+
+### あの, hiragana (Canonical)
+```text
+のるど と りょうて ろくじゅう より 、 きん に せん たす
+```
+Same form, phonetic kana. Particles carry the operators: と &, より >, に the += target, 、 the comma.
+
+### あの, katakana (Canonical)
+```text
+ノルド ト リョウテ ロクジュウ ヨリ 、 キン ニ セン タス
+```
+Same, katakana.
+
+### あの, no spacing (Canonical)
+```text
+のるどとりょうてろくじゅうより、きんにせんたす
+```
+Spaces dropped, the way APL runs glyphs together.
 
 ### J (Canonical)
 ```j
@@ -654,6 +673,22 @@ gold =: gold + 1000 * nord *. 60 < twoH
 ### J (Despawn)
 ```j
 entities #~ -. dead
+```
+
+### Futhark (Canonical)
+```futhark
+map3 (\g n t -> g + 1000 * i32.bool (n && t > 60)) gold nord twoH
+```
+Pure data-parallel map. The same expression compiles to CPU or GPU.
+
+### Futhark (Fold)
+```futhark
+i32.sum (map2 (\g n -> g * i32.bool n) gold nord)
+```
+
+### Futhark (Despawn)
+```futhark
+map (.0) (filter (\(_, d) -> !d) (zip entities dead))
 ```
 
 ### q / kdb+ (Canonical)
