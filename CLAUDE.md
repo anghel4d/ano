@@ -32,4 +32,3 @@ Selection on the left, effect on the right, comma between. `source` defaults to 
 - ALWAYS check if a directory you're working in has a .md file. If it does, read it and follow its guidance.
 - Do NOT add yourself as a contributor.
 - Do not `git commit` or `git push` without explicit per-commit approval. Show the diff and let the author commit.
-- For any file search or grep in the current git-indexed directory, use fff tools.

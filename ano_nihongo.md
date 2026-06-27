@@ -237,6 +237,8 @@ Reads as "the grand total of all Nords' gold." A pure noun phrase. Each の is a
 Cell @ row , Height = prev.Height + prev.prev.Height
 ```
 
+The recurrence assumes row order and boundary values for the first cells.
+
 Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." で scopes to the lattice, は distributes over each cell (pervasion), the recurrence is 前の二升の和 ("the sum of the previous two squares"), and となる is the becoming — a structural generation, not a mutation.
 
 ### 5. The cellar (counters + becoming)
