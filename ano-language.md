@@ -172,7 +172,7 @@ t _: idx                     ⍝ delete rows
 
 Structural effects change which rows exist or which columns a row occupies. They map onto insert, delete, and the kdb+ upsert that extends a row's schema. Adding a component migrates the entity to a new archetype.
 
-Value writes are する; structural writes are なる.
+する/なる mark voice; value vs structure is storage.
 
 ```haskell
 Dead , ~                     -- despawn
@@ -191,6 +191,17 @@ A ⊢ B ⊢ C                    ⍝ all evaluated against the same pre-state
 ```haskell
 @cursor , Knockback 5 ; Flash Red ; -Shielded
 Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
+```
+
+With the subject omitted, the block supplies ゼロが:
+
+```haskell
+spawn Wheat   --cursor , spawn Wheat
+```
+
+```haskell
+Nord & Dead , spawn Ghost
+~                              -- same subject, next effect
 ```
 
 ---
@@ -719,6 +730,9 @@ That's Ano.
 ```markdown
 /\/\/\/\/\/\/\/\
 ```
+
+- How to distinguish ano-native keywords from registered functions, AND
+- Distinguishing bindings/aliases for THINGS from a normal column entry.
 
 - Registered functions vs. bindings vs. derived columns. The surface currently
   uses `def` for both selections and derived columns, distinguished by body

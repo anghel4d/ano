@@ -2,19 +2,21 @@
 
 # ano 日本語 — a Japanese surface mode
 
-ano's canonical surface is ASCII. This document defines a second concrete surface where Japanese grammatical particles stand in for the operators: a tokenizer skin over the same AST.
+This was originally meant to be a joke about APL's extremely silly glpyhs. "What if they were literally just Kana and Kanji lol."
+
+ano's canonical surface is ASCII. This document defines a second concrete surface where Japanese grammatical particles inform the overall structure of the language at a semantic and syntactic level. This is because I think Japanese is pleasant, simple (grammatically), and has an exceptional internal consistency for an extant spoken language.
 
 ## Premise
 
-ano's core form is head-final: `source & predicate , effect`. Selection on the left, effect on the right, the comma between. Japanese is also head-final and agglutinative, and its particles are postfix markers that attach to a noun and name its role. A postfix role-marker is a tacit postfix operator. So the surface ano already wants and the grammar Japanese already has are the same shape, and the mapping is discovery.
+ano's core form is head-final: `source & predicate , effect`. Selection on the left, effect on the right, the comma between. 
+
+Japanese is also head-final and agglutinative. Its particles are postfix markers that attach to a noun and name its role. A postfix role-marker is a tacit postfix operator. So the surface ano was going for, and the grammar Japanese already has had for hundreds of years are of a similar shape.
 
 ## Architecture: a reader skin
 
 One AST, many readers. The grammar is defined over abstract token kinds (`AND`, `OR`, `HOP`, `GT`, `COMMA`, `ASSIGN_ADD`, `IDENT`, `NUM`). Each surface is a lexer that maps concrete glyphs to those kinds. と and `&` emit the same `AND`; everything downstream is identical. The Japanese mode is a lexer table plus a numeral reader. The parser, the type/footprint resolution, the bytecode, the JIT, none of them learn which surface produced the tokens.
 
-Make it bidirectional: one AST, N reader/printer pairs. Then ASCII and Japanese round-trip through the same tree, which is useful for teaching and docs, and the mode falls out of the printer for free.
-
-The mode is also a litmus test. If adding the Japanese reader is trivial, the lexer, parser, and semantics are cleanly separated. If it is not trivial, surface has leaked into semantics and the leak is a bug worth finding. The meme doubles as an architecture check, which is the real reason to build it early.
+The 日本語ーmode is also a litmus test for ano's semantics. If adding the Japanese reader is trivial, the lexer, parser, and semantics are cleanly separated. Note to self: this project might be my opportunity to introduce my long-cherished coinage, the word "lexiom". I don't know what it means yet.
 
 ## Particle → operator map
 
@@ -24,7 +26,8 @@ The mode is also a litmus test. If adding the Japanese reader is trivial, the le
 | `\|` or | か | "or" | か is also the question particle |
 | `.` the dotted hop, `rel.Comp` | の | genitive "'s" | the relationship hop is literally the possessive |
 | `@` region or scope | で | locative "at / in" | で marks where the action happens |
-| `,` selection-effect separator | 、 | the comma (読点) | exact one-to-one |
+| `,` selection-effect separator | 、 / が | subject-predicate hinge | 、 is the surface mark; が is the grammar |
+| omitted subject | ゼロが | zero pronoun | block-local anaphora or default subject |
 | `>` | より, or 超 | "than", "over" | より alone needs a direction word, 超 disambiguates |
 | `<` | 未満 | "under" | the sign-board word, 18歳未満 |
 | `==` | 同 | "same" | |
@@ -46,12 +49,17 @@ ASCII ano:
 Nord & TwoHanded > 60 , Gold += 1000
 ```
 
+Intermediate state:
+```haskell
+あの Nord & TwoHanded > 60 が Gold += 1000
+```
+
 Japanese, kanji:
 ```text
 北 と 両手 六十 より 、 金 に 千 たす
 ```
 
-北 Nord, と and, 両手 Two-Handed, 六十 より over sixty, 、 the comma, 金 に 千 たす is Gold += 1000. The token order is the ano token order with the operators moved to their postfix positions, which is where Japanese already puts them.
+北 Nord, と and, 両手 Two-Handed, 六十 より over sixty, 、 the written が, 金 に 千 たす is Gold += 1000. The token order is the ano token order with the operators moved to their postfix positions, which is where Japanese already puts them.
 
 The dotted hop, `Nord & mentor.TwoHanded > 80 , Gold += 1000`:
 ```text
@@ -115,9 +123,22 @@ The structural reading of Japanese here follows Cure Dolly, who taught Japanese 
 
 Cure Dolly's central correction: が marks the real grammatical subject; は is a non-logical topic that sets a context and persists across sentences. That is a scoping construct. は = "as for Nords, …" establishes a default source for a run of effects; が = the actual selection in each clause. ano gets a native with-block from this: 北は … applies a chain of effects to an established subject without renaming it each time. Topic-chaining = ambient source that carries forward.
 
-### 6. ゼロが (the zero pronoun) — tacit arguments
+### 6. ゼロが (the zero pronoun) — block-local anaphora
 
-Japanese omits any subject that context supplies; the が is frequently invisible and inferred. That is point-free programming. Combined with #5: the implicit subject of an effect is the current topic/selection, named only to disambiguate. ano's `@cursor`/`@observer` are already implicit-context predicates — generalize it to a default "zero" subject so effects apply to the ambient selection tacitly.
+Japanese omits any subject that context supplies; the が is frequently invisible and inferred. That is point-free programming. If the block has no subject, the host may let a registered effect declare a default subject. For instance, you may want to define `@spawn` to happen at the raycast intersect drawn from the player's cursor to the ground. Or have heal target `player`, and so on.
+
+In Japanese, the subject, if omitted from a sentence (as it most often is), is inferred contextually. 
+
+Block-local anaphora (implicit subject)
+
+```haskell
+Nord & Dead , spawn Ghost
+~   -- same block subject
+```
+
+```haskell
+@spawn Wheat    -- reasonable host default: cursor
+```
 
 ### 7. こと/もの nominalizers — reify an effect as a value
 
@@ -204,10 +225,14 @@ Here's what ano looks like if it leans all the way into Japanese grammar. Each e
 ``両手が六十を超える北に、金を千与える。``
 
 ```haskell
+あの Nord & TwoHanded > 60 が Gold += 1000
+```
+
+```haskell
 Nord & TwoHanded > 60 , Gold += 1000
 ```
 
-Reads as "to the Nords whose two-handed exceeds sixty, give a thousand gold." The WHERE is a relative clause (両手が六十を超える), に is the += target, the 、 is the comma. The selection is literally a Japanese subordinate clause.
+Reads as "to the Nords whose two-handed exceeds sixty, give a thousand gold." The WHERE is a relative clause (両手が六十を超える), に is the += target, and 、 is the visible が. The selection is literally a Japanese subordinate clause.
 
 ### 2. The fallen master
 
@@ -244,7 +269,7 @@ Cell @ row , Height = fib(index)
 
 Version A reads closer to the Japanese sentence and assumes row order plus boundary values for the first cells; Version B hides that recurrence boundary in `fib`.
 
-Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." で scopes to the lattice, は distributes over each cell (pervasion), the recurrence is 前の二升の和 ("the sum of the previous two squares"), and となる is the becoming — a structural generation, not a mutation.
+Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." で scopes to the lattice, は distributes over each cell (pervasion), the recurrence is 前の二升の和 ("the sum of the previous two squares"), and となる is the becoming, a structural generation.
 
 ### 5. The cellar (counters + becoming)
 
@@ -256,7 +281,17 @@ Cheese @ cellar & Aged > 3mo , Price *= 2
 
 Reads as "cheese aged in the cellar longer than three months — its price doubles." This is the magnificent one: 三ヶ月 is a frame-typed numeral (the ヶ月 counter is the 3mo unit, checked by the grammar), 熟成した is the selection-clause, and 値が倍になる is the value effect via なる. The coordinate-frame open question and the action both fall out of ordinary counting and ordinary becoming.
 
-The thing that makes these sing: in every one, the program parses as a sentence and the sentence parses as a program. The relative clause is the selection, の is the join, the counter is the type, に is the assignment target, なる is the structural effect, 、 is the comma. The discovery underneath: a 1000-year-old grammar was already a query-and-update language, and nobody noticed.
+### 6. Wheat at the cursor (zero subject)
+
+``小麦を生やす。``
+
+```haskell
+spawn Wheat
+```
+
+Reads as "grow wheat." The subject is omitted: ゼロが. In a console/game setting the host may register `spawn` with `@cursor` as its default subject, so the raycast point where you are looking becomes the silent A in `A , spawn Wheat`.
+
+The thing that makes these sing: in every one, the program parses as a sentence and the sentence parses as a program. The relative clause is the selection, の is the join, the counter is the type, に is the assignment target, なる is becoming voice, 、 is the visible が, and omission is ゼロが. The discovery underneath: a 1000-year-old grammar was already a query-and-update language, and nobody noticed.
 
 ## Citations
 

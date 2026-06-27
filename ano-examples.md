@@ -1,10 +1,6 @@
 考案: Anghel (Anghel4d)
 
-# ano example verification
-
-Working review artifact. Each section gives the operation, a Japanese surface, the ano surface, and a BQN/q reading. The BQN and q are semantic sketches, not final parser commitments.
-
----
+# ano examples
 
 ## 1 - Canonical masked update
 
@@ -12,6 +8,10 @@ Select every Nord whose Two-Handed value exceeds 60 and add 1000 Gold.
 
 ```haskell
 両手が六十を超える北に、金を千与える。
+```
+
+```haskell
+あの Nord & TwoHanded > 60 が Gold += 1000
 ```
 
 Ano:
@@ -1180,6 +1180,10 @@ Show that the Japanese sentence and the ASCII sentence emit the same token strea
 北 と 両手 六十 より 、 金 に 千 たす
 ```
 
+```haskell
+あの Nord & TwoHanded > 60 が Gold += 1000
+```
+
 Ano:
 ```haskell
 Nord & TwoHanded > 60 , Gold += 1000
@@ -1347,4 +1351,60 @@ Price ×↩ 1 + Cheese∧cellar∧Aged>3mo
 ```
 ```q
 update Price:Price*2 from w where Cheese, cellar, Aged>3mo
+```
+
+## 48 - Zero subject default
+
+Omit the left side; the effect supplies or requests a host default subject.
+
+```haskell
+小麦を生やす。
+```
+
+```haskell
+あの @cursor が spawn Wheat
+```
+
+Ano:
+```haskell
+spawn Wheat
+```
+
+Verification:
+```bqn
+world ∾↩ WheatAt cursor
+```
+```q
+w,:enlist spawn[`Wheat;cursor]
+```
+
+## 49 - Block-local anaphora
+
+Omit the left side after an explicit selection; the same block supplies ゼロが.
+
+```haskell
+死んだ北が、幽霊を生み、消える。
+```
+
+```haskell
+あの Nord & Dead が spawn Ghost
+~
+```
+
+Ano:
+```haskell
+Nord & Dead , spawn Ghost
+~
+```
+
+Verification:
+```bqn
+sel ← Nord∧Dead
+world ∾↩ GhostRows sel
+world ↩ (¬sel)/world
+```
+```q
+sel:select from w where Nord, Dead
+w,:spawnGhost each sel
+delete from w where Nord, Dead
 ```
