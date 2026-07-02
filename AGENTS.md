@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## What this is
-Ano (あの). A programming language design. An embeddable ECS scripting layer that addresses entities by description: the selection predicate is the entity reference. FP/LISP/APL lineage, ASCII surface, Lua-class. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
+Ano (あの). A programming language design. An embedded ECS query-and-command engine that addresses entities by description: the selection predicate is the entity reference. FP / APL lineage, ASCII surface, SQL/Datalog/production-rules class — the FP/array sibling of Lua, to the game world what q is to kdb+; beside a Lua-class host the split is coroutines versus triggers. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
 
 One design document so far, `ano-language.md`. No compiler yet. Work here is design and spec writing.
 
@@ -15,7 +15,7 @@ source & predicate , effect
 Selection on the left, effect on the right, comma between. `source` defaults to the live world. Selection is relational algebra (σ by predicate, ⋈ by the dotted relationship hop, π by component access); column effects are the array calculus (reduce, scan, grade, outer product, replicate, reshape). A column store unifies them.
 
 ## Conventions
-- Design repo. The spec borrows surface flavor across languages: APL/BQN/J/k, Haskell, Erlang, q/kdb+, SQL, Datalog, Lisp. Keep each example idiomatic to the language it cites.
+- Design repo. The spec borrows surface flavor across languages: APL/BQN/J/k, Haskell, Erlang, q/kdb+, SQL, Datalog. Keep each example idiomatic to the language it cites. (Lisp left the lineage table; see the staging-and-quotation open question.)
 - Read `ano-language.md` before editing it. Match its part/section numbering and the canonical-task addendum already in place.
 - Open design questions live under "Open Questions, Next Steps". Never resolve one silently in prose; surface the tradeoff.
 - Bootstrap is open: the bytecode VM and JIT target are fixed, the front-end language (APL, Haskell, or OCaml) is not.

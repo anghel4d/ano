@@ -42,7 +42,8 @@ source & predicate , effect
 
 Verification:
 ```bqn
-effect⌾(predicate⊸/) source
+Effect ← ×⟜2                     # the ⌾ operand needs function role; a lowercase subject is a constant
+Effect⌾(predicate⊸/) source      # ≡ source × 1+predicate
 ```
 ```q
 update effect from source where predicate
@@ -50,7 +51,7 @@ update effect from source where predicate
 
 ## 3 - Component masks
 
-Use component presence and boolean operations as masks over the entity view.
+Use component presence and boolean operations as masks over the entity view. `` `Bandit `` is the enum symbol, `Bandit` the component mask; mask-vs-value is decided lexically.
 
 ```haskell
 北に、金を百与える。
@@ -62,14 +63,14 @@ Ano:
 ```haskell
 Nord , Gold += 100
 Dragon , Health = 0
-Bandit & !Dead & Faction == Bandit , Faction = Hostile
+Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
 ```
 
 Verification:
 ```bqn
-Gold +↩ 100×Nord
-Health ↩ 0⌾(Dragon⊸/) Health
-Faction ↩ Hostile⌾((Bandit∧¬Dead∧Faction=Bandit)⊸/) Faction
+gold +↩ 100×nord
+health ↩ (0¨)⌾(dragon⊸/) health                # constants scatter as (v¨)⌾(mask⊸/), never scalar-Under
+faction ↩ (symHostile¨)⌾((bandit ∧ (¬dead) ∧ faction=symBandit)⊸/) faction   # symX stands in for `X
 ```
 ```q
 update Gold:Gold+100 from w where Nord
@@ -112,17 +113,17 @@ Resolve dynamic aliases as singleton or small masks and apply ordinary effects.
 Ano:
 ```haskell
 @cursor , Health = 0
-@observer , Faction = Friendly
+@observer , Faction = `Friendly
 Player , Gold += 9999
 @selected , Damage *= 2
 ```
 
 Verification:
 ```bqn
-Health ↩ 0⌾(cursor⊸/) Health
-Faction ↩ Friendly⌾(observer⊸/) Faction
-Gold +↩ 9999×Player
-Damage ×↩ 1+selected
+health ↩ (0¨)⌾(cursor⊸/) health
+faction ↩ (symFriendly¨)⌾(observer⊸/) faction
+gold +↩ 9999×player
+damage ×↩ 1+selected
 ```
 ```q
 update Health:0 from w where cursor
@@ -150,8 +151,10 @@ Ano:
 
 Verification:
 ```bqn
-sel ← Nord ∧ hasTwoHanded ∧ TwoHanded>60
-Gold +↩ 1000×sel
+sel ← nord ∧ hasTwoHanded ∧ twoHanded>60
+gold +↩ 1000×sel
+trained ∨↩ nord ∧ hasTwoHanded
+untrained ∨↩ nord ∧ ¬hasTwoHanded
 ```
 ```q
 update Gold:Gold+1000 from w where Nord, not null TwoHanded, TwoHanded>60
@@ -207,9 +210,10 @@ Soldier & faction.AtWar , Morale -= 20
 
 Verification:
 ```bqn
-Gold +↩ 1000 × Nord ∧ 80 < mentor⊏TwoHanded
-Mentored ← Mentored without Student∧mentor⊏Dead
-Morale -↩ 20 × Soldier ∧ faction⊏AtWar
+hasMentor ← mentor ≥ 0                    # ¯1 is the absent-link sentinel
+gold +↩ 1000 × nord ∧ hasMentor ∧ 80 < (0⌈mentor)⊏twoHanded
+mentored ∧↩ ¬ student ∧ hasMentor ∧ (0⌈mentor)⊏dead
+morale -↩ 20 × soldier ∧ faction⊏atWar
 ```
 ```q
 m:update mentorTwoHanded:TwoHanded mentor from w
@@ -236,15 +240,19 @@ def master = Human & Nord & TwoHanded > 60
 def rich   = Gold > 10000
 
 master , Gold += 1000
-rich , Faction = Hostile ; +Marked
+rich , Faction = `Hostile ; +Marked
 master & rich , +Legendary
 ```
 
 Verification:
 ```bqn
-master ← Human ∧ Nord ∧ TwoHanded>60
-rich ← Gold>10000
-Gold +↩ 1000×master
+IsMaster ← {𝕤 ⋄ human ∧ nord ∧ twoHanded>60}   # defs are predicates, re-gathered per statement
+IsRich   ← {𝕤 ⋄ gold > 10000}
+gold +↩ 1000 × IsMaster @
+rich ← IsRich @                                # sees statement 1's committed scatter
+faction ↩ (symHostile¨)⌾(rich⊸/) faction
+marked ∨↩ rich
+legendary ∨↩ (IsMaster @) ∧ IsRich @
 ```
 ```q
 master:{[w] w where Human,Nord,TwoHanded>60}
@@ -296,14 +304,14 @@ Replace selected values in an aligned component column.
 
 Ano:
 ```haskell
-Bandit , Faction = Hostile
-Dead , Loot = Empty
+Bandit , Faction = `Hostile
+Dead , Loot = `Empty
 ```
 
 Verification:
 ```bqn
-Faction ↩ Hostile⌾(Bandit⊸/) Faction
-Loot ↩ Empty⌾(Dead⊸/) Loot
+faction ↩ (hostile¨)⌾(bandit⊸/) faction
+loot ↩ (empty¨)⌾(dead⊸/) loot
 ```
 ```q
 update Faction:`Hostile from w where Bandit
@@ -312,7 +320,7 @@ update Loot:`Empty from w where Dead
 
 ## 12 - Structural effects
 
-Delete entities or change component domains, causing archetype migration.
+Delete entities or change component domains, causing archetype migration. The set hop `targets'` selects the image, the union of the fibers; a selection is a mask, so a target reachable from two sources gains the component once.
 
 ```haskell
 死者は、消える。
@@ -323,24 +331,25 @@ Delete entities or change component domains, causing archetype migration.
 Ano:
 ```haskell
 Dead , ~
-Frenzy.targets , +Frenzied
+Frenzy.targets' , +Frenzied
 Burdened , -Encumbered
 ```
 
 Verification:
 ```bqn
-world ↩ (¬Dead)/world
-world ↩ regroup world with Frenzied on Frenzy⊏targets
+world ↩ (¬dead)/world
+frenzied ∨↩ id ∊ ∾frenzy/targets
+encumbered ∧↩ ¬burdened
 ```
 ```q
 delete from w where Dead
-update Frenzied:1b from w where id in raze targets from w where Frenzy
+update Frenzied:1b from w where id in raze exec targets from w where Frenzy
 update Encumbered:0b from w where Burdened
 ```
 
 ## 13 - Sequenced effects
 
-Batch multiple effects against the same pre-state selection and merge the deltas at one barrier.
+Batch multiple effects against the same pre-state selection and merge the deltas at one barrier. One statement is one gather-effect-scatter barrier; `;` within one statement is the only barrier-sharing form.
 
 ```haskell
 この標的に、五の押し戻しを行い、赤く光らせ、盾を失わせる。
@@ -349,14 +358,14 @@ Batch multiple effects against the same pre-state selection and merge the deltas
 
 Ano:
 ```haskell
-@cursor , Knockback 5 ; Flash Red ; -Shielded
+@cursor , Knockback 5 ; Flash `Red ; -Shielded
 Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 ```
 
 Verification:
 ```bqn
-Knockback⌾(cursor⊸/) ⋄ Flash⌾(cursor⊸/) ⋄ Shielded removed under cursor
-Gold +↩ 1000×sel ⋄ Blessed added under sel
+sel ← cursor ⋄ pos +↩ 5×sel ⋄ flash ↩ (red¨)⌾(sel⊸/) flash ⋄ shielded ∧↩ ¬sel
+sel ← nord∧twoHanded>60 ⋄ gold +↩ 1000×sel ⋄ blessed ∨↩ sel
 ```
 ```q
 update pos:knockback[pos;5], Flash:`Red, Shielded:0b from w where cursor
@@ -416,6 +425,8 @@ reduce(threat) Damage @ Enemies
 Verification:
 ```bqn
 ThreatReduce´ Enemies/Damage
+Threat ← {!0<≠𝕩 ⋄ ThreatReduce´𝕩}                 # reduce(threat): fold plus the no-identity guard
+"row fails" ≡ Threat⎊("row fails"˙) none/Damage   # an empty scope fails the row, never invents a value
 ```
 ```q
 select threat Damage from w where Enemies
@@ -465,7 +476,7 @@ scan(+) Weight along pathCells
 
 Verification:
 ```bqn
-+` pathCells/Weight
++` pathCells⊏Weight    # along is an index sequence in path order; ⊏ carries that order, a mask would not
 ```
 ```q
 sums exec Weight from w where pathCells
@@ -482,25 +493,19 @@ Write rank back as an aligned component; use grade plus top-k to select highest 
 
 Ano:
 ```haskell
-Unit , Slot = grade(Initiative)
-top 5 (grade desc Threat) , +Targeted
-```
-
-Version B:
-```haskell
 Unit , Slot = rank(Initiative)
 top 5 (grade desc Threat) , +Targeted
 ```
 
-Verification follows Version B.
+Writing `grade()` into an aligned component is retired: the grade permutation is order-work, exactly the misalignment Tier 2 forbids. `rank()` is value-only (dense), so tied values share a rank and the write-back commutes with every relabeling.
 
 Verification:
 ```bqn
-Slot ↩ ⍋⍋ Unit/Initiative
-Targeted ← Targeted ∨ (↕≠Threat)∊5↑⍒Threat
+slot ↩ ((∧⍷unit/initiative)⊐unit/initiative)˙⌾(unit⊸/) slot   # dense rank of the filtered column, scattered under the mask
+targeted ∨↩ (↕≠threat) ∊ 5↑⍒threat
 ```
 ```q
-update Slot:iasc iasc Initiative from w where Unit
+update Slot:(asc distinct Initiative)?Initiative from w where Unit
 update Targeted:1b from 5 sublist `Threat xdesc select from w
 ```
 
@@ -519,7 +524,7 @@ Enemy |> order by Threat desc |> take 5 , +Targeted
 
 Verification:
 ```bqn
-Targeted ← Targeted ∨ 5↑⍒Enemy/Threat
+targeted ↩ targeted ∨ (↕≠threat) ∊ (/enemy) ⊏˜ 5↑⍒enemy/threat   # grade indices map through /enemy to world rows, then membership
 ```
 ```q
 update Targeted:1b from 5 sublist `Threat xdesc select from w where Enemy
@@ -542,8 +547,8 @@ Ano:
 
 Verification:
 ```bqn
-(Tower dist⌜ Creep) < 50
-(Body overlap⌜ Body) ∧ <⌜˜Body
+pairs ← (⥊(Tower Dist⌜ Creep)<50) / ⥊(↕≠Tower)⋈⌜↕≠Creep
+bpairs ← (⥊(Body Overlap⌜ Body)∧<⌜˜↕≠Body) / ⥊(↕≠Body)⋈⌜↕≠Body
 ```
 ```q
 select from ([]t:Tower) cross ([]c:Creep) where dist[t;c]<50
@@ -565,7 +570,7 @@ cross dist Tower Creep
 
 Verification:
 ```bqn
-Tower dist⌜ Creep
+Tower Dist⌜ Creep
 ```
 ```q
 update d:dist[t;c] from ([]t:Tower) cross ([]c:Creep)
@@ -588,8 +593,8 @@ Nest    , spawn Egg * Fertility
 
 Verification:
 ```bqn
-world ∾↩ Count/MinionRows
-world ∾↩ Fertility/EggRows
+new ← (1+⌈´keys)+↕+´count ⋄ parent ← count/spawner ⋄ keys ∾↩ new   # spawn mints fresh keys; parent links are the count-replicate
+new ↩ (1+⌈´keys)+↕+´fertility ⋄ parent ↩ fertility/nest ⋄ keys ∾↩ new
 ```
 ```q
 w,:raze Count#'MinionRows
@@ -636,9 +641,9 @@ Archer  , pos = to 20
 
 Verification:
 ```bqn
-pos ↩ φ¨(↕8‿8) assigned to Soldier
-pos ↩ φ¨(↕4‿inferred) assigned to Soldier
-pos ↩ φ¨↕20 assigned to Archer
+pos ↩ (⥊↕8‿8)⌾(Soldier⊸/) pos
+pos ↩ (⥊↕4‿(4÷˜+´Soldier))⌾(Soldier⊸/) pos
+pos ↩ (↕20)⌾(Archer⊸/) pos
 ```
 ```q
 update pos:shape[8 8;count i] from w where Soldier
@@ -672,10 +677,12 @@ order by threat desc
 
 Verification:
 ```bqn
-threat ← Damage×Speed÷Range
-dps ← Damage÷Cooldown
-Priority ↩ threat⌾(Enemy⊸/) Priority
-+´ Enemy/threat
+threat ← damage×speed÷range
+dps ← damage÷cooldown
+priority ↩ (enemy/threat)⌾(enemy⊸/) priority   # gather the selected cells first; the raw column is a shape error
+dangerous ∨↩ enemy∧threat>100
++´ enemy/threat
+⍒threat                                        # (⍒threat)⊏threat is the ordered view
 ```
 ```q
 update threat:Damage*Speed%Range,dps:Damage%Cooldown from w
@@ -707,7 +714,7 @@ Verification follows Version B.
 
 Verification:
 ```bqn
-+´ threat⊏˜10↑⍒Enemy/dps
++´ (Enemy/threat) ⊏˜ 10↑⍒Enemy/dps   # grade of the filtered column indexes the filtered column
 ```
 ```q
 select sum threat from 10 sublist `dps xdesc select from w where Enemy
@@ -774,19 +781,21 @@ Version B:
 8  , spawn Pillar at Player.pos + (index * 2, 0)
 ```
 
-Version A assumes boundary values for the first cells; Version B hides the boundary values inside `fib`.
+Version A is not a recurrence: the comma is gather-effect-scatter, every read observes pre-state, so `prev` is a parallel shift, not a carry, and on a freshly minted line the statement computes one shift-and-add over zeros — it cannot generate Fibonacci. Version B runs the recurrence inside the registered host function `fib` and is canonical. The second line of each pair is a leading-comma continuation (spec §10): a new statement and a new barrier over the line's saved mask, whose gather sees the committed `offset`.
 
-Verification follows Version A for the recurrence and the shared lines for both versions.
+Verification follows Version B for the offset line and the shared lines for both versions; the Version A line is kept as the one-stencil-step gloss.
 
 Verification:
 ```bqn
-offset ↩ »offset + »»offset
-pos ↩ PlayerPos + Polar¨(↕12)∾(↕12)×137.5
-pos ↩ PlayerPos + 2×↕8
+offset ↩ 12↑{𝕩∾+´¯2↑𝕩}⍟10 0‿1   # Version B: fib(index), the recurrence host-side
+(»offset)+»»offset               # Version A gloss: one parallel stencil step, never the sequence
+pos ↩ PlayerPos⊸+¨ Polar¨ (↕12) ⋈¨ 137.5×↕12   # polar consumes index-angle pairs, zipped with ⋈¨
+pos ↩ PlayerPos⊸+¨ (2×↕8) ⋈¨ 0
 ```
 ```q
 line12:([]index:til 12)
-update offset:prev[offset]+prev2[offset] from line12
+update offset:fib each index from line12                    / Version B, canonical
+update offset:prev[offset]+prev prev offset from line12     / Version A: one stencil step over pre-state
 update pos:PlayerPos+polar[index;index*137.5] from line12
 update pos:PlayerPos+2*index from ([]index:til 8)
 ```
@@ -806,7 +815,7 @@ Coin , pos = Player.pos + polar(index, index * 137.5)
 
 Verification:
 ```bqn
-pos ↩ PlayerPos + Polar¨(↕≠Coin)∾(↕≠Coin)×137.5
+pos ↩ PlayerPos⊸+¨ Polar¨ (↕≠Coin) ⋈¨ 137.5×↕≠Coin   # index-angle pairs, one per selected coin
 ```
 ```q
 update pos:PlayerPos+polar[index;index*137.5] from update index:i from w where Coin
@@ -839,21 +848,23 @@ scan2(+) Cost @ 64 64
 max\ Height @ (Eye + ↕n * north)
 ```
 
-As written, `+\` is a leading-axis scan; a full summed-area table would be a two-axis scan over the lattice.
+As written, `+\` is a leading-axis scan; the full summed-area table is the two-axis `scan2(+)`.
 
-Verification follows Version B for the cost line and the shared lines for both versions.
+Verification runs both cost lines: they are different fields, and only the SAT corner equals the whole-lattice fold.
 
 Verification:
 ```bqn
-+´⥊Elevation
-⌈´Frontier/Threat
-+` Cost
-⌈` ray/Height
++´⥊elevation
+⌈´frontier/threat
++` cost          # Version A: leading-axis scan
++`˘ +` cost      # Version B: scan2(+), the summed-area table; ¯1‿¯1⊑ is the whole-lattice fold
+⌈` ray/height
 ```
 ```q
 sum Elevation
 max exec Threat from cells where Frontier
-sums Cost
+sums Cost              / Version A
+sums each sums Cost    / Version B: summed-area table
 maxs exec Height from ray
 ```
 
@@ -899,8 +910,8 @@ Ano:
 
 Verification:
 ```bqn
-world ∾↩ Density/TreeRows
-world ∾↩ (Fertility>0)/Fertility/CropRows
+world ∾↩ density/treeRows
+mask ← fertility>0 ⋄ world ∾↩ (mask/fertility)/mask/cropRows   # the predicate selects cells before the counts replicate
 ```
 ```q
 w,:raze Density#'TreeRows
@@ -948,9 +959,9 @@ Verification follows Version B for the slope line and the shared lines for both 
 
 Verification:
 ```bqn
-ridge ← (1○x÷8)+1○y÷8
+ridge ← (•math.Sin x÷8) +⌜ •math.Sin y÷8   # over the coordinate columns; not 2×sin(w/8)
 basin ← ridge<0
-slope ← |Height-«Height
+slope ← |height - (63⌊1+↕64)⊏height        # neighbor(clamp): the boundary row is its own neighbor, slope 0
 ```
 ```q
 update ridge:sin[x%8]+sin[y%8] from cells
@@ -968,13 +979,14 @@ Reshape a glyph string into a board and map each glyph to a spawned piece.
 
 Ano:
 ```haskell
-"RNBQKBNR/PPPPPPPP/......../......../......../......../pppppppp/rnbqkbnr"
+"RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
   to 8 8 , spawn (pieceOf char)
 ```
 
 Verification:
 ```bqn
-PieceOf¨ 8‿8⥊glyphs
+board ← 8‿8⥊glyphs   # exactly 64 glyphs, no separators: the shape consumes the literal
+PieceOf¨ board
 ```
 ```q
 update piece:pieceOf each char from board:shape[8 8;glyphs]
@@ -997,8 +1009,8 @@ scan        +\ Damage @ graded           +\ Cost @ 64 64
 grade       top 5 (grade Threat)         top 8 (grade Safety @ 64 64)
 outer       [f | a<-A, b<-B]             64 64 & (x+y)%2==0
 replicate   spawn Minion * Count         spawn Tree * Density
-reshape     to Unit                      to Soldier 4 _
-recurrence  prev.X       (shift »)       neighbor.X   (shift «/»)
+reshape     pos = to 20                  pos = to 4 _
+shift       prev.X       (shift »)       neighbor.X   (shift «/»)
 def         def threat = Dmg*Spd/Rng     def ridge = sin(x/8)+sin(y/8)
 ```
 
@@ -1030,45 +1042,32 @@ Combine lattice generation, grouped counts, ranking, stencil growth, diffusion, 
 Ano:
 ```haskell
 16 16 & (x + y) % 2 == 0 , spawn Wheat
-Pen , Headcount = #/ (livestock & Cattle)
-Cow & Weight < avg/ Weight @ Cow , +Marked
-Cow , pos.x = grade(Milk) * spacing
-Plot & !Planted & #/(neighbors & Planted) >= 2 , +Planted
-Plot , Moisture = avg/ Moisture @ neighbors
-Crop & Growth >= 100 , spawn Produce ; ~
-Farm & Acreage < avg/ Acreage @ Farm , Gold += 500
-Gold , Gold = Gold * 1.05
-```
-
-Version B:
-```haskell
-16 16 & (x + y) % 2 == 0 , spawn Wheat
-Pen , Headcount = #/ (livestock & Cattle)
+Pen , Headcount = #/ (livestock' & Cattle)
 Cow & Weight < avg/ Weight @ Cow , +Marked
 Cow , pos.x = rank(Milk) * spacing
-Plot & !Planted & #/(neighbors & Planted) >= 2 , +Planted
-Plot , Moisture = avg/ Moisture @ neighbors
+Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
+Plot , Moisture = avg/ neighbors'.Moisture
 Crop & Growth >= 100 , spawn Produce ; ~
 Farm & Acreage < avg/ Acreage @ Farm , Gold += 500
 Gold , Gold = Gold * 1.05
 ```
 
-Verification follows Version B for the herd line and the shared lines for both versions.
+The tick is the grouped fold: `fold/ rel'…` collapses each fiber to one value per selected source (the pen, spread, and moisture lines); `fold/ col @ scope` stays the scoped-global fold, one scalar (the herd and subsidy lines).
 
 Verification:
 ```bqn
 0=2|+⌜˜↕16
-Headcount ↩ +´ Cattle/livestock
-Marked ← Weight < (+´÷≠) Cow/Weight
-pos.x ↩ (⍋⍋Milk)×spacing
-Planted ← Planted ∨ (¬Planted)∧2≤+´neighbors∧Planted
-Moisture ↩ (+´÷≠) neighbor⊏Moisture
-Gold ×↩ 1.05
+headcount ↩ +´¨ (pen∾≠pens)⊔cattle
+marked ∨↩ cow ∧ weight < (+´÷≠) cow/weight
+pos.x ↩ spacing×(∧⍷milk)⊐milk
+planted ↩ planted ∨ (¬planted) ∧ 2 ≤ (»+«+»˘+«˘) planted
+S ← »+«+»˘+«˘ ⋄ moisture ↩ (S moisture) ÷ S 1¨moisture
+gold ×↩ 1.05
 ```
 ```q
-update Headcount:count each livestock where Cattle from Pen
+select Headcount:sum Cattle by pen from w
 update Marked:1b from w where Cow, Weight<avg Weight
-update pos.x:spacing*iasc iasc Milk from w where Cow
+update pos.x:spacing*(asc distinct Milk)?Milk from w where Cow
 update Gold:Gold+500 from w where Farm, Acreage<avg Acreage
 update Gold:Gold*1.05 from w
 ```
@@ -1093,8 +1092,8 @@ Ano:
 Verification:
 ```bqn
 0=2|+⌜˜↕8
-+´⥊Elevation
-+`Cost
++´⥊elevation
++`cost
 ```
 ```q
 select from cells where 0=(x+y) mod 2
@@ -1116,28 +1115,19 @@ Ano:
 ```haskell
 Nord & TwoHanded > 60 , Gold += 1000
 +/ Gold @ Nord
-Unit , Rank = grade(Gold)
-```
-
-Version B:
-```haskell
-Nord & TwoHanded > 60 , Gold += 1000
-+/ Gold @ Nord
 Unit , Rank = rank(Gold)
 ```
 
-Verification follows Version B for the rank line and the shared lines for both versions.
-
 Verification:
 ```bqn
-Gold +↩ 1000×Nord∧TwoHanded>60
-+´Nord/Gold
-Rank ↩ ⍋⍋Gold
+gold +↩ 1000×nord∧twoHanded>60
++´nord/gold
+rank ↩ (∧⍷gold)⊐gold   # dense value-only rank: ties share a rank, the write-back commutes with relabeling
 ```
 ```q
 update Gold:Gold+1000 from w where Nord, TwoHanded>60
 select sum Gold from w where Nord
-update Rank:iasc iasc Gold from w where Unit
+update Rank:(asc distinct Gold)?Gold from w where Unit
 ```
 
 ## 39 - Tier 3 opaque examples
@@ -1159,7 +1149,7 @@ Hostile , shortestPath via Adj
 
 Verification:
 ```bqn
-OutDeg ↩ +´ AdjRow
+outdeg ↩ +´˘adj
 # graph view has no native expression; dispatch to host
 ```
 ```q
@@ -1275,7 +1265,9 @@ Nord & mentor.Dead , -Trained
 
 Verification:
 ```bqn
-Trained removed where Nord∧mentor⊏Dead
+has ← mentor≥0                     # left-join-null: a dangling hop fails the predicate
+sel ← nord∧has∧(has×mentor)⊏dead
+trained ↩ trained∧¬sel
 ```
 ```q
 update Trained:0b from mentorJoin where Nord, mentorDead
@@ -1320,16 +1312,19 @@ Version B:
 Cell @ row , Height = fib(index)
 ```
 
-Version A assumes row order and boundary values for the first cells; Version B hides the boundary values inside `fib`.
+Version A is one barrier step of the two-back stencil: `prev` is a shift over pre-state, not a carry, so the statement cannot generate the sequence. Version B runs the recurrence host-side in `fib` and is canonical.
 
-Verification follows Version A.
+Verification follows Version B; the Version A line is kept as the stencil-step gloss (the left shift must be parenthesized — `»Height + »»Height` parses as `»(Height + »»Height)`).
 
 Verification:
 ```bqn
-Height ↩ »Height + »»Height
+height ↩ (»height) + »»height   # Version A: one stencil step over pre-state; parens required
+Fib ← {⊑{⟨1⊑𝕩,+´𝕩⟩}⍟𝕩 1‿1}
+height ↩ Fib¨↕8                 # Version B, canonical: the recurrence runs host-side in fib
 ```
 ```q
-update Height:prev[Height]+prev2[Height] from row
+update Height:fib each i from row                       / Version B, canonical
+update Height:prev[Height]+prev prev Height from row    / Version A: one stencil step
 ```
 
 ## 47 - Counters and becoming
@@ -1347,7 +1342,8 @@ Cheese @ cellar & Aged > 3mo , Price *= 2
 
 Verification:
 ```bqn
-Price ×↩ 1 + Cheese∧cellar∧Aged>3mo
+mo ← 1   # month unit; the counter check is unit consistency
+price ×↩ 1+cheese∧cellar∧aged>3×mo
 ```
 ```q
 update Price:Price*2 from w where Cheese, cellar, Aged>3mo
@@ -1380,7 +1376,7 @@ w,:enlist spawn[`Wheat;cursor]
 
 ## 49 - Block-local anaphora
 
-Omit the left side after an explicit selection; the same block supplies ゼロが.
+Omit the left side after an explicit selection; the same block supplies ゼロが. `~` is a new statement and a new barrier: it reuses the saved selection mask, not the pre-state, so the spawned ghosts survive the despawn.
 
 ```haskell
 死んだ北が、幽霊を生み、消える。
@@ -1399,12 +1395,12 @@ Nord & Dead , spawn Ghost
 
 Verification:
 ```bqn
-sel ← Nord∧Dead
-world ∾↩ GhostRows sel
-world ↩ (¬sel)/world
+sel ← nord∧dead                 # gather: the anaphora saves the mask
+world ∾↩ GhostRows sel          # barrier one: spawn
+world ↩ (¬sel∾0¨/sel)/world     # barrier two: saved mask zero-padded over the minted rows; ghosts survive
 ```
 ```q
-sel:select from w where Nord, Dead
-w,:spawnGhost each sel
-delete from w where Nord, Dead
+ix:exec i from w where Nord, Dead
+w,:spawnGhost each w ix
+delete from `w where i in ix     / the saved rows, never a re-gather
 ```

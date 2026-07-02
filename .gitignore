@@ -47,3 +47,6 @@ scratch/
 !.claude/skills/**
 !.claude/hooks/
 !.claude/hooks/**
+
+# GNU APL repl history
+.apl.history

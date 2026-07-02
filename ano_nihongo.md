@@ -14,7 +14,7 @@ Japanese is also head-final and agglutinative. Its particles are postfix markers
 
 ## Architecture: a reader skin
 
-One AST, many readers. The grammar is defined over abstract token kinds (`AND`, `OR`, `HOP`, `GT`, `COMMA`, `ASSIGN_ADD`, `IDENT`, `NUM`). Each surface is a lexer that maps concrete glyphs to those kinds. と and `&` emit the same `AND`; everything downstream is identical. The Japanese mode is a lexer table plus a numeral reader. The parser, the type/footprint resolution, the bytecode, the JIT, none of them learn which surface produced the tokens.
+One AST, many readers. The grammar is defined over abstract token kinds (`AND`, `OR`, `HOP`, `GT`, `COMMA`, `ASSIGN_ADD`, `IDENT`, `NUM`). Each surface is a lexer that maps concrete glyphs to those kinds. と and `&` emit the same `AND`; everything downstream is identical. The Japanese mode is a lexer table plus a numeral reader. The parser, the type/footprint resolution, the bytecode, the JIT, none of them learn which surface produced the tokens. One scope note, argued at the end of this document: the lexer-table claim holds for the spaced particle surface defined here; the full-sentence surface keeps it only in the なる voice.
 
 The 日本語ーmode is also a litmus test for ano's semantics. If adding the Japanese reader is trivial, the lexer, parser, and semantics are cleanly separated. Note to self: this project might be my opportunity to introduce my long-cherished coinage, the word "lexiom". I don't know what it means yet.
 
@@ -92,6 +92,7 @@ Japanese negation is a postfix auxiliary, which suits a postfix language, but `�
 - Direction of comparison. より needs a paired adjective in natural Japanese; 超 and 未満 disambiguate but read as jargon. Pick one scheme and commit.
 - Negation glyph, per above.
 - Reduction and scan. The ASCII surface uses `/` and `\`; the particle forms for fold and scan are not yet chosen.
+- Verb-aware case frames. The spaced particle surface is a lexer table because each operator fixes one case frame (に on the column in に…たす). The full-sentence する voice lets the verb pick the frame — 与える puts に on the recipient selection and を on the column — so the same `ASSIGN_ADD` needs a per-verb case-frame table, a grammar rather than a lexer. The なる register ships as the table tier; whether the する register gets verb frames or stays out of the unspaced surface is open.
 - IME ergonomics. Writing kana code needs an input method, and the unspaced form is hard to type as well as to lex. The spaced form is the authoring surface; the unspaced form is accepted but not authored.
 - Whether the printer normalizes mixed kana, or preserves the author's katakana-vs-kanji choices on round-trip.
 
@@ -101,7 +102,7 @@ A side-project, orthogonal to the implementation language. Even on a q or k prot
 
 ## Grammar beyond the operators
 
-The structural reading of Japanese here follows Cure Dolly, who taught Japanese as a single consistent engine whose surface variety is all derived. Her channel, [Organic Japanese with Cure Dolly](https://www.youtube.com/@organicjapanesewithcuredol2667), and her book *Unlocking Japanese*, argue that one structure underlies every Japanese sentence: a subject marked by が, often the invisible ゼロが (the zero pronoun), joined to a predicate, with は a separate non-logical topic marker layered on top. Verbs, adjectives, and noun-sentences are that one engine in different costumes. That refusal of special cases is the design ethic ano borrows. The numbered points below are where the grammar suggests features the array-programming surface never raised.
+The structural reading of Japanese here follows Cure Dolly, who taught Japanese as a single consistent engine whose surface variety is all derived. Her channel, [Organic Japanese with Cure Dolly](https://www.youtube.com/@organicjapanesewithcuredol2667), and her book *Unlocking Japanese*, argue that one structure underlies every Japanese sentence: a subject marked by が, often the invisible ゼロが (the zero pronoun), joined to a predicate, with は a separate non-logical topic marker layered on top. Verbs, adjectives, and noun-sentences are that one engine in different costumes. That refusal of special cases is the design ethic ano borrows. Two notes on sources: Cure Dolly's engine is a pedagogical model, and が-centrality is contested in linguistics proper — Kuno's exhaustive-listing が against thematic は is a live literature. And the model has ancestry: the zero-pronoun treatment descends from Jay Rubin's *Making Sense of Japanese*, and the する/なる split in point 2 is Ikegami's typology. The numbered points below are where the grammar suggests features the array-programming surface never raised.
 
 ### 1. Relative clauses with zero ceremony
 
@@ -109,11 +110,11 @@ The structural reading of Japanese here follows Cure Dolly, who taught Japanese 
 
 ### 2. する vs なる — agentive (imperative) vs spontaneous (declarative)
 
-する is do-something-to-a-thing: an actor performs the change. なる is become: the world settles into a state on its own. The split is voice. Both verbs reach either a value or an identity — 値を倍にする makes the value double, 値が倍になる has it become double, the same column either way. So the pair maps imperative vs declarative: する is an effect the script performs now, なる is a state a rule computes, the reactive register. The value-vs-structural split (column-write vs archetype-change) runs on a separate axis, carried by different verbs: 与える give, 失う lose, 生成 spawn. する/なる are the voice markers — する on a performed effect, なる on a reactive rule.
+する is do-something-to-a-thing: an actor performs the change. なる is become: the world settles into a state on its own. The split is voice. Both verbs reach either a value or an identity — 値を倍にする makes the value double, 値が倍になる has it become double, the same column either way. So the pair maps imperative vs declarative: する is an effect the script performs now, なる is a state a rule computes, the reactive register. The value-vs-structural split (column-write vs archetype-change) runs on a separate axis, carried by different verbs: 与える give, 失う lose, 生成 spawn. する/なる are the voice markers — する on a performed effect, なる on a reactive rule. The split is Ikegami's する-language/なる-language typology (『「する」と「なる」の言語学』, 1981), and the ASCII surface carries it at the hinge: `selection , effect` performs now, the する voice; `selection => effect` installs a standing rule, the なる voice. Same left side, same right side, only the hinge changes.
 
 ### 3. Counters/classifiers — frame-typed numerals
 
-三本 (3 long-things), 三匹 (3 animals), 三枚 (3 flat-things). The number carries the type/shape of what it counts; 三匹 cannot count a flat thing. ano's open question is coordinate frames — "a world-space `at` cannot silently consume a cell-space coordinate." Counters are the natural-language version of exactly that: a scalar tagged with its frame/unit, and a grammar that rejects the wrong counter for the noun. ano numerals could carry a frame counter checked at the で/`at` boundary. This is the one that turns an open question into a design.
+三本 (3 long-things), 三匹 (3 animals), 三枚 (3 flat-things). The number carries the type/shape of what it counts; 三匹 cannot count a flat thing. ano's open question is coordinate frames — "a world-space `at` cannot silently consume a cell-space coordinate." Counters are the natural-language version of exactly that: a scalar tagged with its frame/unit, and a grammar that rejects the wrong counter for the noun. ano numerals could carry a frame counter checked at the で/`at` boundary. This is the one that turns an open question into a design. Fine print: counters are phonologically irregular — 一本 ippon, 三本 sanbon, 六本 roppon — so the semantic analogy survives and the total-regularity rhetoric does not. The irregularity is sandhi, not type structure; the frame check is regular even where the surface sound is not.
 
 ### 4. Agglutination — ordered combinator stacking, no parens
 
@@ -125,7 +126,7 @@ Cure Dolly's central correction: が marks the real grammatical subject; は is 
 
 ### 6. ゼロが (the zero pronoun) — block-local anaphora
 
-Japanese omits any subject that context supplies; the が is frequently invisible and inferred. That is point-free programming. If the block has no subject, the host may let a registered effect declare a default subject. For instance, you may want to define `@spawn` to happen at the raycast intersect drawn from the player's cursor to the ground. Or have heal target `player`, and so on.
+Japanese omits any subject that context supplies; the が is frequently invisible and inferred. That is point-free programming. If the block has no subject, the host may let a registered effect declare a default subject. For instance, you may want to register `spawn` so a subjectless `spawn Wheat` lands at the raycast intersect drawn from the player's cursor to the ground. Or have heal target `player`, and so on.
 
 In Japanese, the subject, if omitted from a sentence (as it most often is), is inferred contextually. 
 
@@ -133,11 +134,11 @@ Block-local anaphora (implicit subject)
 
 ```haskell
 Nord & Dead , spawn Ghost
-~   -- same block subject
+~   -- same subject, next barrier
 ```
 
 ```haskell
-@spawn Wheat    -- reasonable host default: cursor
+spawn Wheat    -- reasonable host default: cursor , spawn Wheat
 ```
 
 ### 7. こと/もの nominalizers — reify an effect as a value
@@ -152,7 +153,7 @@ Nord & Dead , spawn Ghost
 
 Japanese demonstratives are one engine indexed by one axis: こ proximal (near speaker), そ medial (near listener), あ distal (far from both), ど interrogative. これ/それ/あれ/どれ, ここ/そこ/あそこ/どこ, この/その/あの/どの — one mechanism, different referent by deictic distance. ano's target aliases are this engine: @cursor, @observer, @world, dore are one deictic pointer indexed by referent. The rule it sets: aliases proliferate freely, one mechanism resolved per evaluation, while an operation stays in the calculus. @cursor and @world desugar to the same resolve with a different referent, so they are aliases; the old grid and fib desugar to different expressions, so they are operations wearing nouns.
 
-The deictic axis is the coordinate frame. A generated lattice needs an origin, and the demonstrative supplies it: @cursor is こ proximal, origin where the pointer meets the world; @observer/@player is そ medial, origin at the subject; @world is あ distal, the absolute world origin, "that one over there"; dore is ど, the query form, the ano/dore pair. The frame's origin is which demonstrative the selection points with. The language is named あの, the distal — address-by-description, the default for selecting things out there. Generation, being hands-on, defaults to この, proximal, anchored at the cursor.
+The deictic axis is the coordinate frame. A generated lattice needs an origin, and the demonstrative supplies it: @cursor is こ proximal, origin where the pointer meets the world; @observer/@player is そ medial, origin at the subject; @world is あ distal, the absolute world origin, "that one over there"; dore is ど, the query form, the ano/dore pair. The frame's origin is which demonstrative the selection points with. The language is named あの, the distal — address-by-description, the default for selecting things out there. The あ-series carries one more property: it marks a referent in the shared knowledge of speaker and hearer — あの人 is that person we both know. Read that way, あの is exactly right for a language whose scripts utter descriptions resolved against the common ground of the game world. Generation, being hands-on, defaults to この, proximal, anchored at the cursor.
 
 ## The engine underneath
 
@@ -172,7 +173,7 @@ The factoring is the deep part: shared root + varying inflection is columnar sto
 
 ### Total, two exceptions
 
-ano's spec wants totality from finite combinators — every form derivable, no general fixpoint. Japanese verb conjugation is a total function (verb, function) → form with exactly two irregulars (する, 来る) and one fully-regular ichidan shortcut. That near-zero exception rate across every politeness register is the same aesthetic: a closed generating system where surface variety is all derived, never stored. The consistency across registers is the conjugation being orthogonal to register — politeness is a separate axis layered on the same engine.
+ano's spec wants totality from finite combinators — every form derivable, no general fixpoint. Japanese verb conjugation is a total function (verb, function) → form with exactly two irregulars (する, 来る) and one fully-regular ichidan shortcut. The fine print: that count covers the conjugation wheel only — ある negates suppletively to ない, 行く takes the irregular onbin 行って, and です/ます run their own paradigm. That near-zero exception rate across every politeness register is the same aesthetic: a closed generating system where surface variety is all derived, never stored. The consistency across registers is the conjugation being orthogonal to register — politeness is a separate axis layered on the same engine.
 
 ### Enumeration + particle = pervasion
 
@@ -184,7 +185,7 @@ i-adjectives conjugate on the same regular schedule (高い → 高く adverbial
 
 ### The punchline
 
-Japanese is a head-final, totally-regular, closed-combinator system operating on type-tagged nouns through postfix particles, with inflection as vowel-indexed gather and lists as pervaded vectors. Drop the phonology and that description is an array-relational language. ano and Japanese are two surfaces over the same underlying machine — selection, pervasion, gather, total combinators, no parens. The particle mapping was discovery because the machine was already shared.
+Japanese is a head-final, closed-combinator system, regular to within the fine print above, operating on type-tagged nouns through postfix particles, with inflection as vowel-indexed gather and lists as pervaded vectors. Drop the phonology, which is where the residual irregularity lives, and that description is an array-relational language. ano and Japanese are two surfaces over the same underlying machine — selection, pervasion, gather, total combinators, no parens. The particle mapping was discovery because the machine was already shared.
 
 ## Further regularities
 
@@ -232,7 +233,7 @@ Here's what ano looks like if it leans all the way into Japanese grammar. Each e
 Nord & TwoHanded > 60 , Gold += 1000
 ```
 
-Reads as "to the Nords whose two-handed exceeds sixty, give a thousand gold." The WHERE is a relative clause (両手が六十を超える), に is the += target, and 、 is the visible が. The selection is literally a Japanese subordinate clause.
+Reads as "to the Nords whose two-handed exceeds sixty, give a thousand gold." The WHERE is a relative clause (両手が六十を超える), and the selection is literally a Japanese subordinate clause. Mind the case frame, though: に sits on the selected Nords, を on the gold column, and the subject of 与える is a zero-が agent — the script itself. What that costs is settled after example 6.
 
 ### 2. The fallen master
 
@@ -267,9 +268,9 @@ Version B:
 Cell @ row , Height = fib(index)
 ```
 
-Version A reads closer to the Japanese sentence and assumes row order plus boundary values for the first cells; Version B hides that recurrence boundary in `fib`.
+Version B is canonical. Version A reads closer to the Japanese sentence, but under the barrier it is one step of a two-back stencil, not a recurrence: the comma is gather-effect-scatter, every read observes pre-state, so `prev` is a shift, not a carry, and the statement cannot generate the sequence. The recurrence runs inside the registered `fib`, outside the calculus.
 
-Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." で scopes to the lattice, は distributes over each cell (pervasion), the recurrence is 前の二升の和 ("the sum of the previous two squares"), and となる is the becoming, a structural generation.
+Reads as "in the row of squares, each square's height becomes the sum of the two squares before it." で scopes to the lattice, は distributes over each cell (pervasion), 前の二升の和 ("the sum of the previous two squares") is the two-back stencil, and となる is the becoming, a structural generation. The sentence promises the full recurrence; only Version B delivers it.
 
 ### 5. The cellar (counters + becoming)
 
@@ -279,7 +280,7 @@ Reads as "in the row of squares, each square's height becomes the sum of the two
 Cheese @ cellar & Aged > 3mo , Price *= 2
 ```
 
-Reads as "cheese aged in the cellar longer than three months — its price doubles." This is the magnificent one: 三ヶ月 is a frame-typed numeral (the ヶ月 counter is the 3mo unit, checked by the grammar), 熟成した is the selection-clause, and 値が倍になる is the value effect via なる. The coordinate-frame open question and the action both fall out of ordinary counting and ordinary becoming.
+Reads as "cheese aged in the cellar longer than three months — its price doubles." This is the magnificent one: 三ヶ月 is a frame-typed numeral (the ヶ月 counter is the 3mo unit, checked by the grammar), 熟成した is the selection-clause, and 値が倍になる is the value effect via なる. The coordinate-frame open question and the action both fall out of ordinary counting and ordinary becoming. Careful, though: the ASCII keeps the comma, a command performed once; installed as a standing `=>` rule it would re-gather and double every tick. The sentence's becoming voice does not force the rule register on the program.
 
 ### 6. Wheat at the cursor (zero subject)
 
@@ -291,9 +292,24 @@ spawn Wheat
 
 Reads as "grow wheat." The subject is omitted: ゼロが. In a console/game setting the host may register `spawn` with `@cursor` as its default subject, so the raycast point where you are looking becomes the silent A in `A , spawn Wheat`.
 
-The thing that makes these sing: in every one, the program parses as a sentence and the sentence parses as a program. The relative clause is the selection, の is the join, the counter is the type, に is the assignment target, なる is becoming voice, 、 is the visible が, and omission is ゼロが. The discovery underneath: a 1000-year-old grammar was already a query-and-update language, and nobody noticed.
+The thing that makes these sing: in every one, the program parses as a sentence and the sentence parses as a program. The relative clause is the selection, の is the join, the counter is the type, なる is becoming voice, and omission is ゼロが. The discovery underneath: a 1000-year-old grammar was already a query-and-update language, and nobody noticed.
+
+One wrinkle, and it is point 2 keeping its own score. In the なる-voice sentences the selection is the subject — 師匠が死んだ北は、訓練を失う; 値が倍になる — so there the comma really is the visible が and the surface really is a lexer table. In the する sentence the verb picks the case frame: 与える puts に on the selected Nords and を on the gold column, while the table's たす puts に on the column — same `ASSIGN_ADD`, opposite frames. A lexer cannot know what に marks without knowing the verb, so the full する-voice surface needs verb-aware case frames, a small grammar rather than a table, and its subject is a zero-が agent, not the selection. The voice split predicted exactly where the table would end.
+
+Credit where due: Ikegami saw the する/なる typology, and the grammatical tradition has read the particles as case-role markers all along. The new thing is the fit — the correspondence is exact enough to build a surface on.
+
+## What this document is for
+
+This file carries two jobs at once. It is the design's guiding line: Japanese is the intuitive substrate the surface is being fitted to, and a large share of the language's eventual players will read this surface natively or near it — Japanese players outright, and the N5-and-up crowd for whom 北に金を千与える is legible on sight. When an ASCII design question stalls, the Japanese answer is the tiebreaker. And it is the source of a future paper. "Japanese inspired our syntax" is a workshop poster; language-inspired syntax is everywhere, language-inspired semantics is not. The publishable thesis is the strong version the sections above already demonstrate: case-marking grammar is an executable query semantics. The particle system is a role-assignment calculus — に/を/で/が as typed argument slots — the gapless prenominal relative clause is intensional reference with no relativizer and no lambda, selection by juxtaposition, and Ikegami's する/なる typology lands as the command-vs-standing-rule evaluation split. Each is a semantic correspondence with a running artifact behind it, which is what separates the paper from the long tradition of linguistics-flavored notation.
+
+The paper's teeth are the results this document already states, and two of them are negative, which is what makes the mapping falsifiable rather than decorative. The lexer-table boundary theorem: the full-sentence surface is a pure reader skin exactly in the なる voice, and fails for する/与える because に flips case frames with verb choice — a clean, checkable claim about where grammar-as-syntax ends and verb semantics begins, Levin-style valency theory meeting compiler front-ends. The closed-registry segmentation result: general segmentation is hard because the lexicon is open; the registry closes it before lex time, and unspaced kana reduces to maximal munch — a clean, defensible result on its own. Counters as unit types: semantically exact, phonologically irregular — the analogy lives at the type level and dies at the surface. And the deixis system: こそあど as coordinate-frame origins, with the あ-series shared-knowledge reading giving the language's own name a formal semantics (the common ground is the game world state) — Kaplan-style indexicals implemented as scope resolvers, which no running language has done.
+
+The gap between this document and a draft is mostly literature positioning: engaging Ikegami and Kuno seriously rather than citing them in passing, and setting the contrast class — situated language understanding, SHRDLU through modern instruction-following, where everyone parses natural language into commands. The claim here is stranger and cleaner: the grammar already was the command language, no NLU step, just a lexer table within a provable boundary. Beyond that, the missing work is formalizing the particle→operator map as an actual typed translation, stating the する case-frame grammar the boundary forces as a grammar, and the related-work section itself; this file is roughly 60% of the draft. The artifact section is a playable console.
 
 ## Citations
 
-- Cure Dolly. *Organic Japanese with Cure Dolly*, video lessons and articles. [YouTube channel](https://www.youtube.com/@organicjapanesewithcuredol2667), [learnjapaneseonline.info](https://learnjapaneseonline.info/).
+- Cure Dolly. *Organic Japanese with Cure Dolly*, video lessons and articles. [YouTube channel](https://www.youtube.com/@organicjapanesewithcuredol2667), [learnjapaneseonline.info](https://learnjapaneseonline.info/). A pedagogical model, cited as such; が-centrality is contested in linguistics proper.
 - Cure Dolly. *Unlocking Japanese: Making Japanese as Simple as It Really Is*. 2016. ISBN 978-1539485506.
+- 池上嘉彦 (Ikegami Yoshihiko). 『「する」と「なる」の言語学』 (*Suru to Naru no Gengogaku*). 大修館書店, 1981. The する-language/なる-language typology behind point 2.
+- Jay Rubin. *Making Sense of Japanese: What the Textbooks Don't Tell You*. Kodansha International, 1998. The zero pronoun behind ゼロが.
+- Susumu Kuno. *The Structure of the Japanese Language*. MIT Press, 1973. Exhaustive-listing が against thematic は — the live literature.

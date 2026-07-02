@@ -30,7 +30,9 @@ No alias. No handle. No FormID. No loop. The predicate `Nord & TwoHanded > 60` i
 source & predicate , effect
 ```
 
-Selection on the left, effect on the right, comma between. `source` defaults to the live world. Let's dive in.
+Selection on the left, effect on the right, comma between. `source` defaults to the live world.
+
+Ano is to the game world what q is to kdb+: the resident query-and-command language of a live column store, console ergonomics included — SQL, Datalog, and production-rules class, the FP/array sibling of Lua. The split with a Lua-class host is coroutines versus triggers: cinematic sequencing, UI, and per-instance branching stay imperative, and everything statable as a condition over the world, a bulk effect, and a schedule is ano's territory — missions included, since a quest is data: a stage column, objectives as entities, advancement as a standing rule (§11). StarCraft 2's trigger editor shipped a whole campaign on that paradigm; ano is that layer with a relational predicate language. And the shape buys determinism and replay — a statement is a pure function of world state, a predicate plus an effect buffer over pre-state, so the same world and the same log give the same run: a mission is a text file that replays identically anywhere. Let's dive in.
 
 ---
 
@@ -48,7 +50,7 @@ A bare component name is the set of entities carrying it. `&` `|` `!` build the 
 ```haskell
 Nord , Gold += 100
 Dragon , Health = 0
-Bandit & !Dead & Faction == Bandit , Faction = Hostile
+Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
 ```
 
 or, scoped to a region:
@@ -67,7 +69,7 @@ The cursor and the viewpoint are predicates with short names, resolved per evalu
 
 ```haskell
 @cursor , Health = 0
-@observer , Faction = Friendly
+@observer , Faction = `Friendly
 Player , Gold += 9999
 @selected , Damage *= 2
 ```
@@ -75,7 +77,7 @@ Player , Gold += 9999
 ### 3. Pattern-match selectors (Erlang)
 
 ```erlang
-match(E) when race(E) =:= nord, two_handed(E) > 60 -> ...
+match(#entity{race = nord, two_handed = T}) when T > 60 -> ...
 ```
 
 The Erlang tuple-with-guard spells the selector positionally. Component presence has three states a flat tuple cannot tell apart.
@@ -114,6 +116,16 @@ Student & mentor.Dead , -Mentored
 Soldier & faction.AtWar , Morale -= 20
 ```
 
+`rel.Comp` is strictly functional: one ID, one indexed read. Applying the bare dot to a set-valued or inverse relationship is a compile error. The set hop is the postfix tick on the relationship name, k's each: `rel'` is the fiber at each selected entity as a per-source group, `rel'.Comp` gathers a column across it, and in source position `sel.rel'` selects the image, the union of fibers. The set hop is the dot hop under each. A bare `rel'` outside a fold, quantifier, or source position is a compile error; in a boolean position it must sit under a fold — the quantifiers are the boolean folds applied to the fiber: `|/ rel'.Comp` is any, `&/ rel'.Comp` is all, `#/ (rel' & pred)` is count.
+
+```haskell
+Frenzy.targets' , +Frenzied               -- image of the fibers: each reached target, once
+Plot & |/ neighbors'.Planted , +Watered   -- any: a planted neighbor exists
+Pen & &/ livestock'.Healthy , +Certified  -- all: every animal in the pen healthy
+```
+
+The image is a selection and a selection is a mask: a target reachable from two sources appears once, and the effect applies once — set semantics, idempotent scatter, consistent with the predicate-is-the-reference stance, since masks have no multiplicity. In-degree is never silently summed into a value effect. To accumulate per in-edge, fold at the target over the inverse fiber: `Target , Hits += #/ attackers'`.
+
 ### 6. Named selections
 
 ```apl
@@ -127,7 +139,7 @@ def master = Human & Nord & TwoHanded > 60
 def rich   = Gold > 10000
 
 master , Gold += 1000
-rich , Faction = Hostile ; +Marked
+rich , Faction = `Hostile ; +Marked
 master & rich , +Legendary
 ```
 
@@ -140,7 +152,7 @@ master & rich , +Legendary
 ```apl
 gold +← 1000 × nord          ⍝ masked add: increment where the mask is 1
 health -← 25 × bandit
-gold ×← 2 × merchant
+gold ×← 1 + merchant         ⍝ masked double: ×2 on the mask, ×1 off it — 2 × merchant would zero every non-merchant
 ```
 
 A value effect is a masked array operation over a dense column.
@@ -155,12 +167,12 @@ Wounded , Speed /= 2
 ### 8. Assignment
 
 ```apl
-faction[bandit] ← `hostile   ⍝ overwrite where the mask holds
+faction[⍸bandit] ← `hostile  ⍝ overwrite where the mask holds: ⍸ turns the mask into indices; faction[bandit] would index by the mask's 0s and 1s
 ```
 
 ```haskell
-Bandit , Faction = Hostile
-Dead , Loot = Empty
+Bandit , Faction = `Hostile
+Dead , Loot = `Empty
 ```
 
 ### 9. Structural effects (relational, archetype-changing)
@@ -176,7 +188,7 @@ Structural effects change which rows exist or which columns a row occupies. They
 
 ```haskell
 Dead , ~                     -- despawn
-Frenzy.targets , +Frenzied   -- add component
+Frenzy.targets' , +Frenzied  -- add component across the set hop's image
 Burdened , -Encumbered       -- remove component
 ```
 
@@ -186,10 +198,10 @@ Burdened , -Encumbered       -- remove component
 A ⊢ B ⊢ C                    ⍝ all evaluated against the same pre-state
 ```
 
-`;` batches effects into one barrier. All observe the pre-state. The comma is gather-effect-scatter; batched effects must commute.
+Every top-level statement is exactly one gather-effect-scatter barrier. `;` batches effects to the right of one comma into that barrier: all observe the statement's pre-state, and they must commute under the registered merge laws. The scatter commits at the end of the statement; the next statement's gather observes it. Effects become visible across statements exactly at statement boundaries, in program order. `;` within one statement is the only barrier-sharing form; there is no multi-statement block barrier.
 
 ```haskell
-@cursor , Knockback 5 ; Flash Red ; -Shielded
+@cursor , Knockback 5 ; Flash `Red ; -Shielded
 Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 ```
 
@@ -201,8 +213,42 @@ spawn Wheat   --cursor , spawn Wheat
 
 ```haskell
 Nord & Dead , spawn Ghost
-~                              -- same subject, next effect
+~                              -- same subject, next barrier
 ```
+
+A leading comma continues the antecedent explicitly, the same continuation with the effect spelled out:
+
+```haskell
+12 , offset = fib(index)
+   , spawn Cheese at Player.pos + (offset, 0)   -- same subject, next barrier
+```
+
+A continuation line — `~`, a leading comma, or an elided-subject effect — is a new statement and a new barrier: it reuses the antecedent's saved selection mask, not its pre-state. Here the ghosts spawned by the first line survive the second, because the despawn applies the mask saved at the first gather, never a re-gather. The binding rule for the elided subject: `~` and the leading comma always bind the saved mask; a bare effect takes ゼロが — the antecedent's saved mask when one exists, the host default `@cursor` when the block opens cold.
+
+### 11. Standing rules (the naru register)
+
+```lisp
+(defrule spread (plot ?p) => (assert (planted ?p)))   ; condition-action over working memory: the rule stands
+```
+
+The hinge changes, nothing else: `selection , effect` performs a command now; `selection => effect` installs a standing rule. Same left side, same right side, same `;` batching. The comma is する, the performed voice; the arrow is なる, the becoming voice — the する/なる split §9 declares is carried by the hinge, and the hinge is the visible が only in the なる register (ano_nihongo.md, the する case frame). The lineage is the Datalog rule (`head :- body`, with ano's order head-final) and the production rule of OPS5 and CLIPS. A rule is named for retraction the way selections are named.
+
+```haskell
+Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted                  -- performed once, now
+def spread = Plot & !Planted & #/ (neighbors' & Planted) >= 2 => +Planted    -- installed, standing
+```
+
+Schedule: once per tick, one barrier step. At the tick's ingest every installed rule re-gathers against the tick's pre-state and scatters once; no intra-tick cascading, no fixpoint — totality comes from bounded demand, and one step per tick is also the game-legible behavior: spreading crops advance one ring per tick. On-change evaluation is implementation lineage, not semantics: Rete and differential dataflow let the host fire only the rules whose footprints changed, observationally equivalent to the every-tick reading; incrementality is an optimization the registry's read/write footprints already enable, never a semantic mode.
+
+Conflicts: all standing rules active in a tick share one barrier — the `;` law lifted to the rule set. All observe the tick's pre-state, and overlapping writes to one cell are accepted only when the registered footprints are disjoint or the effect algebra proves a deterministic merge (additive increments commute). Two rules whose overlapping writes admit no merge law are rejected at installation, statically, since the rule set is known. Rules never race commands: a tick runs ingest, then the rule barrier, then queued command statements in program order. The per-tick rule barrier is the one whole-program barrier; the static layer needs no block form. The retraction surface is unsettled (Open Questions, Rule retraction).
+
+The register scales from field rules to campaign logic. A quest is data — a stage column, objectives as entities, advancement as a standing rule per stage — the paradigm StarCraft 2's trigger editor shipped a whole campaign on: events, conditions, actions over live game state, here with a relational predicate language in place of the editor's condition list. Timers ride the host's monotonic tick counter; the statement log makes a mission a text file that replays identically anywhere. What stays with the host is the coroutine kingdom — cinematic sequencing, UI, per-instance branching — and little else.
+
+```haskell
+def stage3 = Quest & Id == `Liberation & Stage == 3 & #/ (objectives' & Complete) == 3 => Stage = 4 ; spawn Convoy at rally
+```
+
+The stage-4 rules stand inert until the data says otherwise; on advance, `stage3` must withdraw — the retraction question is load-bearing exactly here.
 
 ---
 
@@ -210,7 +256,7 @@ Nord & Dead , spawn Ghost
 
 A column expression is a vector-over-a-selection. `Gold` is one. These operators build others, and a column expression appears anywhere a component name appears: in a predicate, a fold, an effect, an ordering.
 
-### 11. Reduction (`/`)
+### 12. Reduction (`/`)
 
 ```apl
 +/ 1 2 3 4        ⍝ 10        sum
@@ -219,7 +265,7 @@ A column expression is a vector-over-a-selection. `Gold` is one. These operators
 ∧/ alive          ⍝ all
 ```
 
-Collapse a column to a scalar under an associative operator. `@` scopes to a selection; empty reductions need an identity.
+Collapse a column to a scalar. The contract for a raw `fold/` is strict: an associative binary operator, with a registered identity if the empty scope is to mean anything. `@` scopes the fold to a selection, and a fold under `@` is always one scalar.
 
 ```haskell
 +/ Gold @ Nord              -- total Nord gold
@@ -229,13 +275,31 @@ Collapse a column to a scalar under an associative operator. `@` scopes to a sel
 #/ (Nord & TwoHanded > 60)  -- count of masters
 ```
 
+Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms: `avg/` folds sum and count in one pass and divides at the end; `#/` is `+/` over the constant 1. The surface keeps the spellings; the registry records them as fold-and-finish, which is what makes the empty case honest — a fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true), while a reducer with no identity over finite component values (`avg/`, `max/`, `min/`) fails the empty scope and the row drops, the left-join-null rule again.
+
 or, spelled for named reducers:
 
 ```haskell
 reduce(threat) Damage @ Enemies
 ```
 
-### 12. Scan (`\`)
+### 13. Grouped fold (γ)
+
+```q
+select headcount: count i by pen from animal where cattle   / q: by groups, the aggregate collapses each group
+```
+
+A fold prefix over a tick-marked hop is the grouped fold: `fold/ rel'.Comp` for a gathered column, `fold/ (rel' & pred)` for a filtered fiber. A relationship is registered set-valued forward (`targets`, `neighbors`: each source maps to a set of targets) or as the inverse read of a functional relationship (`livestock`, the inverse of `pen : Animal -> Pen`). For each entity in the current selection, `rel'` denotes the fiber at it — the target set for a forward relationship, the preimage for an inverse read — and the fold collapses each fiber to one value per selected entity. The whole expression is a column aligned to the selection, written back under the ordinary alignment rule. This is γ: q's `by`, Datalog's grouped aggregation, expressed as fold-under-each over the fibers rather than a new clause.
+
+```haskell
+Pen , Headcount = #/ (livestock' & Cattle)    -- count per pen, over the inverse fiber
+Plot , Moisture = avg/ neighbors'.Moisture    -- per-plot mean over the neighbor fiber
+Target , Hits += #/ attackers'                -- in-degree, folded at the target
+```
+
+`fold/ col @ scope` remains the scoped-global fold and is always one scalar; `fold/ rel'…` is always per-source. The result-type split is lexical, never a registry lookup: after a fold, `@` yields one scalar, `'` yields a per-source column, and `@` never groups. Empty fiber: the fold's registered identity when it has one (`#/` and `+/` give 0, `|/` false, `&/` true); a reducer with no identity (`avg/`, `max/`, `min/`) fails the row — the §5 left-join-null rule extended from the dangling link to the empty fiber: the entity drops out of the selection and no write lands.
+
+### 14. Scan (`\`)
 
 ```apl
 +\ 1 2 3 4        ⍝ 1 3 6 10    running sum
@@ -256,7 +320,7 @@ or, with an explicit ordering:
 scan(+) Weight along pathCells
 ```
 
-### 13. Grade and rank (`⍋ ⍒`)
+### 15. Grade and rank (`⍋ ⍒`)
 
 ```apl
 ⍋ 3 1 2           ⍝ 2 3 1     indices that sort ascending
@@ -266,16 +330,10 @@ V[⍋V]             ⍝ V sorted  grade used to reorder
 
 Return the permutation that sorts a column, then reorder anything by it.
 
-Ties are stable.
+Ties are stable in the grade, which is an ordering. A rank written back into a component is value-only — dense or fractional — because stable ties break by index, and leaking index information into a record is exactly what the Tier-2 write law forbids.
 
 ```haskell
-Unit , Slot = grade(Initiative)        -- rank ascending into a component
-top 5 (grade desc Threat) , +Targeted  -- the five highest-threat
-```
-
-Version B:
-```haskell
-Unit , Slot = rank(Initiative)         -- rank ascending into a component
+Unit , Slot = rank(Initiative)         -- value-only rank ascending into a component
 top 5 (grade desc Threat) , +Targeted  -- the five highest-threat
 ```
 
@@ -285,7 +343,7 @@ or, as a pipeline:
 Enemy |> order by Threat desc |> take 5 , +Targeted
 ```
 
-### 14. Outer product (`∘.`)
+### 16. Outer product (`∘.`)
 
 ```apl
 (⍳9) ∘.× ⍳9       ⍝ 9×9 multiplication table
@@ -293,7 +351,7 @@ Enemy |> order by Threat desc |> take 5 , +Targeted
 2 | ∘.+⍨ ⍳8       ⍝ 8×8 checkerboard
 ```
 
-Apply a binary operator to every pair from two sets. The relational reading is a dependent join over two generators.
+Apply a binary operator to every pair from two sets. The relational reading is a filtered cross join over two generators — σ_p(A × B), the θ-join; a dependent join would mean the second generator's domain is a function of the first, `b <- f(a)`, which this is not.
 
 ```haskell
 [ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
@@ -306,7 +364,7 @@ or, the materialized matrix as a value:
 cross dist Tower Creep
 ```
 
-### 15. Replicate (`/` dyadic)
+### 17. Replicate (`/` dyadic)
 
 ```apl
 3 / ⍳2            ⍝ 1 1 1 2 2 2   scalar replicate
@@ -326,7 +384,7 @@ or, exposing the flat-map:
 Spawner |> expand Count , spawn Minion
 ```
 
-### 16. Reshape (`⍴`)
+### 18. Reshape (`⍴`)
 
 ```apl
 3 3 ⍴ ⍳9          ⍝ 3×3 matrix from a flat vector
@@ -341,7 +399,7 @@ Soldier , pos = to 4 _           -- 4 rows, width inferred
 Archer  , pos = to 20            -- one rank of 20
 ```
 
-### 17. Named column transforms (`def` for fields)
+### 19. Named column transforms (`def` for fields)
 
 ```apl
 Mean  ← +/ ÷ ≢                ⍝ fork: sum over count
@@ -379,7 +437,7 @@ Space is the same calculus with the raggedness removed. A lattice is dense and r
 
 Space may denote infinity; a statement demands a finite window or a symbolic field clipped by `@scope`. Coordinates enter world-space by `pos = o + S·k`.
 
-### 18. Patterns from the coordinate lattice (outer product)
+### 20. Patterns from the coordinate lattice (outer product)
 
 ```apl
 2 | ∘.+⍨ ⍳8       ⍝ 8×8 checkerboard (parity of coordinate sums)
@@ -397,31 +455,25 @@ The lattice is `⍳` crossed with `⍳`. Every regular pattern is a predicate on
 8 8 & x % 3 == 0 , spawn Fence           -- stripes
 ```
 
-### 19. Generation along a computed lattice (Fibonacci, spiral)
+### 21. Generation along a computed lattice (Fibonacci, spiral)
 
 ```apl
 +\ fib            ⍝ cumulative fibonacci offsets
 n × 137.5         ⍝ golden-angle per index
 ```
 
-A line of `n` is the bare shape `n`; its index becomes a position under a coordinate transform, and `Player.pos +` lifts into world-space. A computed sequence like Fibonacci is a recurrence over that line: a two-back shift through `prev` and `prev.prev`, carried by the line's order.
+A line of `n` is the bare shape `n`; its index becomes a position under a coordinate transform, and `Player.pos +` lifts into world-space. A computed sequence like Fibonacci comes from a registered host function over the index: the recurrence runs inside `fib`, outside the calculus.
 
 ```haskell
-12 , offset = prev.offset + prev.prev.offset
-   , spawn Cheese at Player.pos + (offset, 0)                 -- fib gaps along a line
+12 , offset = fib(index)                                      -- one statement, one barrier
+   , spawn Cheese at Player.pos + (offset, 0)                 -- continuation: next barrier over the saved line, sees the committed offset
 12 , spawn Cheese at Player.pos + polar(index, index * 137.5) -- phyllotaxis spiral
 8  , spawn Pillar at Player.pos + (index * 2, 0)              -- evenly spaced row
 ```
 
-Version B:
-```haskell
-12 , offset = fib(index)
-   , spawn Cheese at Player.pos + (offset, 0)                 -- fib gaps along a line
-12 , spawn Cheese at Player.pos + polar(index, index * 137.5) -- phyllotaxis spiral
-8  , spawn Pillar at Player.pos + (index * 2, 0)              -- evenly spaced row
-```
+The second cheese line is a leading-comma continuation under §10: a new statement and a new barrier over the line's saved mask, whose gather observes the committed `offset` — it cannot share the first line's barrier, since it reads what that line writes.
 
-Version A assumes boundary values for `prev.offset` and `prev.prev.offset` at the first cells; Version B hides the boundary values inside `fib`.
+The tempting spelling `offset = prev.offset + prev.prev.offset` is not a recurrence. The comma is gather-effect-scatter and every read observes pre-state, so `prev` is a shift, not a carry, and the statement is one parallel stencil step `new[i] = old[i-1] + old[i-2]` over the pre-state column — on a freshly minted line, undefined-or-zero, so it cannot generate Fibonacci; iterating it gives k stencil steps, never the order-carried sequence. `fib(index)` is the honest form; whether a true recurrence should ever be admitted is open (Open Questions, Recurrences).
 
 or, assign the computed positions onto an existing set:
 
@@ -429,7 +481,7 @@ or, assign the computed positions onto an existing set:
 Coin , pos = Player.pos + polar(index, index * 137.5)   -- spiral, assigned from the iota
 ```
 
-### 20. Reduction and scan over space
+### 22. Reduction and scan over space
 
 ```apl
 +/ , elevation    ⍝ total elevation (ravel then sum)
@@ -454,7 +506,7 @@ max\ Height @ (Eye + ↕n * north)     -- occlusion test along a sightline
 
 As written, `+\` is a leading-axis scan; a full summed-area table would be a two-axis scan over the lattice.
 
-### 21. Grade over space (best cells)
+### 23. Grade over space (best cells)
 
 ```apl
 ⍒ , safety        ⍝ cells ordered by safety, descending
@@ -465,7 +517,7 @@ top 8 (grade desc Safety @ 64 64) , spawn Sentry          -- 8 safest cells
 64 64 & top 5 (grade desc Resource) , +MiningNode         -- 5 richest tiles
 ```
 
-### 22. Replicate over space (density fields)
+### 24. Replicate over space (density fields)
 
 ```apl
 counts / cells    ⍝ per-cell multiplicity → a population
@@ -476,10 +528,10 @@ counts / cells    ⍝ per-cell multiplicity → a population
 64 64 & Fertility > 0 , spawn Crop * Fertility  -- richer cells grow more
 ```
 
-### 23. Named fields (`def` over coordinates)
+### 25. Named fields (`def` over coordinates)
 
 ```apl
-Ridge ← {(1○ ⍵÷8) + (1○ ⍵÷8)}    ⍝ a heightmap as a function of position
+Ridge ← {(1○ ⍺÷8) + (1○ ⍵÷8)}    ⍝ a heightmap as a function of position: x Ridge y mixes both coordinates
 ```
 
 A field is a derived column over `x y`, or over a cell's value and its neighbor.
@@ -507,7 +559,7 @@ def slope = abs(Height - neighbor(clamp).Height)    -- local gradient via the ne
 
 Version A assumes a declared default stencil and boundary rule; Version B makes the boundary policy visible.
 
-### 24. Source code that looks like the result (board literal)
+### 26. Source code that looks like the result (board literal)
 
 ```apl
 ⍉ 8 8 ⍴ glyphs    ⍝ reshape a flat glyph string into a board
@@ -516,8 +568,8 @@ Version A assumes a declared default stencil and boundary rule; Version B makes 
 A string literal becomes a glyph lattice carrying a `char` per cell. A registered lookup maps each glyph to a spawn type.
 
 ```haskell
-"RNBQKBNR/PPPPPPPP/......../......../......../......../pppppppp/rnbqkbnr"
-  to 8 8 , spawn (pieceOf char)
+"RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
+  to 8 8 , spawn (pieceOf char)   -- exactly 64 glyphs, no separators: the shape must consume the literal
 ```
 
 ---
@@ -532,8 +584,8 @@ scan        +\ Damage @ graded           +\ Cost @ 64 64
 grade       top 5 (grade Threat)         top 8 (grade Safety @ 64 64)
 outer       [f | a<-A, b<-B]             64 64 & (x+y)%2==0
 replicate   spawn Minion * Count         spawn Tree * Density
-reshape     to Unit                      to Soldier 4 _
-recurrence  prev.X       (shift »)       neighbor.X   (shift «/»)
+reshape     pos = to 20                  pos = to 4 _
+shift       prev.X       (shift »)       neighbor.X   (shift «/»)
 def         def threat = Dmg*Spd/Rng     def ridge = sin(x/8)+sin(y/8)
 ```
 
@@ -545,46 +597,33 @@ Over entities the operation joins across ragged components and leans on the arch
 
 ```haskell
 16 16 & (x + y) % 2 == 0 , spawn Wheat                       -- checkerboard field
-Pen , Headcount = #/ (livestock & Cattle)                   -- count cattle per pen
-Cow & Weight < avg/ Weight @ Cow , +Marked                  -- below-average weight
-Cow , pos.x = grade(Milk) * spacing                         -- line the herd by yield
-Plot & !Planted & #/(neighbors & Planted) >= 2 , +Planted   -- crops spread
-Plot , Moisture = avg/ Moisture @ neighbors                 -- irrigation diffusion
-Crop & Growth >= 100 , spawn Produce ; ~                    -- harvest the ripe
-Farm & Acreage < avg/ Acreage @ Farm , Gold += 500          -- subsidy to small holdings
-Gold , Gold = Gold * 1.05                                   -- 5% interest, world-wide
+Pen , Headcount = #/ (livestock' & Cattle)                   -- count cattle per pen, over the inverse fiber
+Cow & Weight < avg/ Weight @ Cow , +Marked                   -- below-average weight (scoped fold: one scalar, broadcast)
+Cow , pos.x = rank(Milk) * spacing                           -- line the herd by yield (value-only rank)
+Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted  -- crops spread, one ring per statement
+Plot , Moisture = avg/ neighbors'.Moisture                   -- per-plot mean over the neighbor fiber
+Crop & Growth >= 100 , spawn Produce ; ~                     -- harvest the ripe
+Farm & Acreage < avg/ Acreage @ Farm , Gold += 500           -- subsidy to small holdings
+Gold , Gold = Gold * 1.05                                    -- 5% interest, world-wide
 ```
 
-Version B:
-```haskell
-16 16 & (x + y) % 2 == 0 , spawn Wheat                       -- checkerboard field
-Pen , Headcount = #/ (livestock & Cattle)                   -- count cattle per pen
-Cow & Weight < avg/ Weight @ Cow , +Marked                  -- below-average weight
-Cow , pos.x = rank(Milk) * spacing                          -- line the herd by yield
-Plot & !Planted & #/(neighbors & Planted) >= 2 , +Planted   -- crops spread
-Plot , Moisture = avg/ Moisture @ neighbors                 -- irrigation diffusion
-Crop & Growth >= 100 , spawn Produce ; ~                    -- harvest the ripe
-Farm & Acreage < avg/ Acreage @ Farm , Gold += 500          -- subsidy to small holdings
-Gold , Gold = Gold * 1.05                                   -- 5% interest, world-wide
-```
+The two folds differ at the glyph: `@` after a fold is scoped-global, one scalar broadcast into the comparison; the tick is γ, a per-source column over each fiber. The moisture line drops no rows only because no grid fiber is empty; a pen with no animals keeps `Headcount` at `#/`'s identity 0. Performed, the crops-spread line advances one ring per statement; installed with the arrow (`def spread = … => +Planted`, §11), one ring per tick.
 
 ---
 
 ## Technical Explanation
 
-A staging language for entity-component systems. FP / LISP / APL lineage, ASCII
-surface, intended as a Lua-class embeddable scripting layer.
+A staging language for entity-component systems. FP / APL lineage, ASCII surface. An embedded query-and-command engine with console ergonomics — SQL, Datalog, and production-rules class: to the game world what q is to kdb+, the FP/array sibling of Lua. Beside a Lua-class host the split is coroutines versus triggers — sequencing and UI stay imperative; conditions over the world with bulk effects on a schedule, missions included, are ano's territory (§11).
 
 A script states predicates over registered components. The host engine resolves
 which entities satisfy them. The selection predicate is the entity reference.
 The name あの is the distal demonstrative ("that one over there").
 
-Architecture. Scripts stage calls to host-registered functions, compile to
-bytecode, JIT the predicate-and-emit hot path, and return an effect buffer
-describing the work. The host interprets the buffer. The execution model is
-eBPF-shaped: the script invokes only registered functions. Component types and
-read/write footprints reside in the registry, declared once at registration and
-referenced by name in scripts.
+What the model buys is determinism and replay. A statement is a pure function of world state: gather against pre-state, emit an effect buffer, scatter at the barrier. The same world and the same statement log give the same run, so a session replays from its log and a rule set is testable against a snapshot.
+
+Architecture. Scripts stage calls to host-registered functions, compile to bytecode, JIT the predicate-and-emit hot path, and return an effect buffer describing the work. The host interprets the buffer. The staging and registration mechanics are eBPF-shaped — the script invokes only registered functions, and component types and read/write footprints reside in the registry, declared once at registration and referenced by name in scripts — but the safety story is stronger than the one borrowed: eBPF needs a verifier to bound a general instruction set after the fact, while ano is total by construction — no loops, no recursion, registered functions, declared footprints — so termination is a corollary of the grammar, not a check bolted onto it.
+
+Binding types. Registration binds a name to the host three ways, all at compile time. A callback function: host code invoked by name (`fib(index)`, `polar`), the Tier 3 dispatch path — the host runs it, the script keys off the returned column. A mutable data-store: an ordinary component column, read and write footprints declared, the Tier 1/2 territory every effect targets. A readonly data-store: a column whose write footprint is declared empty, so no effect buffer can name it as a target — statically, at installation, not by runtime check; this is where the host exposes hot-path state (physics positions, render data) that scripts may predicate on but only C may move. Readonly does not exempt a column from the clock: ano observes it at the tick's ingest snapshot, so host mutation lands between ticks as far as any script can tell, and the determinism claim survives.
 
 ### Data model
 
@@ -623,39 +662,41 @@ Nord & mentor.TwoHanded > 80 , Gold += 1000
 |---|---|---|
 | Surface flavor | Haskell, Erlang | Equational read, guard idiom |
 | Front door | Cortex Roleplay console | Verb-legible command ergonomics |
+| Address by description | Inform 7 | "now every closed door is open" — first-class intensional descriptions with bulk declarative effect, shipped in a game-authoring language |
 | Selection | q/kdb+, SQL, Datalog | Target-by-description, join, sparseness |
+| Standing rules | OPS5, CLIPS, Drools | Condition-action over working memory is precisely predicate-comma-effect; Rete is the known answer to incremental re-evaluation |
+| Campaign logic | StarCraft 2 trigger editor | Events-conditions-actions over live game state scripted whole campaigns; the なる register is that layer with a relational predicate language |
 | Action | APL, q/kdb+ | Masked column arithmetic, the array calculus |
-| Core | Lisp | Homoiconic staging, registry, macros |
+| Space | PuzzleScript | Pattern-rewrite over a grid: the space tier as rules |
+| Effects | ECS command buffers (Flecs, Bevy) | The deferred effect buffer, committed at a sync point |
 
 ### The maths
 
-The selection sublanguage is relational algebra: selection (σ) by predicate, join (⋈) by relationship, projection (π) by component access. The column sublanguage is the array calculus: reduce, scan, grade, outer product, replicate, reshape over dense vectors. A column store unifies them, since "set of rows" and "array of values" are the same bytes viewed along two axes. The comprehension correspondence (Wadler) identifies the monad comprehension with the relational query, so the double-generator form and the join are one object. Totality follows from bounded demand rather than a general fixpoint.
+The selection sublanguage is relational algebra with grouping: selection (σ) by predicate, join (⋈) by relationship, projection (π) by component access, grouped aggregation (γ) by the fold over a relationship's fibers — σ, ⋈, π alone cannot express a grouped or correlated aggregate, and the farm needs three. The column sublanguage is the array calculus: reduce, scan, grade, outer product, replicate, reshape over dense vectors. A column store unifies them, since "set of rows" and "array of values" are the same bytes viewed along two axes. The comprehension correspondence (Trinder and Wadler 1989/1991; Buneman, Libkin, Suciu, Tannen, Wong 1994) identifies the double-generator comprehension with σ_p(A × B), the θ-join, so the comprehension and the join are one object. The combinator core is structural recursion over finite columns, so totality is a corollary of the grammar — no fixpoint, no unbounded iteration ever parses. The formal development lives in `proofs/foundations.md`.
 
 ---
 # Tiers and Algebras
 
-Three tiers, ordered by what a write into the data costs — and the cost is fixed by the symmetry group an operation must stay equivariant under (Klein's Erlangen program: classify the algebra by the group it commutes with). Demand more symmetry of the index, get less operational freedom; the tiers run from the permissive ground (space) through the aligned ledger (records) to the walled-off opaque. A datum carries no tier on its own — the tier is the (operation, view) pair.
+Three tiers, ordered by what a write into the data costs — and the cost is fixed by the invariance an operation must keep (Klein's Erlangen program: classify the algebra by what it must commute with). Demand more of the index or the value, get less operational freedom; the tiers run from the permissive ground (space) through the aligned ledger (records) to the walled-off opaque. A datum carries no tier on its own — the tier is the (operation, view) pair. The formal development — the laws, the counterexamples, the machine-checked witnesses — lives in `proofs/foundations.md`; this section keeps the English and the worked examples.
 
 ---
 
-# Tier 1 — Space (the indestructible tier)
+# Tier 1 — Space
 
-**English.** The index is a *place*, not a thing. A coordinate carries order and geometry but no durable identity. Writing into position-space doesn't overwrite anything, it inscribes a figure on a conserved ground. So the full calculus applies: any morphism, free rank change, scan, reduce, reshape, grade, annihilate cells. No closure demand, no contract, no types. It doesn't *keep* a promise; it has none. It just IS.
+English. The index is a *place*, not a thing. A coordinate carries order and geometry but no durable identity of its own, because the ground is regenerable. Writing into position-space inscribes a figure on a conserved ground. So the full calculus applies: free rank change, scan, reduce, reshape, grade, annihilate cells. No closure demand, no contract, no types. It doesn't *keep* a promise; it has none. It just IS.
 
-**Math.** Operations are unconstrained morphisms `f : (I → V) → (J → V)`, `J` free. Equivariance demanded only under the geometry-preserving group `G₀` (small ⟹ permissive). A reduction is a *projection*, `+/ : ℝⁿ → ℝ`, a shadow cast onto lower rank, not a deletion. **Why space is indestructible, in two moves.** *(1) A write cannot consume its own domain.* A write is a function `w : I → V` assigning values *over* the index; it never acts *on* `I`. A point `p ∈ I` is a coordinate, fixed by its position in the lattice and independent of occupancy, so `p` exists whether or not anything is written there, and a function cannot delete its own domain, only re-value it. Under any write the ground `I` holds and only the map `I → V` moves. *(2) Every figure is regenerable and owed to no one.* The rank-changing, cell-killing morphisms — `(¬m)/c`, reshape, a fold to lower rank — do hand back a smaller index `J ⊊ I`, yet they leave the ground untouched: `I = ↕shape`, so the generator rebuilds it at any time (a filter cannot invent a key, so generation is irreducible — Part IV), and *nothing refers to a space cell durably*, so dropping a figure breaks no contract. Move (1) conserves the ground beneath every write; move (2) frees the reshape and the annihilate, since a discarded figure costs only what `↕` instantly remakes and nothing else was promised. Space is the *ground of the function, not a value in it* — repaint the canvas forever, or tear it up, and `↕` hands you a fresh one. ∎
+Math. The content of the tier is the key asymmetry. The index of space is **regenerable**: `I = ↕shape`, a definable key, recomputable from the shape alone at any time. The index of records is **nominal**: an allocated key, held only by the store, unrecoverable once dropped. That asymmetry is exactly why the rank-changing index operations — `(¬m)/c`, reshape, a fold to lower rank — are free over space and forbidden as record write-backs: over space no address is lost that `↕` cannot remint; over records a dropped key is gone. Cells are still referred to durably — `Water = 100`, `+Cliff`, moisture diffusion all store state at cells across ticks — so nothing here says the figure is owed to no one; only the ground under it is definable, and that alone buys the freedom. What the tier demands is coherence at the de/at boundary, not symmetry of the operator: the frame check `pos = φ(k) = o + S·k`, with `@` fixing `(o, S)` per the resolved frames rule, and the counter identity `[world] = [world] + [world/cell]·[cell]` — the unit consistency the counter-typed numeral enforces. A reduction, note, is a fold, a catamorphism `+/ : ℝⁿ → ℝ`, not a projection and not a deletion; the read consumes nothing and the field persists.
 
-**The geometry group is the frame.** `G₀` has a name from the spatial calculus: it is the frame. `pos = φ(k) = o + S·k` is a `G₀`-action, and `G₀` is the group of admissible frame changes — translation of the origin `o`, uniform scaling of the spacing `S`, the lattice's rotations and reflections. A Tier-1 operation is legal exactly when it is `G₀`-equivariant, `f(g · c) = g · f(c)` for every `g ∈ G₀`. Read the units and that equivariance *is* the counter type: a value tagged with the frame it counts in, `[world] = [world] + [world/cell]·[cell]`, consistent only because `S ∈ G₀` carries cells into world units. The counter-typed numeral and the de/at boundary check are the single demand "respect `G₀`." And `G₀` is small — a handful of continuous and discrete generators — which is why Tier 1 is the permissive tier: little symmetry asked, almost every morphism survives.
-
-**BQN.**
+BQN:
 ```bqn
-+´∾ h        # reduce a 2D field to a scalar: rank 2 → 0, the field survives as projection
-(¬m)/ c      # annihilate cells by mask: legal, positions aren't owed
++´∾ h        # fold a 2D field to a scalar: rank 2 → 0, the field survives, reads are non-destructive
+(¬m)/ c      # annihilate cells by mask: legal, ↕ remints the ground
 ⌽ g          # reverse/reshape: free, order is data not identity
 ```
-**Ano.**
+Ano:
 ```haskell
 8 8 & (x + y) % 2 == 0 , spawn Wheat   -- inscribe a figure (checkerboard) on the ground
-+/ Elevation @ 64 64                    -- project the field to a scalar; field persists
++/ Elevation @ 64 64                    -- fold the field to a scalar; the field persists
 +\ Cost @ 64 64                         -- scan: order is intrinsic to position
 ```
 
@@ -663,44 +704,37 @@ Three tiers, ordered by what a write into the data costs — and the cost is fix
 
 # Tier 2 — Records
 
-**English.** The index is a *name* that must survive. The slot holds a record; the record *is* the information. Reads are free (a read leaves into Tier 1's open world owing nothing), but a write *back into* the slot is an amendment to a ledger: it must preserve the names or it's forgery, lost information. So write-backs are forced to be identity-aligned. Anything joined-against or referred-to durably must live here. One closure demand ⟹ one contract ⟹ one type.
+English. The index is a *name* that must survive. The slot holds a record; the record *is* the information. Reads are free (a read leaves into Tier 1's open world owing nothing), but a write *back into* the slot is an amendment to a ledger: it must preserve the names or it's forgery, lost information. So write-backs are forced to be identity-aligned. Anything joined-against or referred-to durably must live here. One closure demand ⟹ one contract ⟹ one type.
 
-**Math.** Write-backs are endomorphisms equivariant under the *full* symmetric group: `f(c ∘ σ) = f(c) ∘ σ ∀ σ ∈ Sym(I)`, with `J = I`. Maximal index symmetry ⟹ minimal operational freedom. `Sym(I)`-equivariance forbids order-dependence (no canonical "previous") and pins rank. **The asymmetry, exactly:** read `r : (I→V) → β` is unconstrained (it exits the tier); write-back `w : (I→V) → (I→V)` must satisfy `w ∘ σ = σ ∘ w`. Conjugation reconciles them: `σ⁻¹ ∘ f ∘ σ` lets a free Tier-1 operation `f` act between a relabeling and its inverse, net endomorphism preserved. `I` is invariant under value-writes; creating/destroying names is a *structural* op, staged separately.
+Math. The law is permutation-equivariance under the **diagonal action** of `Sym(I)` on the whole per-entity record: a write-back `w : (I → V₁ × ⋯ × V_k) → (I → V_j)` — it may read several columns; `Nord & TwoHanded > 60 , Gold += 1000` reads two and writes a third, so a single-column signature would outlaw the flagship line — must satisfy `w(ρ ∘ σ) = w(ρ) ∘ σ` for every `σ ∈ Sym(I)`. Relabel the entities and every column relabels together; the write must not notice. Maximal index symmetry ⟹ minimal operational freedom: the characterization is `f(c)_i = φ(c_i, ⟦c⟧)` — pointwise work plus multiset-level aggregates, nothing else (linear case `a·c + b·(Σc)·1`, Schur). Two corollaries fall out. *No canonical previous*: any order-dependent operator breaks the law, so a Fibonacci through gold held by Nords is impossible as a theorem, and an entity scan is legal only along a declared order (`along`, grade) — the order is exactly the extra structure that dissolves the obstruction. *Ties*: stable rank breaks the law (`[5,5,3]` under a swap of the tied pair), so rank write-backs are value-only, dense or fractional. Reads `r` are unconstrained; they exit the tier. Free order-work re-enters by conjugating with the data-derived grade `σ_c` — sort, act, unsort: `h(c) = f(c ∘ σ_c) ∘ σ_c⁻¹`, equivariant precisely because value-only ties give `σ_{c∘τ} = τ⁻¹ ∘ σ_c`; conjugating by a *fixed* σ is not equivariant. `I` is invariant under value-writes; creating/destroying names is a *structural* op, staged separately.
 
-**BQN.**
+BQN:
 ```bqn
-gold + 1000 × nord     # masked add: length & alignment MUST equal input (α→α)
-+´ gold                # read out to scalar: free, leaves the tier, owes nothing
-gold ⊏˜ ⍋ gold         # conjugation: grade out (free), index back aligned
+gold + 1000 × nord              # masked add: length & alignment MUST equal input (α→α)
++´ gold                         # read out to scalar: free, leaves the tier, owes nothing
+(⍋⍋gold) ⊏ +` (⍋gold) ⊏ gold    # conjugation: grade out, free order-work in value order, index back aligned
 ```
-**Ano.**
+Ano:
 ```haskell
 Nord & TwoHanded > 60 , Gold += 1000   -- α→α, entity 47's gold stays entity 47's
 +/ Gold @ Nord                          -- read: exits to a scalar, no return owed
-Unit , Rank = grade(Gold)               -- conjugate: free order-work, scatter back aligned
-```
-
-Version B:
-```haskell
-Nord & TwoHanded > 60 , Gold += 1000   -- α→α, entity 47's gold stays entity 47's
-+/ Gold @ Nord                          -- read: exits to a scalar, no return owed
-Unit , Rank = rank(Gold)                -- conjugate: free order-work, scatter back aligned
+Unit , Rank = rank(Gold)                -- conjugate by the grade: free order-work, scatter back aligned, value-only ties
 ```
 
 ---
 
 # Tier 3 — Opaque
 
-**English.** The *value* means something no array operator respects: a behaviour tree, a graph-with-traversal, a nav-mesh. No morphism in the calculus is defined over it. All that remains is selection (the carrying entity is still an identity, still addressable) and dispatch (hand it to a registered host routine — ano guarantees the envelope, never inspects the value). The Erlang hand-off. Maximal partiality ⟹ maximal type ⟹ walled behind dispatch.
+English. The *value* means something no array operator respects: a behaviour tree, a graph-with-traversal, a nav-mesh. All that remains is selection (the carrying entity is still an identity, still addressable) and dispatch (hand it to a registered host routine — ano guarantees the envelope, never inspects the value). The Erlang hand-off. Maximal partiality ⟹ maximal type ⟹ walled behind dispatch.
 
-**Math.** `∄ f : (I→V) → (·) ∈ 𝒜`, where `𝒜` is ano's operator algebra. Admits only `σ_P : I → I` (selection by predicate) and dispatch `h : V ⇝ host`. **Tier is a property of the (operation, view) pair, not the data:** the same bits viewed as `V₀ = 𝔹` (matrix) sit in Tier 1; viewed as `V = Graph` (asserted traversal meaning) sit in Tier 3. The type-pun is the functor `V₀ ⇄ V` that asserts or strips the meaning — identical to opening `√` into ℂ vs pinning it to ℝ: you are opening or closing the codomain, sliding along the one axis.
+Math. The law is **naturality in `V`** — parametricity. Not "no map exists" (selection and dispatch are maps); no admitted map *inspects* the value. Every algebra map over an opaque column must be a family `f_V : (I→V) → (J→V)` natural in `V`, and by Yoneda every such map is a reindexing `f(c) = c ∘ u` for some `u : J → I`. So the legal maps are index manipulations, select — the subobject inclusion `ι : I_P ↪ I`, a mono into the index, never an endofunction on it — and dispatch `h : V ⇝ host`, admitted by the envelope, never by inspection. Tier is a property of the (operation, view) pair, not the data: the same bits viewed as `V₀ = 𝔹` (matrix) sit in Tier 1; viewed as `V = Graph` (asserted traversal meaning) sit in Tier 3. The type-pun is the functor `V₀ ⇄ V` that asserts or strips the meaning — identical to opening `√` into ℂ vs pinning it to ℝ: you are opening or closing the codomain, sliding along the one axis.
 
-**BQN.**
+BQN:
 ```bqn
 +´ A          # SAME bits as a matrix → Tier 1, out-degrees, free
 # as a graph → no expression exists; hand off
 ```
-**Ano.**
+Ano:
 ```haskell
 Node , OutDeg = +/ Adj@row          -- matrix view: Tier 1, full calculus
 Hostile , shortestPath via Adj      -- graph view: Tier 3, host runs Dijkstra, writes a column back
@@ -709,7 +743,7 @@ Hostile , shortestPath via Adj      -- graph view: Tier 3, host runs Dijkstra, w
 
 ---
 
-**The one axis under all three.** Tier = how much a write costs = how much closure the (operation, view) lacks. **Tier 1:** writes draw figures on a conserved ground, cost nothing, no types — *it just is.* **Tier 2:** writes amend a ledger, cost is the alignment that must survive, one type. **Tier 3:** writes are undefined in the calculus, the value is opaque, only select-and-dispatch remain. The data sits *nowhere* until an operation places it on the axis; promotion and demotion are sliding along it by opening the codomain or asserting a meaning.
+The one axis under all three. The ladder is monotone: Tier 1 demands **geometry of the index** — unit and frame coherence at the de/at boundary; Tier 2 demands **full symmetry of the index** — `Sym(I)`-equivariance under the diagonal action; Tier 3 demands **full abstraction of the value** — naturality in `V`. The monotonicity principle is the spine: for groups `H ⊆ G`, `Equiv_G ⊆ Equiv_H` — demand more symmetry, admit fewer maps — and naturality in `V` extends the principle past groups, invariance under *all* value substitutions, the limit of the demand, leaving the thinnest algebra. The data sits *nowhere* until an operation places it on the axis; promotion and demotion are sliding along it by opening the codomain or asserting a meaning.
 
 The problem I was struggling with was how to have the scripting language remain consistent when faced with different kinds of information. Then this was revealed to me.
 
@@ -724,6 +758,65 @@ However, to draw a fib over space doesnt destroy space, you can't overwrite it. 
 Tier 3 can include non-columnar or functions where trying to treat it as a vector database would be incorrect. You can't select and operate upon an entity's MeshNavGraph directly, like you could for numerical data or space. So we allow the compile-time integration to register these types of objects and the functions that operate over them as static bindings, which call *outside* of ano but can't be operated upon directly in our native algebra. We allow for Tier 3 because one would still like to invoke things from the console, even if they aren't natively scriptable.
 
 That's Ano.
+
+## Appendix — Grammar
+
+### Precedence
+
+Fourteen levels, loosest to tightest. Everything else in the document is a consequence of this table.
+
+- 1 (loosest) — `,` and `=>`: the hinge; everything left is selection, everything right is effect (`,` performs, `=>` installs). The comma inside a parenthesized presence tuple `(Nord, !TwoHanded)` is bracketed and does not compete.
+- 2 — `;`: effect batching within the statement's one barrier.
+- 3 — `|>`: pipeline stages (`order by`, `take`, `expand`).
+- 4 — effect verbs and assignment: `= += -= *= /=`, `+Comp -Comp ~ spawn`, the locatives `at` and `to`, replicate `*` in `spawn X * n`.
+- 5 — `|`: mask or.
+- 6 — `&`: mask and.
+- 7 — `!`: mask not, prefix on one mask term.
+- 8 — comparison: `== != < <= > >=`.
+- 9 — fold and scan prefixes: `f/ f\`, `reduce(f)`, `scan(f) … along`, `grade`, `top k`.
+- 10 — additive arithmetic: `+ -`.
+- 11 — multiplicative arithmetic: `* / %`.
+- 12 — `@` scope: locative on a mask (`Cheese @ cellar`) and fold scope (`Gold @ Nord`), one meaning: evaluate within this scope.
+- 13 — hops: the dot `.` and the set-hop tick `'`, the gather, the tightest operator.
+- 14 (tightest) — atoms: names, the `@alias` sigil (lexical, part of the identifier), backtick symbols, counter-typed numerals (`3mo`), parens and comprehension brackets.
+
+Resolution, worked: `Cheese @ cellar & Aged > 3mo` parses as `(Cheese @ cellar) & (Aged > 3mo)` — `@` (12) binds its scope before `&` (6), and `>` (8) binds before `&`. `Cow & Weight < avg/ Weight @ Cow` parses as `Cow & (Weight < (avg/ (Weight @ Cow)))` — the fold prefix (9) outbinds the comparison (8).
+
+### Desugarings
+
+Every surface form is the one form `source & predicate , effect`; sugar only elides or supplies a slot.
+
+```haskell
+Nord , Gold += 100                         -- world & Nord , Gold += 100: source elided, the live world
+Merchant @ Whiterun , Gold += 5000         -- world & (Merchant @ Whiterun) , …: the locative is part of the predicate
+@cursor , Health = 0                       -- world & @cursor , …: an alias is a named predicate with a unique resolve
+spawn Wheat                                -- @cursor , spawn Wheat: subject elided, ゼロが supplies the antecedent
+~                                          -- saved mask , ~: continuation, a new statement and barrier over the antecedent's saved mask (§10)
+, spawn Cheese at Player.pos + (offset, 0) -- saved mask , effect: the leading-comma continuation, same rule spelled with an effect (§10)
+def master = Human & Nord                  -- names a predicate; folds into any selection slot at plan time (§6)
+Enemy |> order by Threat desc |> take 5 , +Targeted   -- the pipeline builds an ordered, truncated source view; the effect half is unchanged
+top 5 (grade desc Threat) , +Targeted      -- the same view, fold-prefix spelling (§15)
+[ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]   -- the comprehension's generators and filter are the source: σ_p(Tower × Creep) , +InRange (§16)
+Spawner |> expand Count , spawn Minion     -- replicate: each source row emits Count effect rows (§17)
+12 , offset = fib(index)                   -- a numeric shape in source position is the generator (↕12), predicate empty (§21)
+8 8 & x == y , spawn Pillar                -- the rank-2 generator (↕ 8‿8), coordinates as columns (§20)
+"…" to 8 8 , spawn (pieceOf char)          -- reshape pours the literal into a lattice source (§26)
+def spread = Plot & p => +Planted          -- the naru hinge: same form, installed instead of performed, re-gathered once per tick (§11)
+```
+
+### The enum sigil
+
+The backtick, q's symbol literal: `` `Bandit `` is the enum value; `Bandit` is the component mask. The comparison rule is lexical, never a registry lookup: a bare name in a value position always denotes a column (component or derived); a backtick name is a symbol atom; `` Col == `Sym `` is a pointwise mask against the constant; `Col == Col2` is a pointwise column comparison; a bare name that resolves to no registered column is a compile error, never a silent symbol. Zero new lexicon: the spec's own APL and q lines have written `` race=`nord `` all along; the sigil is what the document has been using on the right-hand side of every worked example.
+
+```haskell
+Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
+```
+
+### Dot and `@`
+
+Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` — one ID, one indexed read, left-join-null, chainable (`mentor.mentor.Dead`); (2) the mirror-read, the same hop rooted at a named singleton or alias (`Player.pos`, `@cursor.pos`) — an arity-one gather usable inside effect expressions; (3) field projection into a registered compound component (`pos.x`) — registry-resolved, no join; (4) the shift pseudo-relations on an ordered view or lattice (`prev`, `prev.prev`, `neighbor(clamp)`) — functional single-step hops whose link is the view's order, boundary policy per registration; shifts, never carries; (5) the gather inside a set hop (`neighbors'.Moisture`) — the tick marks the fan-out, the dot still means gather. Dot never groups, never scopes, never folds.
+
+`@`, three roles: (1) locative scope on a selection (`Merchant @ Whiterun`, `Cheese @ cellar`), which also fixes the coordinate frame `(o, S)`; (2) fold and scan scope (`+/ Gold @ Nord`, `+/ Elevation @ 64 64`) — always scoped-global, one scalar per fold; `@` never marks grouping, grouping is the tick; (3) the lexical alias sigil (`@cursor`, `@observer`, `@world`), part of the identifier, the こそあど deixis, not an operator. The `@spawn` verb form is retired. The lexical rule: `@` immediately followed by a name, no whitespace, in term position, is the sigil and belongs to the identifier; `@` with an expression on each side is the scope operator. Roles 1 and 2 are one meaning — evaluate within this scope — since result arity is carried by fold-vs-tick, never by `@`.
 
 ## Open Questions, Next Steps
 
@@ -740,9 +833,15 @@ That's Ano.
   primitives, user bindings, and derived columns is wanted. The `@spawn`
   verb-form is retired pending this.
 
-- Sigil overload. `@` serves both the registered-selector namespace (`@cursor`)
-  and the fold scope (`+/ Gold @ Nord`). Context disambiguates; a rename of one
-  removes the overload.
+- Dot and `@`, the role inventory. Pinned in the grammar appendix: dot has five roles, all gathers; `@` has one operator meaning (evaluate within this scope) plus the lexical alias sigil, disambiguated by whitespace. The residual overload stands anyway — operator `@` and sigil `@` are two meanings on one glyph, a reading cost the lexical rule bounds but does not remove. Whether the sigil should move to another glyph is open.
+
+- Recurrences. `offset = prev.offset + prev.prev.offset` is not a recurrence under the one evaluation rule: the comma is gather-effect-scatter, every read observes pre-state, so `prev` is a parallel shift and the statement is one stencil step; no statement can carry a value along the line it is writing, and iterating it gives k stencil steps, never the order-carried sequence. A true recurrence is a scan whose step need not be associative, and §14's scan is a read-side column expression over a declared order; a scan that feeds its own column's scatter breaks the barrier by construction, so scans cannot live behind the barrier. Options, each with a cost: keep recurrences host-side as registered functions (`fib(index)`, the current Version B — the host runs the recursion and hands back a column, which a statement may key positions off in the same breath), or admit a sequential `scan(f) along order` with non-associative f, legal only where its write footprint does not intersect its read footprint, or admit a generator subclause — corecursion consumed under bounded demand, the lazy-list/Python-generator shape, total because the take is finite even when the definition is not, and read-side by construction so it never touches the barrier. Whether the host-registered form deserves a lexical sigil (`@fib` / `#fib`) folds into the registered-functions sigil question above. A fixpoint/iterate form stays rejected — totality comes from bounded demand, not a general fixpoint. One boundary note: under a fixed-tickrate host the game loop is itself the scan — state[t+1] = F(state[t]), one barrier per tick — so recurrences across ticks are already expressible, and a stage counter advanced by standing rules is one running; only the within-statement form is open. Unresolved; the Fibonacci examples are glossed as one stencil step, Version B canonical.
+
+- Identity. The intensional/extensional boundary: how does a script say "the same bandit as last tick"? A predicate re-resolves per evaluation, so the surface is intensional at the statement level; yet relationship components already store entity IDs — extensional handles — so the data level is extensional, and the surface cannot reach what the data already holds. The saved-mask continuation rule gives one statement of extension inside a script; nothing spans ticks. The options pull against each other: a surface form that holds a resolved selection across ticks is a handle, which breaks the predicate-is-the-reference stance; a component that freezes the match (`+Marked`) keeps the stance but makes identity state the script must manage and retract. A third option rides the clock: a host with tick-stamped history (Anoptic plans a monotonic tick counter at a fixed rate) makes "the same bandit as last tick" an as-of join against the t−1 partition — q's `aj` — an extensional read recovered through the time axis, with no handle on the surface; identity becomes an indexing question. Where the boundary between intensional statements and extensional data sits is the design. Unresolved.
+
+- Rule retraction. A standing rule is named (`def spread = … => …`) so it can be withdrawn, but the retraction form is unspecified: an `undef spread`, a scope that expires (`=> … @ scene`), or a component guard the rule itself reads. A handle-shaped verb sits awkwardly beside predicate-is-the-reference; a guard makes rule state the script must manage and retract. Campaign logic makes this entry load-bearing: a mission stage is a standing rule that must withdraw itself on advance (§11). Unresolved.
+
+- Staging and quotation. The Lisp row left the lineage table: nothing in the current design is homoiconic — there is no quote form and no macro, and "registry" is Lua vocabulary, not Lisp. A staging story (scripts as data, rules that write rules) would have to earn the row back; the nihongo koto nominalizer — the clause-as-thing form — points at where it would enter. Open.
 
 - Outer product as a value. The double-generator comprehension covers the
   filtered-pairs case. Whether ano lets a script hold a materialized N×M matrix
