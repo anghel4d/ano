@@ -1,10 +1,12 @@
 # ano ECS — the world store beneath the language
 
-**Status: working blueprint, 2026-07-02.** This is the design of Anoptic's world store: the C-side ECS that ano scripts against. It is a commitment, not a survey. The BQN files under `demos/` are the reference semantics. The store is those shapes in bits. An implementation in `src/` is verified against the BQN post-states by differential testing (`demos/demos.md`). We target C23. Dialect notes are in §14.
+**Status: working blueprint, 2026-07-02.** This is the design of Anoptic's world store: the C-side backend that ano runs on. It is a commitment, not a survey. The BQN files under `demos/` are the reference semantics. The store is those shapes in bits. An implementation in `src/` is verified against the BQN post-states by differential testing (`demos/demos.md`). We target C23. Dialect notes are in §15.
 
 ## 0. Position
 
-A traditional ECS (Flecs, EnTT, Bevy) is a scheduler's data structure. It exists so per-entity update functions iterate fast. Ano never iterates entities. Every statement is a column transformation: build a mask with vector compares, scatter an effect under it. So the store's client is a query executor, not a system scheduler. The correct lineage is not Flecs. It is kdb+, Arrow, and the APL runtimes: a column store with validity bitmaps, vectorized kernels over fixed-size pages, and copy-on-write snapshots for the time axis. The host's C systems (physics, render, input) live outside. They write their own columns and hand ano a sealed snapshot at ingest. The relationship is exactly q to kdb+. The ECS is the database. Ano is its resident query language. This document is the storage engine spec.
+The division of labor comes first. The game engine is the OS and the hardware. Ano is a program running on it. This store is ano's backend: the address space its masks, barriers, and history operate in. It is not a rival ECS and it does not dictate the host's data layout. The host's ECS can be archetyped, sparse-set, hand-rolled AoS, or nothing at all. World data enters by registration (spec, Binding types). A mutable data-store is gameplay state ano owns physically, the Tier 1/2 territory every effect targets. A readonly data-store is hot-path host state ano maps virtually and predicates on. A callback is dispatch. The boundary ABI is §11.
+
+A traditional ECS (Flecs, EnTT, Bevy) is a scheduler's data structure. It exists so per-entity update functions iterate fast. Ano never iterates entities. Every statement is a column transformation: build a mask with vector compares, scatter an effect under it. So this store's client is a query executor, not a system scheduler, and its lineage is not Flecs. It is kdb+, Arrow, and the APL runtimes: a column store with validity bitmaps, vectorized kernels over fixed-size pages, and copy-on-write snapshots for the time axis. The relationship is exactly q to kdb+. The store is the database. Ano is its resident query language. The host is the operating system both run on. This document specifies the database and the syscall boundary.
 
 The design rule throughout: every mechanism below is the physical form of a law the spec already states. Where foundations.md proves something, we delete machinery. The tier theorems are storage classes. The `;` commutation law is the parallelism license. Totality by construction means the load-time verifier checks footprints and nothing else. Mathematical consistency is what lets the engine be small.
 
@@ -26,15 +28,16 @@ Each row is a spec commitment and the storage decision it forces. The rest of th
 | Tier 1 keys are regenerable (foundations §2.1) | lattice columns: no allocator, no generations, no presence bitmap — presence is total by construction (§9) |
 | Tier 2 law: Sym(I)-equivariance, value-only ties (foundations §3) | mask-aligned scatters only; dense-rank kernel; sort-act-unsort runs in compressed space (§8) |
 | Tier 3 law: naturality in V (foundations §4) | handle columns the engine may only memcpy, reindex, select, dispatch (§9) |
-| determinism and replay (Intro, ano-time.md) | fixed-point state, saturate-once-at-scatter, canonical spawn order, COW tick partitions (§6, §11) |
-| rules share one barrier per tick; conflicts rejected at install (§11) | rule registry with `_BitInt` footprints; pairwise commute check at install; dirty-page incrementality (§10, §11) |
-| readonly bindings: hot host state, predicated on, never written (Binding types) | write-footprint-empty columns with double-buffered page directories swapped at ingest (§11) |
+| determinism and replay (Intro, ano-time.md) | fixed-point state, saturate-once-at-scatter, canonical spawn order, COW tick partitions (§6, §12) |
+| rules share one barrier per tick; conflicts rejected at install (§11) | rule registry with `_BitInt` footprints; pairwise commute check at install; dirty-page incrementality (§10, §12) |
+| the lang ingests raw ECS data per the registry (Technical Explanation) | the host boundary: shared slot space, owned vs mapped directory entries, ingest-copy fallback (§11) |
+| readonly bindings: hot host state, predicated on, never written (Binding types) | write-footprint-empty columns on mapped pages, published at ingest (§11) |
 
 ## 2. Keys: three storage classes from the tier theorems
 
 The generable-vs-nominal asymmetry (foundations §2.1) is an allocator decision, not philosophy. Three classes fall out. Each theorem deletes a mechanism from one of them.
 
-**Nominal keys (Tier 2).** An entity is a slot in one global index space shared by every record column. The ID carries a generation. Relationship columns store IDs as data, so the hop detects staleness with one compare against `gen[slot]`. No lookup structure. Slot reuse happens only at tick seal, from a slot-sorted free list. Allocation order is a pure function of the statement log (§11).
+**Nominal keys (Tier 2).** An entity is a slot in one global index space shared by every record column, and by the host under the boundary contract (§11). The ID carries a generation. Relationship columns store IDs as data, so the hop detects staleness with one compare against `gen[slot]`. No lookup structure. Slot reuse happens only at tick seal, from a slot-sorted free list. Allocation order is a pure function of the statement log (§12).
 
 ```c
 // ano_id.h — nominal key. Invariants: NIL is all-ones; gen 0 never allocated; slot indexes every record column directly.
@@ -74,7 +77,7 @@ typedef enum : uint8_t { T_TAG, T_I64, T_Q, T_SYM, T_ID, T_F64, T_H64 } ano_elt;
 
 typedef struct ano_page {
     _Atomic uint32_t rc;      // COW sharing across tick directories
-    uint32_t tick;            // tick that opened this page for writing — the dirty bit (§11)
+    uint32_t tick;            // tick that opened this page for writing — the dirty bit (§12)
     alignas(64) unsigned char bytes[];
 } ano_page;
 
@@ -92,7 +95,7 @@ Compound components (`pos`) are SoA. The registry maps `pos.x`, `pos.y` to sibli
 
 Symbols intern once, globally. `T_SYM` cells are u32 indices. `` Faction == `Bandit `` is an integer compare. The intern table is append-only within a run and serialized with saves, so symbol identity is replay-stable.
 
-Why not sparse sets (EnTT): the sparse→dense indirection puts a dependent load on every hop, and two components' dense arrays share no index space, so `Nord & TwoHanded > 60` cannot be a bitmap AND. Why not archetype tables (Flecs, Bevy): the hop becomes ID→record→(table,row)→column, two indirections against the spec's one indexed read. Structural effects become migration storms. Grade, scan, and reshape want one flat column, not a column shattered across tables. Both designs optimize entity iteration. Ano does not iterate entities.
+Why ano's store refuses sparse sets (EnTT) internally: the sparse→dense indirection puts a dependent load on every hop, and two components' dense arrays share no index space, so `Nord & TwoHanded > 60` cannot be a bitmap AND. Why it refuses archetype tables (Flecs, Bevy): the hop becomes ID→record→(table,row)→column, two indirections against the spec's one indexed read. Structural effects become migration storms. Grade, scan, and reshape want one flat column, not a column shattered across tables. Both layouts optimize entity iteration. Ano does not iterate entities. None of this binds the host. An archetyped or sparse-set host registers its columns anyway and pays a transpose at ingest (§11). Ano never pays per-hop indirection. That trade is what the boundary exists to make.
 
 ## 4. Masks: the working currency
 
@@ -131,7 +134,7 @@ Masks have no multiplicity. The set hop's image (`Frenzy.targets'`, ex12) is bit
 
 ## 5. The barrier: gather, compute, scatter
 
-One statement is one transaction against pre-state. Two mechanisms implement the barrier, and both share their machinery with the time axis (§11). COW pages make pre-state free to read. A typed delta buffer makes the scatter a single merged commit.
+One statement is one transaction against pre-state. Two mechanisms implement the barrier, and both share their machinery with the time axis (§12). COW pages make pre-state free to read. A typed delta buffer makes the scatter a single merged commit.
 
 **Gather.** Reads never copy. Pre-state is whatever the sealed directories say. Within a statement the open tick's pages are pre-state too, because the statement's own writes haven't committed. Column expressions evaluate in **compressed space**. The mask compresses selected cells into dense scratch vectors (BQN's `mask⊸/`). Kernels run dense. Results align to the mask's popcount. This executes the `⌾(mask⊸/)` idiom from every demo literally: gather, act dense, scatter back through the same mask.
 
@@ -167,7 +170,7 @@ typedef struct ano_delta {                     // per (comp, opclass), pages all
 void fx_scatter_add_i64(ano_col *c, const ano_delta *d, uint32_t now) {
     for (uint32_t p = 0; p < d->touched.npages; p++) {
         if (!(d->touched.sum[p >> 6] >> (p & 63) & 1)) continue;
-        int64_t *v = (int64_t *)col_open_page(c, p, now)->bytes;     // COW iff shared or stale (§11)
+        int64_t *v = (int64_t *)col_open_page(c, p, now)->bytes;     // COW iff shared or stale (§12)
         const uint64_t *w = d->touched.page[p];
         const _BitInt(128) *a = delta_page(d, p);                    // lane page, materialized on first touch
         if (d->touched.pop[p] < PAGE_SLOTS / 16) {
@@ -239,7 +242,7 @@ The **inverse read** of a functional relationship (`livestock'` = fibers of `pen
 void gamma_count(const ano_id *key, const ano_mask *fsel, ano_mask *tsel, int64_t *acc);
 ```
 
-**Set-valued forward relationship** (`targets`, explicit adjacency): CSR, an offsets column on sources plus a flat `T_ID` edge array. The fiber at a source is a slice. The image (`targets'` in source position) is bits OR'd from edge targets into a mask. Forward γ is a per-source slice fold. CSR rebuilds or patches at the barrier that edits it. Edge edits are structural effects with the edge array as their footprint, so the rule machinery already serializes them. Patch vs rebuild is an open tuning question (§15).
+**Set-valued forward relationship** (`targets`, explicit adjacency): CSR, an offsets column on sources plus a flat `T_ID` edge array. The fiber at a source is a slice. The image (`targets'` in source position) is bits OR'd from edge targets into a mask. Forward γ is a per-source slice fold. CSR rebuilds or patches at the barrier that edits it. Edge edits are structural effects with the edge array as their footprint, so the rule machinery already serializes them. Patch vs rebuild is an open tuning question (§16).
 
 **Implicit relationship** (the stencil: `neighbors`, `prev`, `neighbor(clamp)`): no storage. The fiber comes from the lattice shape plus the registered stencil and boundary policy. γ over it is shift-and-accumulate. The demo's `S ← »+«+»˘+«˘` becomes four strided adds:
 
@@ -307,7 +310,7 @@ Nothing converts. Nothing copies. The registry records which view each operation
 
 ## 10. The registry
 
-Registration is the compile-time contract between host and language (Binding types, Technical Explanation). Everything the plan compiler and the install checker need is a table of plain values, built with designated initializers and frozen `constexpr` where the component set is static.
+Registration is the compile-time contract between host and language (Binding types, Technical Explanation). Everything the plan compiler and the install checker need is a table of plain values, built with designated initializers and frozen `constexpr` where the component set is static. Host-fed columns additionally declare a binding (§11).
 
 ```c
 // ano_reg.h — descriptors. The component universe is capped at 128 per world: footprints are one _BitInt.
@@ -348,13 +351,45 @@ typedef struct ano_rule {
 } ano_rule;
 ```
 
-## 11. The tick, and time
+## 11. The host boundary
+
+The store is a virtual address space and the page directory is its page table. The slot space is logical. Physical residency is decided per directory entry, and there are two kinds. This is where the integration work lives: the host engine keeps whatever layout it has, and registration maps its columns into ano's address space.
+
+```c
+// ano_map.h — tagged directory entries. Owned pages COW and persist (§3); mapped pages borrow host memory for one tick.
+typedef union ano_dirent {
+    ano_page *owned;                     // rc, tick, bytes: COW, dirty tracking, history
+    uintptr_t bits;                      // low bit set = mapped: bits & ~1 points into host memory, sealed for tick t
+} ano_dirent;
+
+typedef struct ano_binding {             // the registration ABI, one per host-fed column
+    uint16_t comp; ano_elt elt;
+    const void *base; size_t stride;     // slot-ordered host array; stride == elt width ⇒ zero-copy mappable
+    enum : uint8_t { BIND_MAP, BIND_COPY, BIND_QUANTIZE } mode;   // QUANTIZE: f64 → T_Q at the boundary (§6)
+    uint32_t (*dirty)(uint32_t *pages, uint32_t cap);   // optional host change report; NULL = assume all dirty
+} ano_binding;
+```
+
+**Owned pages** hold what ano writes: the mutable data-stores, the Tier 1/2 territory every effect targets. Ano is the store of record for that state. The host reads it freely. Owned pages are plain memory and sealed partitions are stable for the whole tick. The host writes it only through queued commands or at ingest. The spec's clock paragraph already states this discipline. Here it is the memory model.
+
+**Mapped pages** hold what the host writes: the readonly data-stores, physics positions, render state. `BIND_MAP` publishes them by pointer swap at ingest, zero copy, when the host layout is slot-ordered, contiguous, and naturally strided. Mapped pages never COW, carry no refcount, and expire at the next ingest. History for a mapped column is copy-on-seal, opted into per binding, or nothing.
+
+`BIND_COPY` is the fallback for every other layout. An archetyped or AoS host gathers into owned pages at ingest: a strided transpose of registered columns, once per tick, pruned by the `dirty` report when the host gives one. The bandwidth is small by frame standards and it buys a physically crisp determinism boundary. `BIND_QUANTIZE` is the same gather through f64 → `T_Q`, which makes ingest the determinism boundary for float-fed predicates (§6).
+
+**The shared key space is the contract.** Relationship columns store ano IDs and the hop indexes the slot space directly (§2, §7). So the host either exposes a stable dense entity index that ano adopts as its slot space, or accepts ID translation at ingest as part of the copy. One indexed read is non-negotiable on ano's side. Everything else about the host's layout is negotiable through the binding.
+
+Mid-tick mutation of mapped memory is a contract violation, not a supported mode. The debug build checks it: a checksum per mapped page at ingest, verified at seal. Release trusts the contract. The spec's snapshot claim (host mutation lands between ticks as far as any script can tell) holds by construction for owned pages and by contract for mapped ones.
+
+The posture is Lua's. Lua never demanded the host restructure its data. Ano ships as a runtime plus this binding ABI, not a rival engine. A Flecs host registers its columns and keeps its archetypes.
+
+## 12. The tick, and time
 
 One tick is one fold step of `state[t+1] = F(state[t])` (ano-time.md). The tick is four phases. Every phase reuses §5's machinery.
 
 ```c
 // ano_tick — order is normative (spec §11): rules never race commands.
-// ingest: swap host staging directories in; the sealed view of t is now what every gather reads.
+// ingest: run the bindings (§11): swap mapped directories in, gather BIND_COPY columns; the sealed view of t
+//         is now what every gather reads.
 // rules:  every installed rule gathers against sealed t; effect buffers merge into ONE delta (the rule barrier);
 //         commit. Incrementality: a rule whose read set misses last tick's dirty pages replays its cached masks.
 // commands: queued statements in program order, one barrier each (§5).
@@ -371,13 +406,13 @@ void ano_tick(ano_world *w);
 
 **Rule incrementality** is differential dataflow at page granularity, no Rete network. `dirty(t) = ⋃ pages opened during t`, per column. A rule re-evaluates only pages where `reads ∩ dirty(t−1)` is non-empty and replays cached per-page masks elsewhere. This is observationally identical to every-tick re-gather (spec §11), because a clean page provably yields last tick's mask bits. Crops spread one ring per tick, and the rule costs the ring's pages, not the field.
 
-**Determinism checklist**, the replay contract in one place: fixed-point mutable state, wide-lane exact merges, saturation once at scatter (§6). Canonical spawn order and seal-time slot-sorted free-list recycling (§5). Slot-order iteration everywhere, pointer order nowhere. Seeded-pure host callbacks. Parallel commit only through the commutative classes (§12). Same tick-0 snapshot, same log, same trajectory. The mission file replays anywhere.
+**Determinism checklist**, the replay contract in one place: fixed-point mutable state, wide-lane exact merges, saturation once at scatter (§6). Canonical spawn order and seal-time slot-sorted free-list recycling (§5). Slot-order iteration everywhere, pointer order nowhere. Seeded-pure host callbacks. Parallel commit only through the commutative classes (§13). Same tick-0 snapshot, same log, same trajectory. The mission file replays anywhere.
 
-## 12. Parallelism: the `;` law is the license
+## 13. Parallelism: the `;` law is the license
 
 The page is the morsel. Predicate evaluation and compressed-space compute parallelize embarrassingly, since pages are independent. The scatter is the interesting half, and the language already solved it. Effects merge through exactly associative-commutative monoids (§6), so per-worker partial deltas merge in any order to the same bits. The commutation law that legalizes `;` and the rule barrier is, unchanged, the proof obligation for parallel commit. γ's scatter-reduce keeps per-worker accumulator strips merged by the same monoids. Integer and fixed arithmetic make the merge tree's shape irrelevant. That is the concrete payoff of evicting floats from mutable state. We steal work over pages with deterministic merge points. The structural class serializes in canonical order, a tiny fraction of any barrier. Nothing in the parallel path is best-effort. Either an op class is in the exact ledger and parallelizes, or it is SET/MUL with a disjointness certificate, or that column's commit runs single-threaded. The determinism claim survives thread count.
 
-## 13. The VM, and worked plans
+## 14. The VM, and worked plans
 
 Statements compile to plans: a short SSA program over mask and vector registers, executed page-at-a-time. This is vectorized interpretation in the DuckDB style. Dispatch overhead amortizes over 4096 slots, so the interpreter is already fast. The JIT then fuses a plan's kernels into one loop per page. It is an optimization, never a semantic change. Load-time verification is small because totality is grammatical (foundations §8). Check the plan's columns against declared footprints and write policies. Check the barrier's op classes against the exactness ledger. Done. The eBPF comparison ends here. There is no unbounded program to bound.
 
@@ -421,15 +456,15 @@ Statements compile to plans: a short SSA program over mask and vector registers,
                                               ; the produce survives its parent by construction
 ```
 
-## 14. C23 inventory
+## 15. C23 inventory
 
-The dialect earns its keep at specific joints. `union` punning: entity IDs (§2), effect operands (§5), the tier view functor (§9). Reading the unwritten member is the defined byte reinterpretation the view pun needs. `_BitInt(128)`: exact delta accumulation and fixed-point intermediates (§6), component-set footprints with one-op subset tests (§10). `<stdbit.h>`: `stdc_trailing_zeros` and `stdc_count_ones` are the mask kernels' inner loop. `<stdckdint.h>`: `ckd_add`/`ckd_mul` guard spawn totals and any path that leaves the wide lanes. `constexpr` objects and `static_assert`: frozen registry tables and layout proofs. `enum : type`: stable ABI for op classes and element kinds. Designated initializers: the registry is legible C. `alignas(64)`: page payloads on cacheline boundaries. `unreachable()`: kernel dispatch tails. `auto`, `typeof`: generic kernel macros without a macro language. `#embed`: mission files, board literals (ex34), and the BQN-derived fixtures baked into the conformance binary. Portability: `_BitInt(128)` is clang ≥14 anywhere and GCC 14 on the 64-bit mainline targets. That bounds the compiler floor. Everything else is vanilla C23.
+The dialect earns its keep at specific joints. `union` punning: entity IDs (§2), effect operands (§5), tagged directory entries (§11), the tier view functor (§9). Reading the unwritten member is the defined byte reinterpretation the view pun needs. `_BitInt(128)`: exact delta accumulation and fixed-point intermediates (§6), component-set footprints with one-op subset tests (§10). `<stdbit.h>`: `stdc_trailing_zeros` and `stdc_count_ones` are the mask kernels' inner loop. `<stdckdint.h>`: `ckd_add`/`ckd_mul` guard spawn totals and any path that leaves the wide lanes. `constexpr` objects and `static_assert`: frozen registry tables and layout proofs. `enum : type`: stable ABI for op classes and element kinds. Designated initializers: the registry is legible C. `alignas(64)`: page payloads on cacheline boundaries. `unreachable()`: kernel dispatch tails. `auto`, `typeof`: generic kernel macros without a macro language. `#embed`: mission files, board literals (ex34), and the BQN-derived fixtures baked into the conformance binary. Portability: `_BitInt(128)` is clang ≥14 anywhere and GCC 14 on the 64-bit mainline targets. That bounds the compiler floor. Everything else is vanilla C23.
 
-## 15. Conformance, module map, open questions
+## 16. Conformance, module map, open questions
 
 **Conformance.** Every `demos/**/*.bqn` file is a fixture. The differential harness loads the demo's pre-state, runs the corresponding plan, and asserts bit-identical post-state against the BQN interpreter's: masks, columns, minted keys, and all. `check.sh` gates the BQN side. The C side gets the mirror script. The store has no semantics of its own to test. It has the demos'.
 
-**Module map** (under `src/`): `ano_id` (§2), `ano_page`/`ano_mask` (§3–4), `ano_col` (columns + COW), `ano_fx` (delta buffer, scatter kernels), `ano_q` (arithmetic), `ano_rel` (hops, γ, CSR, stencils), `ano_ord` (radix, rank, scan, top-k), `ano_lat` (Tier 1), `ano_reg` (registry, install checks), `ano_tick` (phases, seal, history), `ano_vm` (plans, verification, interpretation), `ano_par` (morsel scheduler). The parser and plan compiler sit above this line and are the bootstrap-language question, open per CLAUDE.md. Everything below the line is this document.
+**Module map** (under `src/`): `ano_id` (§2), `ano_page`/`ano_mask` (§3–4), `ano_col` (columns + COW), `ano_fx` (delta buffer, scatter kernels), `ano_q` (arithmetic), `ano_rel` (hops, γ, CSR, stencils), `ano_ord` (radix, rank, scan, top-k), `ano_lat` (Tier 1), `ano_reg` (registry, install checks), `ano_map` (the host boundary: bindings, mapped directories, ingest), `ano_tick` (phases, seal, history), `ano_vm` (plans, verification, interpretation), `ano_par` (morsel scheduler). The parser and plan compiler sit above this line and are the bootstrap-language question, open per CLAUDE.md. Everything below the line is this document.
 
 **Open questions**, kept honest per repo discipline:
 
@@ -437,6 +472,8 @@ The dialect earns its keep at specific joints. `union` punning: entity IDs (§2)
 - CSR maintenance. Patch-in-place per dirty source vs rebuild-per-barrier. Rebuild is simpler and probably wins below ~10⁵ edges. The crossover needs numbers.
 - A sparse column class. Paged NULL elision handles clustered sparsity. A component carried by 100 entities scattered across a million slots still pays pages. A sorted-slot side form fixes it and complicates every kernel with a second representation. Deferred until a real workload produces one.
 - The per-slot signature transpose. A `_BitInt(128) sig[slot]` column (which components does e carry) would speed despawn and console inspection. It duplicates the presence bitmaps' truth, and every structural commit would maintain both. Rejected for now: despawn is bulk ANDNOT and inspection is cold. Recorded.
-- Float ingress. Readonly host f64 columns sit outside replay, but a predicate over one (`physics.vel > x`) feeds a deterministic path from a nondeterministic source across machines. Either quantize at ingest (f64 → T_Q, making ingest the determinism boundary) or mark such predicates replay-tainting. Quantize-at-ingest is cleaner and costs host-integration friction. Leaning quantize.
+- Float ingress. `BIND_QUANTIZE` makes ingest the determinism boundary for float-fed predicates (§11). Whether it is the default for every `T_F64` binding, with replay-tainting as the explicit opt-out, is still a choice. Leaning: quantize by default.
+- Host change tracking. `BIND_COPY` re-gathers every bound page each tick when the host reports nothing. The `dirty` callback cuts it, if hosts report honestly. Trust the report, checksum in debug: the current answer.
+- The shared key space in practice. Hosts with unstable or non-dense entity indices take ID translation at ingest. The translation cost is one pass inside the copy, but the mapping table it needs is real state with its own lifetime. The ABI's weakest joint. Needs a worked integration against one real engine before freezing.
 - Sequential scan kernel. §8 implements `scan(f) along` for associative f. The spec's open recurrence question (non-associative f, write footprint disjoint from read) needs a genuinely sequential kernel. Trivial to add. Deliberately absent until the language decides. The store must not make the choice by shipping it.
 - Rule retraction. The registry supports named uninstall. Whether a rule can retract itself mid-tick (stage advance, spec §11) touches the one-barrier-per-tick claim. Uninstall-at-seal is the conservative answer and the current plan.
