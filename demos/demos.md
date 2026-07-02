@@ -6,6 +6,8 @@ Currently, this means working through the language examples in BQN, Erlang, Hask
 
 A temporary transpiler through BQN or OCaml might be considered at a later point.
 
+We use BQN to work through and verify the semantics of ano language ahead of time. An implementation in src/ is verified against the BQN post-states by differential testing.
+
 ## Layout
 
 - `selection/` — masks, scopes, aliases, presence, value predicates, hops, named selections (ex1-9, the set hop).
