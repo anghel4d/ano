@@ -1,4 +1,4 @@
-# demos/selection
+# demos/1-selection
 
 BQN models of the selection layer: examples 1-9, the spec §8 scatter fix, and the setHop decision record. Each file builds a small column-store world, applies the ano statement, and asserts the exact post-state. Column names are lowercase because BQN reserves uppercase-first spellings for functions; `sym`-prefixed constants stand in for backtick enum symbols.
 

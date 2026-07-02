@@ -166,7 +166,7 @@ typedef struct ano_delta {                     // per (comp, opclass), pages all
 ```c
 // fx_scatter_add_i64: commit an additive delta into a column, page-at-a-time under COW.
 // in: c open for tick now, d = delta, sel = touched mask. out: none.
-// invariant: off-mask cells bit-identical to pre-state (demos/effects/13); each cell written once per barrier.
+// invariant: off-mask cells bit-identical to pre-state (demos/2-effects/13); each cell written once per barrier.
 void fx_scatter_add_i64(ano_col *c, const ano_delta *d, uint32_t now) {
     for (uint32_t p = 0; p < d->touched.npages; p++) {
         if (!(d->touched.sum[p >> 6] >> (p & 63) & 1)) continue;
@@ -232,7 +232,7 @@ size_t hop_gather_i64(const ano_col *rel, const ano_col *comp, const uint32_t *g
 
 Per selected slot: load `ano_id x`, test `id_live(gen, x)`, test `comp->present` at `x.slot`, gather `comp[x.slot]`. Failures drop the mask bit. The left-join-null rule is a bit clear. `mentor.mentor.Dead` chains by feeding `alive` back in as `sel`. On AVX-512 the whole test-and-gather is a masked `vpgatherqq`. Scalar code is the fallback, not the design.
 
-The **inverse read** of a functional relationship (`livestock'` = fibers of `pen`) never materializes fibers. γ over it is a scatter-reduce, the counting-sort fold, one pass. It is `demos/gamma/36-farm-gamma.bqn`'s `+´¨ (pen∾≠pens) ⊔ cattle` without the ⊔:
+The **inverse read** of a functional relationship (`livestock'` = fibers of `pen`) never materializes fibers. γ over it is a scatter-reduce, the counting-sort fold, one pass. It is `demos/8-gamma/36-farm-gamma.bqn`'s `+´¨ (pen∾≠pens) ⊔ cattle` without the ⊔:
 
 ```c
 // gamma_count: Pen , Headcount = #/ (livestock' & Cattle). acc indexed by target slot.
@@ -247,7 +247,7 @@ void gamma_count(const ano_id *key, const ano_mask *fsel, ano_mask *tsel, int64_
 **Implicit relationship** (the stencil: `neighbors`, `prev`, `neighbor(clamp)`): no storage. The fiber comes from the lattice shape plus the registered stencil and boundary policy. γ over it is shift-and-accumulate. The demo's `S ← »+«+»˘+«˘` becomes four strided adds:
 
 ```c
-// stencil4_sum_q: Σ over the 4-neighbor fiber, boundary-shrunk (fiber loses out-of-grid legs; demos/gamma/36).
+// stencil4_sum_q: Σ over the 4-neighbor fiber, boundary-shrunk (fiber loses out-of-grid legs; demos/8-gamma/36).
 // in: g = h×w lattice cells. out: sum per cell, cnt per cell (fiber size: 2 at corners, 3 at edges, 4 inside).
 // invariant: matches the flattened-edge γ cross-check in the demo cell for cell.
 void stencil4_sum_q(const ano_q *g, uint32_t h, uint32_t w, ano_q *sum, int32_t *cnt);
@@ -416,7 +416,7 @@ The page is the morsel. Predicate evaluation and compressed-space compute parall
 
 Statements compile to plans: a short SSA program over mask and vector registers, executed page-at-a-time. This is vectorized interpretation in the DuckDB style. Dispatch overhead amortizes over 4096 slots, so the interpreter is already fast. The JIT then fuses a plan's kernels into one loop per page. It is an optimization, never a semantic change. Load-time verification is small because totality is grammatical (foundations §8). Check the plan's columns against declared footprints and write policies. Check the barrier's op classes against the exactness ledger. Done. The eBPF comparison ends here. There is no unbounded program to bound.
 
-`Nord & TwoHanded > 60 , Gold += 1000` (ex1; `demos/effects/13`):
+`Nord & TwoHanded > 60 , Gold += 1000` (ex1; `demos/2-effects/13`):
 
 ```
   %p = and.present   Nord, TwoHanded          ; presence ⋈: summary AND kills dead pages first
@@ -426,7 +426,7 @@ Statements compile to plans: a short SSA program over mask and vector registers,
   commit                                      ; COW pages, saturate once — gold +↩ 1000×nord∧th>60
 ```
 
-`Pen , Headcount = #/ (livestock' & Cattle)` (`demos/gamma/36`):
+`Pen , Headcount = #/ (livestock' & Cattle)` (`demos/8-gamma/36`):
 
 ```
   %t = and           present(Pen), live

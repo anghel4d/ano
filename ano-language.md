@@ -32,6 +32,41 @@ source & predicate , effect
 
 Selection on the left, effect on the right, comma between. `source` defaults to the live world.
 
+## A Potential Comparison
+
+```lua
+local player = GetPlayer()
+local playerFaction = player:GetFaction()
+local cheeseCount = 122
+local goldenAngle = math.pi * (3 - math.sqrt(5))  -- ~137.5 degrees
+
+for _, npc in ipairs(GetAllActors()) do
+  if npc:HasTunic("red")
+    and (npc:GetRace() == "Nord" or npc:GetRace() == "Khajiit")
+    and npc:GetFaction() == playerFaction then
+    
+    local center = npc:GetPosition()
+    for i = 0, cheeseCount - 1 do
+      local radius = math.sqrt(i) * 1.5
+      local angle = i * goldenAngle
+      local x = center.x + radius * math.cos(angle)
+      local z = center.z + radius * math.sin(angle)
+      SpawnObject("CheeseWheel", x, center.y, z)
+    end
+  end
+end
+```
+
+Roughly 20 lines, and that's already assuming a clean API. In practice this is a coroutine or an event-hooked function, not a console line, because Lua has no notion of "select then broadcast an effect" as a primitive.
+
+The Ano version:
+```haskell
+NPC & Tunic = `Red & (Nord | Khajiit) & Faction = Player.Faction ,
+  spawn CheeseWheel * 122 at pos + phyllotaxis(index)
+```
+
+Every token is defined later in this document: `=` compares on the left of the hinge and assigns on the right (the equals glyph, appendix), `spawn CheeseWheel * 122` binds `index` per copy and each copy reads its own NPC's `pos` (§17), and `phyllotaxis` is a callable the host registered — the same kind of registry row as the prelude's `polar`, and nothing in the grammar tells them apart (the registry).
+
 Ano is to the game world what q is to kdb+: the resident query-and-command language of a live column store, console ergonomics included — SQL, Datalog, and production-rules class, the FP/array sibling of Lua. The split with a Lua-class host is coroutines versus triggers: cinematic sequencing, UI, and per-instance branching stay imperative, and everything statable as a condition over the world, a bulk effect, and a schedule is ano's territory — missions included, since a quest is data: a stage column, objectives as entities, advancement as a standing rule (§11). StarCraft 2's trigger editor shipped a whole campaign on that paradigm; ano is that layer with a relational predicate language. And the shape buys determinism and replay — a statement is a pure function of world state, a predicate plus an effect buffer over pre-state, so the same world and the same log give the same run: a mission is a text file that replays identically anywhere. Let's dive in.
 
 ---
@@ -378,6 +413,12 @@ Spawner , spawn Minion * Count       -- each spawner emits Count minions
 Nest    , spawn Egg * Fertility      -- counts from a per-source column
 ```
 
+The replicate binds `index` on each copy — 0 up to the count, restarting at every source — and a copy reads its source's columns, so per-copy position math needs no loop. It is the same `index` the bare shape binds (§21), one name for the row's ordinal in whatever minted the row; under a replicate the copy number is the innermost binding and shadows any outer one. The intro's cheese line is this rule: each wheel takes its own NPC's `pos` and its own copy number.
+
+```haskell
+Nest , spawn Egg * Fertility at pos + polar(index, index * 137.5)   -- each nest's clutch spirals around it
+```
+
 or, exposing the flat-map:
 
 ```haskell
@@ -623,7 +664,15 @@ What the model buys is determinism and replay. A statement is a pure function of
 
 Architecture. Scripts stage calls to host-registered functions, compile to bytecode, JIT the predicate-and-emit hot path, and return an effect buffer describing the work. The host interprets the buffer. The staging and registration mechanics are eBPF-shaped — the script invokes only registered functions, and component types and read/write footprints reside in the registry, declared once at registration and referenced by name in scripts — but the safety story is stronger than the one borrowed: eBPF needs a verifier to bound a general instruction set after the fact, while ano is total by construction — no loops, no recursion, registered functions, declared footprints — so termination is a corollary of the grammar, not a check bolted onto it.
 
-Binding types. Registration binds a name to the host three ways, all at compile time. A callback function: host code invoked by name (`fib(index)`, `polar`), the Tier 3 dispatch path — the host runs it, the script keys off the returned column. A mutable data-store: an ordinary component column, read and write footprints declared, the Tier 1/2 territory every effect targets. A readonly data-store: a column whose write footprint is declared empty, so no effect buffer can name it as a target — statically, at installation, not by runtime check; this is where the host exposes hot-path state (physics positions, render data) that scripts may predicate on but only C may move. Readonly does not exempt a column from the clock: ano observes it at the tick's ingest snapshot, so host mutation lands between ticks as far as any script can tell, and the determinism claim survives.
+The registry. The registry is ano's entire contact surface with the host: a script can name nothing the registry does not hold. Registration binds a name to the host five ways, all at compile time.
+
+- A mutable column: an ordinary component column, read and write footprints declared, the Tier 1/2 territory every effect targets.
+- A readonly column: a column whose write footprint is declared empty, so no effect buffer can name it as a target — statically, at installation, not by runtime check; this is where the host exposes hot-path state (physics positions, render data) that scripts may predicate on but only C may move. Readonly does not exempt a column from the clock: ano observes it at the tick's ingest snapshot, so host mutation lands between ticks as far as any script can tell, and the determinism claim survives.
+- A callable function: host code invoked by name (`fib(index)`, `polar`, `phyllotaxis`), the Tier 3 dispatch path — the host runs it, the script keys off the returned column.
+- An alias: a deictic resolver (`@cursor`, `@observer`, `@world`), re-resolved per evaluation — the こそあど engine (§2, the grammar appendix). The registry supplies the resolver, never a stored ID.
+- An explicit binding: a bare proper noun bound as a constant (`Player`, `rally`, `Whiterun`). The sigil splits the last two kinds: `@name` moves with the context, a bare proper noun is fixed at registration. `Player.pos` mirror-reads through one, `spawn Convoy at rally` places by one, `Merchant @ Whiterun` scopes by one. What the constant denotes — an entity key, a pre-baked selection, an archetype — is open (Open Questions, Explicit bindings); the surface reads identically under all three, and the opacity is the point: the registry carries the denotation so the script never spells it.
+
+The namespace is flat. Five kinds, one namespace, and no sigil marks provenance. The reserved words are a small closed set the lexer owns — the verbs, the hinge, the connectives; every other name in a script is a registry row, and sentence position alone fixes its syntactic kind: a name applied to arguments is a callable, a name in a value position is a column, a bare name in a predicate is a mask, a proper noun in source position is a binding. Where a row came from is invisible to the grammar by design: `polar` is prelude, a row ano ships with; `phyllotaxis` arrives with the host; an author's `def` adds a third shipper — and the script reads identically under all of them, the way C holds `sin` from libm and a user's function in one flat identifier space and leaves the coloring to the editor's symbol table. Provenance is metadata, and metadata is tooling's job — hover, color, the registry inspector — never a glyph. The surface spends its one sigil on deixis, a semantic axis, not a provenance one.
 
 ### Data model
 
@@ -768,11 +817,11 @@ Fourteen levels, loosest to tightest. Everything else in the document is a conse
 - 1 (loosest) — `,` and `=>`: the hinge; everything left is selection, everything right is effect (`,` performs, `=>` installs). The comma inside a parenthesized presence tuple `(Nord, !TwoHanded)` is bracketed and does not compete.
 - 2 — `;`: effect batching within the statement's one barrier.
 - 3 — `|>`: pipeline stages (`order by`, `take`, `expand`).
-- 4 — effect verbs and assignment: `= += -= *= /=`, `+Comp -Comp ~ spawn`, the locatives `at` and `to`, replicate `*` in `spawn X * n`.
+- 4 — effect verbs and assignment: `= += -= *= /=` (`=` assigns only in effect position; the equals glyph, below), `+Comp -Comp ~ spawn`, the locatives `at` and `to`, replicate `*` in `spawn X * n`.
 - 5 — `|`: mask or.
 - 6 — `&`: mask and.
 - 7 — `!`: mask not, prefix on one mask term.
-- 8 — comparison: `== != < <= > >=`.
+- 8 — comparison: `== != < <= > >=`, and `=` in selection position (the equals glyph, below).
 - 9 — fold and scan prefixes: `f/ f\`, `reduce(f)`, `scan(f) … along`, `grade`, `top k`.
 - 10 — additive arithmetic: `+ -`.
 - 11 — multiplicative arithmetic: `* / %`.
@@ -812,6 +861,14 @@ The backtick, q's symbol literal: `` `Bandit `` is the enum value; `Bandit` is t
 Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
 ```
 
+### The equals glyph
+
+One glyph, position decides — the SQL rule. Left of the hinge (`,` or `=>`) `=` is comparison, identical to `==`; right of it, assignment. The first `=` after `def name` is definitional, and a def body is selection position, so any further `=` inside it compares. The readings never collide: assignment cannot parse in a predicate, and a comparison nested inside an effect's right-hand expression is spelled `==`. `==` stays legal everywhere.
+
+```haskell
+NPC & Tunic = `Red & Faction = Player.Faction , Gold = 0   -- two comparisons, one assignment
+```
+
 ### Dot and `@`
 
 Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` — one ID, one indexed read, left-join-null, chainable (`mentor.mentor.Dead`); (2) the mirror-read, the same hop rooted at a named singleton or alias (`Player.pos`, `@cursor.pos`) — an arity-one gather usable inside effect expressions; (3) field projection into a registered compound component (`pos.x`) — registry-resolved, no join; (4) the shift pseudo-relations on an ordered view or lattice (`prev`, `prev.prev`, `neighbor(clamp)`) — functional single-step hops whose link is the view's order, boundary policy per registration; shifts, never carries; (5) the gather inside a set hop (`neighbors'.Moisture`) — the tick marks the fan-out, the dot still means gather. Dot never groups, never scopes, never folds.
@@ -832,6 +889,8 @@ Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` —
   type. A clearer lexical or sigil scheme to separate host-registered
   primitives, user bindings, and derived columns is wanted. The `@spawn`
   verb-form is retired pending this.
+
+- Explicit bindings, the denotation. The registry binds a bare proper noun as a constant, and the surface reads identically whether that constant is an entity key (`Player`), a pre-baked selection (`Whiterun`), or an archetype. The options are not exclusive: a binding could declare its denotation at registration and resolve by context — the mirror-read `Player.pos` demands a unique entity, the scope `@ Whiterun` demands a region, `at rally` demands a point. Whether one name may carry several faces or must declare exactly one is open; context dispatch fits the language's inference stance, one face per name is easier to check and easier to read.
 
 - Dot and `@`, the role inventory. Pinned in the grammar appendix: dot has five roles, all gathers; `@` has one operator meaning (evaluate within this scope) plus the lexical alias sigil, disambiguated by whitespace. The residual overload stands anyway — operator `@` and sigil `@` are two meanings on one glyph, a reading cost the lexical rule bounds but does not remove. Whether the sigil should move to another glyph is open.
 

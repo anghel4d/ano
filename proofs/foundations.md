@@ -1,6 +1,6 @@
 # Foundations
 
-**Status: TENTATIVE. 2026-07-02.** Everything below is believed true with proof sketches, not yet formally verified. Lean4 infrastructure is planned but not set up; nothing here is load-bearing until mechanized. Executable witnesses for the concrete counterexamples and identities live in `demos/tiers/`: `t1-reverse.bqn`, `t2-ties.bqn`, `t2-conjugation.bqn`, `t2-diagonal.bqn`. This document replaces the mathematical claims formerly in the spec's "The maths" and "Tiers and Algebras" sections; the spec keeps the English and the examples, the mathematics lives here.
+**Status: TENTATIVE. 2026-07-02.** Everything below is believed true with proof sketches, not yet formally verified. Lean4 infrastructure is planned but not set up; nothing here is load-bearing until mechanized. Executable witnesses for the concrete counterexamples and identities live in `demos/7-tiers/`: `t1-reverse.bqn`, `t2-ties.bqn`, `t2-conjugation.bqn`, `t2-diagonal.bqn`. This document replaces the mathematical claims formerly in the spec's "The maths" and "Tiers and Algebras" sections; the spec keeps the English and the examples, the mathematics lives here.
 
 ## 1. Setting
 
@@ -28,7 +28,7 @@ Move 2 — "nothing refers to a space cell durably" — is false in the language
 
 ### 2.3 The refuted equivariance criterion
 
-The spec asserted: a Tier-1 operation is legal exactly when it is `G₀`-equivariant, `f(g·c) = g·f(c)` for the geometry group `G₀` (translations, uniform scaling, the lattice rotations and reflections). Refuted twice over; witness `demos/tiers/t1-reverse.bqn`.
+The spec asserted: a Tier-1 operation is legal exactly when it is `G₀`-equivariant, `f(g·c) = g·f(c)` for the geometry group `G₀` (translations, uniform scaling, the lattice rotations and reflections). Refuted twice over; witness `demos/7-tiers/t1-reverse.bqn`.
 
 Reverse conjugates translations rather than commuting with them: `rev(shift_t c) = shift_{−t}(rev c)`. And reverse is a reflection, non-central in the dihedral group `D₄`, so it fails to commute with the lattice rotations the spec itself puts in `G₀`. Yet `⌽` is a canonical Tier-1 operation. So the criterion excludes operations the tier must admit.
 
@@ -49,7 +49,7 @@ w : (I → V₁ × ⋯ × V_k) → (I → V_j)
 w(ρ ∘ σ) = w(ρ) ∘ σ    for all σ ∈ Sym(I)
 ```
 
-Relabel the entities and every column relabels together; the write-back must not notice. Witness `demos/tiers/t2-diagonal.bqn`.
+Relabel the entities and every column relabels together; the write-back must not notice. Witness `demos/7-tiers/t2-diagonal.bqn`.
 
 ### 3.2 Characterization
 
@@ -67,7 +67,7 @@ Any order-dependent operator fails the law immediately: `prev` over an unordered
 
 ### 3.4 Ties break the law; value-only rank repairs it
 
-Stable tie-breaking and equivariance are mutually inconsistent. Witness `demos/tiers/t2-ties.bqn`. Take `c = [5,5,3]` and `σ = swap(0,1)`. Then `c ∘ σ = c`, so stable ascending rank gives `rank(c ∘ σ) = rank(c) = [1,2,0]`; but the law demands `rank(c) ∘ σ = [2,1,0]`. Stability breaks ties by index, and index-dependence is precisely what `Sym(I)`-equivariance forbids. The repair: Tier-2 write-backs use **value-only tie-breaking** — dense or fractional rank — under which tied values receive equal ranks and the counterexample dissolves. Stable grade remains available as a read (it exits the tier) and over space (where the index carries intrinsic order).
+Stable tie-breaking and equivariance are mutually inconsistent. Witness `demos/7-tiers/t2-ties.bqn`. Take `c = [5,5,3]` and `σ = swap(0,1)`. Then `c ∘ σ = c`, so stable ascending rank gives `rank(c ∘ σ) = rank(c) = [1,2,0]`; but the law demands `rank(c) ∘ σ = [2,1,0]`. Stability breaks ties by index, and index-dependence is precisely what `Sym(I)`-equivariance forbids. The repair: Tier-2 write-backs use **value-only tie-breaking** — dense or fractional rank — under which tied values receive equal ranks and the counterexample dissolves. Stable grade remains available as a read (it exits the tier) and over space (where the index carries intrinsic order).
 
 ### 3.5 Conjugation, correctly
 
@@ -83,7 +83,7 @@ h(c) = f(c ∘ σ_c) ∘ σ_c⁻¹        -- sort, act, unsort
 σ_{c ∘ τ} = τ⁻¹ ∘ σ_c
 ```
 
-which holds exactly when tie-breaking is index-free (3.4): `(c∘τ) ∘ (τ⁻¹∘σ_c) = c∘σ_c` is sorted, and value-only ties make the grade a function of the values alone, so this is *the* grade of `c∘τ`. Then `h(c∘τ) = f(c∘σ_c) ∘ (σ_c⁻¹∘τ) = h(c) ∘ τ`. Witness `demos/tiers/t2-conjugation.bqn`. `Unit , Rank = rank(Gold)` is this construction; the equivariance of the whole line is inherited from the identity, and the identity is why the ties repair in 3.4 is not optional.
+which holds exactly when tie-breaking is index-free (3.4): `(c∘τ) ∘ (τ⁻¹∘σ_c) = c∘σ_c` is sorted, and value-only ties make the grade a function of the values alone, so this is *the* grade of `c∘τ`. Then `h(c∘τ) = f(c∘σ_c) ∘ (σ_c⁻¹∘τ) = h(c) ∘ τ`. Witness `demos/7-tiers/t2-conjugation.bqn`. `Unit , Rank = rank(Gold)` is this construction; the equivariance of the whole line is inherited from the identity, and the identity is why the ties repair in 3.4 is not optional.
 
 ## 4. Tier 3 — opaque
 
