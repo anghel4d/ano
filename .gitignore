@@ -50,3 +50,7 @@ scratch/
 
 # GNU APL repl history
 .apl.history
+
+# Nix build output symlinks
+result
+result-*
