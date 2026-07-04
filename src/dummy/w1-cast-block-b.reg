@@ -1,0 +1,14 @@
+# w1-b — the recovery trap (mirrors demos/11-noita/w1-cast-block.bqn, trap section)
+# Wand [SB, Double, SB, SB]: the balance recovers to 1 after the block already ended at slot 0 — bal >= 0 is the wrong membership, the min-scan is load-bearing.
+n 5
+col keys num 0 1 2 3 4
+col wand bool 1 0 0 0 0
+col spell bool 0 1 1 1 1
+col slot num -1 0 1 2 3
+col proj bool 0 1 0 1 1
+col multi bool 0 0 1 0 0
+col drawAdd num 0 0 2 0 0
+col bal num 0 0 0 0 0
+col minBal num 0 0 0 0 0
+col member bool 0 0 0 0 0
+bind deck mask 1 1 1 1 1

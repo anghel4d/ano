@@ -29,7 +29,10 @@ typedef struct {
 
 typedef enum { MODE_WORLD, MODE_SEL, MODE_COPY } Mode;
 
-typedef struct { char *v; char *g; int pair; int unit; int sym; } EV;
+typedef struct { char *v; char *g; int pair; int unit; int sym;
+                 char *along;   /* scan-along order expr: values are in along order, and a
+                                   write-back must conjugate — sort, act, unsort (Tier 2) */
+} EV;
 
 typedef struct {
   const Registry *reg;
@@ -650,6 +653,13 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
       ev->g = gAnd(em, a.g, b.g);
       ev->pair = a.pair || b.pair;
       ev->unit = a.unit && b.unit;
+      /* a scan-along value keeps its order through scalar arithmetic; against another
+       * column the two orders disagree and no alignment exists */
+      if (a.along || b.along) {
+        if (a.along && !b.unit) return fail(em, nd->line, "scan-along composed against a differently-ordered operand");
+        if (b.along && !a.unit) return fail(em, nd->line, "scan-along composed against a differently-ordered operand");
+        ev->along = a.along ? a.along : b.along;
+      }
       const char *op = nd->op == '+' ? "+" : nd->op == '-' ? "-" : nd->op == '*' ? "×"
                      : nd->op == '/' ? "÷" : "|";
       if (nd->op == '%') { ev->v = efmt(em, "(%s|%s)", b.v, a.v); return 0; } /* a % b = b | a */
@@ -700,8 +710,11 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
     case N_SCANALONG: {
       EV xv; if (emitVal(em, nd->kids[0], MODE_WORLD, &xv)) return -1;
       EV ov; if (emitVal(em, nd->kids[1], MODE_WORLD, &ov)) return -1;
-      const char *gl = !strcmp(nd->name, "+") ? "+`" : !strcmp(nd->name, "*") ? "×`" : "⌈`";
+      const char *gl = !strcmp(nd->name, "+") ? "+`" : !strcmp(nd->name, "*") ? "×`"
+                     : !strcmp(nd->name, "max") ? "⌈`" : !strcmp(nd->name, "min") ? "⌊`" : NULL;
+      if (!gl) return fail(em, nd->line, "scan(%s): no registered scan step", nd->name);
       ev->v = efmt(em, "(%s(%s)⊏%s)", gl, ov.v, xv.v);
+      ev->along = ov.v;
       return 0;
     }
     case N_IOTAX: {
@@ -947,27 +960,66 @@ static const Node *stripFrame(Em *em, const Node *sel) {
 typedef struct {
   int colIdx;          /* registry entry */
   char *newExpr;       /* full replacement column expr (world length) */
+  char fam;            /* merge family: '+' additive, '*' multiplicative, '=' set,
+                          '|' presence-add, '&' presence-del, 'v' verb dispatch */
+  const char *field;   /* pair-field projection name or NULL */
 } Commit;
+
+/* one spawn group: a statement may batch several spawn effects (§10); each appends
+ * its own row group in effect order, keys mint once across the batch */
+typedef struct {
+  char *cnt;           /* selection-space counts */
+  char *tot;           /* (+´cnt) */
+  char *pos;           /* copy-space positions or NULL */
+  int posPair;
+  const char *protoName;   /* named proto col or NULL */
+  char *protoExpr;     /* computed proto (sym per copy) or NULL */
+} SpawnG;
 
 /* per-statement effect staging */
 typedef struct {
   Commit commits[64]; int ncommits;
   int despawn;         /* keep = ¬sel */
-  char *spawnCnt;      /* selection-space counts, NULL = no spawn */
-  char *spawnTot;
-  char *spawnPos;      /* copy-space positions or NULL */
-  int spawnPosPair;
-  const char *protoName;   /* named proto col or NULL */
-  char *protoExpr;     /* computed proto (sym per copy) or NULL */
+  SpawnG sp[8]; int nsp;
 } Fx;
 
-static void addCommit(Em *em, Fx *fx, int colIdx, char *expr) {
+static Commit *findCommit(Fx *fx, int colIdx) {
   for (int i = 0; i < fx->ncommits; i++)
-    if (fx->commits[i].colIdx == colIdx) { fx->commits[i].newExpr = expr; return; }
+    if (fx->commits[i].colIdx == colIdx) return &fx->commits[i];
+  return NULL;
+}
+
+static void addCommit(Em *em, Fx *fx, int colIdx, char *expr, char fam, const char *field) {
+  for (int i = 0; i < fx->ncommits; i++)
+    if (fx->commits[i].colIdx == colIdx) {
+      fx->commits[i].newExpr = expr; fx->commits[i].fam = fam; fx->commits[i].field = field;
+      return;
+    }
   fx->commits[fx->ncommits].colIdx = colIdx;
   fx->commits[fx->ncommits].newExpr = expr;
+  fx->commits[fx->ncommits].fam = fam;
+  fx->commits[fx->ncommits].field = field;
   fx->ncommits++;
   (void)em;
+}
+
+/* §10 same-column batch: deltas observe pre-state; the commit is their merge. Rebasing a
+ * later effect's accumulate onto the earlier commit realizes the merge exactly when the
+ * family commutes (additive, multiplicative, idempotent presence, or disjoint pair fields);
+ * anything else has no merge law and the batch is rejected. Returns the accumulate base,
+ * or NULL after fail. */
+static char *mergeBase(Em *em, Fx *fx, int colIdx, char *col, char fam, const char *field,
+                       int line, const char *name) {
+  Commit *prev = findCommit(fx, colIdx);
+  if (!prev) return col;
+  int ok = (prev->fam == fam && (fam == '+' || fam == '*' || fam == '|' || fam == '&')) ||
+           (prev->fam == '=' && fam == '=' && field && prev->field &&
+            strcmp(field, prev->field) != 0);
+  if (!ok) {
+    fail(em, line, "no merge law: '%s' written twice in one barrier (§10)", name);
+    return NULL;
+  }
+  return prev->newExpr;
 }
 
 /* current column read: staged value if already written this statement (barrier says NO:
@@ -1000,26 +1052,34 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (emitVal(em, ef->kids[1], MODE_SEL, &rhs)) return -1;
       char *rv = rhs.v;
       if (rhs.unit) rv = efmt(em, "((+´%s)⥊%s)", selE, rv);
+      /* scan-along: values arrive in along order; the scatter walks the mask in row order,
+       * so unsort through the order's grade — the Tier-2 conjugation h(c) = f(c∘σ)∘σ⁻¹ */
+      if (rhs.along) rv = efmt(em, "((⍋%s)⊏%s)", rhs.along, rv);
+      /* the RHS observed pre-state above; only the accumulate base rebases onto an
+       * earlier same-column commit, which is the §10 merge for a commuting family */
+      char fam = ef->op == '=' ? '=' : (ef->op == '+' || ef->op == '-') ? '+' : '*';
+      char *base = mergeBase(em, fx, entIdx(em, e), col, fam, field, ef->line, coln->name);
+      if (!base) return -1;
       if (ef->op != '=') {
         const char *op = ef->op == '+' ? "+" : ef->op == '-' ? "-" : ef->op == '*' ? "×" : "÷";
-        char *oldv = field ? efmt(em, "(%d⊸⊑¨(%s/%s))", field[0]=='y', selE, col)
-                           : efmt(em, "(%s/%s)", selE, col);
+        char *oldv = field ? efmt(em, "(%d⊸⊑¨(%s/%s))", field[0]=='y', selE, base)
+                           : efmt(em, "(%s/%s)", selE, base);
         rv = efmt(em, "(%s%s%s)", oldv, op, rv);
       }
       char *newcol;
       if (field) {
         int yi = field[0] == 'y';
-        char *pairs = yi ? efmt(em, "((0⊸⊑¨(%s/%s))⋈¨%s)", selE, col, rv)
-                         : efmt(em, "(%s⋈¨(1⊸⊑¨(%s/%s)))", rv, selE, col);
-        newcol = efmt(em, "%s‿%s AnoScat %s", selE, pairs, col);
+        char *pairs = yi ? efmt(em, "((0⊸⊑¨(%s/%s))⋈¨%s)", selE, base, rv)
+                         : efmt(em, "(%s⋈¨(1⊸⊑¨(%s/%s)))", rv, selE, base);
+        newcol = efmt(em, "%s‿%s AnoScat %s", selE, pairs, base);
         em->isPair[entIdx(em, e)] = 1;
       } else {
-        newcol = efmt(em, "%s‿%s AnoScat %s", selE, rv, col);
+        newcol = efmt(em, "%s‿%s AnoScat %s", selE, rv, base);
         if (rhs.pair) em->isPair[entIdx(em, e)] = 1;
       }
       char *t = tv(em);
       stage(em, "%s ← %s", t, newcol);
-      addCommit(em, fx, entIdx(em, e), t);
+      addCommit(em, fx, entIdx(em, e), t, fam, field);
       snprintf(em->selVar, sizeof em->selVar, "%s", oldSel);
       return 0;
     }
@@ -1028,10 +1088,13 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (!e || (e->kind != RK_COL && e->kind != RK_FIELD))
         return fail(em, ef->line, "%cComp on unregistered '%s'", ef->kind == N_EADD ? '+' : '-', ef->name);
       char *col = lc(em, e->name);
+      char fam = ef->kind == N_EADD ? '|' : '&';
+      char *base = mergeBase(em, fx, entIdx(em, e), col, fam, NULL, ef->line, ef->name);
+      if (!base) return -1;
       char *t = tv(em);
-      if (ef->kind == N_EADD) stage(em, "%s ← %s∨%s", t, col, em->selVar);
-      else stage(em, "%s ← %s∧¬%s", t, col, em->selVar);
-      addCommit(em, fx, entIdx(em, e), t);
+      if (ef->kind == N_EADD) stage(em, "%s ← %s∨%s", t, base, em->selVar);
+      else stage(em, "%s ← %s∧¬%s", t, base, em->selVar);
+      addCommit(em, fx, entIdx(em, e), t, fam, NULL);
       return 0;
     }
     case N_EDESPAWN: fx->despawn = 1; return 0;
@@ -1045,12 +1108,17 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
           what->kind == N_NAME) {
         const RegEntry *fe = find(em, what->name);
         if (fe && fe->kind == RK_FIELD) {
+          char *base = mergeBase(em, fx, entIdx(em, fe), lc(em, fe->name), '|', NULL,
+                                 ef->line, what->name);
+          if (!base) return -1;
           char *t = tv(em);
-          stage(em, "%s ← %s∨%s", t, lc(em, fe->name), em->selVar);
-          addCommit(em, fx, entIdx(em, fe), t);
+          stage(em, "%s ← %s∨%s", t, base, em->selVar);
+          addCommit(em, fx, entIdx(em, fe), t, '|', NULL);
           return 0;
         }
       }
+      if (fx->nsp >= 8) return fail(em, ef->line, "too many spawn groups in one statement");
+      SpawnG *sg = &fx->sp[fx->nsp++];
       char *cv;
       char *protoSel = NULL;   /* computed proto, selection space, before the skip filter */
       if (cnt) {
@@ -1075,33 +1143,33 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
         snprintf(em->idxVar, sizeof em->idxVar, "%s", iV);
       } else
         snprintf(em->idxVar, sizeof em->idxVar, "(↕+´%s)", em->selVar);
-      fx->spawnCnt = cV;
-      fx->spawnTot = efmt(em, "(+´%s)", cV);
+      sg->cnt = cV;
+      sg->tot = efmt(em, "(+´%s)", cV);
       /* stage pos/proto as temps NOW: the commit loop mutates columns in registry order,
        * and a spawn expression must observe pre-state, never a sibling commit (ex28) */
       if (at) {
         EV p; if (emitVal(em, at, MODE_COPY, &p)) return -1;
         char *pv = tv(em);
-        stage(em, "%s ← %s", pv, p.unit ? efmt(em, "(%s⥊%s)", fx->spawnTot, p.v) : p.v);
-        fx->spawnPos = pv;
-        fx->spawnPosPair = p.pair;
+        stage(em, "%s ← %s", pv, p.unit ? efmt(em, "(%s⥊%s)", sg->tot, p.v) : p.v);
+        sg->pos = pv;
+        sg->posPair = p.pair;
       } else if (em->fr.kind == FR_LAT || em->fr.kind == FR_BOARD) {
         char *pv = tv(em);
         stage(em, "%s ← %s/%s/((%d|↕%d)⋈¨⌊(↕%d)÷%d)",
               pv, cV, em->selVar, em->fr.w, em->fr.w*em->fr.h, em->fr.w*em->fr.h, em->fr.w);
-        fx->spawnPos = pv;
-        fx->spawnPosPair = 1;
+        sg->pos = pv;
+        sg->posPair = 1;
       }
-      if (what->kind == N_NAME) fx->protoName = what->name;
+      if (what->kind == N_NAME) sg->protoName = what->name;
       else if (protoSel) {
         char *pt = tv(em);
         stage(em, "%s ← %s/%s", pt, cV, protoSel);
-        fx->protoExpr = pt;
+        sg->protoExpr = pt;
       } else if (what->kind == N_CALL) {
         EV pv; if (emitVal(em, what, MODE_COPY, &pv)) return -1;
         char *pt = tv(em);
         stage(em, "%s ← %s", pt, pv.v);
-        fx->protoExpr = pt;
+        sg->protoExpr = pt;
       }
       return 0;
     }
@@ -1119,25 +1187,35 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
         args = efmt(em, "%s, %s", args, av.v);
       }
       args = efmt(em, "%s⟩", args);
+      if (!mergeBase(em, fx, entIdx(em, tc), lc(em, tc->name), 'v', NULL, ef->line, ef->name))
+        return -1;
       char *t = tv(em);
       stage(em, "%s ← %s %s %s", t, em->selVar, fnv(em, e->name), args);
-      addCommit(em, fx, entIdx(em, tc), t);
+      addCommit(em, fx, entIdx(em, tc), t, 'v', NULL);
       return 0;
     }
     default: return fail(em, ef->line, "unsupported effect %d", ef->kind);
   }
 }
 
-/* default append value for a column on spawn */
-static char *spawnDefault(Em *em, const RegEntry *e, Fx *fx) {
-  char *tot = fx->spawnTot;
+/* default append value for a column on one spawn group; keys are minted once across the
+ * whole batch by the caller, never here */
+static char *spawnDefault(Em *em, const RegEntry *e, SpawnG *g) {
+  char *tot = g->tot;
   if (e->kind == RK_SREL) return efmt(em, "(%s⥊<⟨⟩)", tot);
   if (e->kind == RK_REL) return efmt(em, "(%s⥊¯1)", tot);
   if (e->type == CT_SYM) return efmt(em, "(%s⥊<\"\")", tot);
   if (em->isPair[entIdx(em, e)]) return efmt(em, "(%s⥊<¯1‿¯1)", tot);
-  if (!strcmp(e->name, "keys")) return efmt(em, "((1+⌈´¯1∾keys)+↕%s)", tot);
-  if (!strcmp(e->name, "parent")) return efmt(em, "(%s//%s)", fx->spawnCnt, em->selVar);
+  if (!strcmp(e->name, "parent")) return efmt(em, "(%s//%s)", g->cnt, em->selVar);
   return efmt(em, "(%s⥊%s)", tot, numLit(em, e->defval));
+}
+
+/* the batch total: sum of every spawn group's row count */
+static char *spawnTotAll(Em *em, Fx *fx) {
+  char *tot = NULL;
+  for (int g = 0; g < fx->nsp; g++)
+    tot = tot ? efmt(em, "(%s+%s)", tot, fx->sp[g].tot) : fx->sp[g].tot;
+  return tot;
 }
 
 static int commitStmt(Em *em, Fx *fx, int isCont) {
@@ -1147,14 +1225,19 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     keep = tv(em);
     stage(em, "%s ← ¬%s", keep, em->selVar);
   }
-  int structural = fx->despawn || fx->spawnCnt;
+  int structural = fx->despawn || fx->nsp;
   if (em->fr.kind != FR_ENT && structural && fx->despawn)
     return fail(em, 0, "despawn outside the entity world");
   (void)isCont;
+  char *totAll = fx->nsp ? spawnTotAll(em, fx) : NULL;
   for (int i = 0; i < r->nents; i++) {
     const RegEntry *e = &r->ents[i];
     int isField = e->kind == RK_FIELD;
     if (e->kind != RK_COL && e->kind != RK_REL && e->kind != RK_SREL && !isField) continue;
+    /* lattice-sided relations (a stencil srel over w*h cells) are frame-foreign to entity
+     * row structure: never filter on despawn, never pad on spawn */
+    if (e->kind == RK_SREL && e->nfib != r->n) continue;
+    if (e->kind == RK_REL && e->nnums != r->n) continue;
     char *cur = lc(em, e->name);
     char *base = cur;
     for (int c = 0; c < fx->ncommits; c++)
@@ -1164,12 +1247,21 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
       continue;
     }
     char *app = NULL;
-    if (fx->spawnCnt) { /* spawn appends rows to the entity world */
-      if (fx->protoName && !strcmp(lc(em, (char*)fx->protoName), cur))
-        app = efmt(em, "(%s⥊1)", fx->spawnTot);
-      else if (fx->protoExpr && !strcmp(cur, "proto")) app = fx->protoExpr;
-      else if (fx->spawnPos && !strcmp(cur, "pos")) { app = fx->spawnPos; if (fx->spawnPosPair) em->isPair[i] = 1; }
-      else app = spawnDefault(em, e, fx);
+    int anyProto = 0;
+    if (fx->nsp) { /* spawn appends one row group per spawn effect, in effect order */
+      if (!strcmp(e->name, "keys"))
+        app = efmt(em, "((1+⌈´¯1∾keys)+↕%s)", totAll);  /* one mint across the batch */
+      else for (int g = 0; g < fx->nsp; g++) {
+        SpawnG *sg = &fx->sp[g];
+        char *piece;
+        int isProto = sg->protoName && !strcmp(lc(em, (char*)sg->protoName), cur);
+        anyProto |= isProto;
+        if (isProto) piece = efmt(em, "(%s⥊1)", sg->tot);
+        else if (sg->protoExpr && !strcmp(cur, "proto")) piece = sg->protoExpr;
+        else if (sg->pos && !strcmp(cur, "pos")) { piece = sg->pos; if (sg->posPair) em->isPair[i] = 1; }
+        else piece = spawnDefault(em, e, sg);
+        app = app ? efmt(em, "%s∾%s", app, piece) : piece;
+      }
     }
     if (base == cur && !app && !fx->despawn) continue;
     if (structural) {
@@ -1182,17 +1274,24 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     if (e->kind == RK_COL && e->hasPres && structural) {
       char *p = efmt(em, "pres_%s", e->name);
       char *kept = keep ? efmt(em, "(%s/%s)", keep, p) : p;
-      if (fx->spawnCnt)
-        stage(em, "%s ↩ %s∾(%s⥊%d)", p, kept, fx->spawnTot,
-              (fx->protoName && !strcmp(lc(em, (char*)fx->protoName), cur)) ? 1 : 0);
+      if (fx->nsp) {
+        char *papp = NULL;
+        for (int g = 0; g < fx->nsp; g++) {
+          int isProto = fx->sp[g].protoName && !strcmp(lc(em, (char*)fx->sp[g].protoName), cur);
+          char *piece = efmt(em, "(%s⥊%d)", fx->sp[g].tot, isProto ? 1 : 0);
+          papp = papp ? efmt(em, "%s∾%s", papp, piece) : piece;
+        }
+        stage(em, "%s ↩ %s∾%s", p, kept, papp);
+      }
       else stage(em, "%s ↩ %s", p, kept);
     }
+    (void)anyProto;
   }
   /* spawn always appends to the entity world, whatever frame selected the sources */
   if (structural) {
-    if (fx->despawn && fx->spawnCnt) stage(em, "anoN ↩ (+´%s)+%s", keep, fx->spawnTot);
+    if (fx->despawn && fx->nsp) stage(em, "anoN ↩ (+´%s)+%s", keep, totAll);
     else if (fx->despawn) stage(em, "anoN ↩ +´%s", keep);
-    else stage(em, "anoN ↩ anoN+%s", fx->spawnTot);
+    else stage(em, "anoN ↩ anoN+%s", totAll);
   }
   return 0;
 }
@@ -1346,7 +1445,7 @@ static int emitCompr(Em *em, const Node *st) {
       if (ce && ce->kind == RK_COL && ce->type == CT_BOOL) {
         char *t = tv(em);
         stage(em, "%s ← %s∨%s", t, lc(em, ce->name), sv);
-        addCommit(em, &fx, entIdx(em, ce), t);
+        addCommit(em, &fx, entIdx(em, ce), t, '|', NULL);
         continue;
       }
     }

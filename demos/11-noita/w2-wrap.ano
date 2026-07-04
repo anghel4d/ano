@@ -1,0 +1,11 @@
+-- The wrap (w2): the deck is a ring; wrapping is modular index arithmetic, and no row ever moves. Twin of w2-wrap.bqn.
+-- Wand [SB, DP] with the cast pointer at slot 1: the block draws DP, needs one more, and wraps to the front — the classic trick that hangs a modifier at the buffer's end to catch the first slot.
+-- drawPos is the rotation as position math (Tier 1: the slot ground is regenerable, the rotation is a projection); the balance runs along the rotation via scan-along, whose write-back conjugates through the order's grade (sort, act, unsort — the Tier-2 law); the modifier's payload is the bolt drawn AFTER it, which is the wand's FIRST slot.
+--! registry w2-wrap
+--! expect drawPos = 0 1 0
+--! expect bal = 0 0 1
+--! expect damage = 0 13 0
+
+Spell , DrawPos = (Slot - 1) % 2
+Spell , Bal = 1 + (scan(+) (DrawAdd - 1) along rot)
+Spell & Proj & DrawPos == 1 , Damage += 10

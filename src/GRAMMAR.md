@@ -69,11 +69,13 @@ The fold prefix at level 9 takes the longest expression at level ≥10 to its ri
 - `Col op expr` with op in `= += -= *= /=`; target may be `pos.x` (field projection).
 - `+Comp` / `-Comp` — add/remove component (presence write).
 - `~` — despawn.
-- `spawn Proto` | `spawn Proto * countExpr` | `spawn Proto at posExpr` | `spawn (pieceOf char) ...` — mint rows; `index` is bound per copy (0.. within each source's copies); copies read their source's columns.
+- `spawn Proto` | `spawn Proto * countExpr` | `spawn Proto at posExpr` | `spawn (pieceOf char) ...` — mint rows; `index` is bound per copy (0.. within each source's copies); copies read their source's columns. A statement may batch several spawn effects: each appends its own row group in effect order, keys mint once across the batch.
 - `Verb args` — registered effect verb (`Knockback 5`, `Flash `Red`, `runBehaviorTree`).
 - `fn via Col` — Tier-3 dispatch (`shortestPath via Adj`).
 
-RHS evaluation space: a column expression on the effect side is evaluated over the full world, gathered by the selection at the scatter (`sel/rhs`), and written back under the mask; `index` is the ordinal within the selection (or within the copy run under spawn-replicate); `to shape` produces exactly count-of-selection positions.
+Same-column batches commit through the spec's merge laws (§10): the additive family (`+=` `-=`) and the multiplicative family (`*=` `/=`) compose by rebasing the later accumulate on the earlier commit (each RHS still observes pre-state); presence writes of one kind compose idempotently; pair-field SETs compose when the fields differ. Any other pair on one column — `+=` beside `*=`, a double SET, anything beside a verb — is rejected at emit time ("no merge law: written twice in one barrier").
+
+RHS evaluation space: a column expression on the effect side is evaluated over the full world, gathered by the selection at the scatter (`sel/rhs`), and written back under the mask; `index` is the ordinal within the selection (or within the copy run under spawn-replicate); `to shape` produces exactly count-of-selection positions. A `scan(f) … along order` value arrives in along order and its write-back conjugates through the order's grade (sort, act, unsort — the Tier-2 law); it keeps its order through scalar arithmetic and is rejected when composed against a differently-ordered column. Scan steps: `+ * max min`; anything else is rejected, never guessed.
 
 ## Japanese skin (`--! ja`)
 

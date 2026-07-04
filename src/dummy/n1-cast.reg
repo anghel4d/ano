@@ -1,0 +1,11 @@
+# n1 — the wand alone (mirrors demos/11-noita/n1-cast.bqn)
+# One entity: the wand at (5,5), mana 100. Every cast appends projectile rows; keys mint from 1+max, parent records the caster.
+n 1
+col keys num 0
+col wand bool 1
+col mana num 100
+col sparkBolt bool 0
+col bomb bool 0
+col pos vec 5 5
+col parent num -1
+fn polar {𝕨×(•math.Cos 𝕩×π÷180)⋈•math.Sin 𝕩×π÷180}

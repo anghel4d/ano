@@ -1,0 +1,12 @@
+-- The Greek letters (w4): a reflective spell is a query over the wand's own table. Twin of w4-greek.bqn.
+-- Alpha copies the wand's first spell, Gamma the last, Omega every spell, Mu every modifier. Noita's interpreter must reify its spell list to run these; here the wand was a table before any spell asked — Alpha is a grade-and-take, Omega is a replicate, and parent pins which slot each letter copied. No quotation, no staging: copies are rows, not code (the staging question stays dormant, ano-limitations.md).
+--! registry w4-greek
+--! expect-n 12
+--! expect keys = 0 1 2 3 4 5 6 7 8 9 10 11
+--! expect copy = 0 0 0 0 0 1 1 1 1 1 1 1
+--! expect parent = -1 -1 -1 -1 -1 1 4 1 2 3 4 1
+
+Spell |> order by Slot |> take 1 , spawn Copy
+Spell |> order by Slot desc |> take 1 , spawn Copy
+Spell , spawn Copy
+Spell & Mod , spawn Copy

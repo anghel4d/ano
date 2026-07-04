@@ -1,0 +1,8 @@
+-- The naru register (c3): the standing rule, the tick acting Life out. Twin of c3-life-naru.bqn (shared-barrier section).
+-- One installed rule, the fused value form; the harness runs one tick — the rule gathers the tick's pre-state and scatters once, one generation of the blinker.
+-- The two-rule flora pair (bloom => +Planted, wither => -Planted) stays a .bqn-only witness: it needs §11's SHARED rule barrier, and the emitter today runs each def-rule as its own barrier (emit.c, "single rule => one barrier"), which the .bqn shows breaks the blinker in both orders.
+--! registry c3-life-naru
+--! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
+
+def kin = #/ (moore' & Planted)
+def life = Plot => Planted = kin == 3 | Planted & kin == 2

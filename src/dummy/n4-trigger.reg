@@ -1,0 +1,16 @@
+# n4 — trigger (mirrors demos/11-noita/n4-trigger.bqn)
+# Row 0 the trigger bolt beside enemy row 3, row 1 a plain bolt beside enemy row 4, row 2 a bolt in open air, row 5 a bystander.
+# dist is euclidean over the pos pairs; default damage 3 stamps the payload the rule mints.
+n 6
+col keys num 0 1 2 3 4 5
+col sparkBolt bool 1 1 1 0 0 0
+col trigger bool 1 0 0 0 0 0
+col firebolt bool 0 0 0 0 0 0
+col damage num 3 3 3 0 0 0
+default damage 3
+col hit bool 0 0 0 0 0 0
+col enemy bool 0 0 0 1 1 0
+col health num 0 0 0 25 25 0
+col pos vec 40 5 | 60 4 | 20 30 | 40 6 | 61 5 | 0 0
+col parent num -1 -1 -1 -1 -1 -1
+fn dist {√+´×˜(𝕨⊑pos)-𝕩⊑pos}
