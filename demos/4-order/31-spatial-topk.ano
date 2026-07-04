@@ -1,0 +1,23 @@
+-- Spatial top-k at 8x8 (ex31; the docs' 64 64 rescaled to the demo's 8 8 per the .bqn header). Twin of 31-spatial-topk.bqn.
+-- World layout: ONE entity world whose 64 initial rows are the lattice cells, row id = flat index k (x = k mod 8, y = k div 8).
+-- The .bqn's per-cell sentries COUNT column becomes spawn-appended Sentry rows: cell k's count = number of sentry rows whose parent is k;
+-- exactly one Sentry per top-8 safety cell means parent's appended tail is exactly those 8 cell ids (ascending) and expect-n grows 64 -> 72.
+-- Statement order: the two header commands are independent (disjoint writes: miningNode vs sentry/parent rows); the lattice-framed
+-- +MiningNode command is placed before the world-growing spawn so both act on the 64-row pre-world.
+-- The two bare queries twin the .bqn's top8/top5 asserts and pin the stable grade-desc tie order:
+-- safety d2=1 quadruple 18 25 27 34 kept in index order; d2=2 group truncated mid-tie to 17 19 33 (35 drops);
+-- resource 42-tie 55 before 62; 35-tie keeps 47, drops 61.
+--! registry 31-spatial-topk
+--! out 26 18 25 27 34 17 19 33
+--! out 63 55 62 54 47
+--! expect miningNode = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0
+--! expect sentry = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1
+--! expect parent = -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 17 18 19 25 26 27 33 34
+--! expect-n 72
+
+-- .bqn assert: 26 18 25 27 34 17 19 33 ≡ top8 (grade order, stable ties)
+top 8 (grade desc Safety @ 8 8)
+-- .bqn assert: 63 55 62 54 47 ≡ top5
+top 5 (grade desc Resource)
+8 8 & top 5 (grade desc Resource) , +MiningNode
+top 8 (grade desc Safety @ 8 8) , spawn Sentry

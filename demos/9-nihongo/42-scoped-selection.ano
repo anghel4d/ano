@@ -1,0 +1,7 @@
+-- Japanese scoped selection (ex42): で is the locative scope. Twin of 42-scoped-selection.bqn.
+-- ASCII gloss: Merchant @ Whiterun , Gold += 5000. Whiterun is not a stored bool column: the .bqn derives it as region=1; a ja-mode file cannot carry an ASCII def statement, so the fixture pins the derived mask as bind Whiterun and keeps the region codes as provenance. Row 2 is a merchant outside Whiterun and stays untouched.
+--! registry 42-scoped-selection
+--! ja
+--! expect gold = 5010 20 30 5040 50 5060
+
+商人 ホワイトラン で 、 金 に 五千 たす

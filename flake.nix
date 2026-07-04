@@ -15,6 +15,10 @@
             pkgs.cbqn # BQN, the verification language for all executable claims
             pkgs.rlwrap # line editing for the bqn and apl repls
 
+            # anoc, the ano -> BQN transpiler in src/ (C23).
+            pkgs.gcc
+            pkgs.gnumake
+
             # Demo languages beyond BQN (demos/demos.md): Erlang, Haskell, OCaml.
             pkgs.beamPackages.erlang
             (pkgs.haskellPackages.ghcWithPackages (p: [ p.megaparsec ])) # draft interpreters, reader experiments
@@ -33,10 +37,17 @@
         };
       });
 
-      # `nix flake check` runs every demo under demos/ through check.sh.
+      # `nix flake check` runs every demo under demos/ through check.sh,
+      # and every .ano twin through anoc (src/check-ano.sh).
       checks = forAll (pkgs: {
         demos = pkgs.runCommand "ano-demos" { nativeBuildInputs = [ pkgs.cbqn ]; } ''
           bash ${self}/demos/check.sh
+          touch $out
+        '';
+        anoc = pkgs.runCommand "ano-anoc-demos" { nativeBuildInputs = [ pkgs.gcc pkgs.gnumake pkgs.cbqn ]; } ''
+          cp -r ${self}/src src && cp -r ${self}/demos demos && chmod -R +w src demos
+          make -C src anoc
+          bash src/check-ano.sh
           touch $out
         '';
       });

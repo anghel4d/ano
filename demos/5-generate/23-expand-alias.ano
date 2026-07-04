@@ -1,0 +1,10 @@
+-- Expand alias (ex23): replicate exposed as a flat-map pipeline stage. Twin of 23-expand-alias.bqn.
+-- Shares ex22's registry verbatim (rows 0-4 the spawner table, rows 5-7 nests as bystanders): expand-then-spawn-one must mint the same keys, row for row, as ex22's spawn * Count — same world, same post-state columns as ex22 after its first statement.
+-- Remap: fresh keys 103..107 (from 1+max live key 102); parents are world row ids 0 0 2 2 2 — the zero-count spawner (row 1) appears nowhere.
+--! registry 22-replicate-spawn
+--! expect-n 13
+--! expect keys = 0 1 2 3 4 100 101 102 103 104 105 106 107
+--! expect parent = -1 -1 -1 -1 -1 -1 -1 -1 0 0 2 2 2
+--! expect minion = 0 0 0 0 0 0 0 0 1 1 1 1 1
+
+Spawner |> expand Count , spawn Minion

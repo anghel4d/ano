@@ -1,0 +1,17 @@
+-- Derived columns (ex25): def as effect source, predicate, fold source, ordering key. Twin of 25-derived-columns.bqn.
+-- threat evaluates to 20 30 120 200 40 20 against pre-state; the masked write gathers the derived cells for the selected rows first.
+-- Rows 0 and 5 keep priority 9 (not Enemy); row 5 keeps Dangerous without Enemy; rows 2 and 3 gain it.
+-- threat/dps full-vector asserts and the ordered view 200 120 40 30 20 20 are BQN-internal witnesses over def columns; the fold and grade queries pin them here.
+--! registry 25-derived-columns
+--! expect priority = 9 30 120 200 40 9
+--! expect dangerous = 0 0 1 1 0 1
+
+def threat = Damage * Speed / Range
+def dps    = Damage / Cooldown
+Enemy , Priority = threat
+Enemy & threat > 100 , +Dangerous
+--! out 390
++/ threat @ Enemy
+-- descending grade is stable: the tie 20 at rows 0 and 5 grades in source order, 0 before 5
+--! out 3 2 4 1 0 5
+order by threat desc

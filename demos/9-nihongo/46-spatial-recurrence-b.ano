@@ -1,0 +1,13 @@
+-- Spatial recurrence (ex46): a fresh line stays zero under iteration. Twin of 46-spatial-recurrence.bqn (second assertion).
+-- Eight barriers of the Version A stencil on an all-zero pre-state: k statements are k stencil steps, every read observes that statement's pre-state, so a freshly minted line stays zero forever.
+--! registry 46-spatial-recurrence-b
+--! expect height = 0 0 0 0 0 0 0 0
+
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height
+Cell @ row , Height = prev.Height + prev.prev.Height

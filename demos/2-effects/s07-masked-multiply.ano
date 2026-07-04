@@ -1,0 +1,7 @@
+-- Masked multiply, corrected (spec §7): doubling merchants' gold. Twin of s07-masked-multiply.bqn.
+-- The factor column is 1+merchant (multiplicative identity 1 off-mask); the .bqn's wrong half (2×merchant, wipes off-mask) and the k=3 form are BQN-only witnesses unreachable from ano semantics.
+-- On-mask doubled, off-mask bit-identical to pre-state.
+--! registry s07-masked-multiply
+--! expect gold = 100 400 300 400 1000 600
+
+Merchant , Gold *= 2

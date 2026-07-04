@@ -1,0 +1,13 @@
+# ex35 rank-1 rows + 2x3 lattice fields (mirrors demos/7-tiers/35-two-habitats.bqn)
+# lattice is w h = 3 2: three columns, two rows; fields row-major, so elevation is 1 2 3 / 4 5 6.
+n 5
+col gold num 7 12 5 30 9
+col nord bool 1 0 1 1 0
+col damage num 4 1 3 2 5
+col threat num 10 50 20 40 30
+col x num 5 8 13 21 34
+lattice 3 2
+field elevation num 1 2 3 4 5 6
+field cost num 1 1 1 1 1 1
+field safety num 3 1 4 1 5 9
+field g num 1 2 3 4 5 6

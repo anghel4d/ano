@@ -1,0 +1,7 @@
+-- t2-diagonal: the Tier-2 masked add as a map on the whole record row. Twin of t2-diagonal.bqn.
+-- The .bqn witnesses the flagship line as W = gold + 1000×nord; its fixture has no twoHanded, so the twin adds a scaffold twoHanded column with every value 61: TwoHanded > 60 passes on all rows and the selection reduces to nord, exactly W's gate.
+-- expect gold is the .bqn's hand-computed anchor W gold‿nord. The diagonal-action quantification over taus and the single-column counterexample (permuting gold alone across a nord boundary) are Sym(I) equivariance witnesses, left to the .bqn twin.
+--! registry t2-diagonal
+--! expect gold = 1100 200 1300 1400 500
+
+Nord & TwoHanded > 60 , Gold += 1000

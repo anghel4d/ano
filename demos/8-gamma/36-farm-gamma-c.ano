@@ -1,0 +1,9 @@
+-- Farm gamma, moisture stencil mean (ex36): per-plot avg over the boundary-shrunk neighbor fiber. Twin of 36-farm-gamma.bqn (moisture section).
+-- 3x3 lattice world, moisture 1..9 row-major. The divisor is the shrunken fiber size (2 at corners, 3 at edges, 4 at the center), never a clamp, wrap, or constant 4; no fiber is empty, so every row survives the identity-less avg.
+-- The Cnt statement pins the .bqn cnt cross-check (fiber size per cell) in its own -1-sentinel column. The .bqn edge-list equivalence assert ((⥊m1) ≡ grouped fold of the flattened relation) is a BQN-internal witness, left to the twin.
+--! registry 36-farm-gamma-c
+--! expect moisture = 3 3 4 4.333333333333333 5 5.666666666666667 6 7 7
+--! expect cnt = 2 3 2 3 4 3 2 3 2
+
+Plot , Moisture = avg/ neighbors'.Moisture   -- per-plot mean over the neighbor fiber
+Plot , Cnt = #/ neighbors'                   -- the fiber-size column: 2 corners, 3 edges, 4 center

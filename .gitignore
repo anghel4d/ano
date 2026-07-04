@@ -54,3 +54,7 @@ scratch/
 # Nix build output symlinks
 result
 result-*
+
+# anoc build output
+src/anoc
+src/*.o

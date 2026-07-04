@@ -1,0 +1,7 @@
+-- Version A pinned semantics, point 1: one stencil step from the zero pre-state is all zeros (spec §21, pre-renumbering §19). Twin of s19-fib-stencil.bqn (the Step over n zeros assertion).
+-- prev is a zero-fill shift over the line's order, never a carry: on a freshly minted line the pre-state of offset is undefined-or-zero, so the ex28 Version A statement as written yields zeros — the wrong-looking values ARE the assertion; producing Fibonacci here is the bug.
+--! registry s19-fib-stencil-a
+--! expect offset = 0 0 0 0 0 0 0 0 0 0 0 0
+--! expect fib = 1 1 2 3 5 8 13 21 34 55 89 144
+
+12 , offset = prev.offset + prev.prev.offset

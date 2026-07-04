@@ -1,0 +1,4 @@
+# spec §7 — masked-multiply fixture (mirrors demos/2-effects/s07-masked-multiply.bqn)
+n 6
+col merchant bool 0 1 0 0 1 0
+col gold num 100 200 300 400 500 600

@@ -1,0 +1,14 @@
+-- Sequenced effects (ex13): `;`-batched effects share one statement barrier. Twin of 13-sequenced-effects.bqn.
+-- Knockback and Flash are registered effect verbs (fn knockback pos / fn flash tint); @cursor is a one-hot alias.
+-- The .bqn's flash symbol column is registered as `tint`: an effect verb cannot share its target column's name (registry lookup is first-match). tint None/Red mirrors sNone/sRed.
+-- Statement 2: rows 0 and 3 are Nord with TwoHanded > 60; row 2 has 90 but not Nord, row 5 has 99 but not Nord; row 1 keeps pre-existing Blessed.
+-- The .bqn's reverse-order commutation witness and its `sel` binding are BQN-internal; this twin pins the post-state.
+--! registry 13-sequenced-effects
+--! expect pos = 0 10 25 30 40 50
+--! expect tint = None None Red None None None
+--! expect shielded = 1 1 0 0 1 0
+--! expect gold = 1005 10 15 1020 25 30
+--! expect blessed = 1 1 0 1 0 0
+
+@cursor , Knockback 5 ; Flash `Red ; -Shielded
+Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed

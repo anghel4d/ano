@@ -1,0 +1,9 @@
+# ex35 outer row (mirrors demos/7-tiers/35-two-habitats.bqn)
+# a = 1 2 3 at rows 0-2, b = 10 20 at rows 3-4, concatenated into val; masks A and B mark the slices.
+# f is the comprehension body: the id-indexed sum over the concatenated layout.
+n 5
+col val num 1 2 3 10 20
+col a bool 1 1 1 0 0
+col b bool 0 0 0 1 1
+fn f {(𝕨⊑val)+𝕩⊑val}
+lattice 4 4

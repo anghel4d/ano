@@ -1,0 +1,11 @@
+-- Pipeline top-k (ex19): filter to Enemy, order by Threat desc, take 5, mask-or Targeted. Twin of 19-pipeline-topk.bqn.
+-- Grade indices live in the filtered index space and are mapped through /enemy before touching world rows:
+-- the two non-enemies carry the highest raw threat (95, 99) and must never be picked.
+-- The bare query twins the .bqn's chosen assert (world rows of the top-5 enemies, grade order);
+-- the buggy branch (untranslated filtered indices) has no ano surface and stays in the .bqn twin.
+--! registry 19-pipeline-topk
+--! out 6 3 4 0 7
+--! expect targeted = 1 1 0 1 1 0 1 1
+
+Enemy |> order by Threat desc |> take 5
+Enemy |> order by Threat desc |> take 5 , +Targeted

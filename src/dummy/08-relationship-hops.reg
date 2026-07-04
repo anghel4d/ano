@@ -1,0 +1,15 @@
+# ex08 — relationship hops fixture (mirrors demos/1-selection/08-relationship-hops.bqn)
+# mentor is nullable (-1 dangling: rows 1, 4); faction is total — rows 0..1 double as
+# faction entities in the same id space. hasMentor is derived by the emitter from the sentinel.
+n 6
+rel mentor 2 -1 4 2 -1 1
+rel faction 0 0 0 1 0 1
+col nord bool 1 1 1 1 0 1
+col twoHanded num 90 20 85 70 81 30
+col student bool 1 1 1 1 0 1
+col dead bool 0 0 1 0 1 0
+col mentored bool 1 0 1 1 0 1
+col soldier bool 0 0 1 1 1 1
+col atWar bool 1 0 0 0 0 0
+col gold num 0 0 0 0 0 0
+col morale num 100 100 100 100 100 100

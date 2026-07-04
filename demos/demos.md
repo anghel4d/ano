@@ -8,6 +8,8 @@ A temporary transpiler through BQN or OCaml might be considered at a later point
 
 We use BQN to work through and verify the semantics of ano language ahead of time. An implementation in src/ is verified against the BQN post-states by differential testing.
 
+That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every .bqn demo has an .ano twin beside it — the demo's own `# ano:` statements as a runnable program, a dummy registry in src/dummy/ reproducing the .bqn fixture, and `--!` directives pinning the same post-state as BQN assertions. `src/anoc --run demo.ano` compiles the program, runs it under CBQN, and exits nonzero on any divergence. Split twins (-a/-b/-c) pin intermediate program points; the two .bqn files with no ano surface (s16-keygen, t1-reverse) stay BQN-only witnesses.
+
 ## Layout
 
 - `1-selection/` — masks, scopes, aliases, presence, value predicates, hops, named selections (ex1-9, the set hop).
@@ -20,3 +22,4 @@ We use BQN to work through and verify the semantics of ano language ahead of tim
 - `8-gamma/` — the grouped fold over relationship fibers (the ex36 farm lines).
 - `9-nihongo/` — the Japanese surface examples (ex40-49).
 - `check.sh` — runs every .bqn under demos/, one ok/FAIL line per file, nonzero exit on any failure.
+- `../src/check-ano.sh` — the same contract over every .ano twin, through `anoc --run` (build anoc first: `make -C src`).

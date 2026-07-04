@@ -1,0 +1,13 @@
+# ex28 — computed line fixture (mirrors demos/6-space/28-computed-line.bqn)
+# The world backs the 12-line: offset is the fresh line's pre-state (twelve zeros, the
+# Version A gloss's pre-state), row 0 doubles as the Player anchor (pos 100 200), rows
+# 1..11 carry -1 -1 pos decoys. fib carries the recurrence host-side (scalar dfn, Fib¨);
+# polar is dyadic r Polar¨ theta, theta in degrees.
+n 12
+col offset num 0 0 0 0 0 0 0 0 0 0 0 0
+col cheese bool 0 0 0 0 0 0 0 0 0 0 0 0
+col pillar bool 0 0 0 0 0 0 0 0 0 0 0 0
+col pos vec 100 200 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1
+bind player entity 0
+fn fib {𝕩⊑12↑{𝕩∾+´¯2↑𝕩}⍟10 0‿1}
+fn polar {𝕨×(•math.Cos 𝕩×π÷180)⋈•math.Sin 𝕩×π÷180}

@@ -1,0 +1,6 @@
+# ex30 — space reductions fixture, 3 3 half (mirrors demos/6-space/30-space-reductions.bqn)
+# The .bqn's non-uniform cost2 field (1..9 row-major), registered as cost so the canonical
+# scan statements read unchanged at the modeled shape.
+n 0
+lattice 3 3
+field cost num 1 2 3 4 5 6 7 8 9

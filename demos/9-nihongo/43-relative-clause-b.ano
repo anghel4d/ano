@@ -1,0 +1,6 @@
+-- Relative-clause commute witness (ex43): juxtaposition is &, so the mask is the same whichever side of & the clause sits on. Twin of 43-relative-clause.bqn (the clause∧nord ≡ nord∧clause assertion): same fixture, flipped conjuncts, same post-state.
+-- Comparison binds tighter than &, so the line parses (TwoHanded > 60) & Nord.
+--! registry 43-relative-clause-a
+--! expect gold = 1005 5 5 1005 5 5
+
+TwoHanded > 60 & Nord , Gold += 1000

@@ -1,0 +1,16 @@
+-- Spatial derived fields (ex33). Twin of 33-derived-fields.bqn. Version B canonical: the boundary policy is visible.
+-- Modeled as the demo's 8x8 window with frame origin -4 -4: the coordinate fields x (row) and y (column) are registered spanning -4..3 so the basin is inhabited — with 0-based coords it would be empty, and registered fields win over the emitter's synthesized (0-based, transposed) coords.
+-- ridge reads BOTH coordinates (sin(x/8)+sin(y/8)); water floods the 36 basin cells over the non-zero pre-state 7 (untouched cells must still read 7); peaks land on window cells (6,7) (7,6) (7,7) — flat 55 62 63, world coords (2,3) (3,2) (3,3) — pinned via pos as the emitter's (k mod 8, k div 8) spawn pairs; neighbor(clamp) makes the boundary row its own neighbor (slope 0), so cliff is the 30-to-80 jump alone: row 3, flat 24..31.
+-- Left to the .bqn twin: the ridge corner float assertions (1e-12 tolerance) and the wrong one-coordinate dfn witness (2sin(w/8) reads one coordinate twice) — ridge is a def, not a stored column, so only its masked consequences are pinnable here.
+--! registry 33-derived-fields
+--! expect peak = 1 1 1
+--! expect pos = 7 6 6 7 7 7
+--! expect water = 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 7 100 100 100 100 100 100 7 7 100 100 100 100 100 7 7 7 100 100 100 100 7 7 7 7 100 100 100 7 7 7 7 7 100 100 7 7 7 7 7 7 100 7 7 7 7 7 7 7
+--! expect cliff = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+def ridge = sin(x / 8) + sin(y / 8)
+def basin = ridge < 0
+def slope = abs(Height - neighbor(clamp).Height)
+8 8 & ridge > 0.5 , spawn Peak
+8 8 & basin , Water = 100
+8 8 & slope > 30 , +Cliff

@@ -1,0 +1,10 @@
+-- Presence patterns (ex6). Twin of 06-presence-patterns.bqn.
+-- Three presence states: present-constrained, present-any (_), absent (!). Junk 99/77 sits behind absent TwoHanded; the value predicate must imply the presence guard — gold row 2 staying 0 is the .bqn's "presence guards the value predicate" witness. Row 3 has the component (70>60) but is not Nord; row 5 has junk 77 and no component, so Untrained, not Gold.
+--! registry 06-presence-patterns
+--! expect gold = 1000 0 0 0 1000 0
+--! expect trained = 1 1 0 0 1 0
+--! expect untrained = 0 0 1 0 0 1
+
+(Nord, TwoHanded > 60) , Gold += 1000
+(Nord, TwoHanded _) , +Trained
+(Nord, !TwoHanded) , +Untrained

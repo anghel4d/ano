@@ -1,0 +1,6 @@
+# s08 — masked scatter fixture (mirrors demos/1-selection/s08-masked-scatter.bqn)
+# post-state distinguishes the correct scatter (writes rows 1 3 4) from the
+# mask-as-index misread (writes rows 0 1): rows 3 and 4 must flip, row 0 must not
+n 6
+col bandit bool 0 1 0 1 1 0
+col faction sym Friendly Bandit Friendly Bandit Bandit Friendly

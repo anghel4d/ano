@@ -1,0 +1,9 @@
+-- Assignment (ex11): masked overwrite with a backtick-symbol constant. Twin of 11-assignment.bqn.
+-- The .bqn's enum codes map to sym-column names: faction 0/1/2 = Friendly/Bandit/Hostile, loot 0/1/2 = Empty/Coins/Gems.
+-- Faction and Loot are distinct enum spaces that share codes numerically; sym columns keep the name spaces separate.
+--! registry 11-assignment
+--! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly
+--! expect loot = Empty Gems Coins Empty Coins Gems
+
+Bandit , Faction = `Hostile
+Dead , Loot = `Empty

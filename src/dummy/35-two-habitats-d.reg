@@ -1,0 +1,5 @@
+# ex35 reshape row (mirrors demos/7-tiers/35-two-habitats.bqn)
+# eight soldiers, positions junk until the reshape writes them.
+n 8
+col soldier bool 1 1 1 1 1 1 1 1
+col pos vec -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1
