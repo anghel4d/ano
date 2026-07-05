@@ -3,7 +3,7 @@
 ## What this is
 Ano (あの). A programming language design. An embedded ECS query-and-command engine that addresses entities by description: the selection predicate is the entity reference. FP / APL lineage, ASCII surface, SQL/Datalog/production-rules class — the FP/array sibling of Lua, to the game world what q is to kdb+; beside a Lua-class host the split is coroutines versus triggers. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
 
-One design document so far, `ano-language.md`. No compiler yet. Work here is design and spec writing.
+The spec is `ano-language.md`; satellite working notes orbit it (`ano-ecs.md` the world store, `ano-time.md` time and missions, `ano-sky.md` purity, the Sky Registry, and the machine-as-world hypothesis). The compiler `anoc` lives in `src/`. Work here is design, spec writing, and the differential-tested compiler.
 
 ## The shape
 One form governs the static layer:
