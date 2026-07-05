@@ -483,6 +483,12 @@ static Node *parse_binloop(P *p, Node *l, int min) {
     else                 { n = node_new(p->a, N_ARITH, line); n->op = arithop(k); }
     node_addkid(p->a, n, l);
     node_addkid(p->a, n, r);
+    if (k == T_AT && pk(p) == T_ATKW) {       /* mask @ frame at origin: anchored frame */
+      adv(p);
+      Node *org = parse_expr(p, 10);
+      if (!org) return NULL;
+      node_addkid(p->a, n, org);
+    }
     l = n;
   }
 }
@@ -658,6 +664,24 @@ static Node *parse_stmt(P *p) {
     return st;
   }
   if (k == T_LB) return parse_compr(p);
+  /* eval "<statement>" — APL's ⍎ constrained to a literal: the quotation is re-lexed and
+   * spliced HERE, at parse time, so the spliced statement's footprint stays visible to
+   * every later static check. One statement per quotation; dynamic strings are not this. */
+  if (k == T_NAME && !strcmp(cur(p)->name, "eval") && pk2(p, 1) == T_STR &&
+      (pk2(p, 2) == T_NL || pk2(p, 2) == T_EOF)) {
+    const char *quoted = p->t[p->i + 1].name;
+    adv(p); adv(p);
+    Tok *ts = NULL; int nts = 0;
+    if (ano_lex(quoted, 0, NULL, p->a, &ts, &nts, p->err, p->errsz)) return NULL;
+    P q = { ts, nts, 0, p->a, p->err, p->errsz };
+    while (pk(&q) == T_NL) adv(&q);
+    if (pk(&q) == T_EOF) return perrf(p, line, "eval of an empty quotation");
+    Node *s = parse_stmt(&q);
+    if (!s) return NULL;
+    while (pk(&q) == T_NL) adv(&q);
+    if (pk(&q) != T_EOF) return perrf(p, line, "eval: one statement per quotation");
+    return s;
+  }
   if (k == T_SPAWN ||
       ((k == T_PLUS || k == T_MINUS) && pk2(p, 1) == T_NAME &&
        (pk2(p, 2) == T_NL || pk2(p, 2) == T_SEMI || pk2(p, 2) == T_EOF))) {
@@ -760,6 +784,15 @@ Node *ano_parse(const Tok *toks, int ntoks, Arena *a, char *err, size_t errsz) {
 
 /* ---------- self-test ---------- */
 #ifdef PARSE_TEST
+
+/* stub for standalone compilation: the eval splice needs the real lexer (link lex.c);
+ * no self-test case quotes a statement */
+int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
+            Tok **toks, int *ntoks, char *err, size_t errsz) {
+  (void)src; (void)ja; (void)reg; (void)a; (void)toks; (void)ntoks;
+  snprintf(err, errsz, "ano_lex stub (PARSE_TEST)");
+  return -1;
+}
 
 /* Input: node kind. Output: static name string (enum order of ano.h). */
 static const char *kindname(NodeKind k) {

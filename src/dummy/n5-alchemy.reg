@@ -2,6 +2,12 @@
 # 12x12 lattice, x the row (k div 12), y the column (k mod 12), registered like ex27 so the row-major convention wins.
 # oil: a 3x3 pool (x 5-7, y 3-5) with a vein along x=6 out to the east edge; water: a pond x 9-10, y 3-8; no fire yet.
 # moore: 8-stencil fibers, boundary shrunk, linear ids row*12+col, ascending.
+# the payload: one firebolt row, pos in chunk coordinates — the anchor of the detonation's frame.
+# blast: the frame predicate, per cell Fn ⟨cell, origin, r2⟩ with r2 the squared radius.
+n 1
+col pos vec 6 6
+bind Firebolt entity 0
+fn blast {c‿o‿r2: r2 ≥ +´×˜c-o}
 lattice 12 12
 field x num 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5 5 5 5 5 6 6 6 6 6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7 7 7 7 7 8 8 8 8 8 8 8 8 8 8 8 8 9 9 9 9 9 9 9 9 9 9 9 9 10 10 10 10 10 10 10 10 10 10 10 10 11 11 11 11 11 11 11 11 11 11 11 11
 field y num 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11 0 1 2 3 4 5 6 7 8 9 10 11

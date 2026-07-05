@@ -1,7 +1,8 @@
 # Alchemy (n5): the material world is a lattice; the alchemy table is standing rules.
 # Ano: Oil & (x - 6) * (x - 6) + (y - 6) * (y - 6) <= 5 , +Fire
+#      Oil @ blast(5) at Firebolt.pos , +Fire
 #      def spread = Oil & !Fire & #/ (moore' & Fire) >= 1 => +Fire
-# Semantics: the Firebolt payload detonates at chunk (6,6), staged from n4 the way split twins pin program points. Ignition is a coordinate-disc predicate meeting the oil mask (§20 — every regular figure is a predicate on the coordinate columns); spread is the 10-conways stencil under a fuel guard — fire is Life with birth-on-any-neighbor restricted to the oil mask. Water never enters a mask, so it cannot burn; oil persists under its fire — consumption is a second rule (Fire & Oil => -Oil) and the pair waits on the shared rule barrier exactly as c3's bloom/wither does.
+# Semantics: the Firebolt payload detonates at chunk (6,6), staged from n4 the way split twins pin program points. Ignition is spelled twice with one meaning: the coordinate-disc predicate (§20 — every regular figure is a predicate on the coordinate columns) and the anchored frame (`at` filling the frame's origin with a mirror-read of the payload's pos) — same cells, idempotent pair. Spread is the 10-conways stencil under a fuel guard — fire is Life with birth-on-any-neighbor restricted to the oil mask. Water never enters a mask, so it cannot burn; oil persists under its fire here — consumption (Fire & Oil => -Oil) joins spread in one tick in the -b twin, under §11's shared rule barrier exactly as c3's bloom/wither does.
 # Invariant: the blast ignites exactly the 9 oil cells inside the disc; one tick licks exactly one ring further (4 cells, three at the pool's west face and one down the vein) and no more; fire never leaves the fuel and never touches the pond.
 
 i ← ↕12

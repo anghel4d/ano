@@ -3,7 +3,7 @@
 #      Spell , MinBal = 0 - (max\ (0 - Bal) @ Spell)
 #      Spell @ deck & (Slot == 0 | prev.MinBal > 0) , +Member
 #      Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 10 * (#/ (Spell & Mod & Member))
-# Semantics: "next projectile at or after slot i" is min{slot_p : p projectile, slot_p >= i} — a reverse running-min over the slot line with non-projectiles at +inf, one scan, no loop; multicast markers are passed straight through, which is Noita's rule (the modifier recurses into the group and lands on its first bolt). When every modifier precedes every projectile the join collapses to "the block's first projectile takes the whole stack" — the twin's scoped-fold spelling; the interleaved wand pins where that shortcut dies.
+# Semantics: "next projectile at or after slot i" is min{slot_p : p projectile, slot_p >= i} — a reverse running-min over the slot line with non-projectiles at +inf, one scan, no loop; multicast markers are passed straight through, which is Noita's rule (the modifier recurses into the group and lands on its first bolt). When every modifier precedes every projectile the join collapses to "the block's first projectile takes the whole stack" — the twin's scoped-fold spelling; the interleaved wand pins where that shortcut dies, and the -b/-c twins run the general join on it — as an order-derived srel and as the value-level rel.
 # Invariant: [DP, DP, Triple, SB, SB, SB] is one block and both DP land on the first bolt (3 to 23); the interleaved one-block wand [DP, Triple, SB, DP, SB, SB] binds DP0 to the bolt at slot 2 and DP3 to slot 4 — the general join and the shortcut disagree there, and the general join is the evaluator.
 
 Draw ← {1 + +` 𝕩-1}

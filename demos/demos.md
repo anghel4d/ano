@@ -21,7 +21,7 @@ That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every 
 - `7-tiers/` — the two-habitats table and the tier witnesses (ex35, 37-39, the foundations counterexamples).
 - `8-gamma/` — the grouped fold over relationship fibers (the ex36 farm lines).
 - `9-nihongo/` — the Japanese surface examples (ex40-49).
-- `10-conways/` — Conway's Game of Life: the synchronous step as one barrier, the glider flipbook, the naru pair and the shared-rule-barrier witness (c1-c3).
-- `11-noita/` — Noita's wand, card by card: casts and multicast, modifier order, homing as marker-plus-rule, the trigger, lattice alchemy, the assembled wand (n1-n6); the wand-construction stress test — the draw scan, the wrap, the modifier chain, the Greek letters, the timeless ledger (w1-w5, findings in ano-limitations.md).
+- `10-conways/` — Conway's Game of Life: the synchronous step as one barrier, the glider flipbook, the naru pair under the shared rule barrier — bloom+wither in one tick, the guard-complement certificate (c1-c3, c3-b).
+- `11-noita/` — Noita's wand, card by card: casts and multicast, modifier order, homing as marker-plus-rule, the trigger, lattice alchemy with the anchored frame and the spread+consume tick, the assembled wand (n1-n6, n5-b/-c); the wand-construction stress test — the draw scan, the wrap, the modifier chain and its two general-join spellings, the Greek letters, the timeless ledger, the eval splice (w1-w6; what stays open, ano-limitations.md).
 - `check.sh` — runs every .bqn under demos/, one ok/FAIL line per file, nonzero exit on any failure.
 - `../src/check-ano.sh` — the same contract over every .ano twin, through `anoc --run` (build anoc first: `make -C src`).

@@ -5,9 +5,9 @@
 #      [ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
 #      Enemy & Hit , Health -= +/ Damage @ SparkBolt
 #      def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~
-#      Oil & (x - 6) * (x - 6) + (y - 6) * (y - 6) <= 5 , +Fire
+#      Oil @ blast(5) at impact , +Fire
 #      Oil & !Fire & #/ (moore' & Fire) >= 1 , +Fire
-# Semantics: the n1-n5 ladder as one program — cast, cards riding the fresh volley in one barrier, one frame of flight, the collision join, the damage spend as a scoped fold (the volley's stacked damage, one scalar), the trigger rule minting a payload at each impact, then the material chunk takes over. The chunk names its own coordinates: a lattice predicate cannot yet read an entity column, so the detonation centers at chunk (6,6) by construction — the frame join, surfaced in the README.
+# Semantics: the n1-n5 ladder as one program — cast, cards riding the fresh volley in one barrier, one frame of flight, the collision join, the damage spend as a scoped fold (the volley's stacked damage, one scalar), the material chunk's detonation and ring, and the trigger rule minting a payload at each impact — installed last, its tick independent of the chunk statements. The detonation is the anchored frame: @ fixes it and `at` fills its origin with the impact binding — the deictic form, the host having resolved the payload's world pos into chunk coordinates.
 # Invariant: both bolts hit; the volley spends 26 = 2 x (3+10) and the enemy keeps 4; both payloads hold their own impact pos and dangling parents; the performed spread ring equals n5's installed tick cell for cell.
 
 # ── the cast: two copies, index per copy, cards in the next two barriers

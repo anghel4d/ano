@@ -1,6 +1,6 @@
 -- The assembled wand (n6): [Twin Spell, Damage Plus, Trigger, Firebolt], cast at an enemy standing over an oil vein. Twin of n6-wand.bqn.
--- Cast, cards, one frame of flight, the collision join, the damage spend (a scoped fold: the volley's stacked damage), the trigger rule minting payloads at both impacts, detonation and one performed ring of spread in the material chunk.
--- The chunk names its own coordinates: a lattice predicate cannot yet read an entity column, so the detonation centers at chunk (6,6) by construction — the frame join is the missing piece, surfaced in the README.
+-- Cast, cards, one frame of flight, the collision join, the damage spend (a scoped fold: the volley's stacked damage), detonation and one performed ring of spread in the material chunk. The trigger rule that mints payloads at both impacts is installed last: the harness clock beats at the end of an install run, so the payload tick gathers everything the earlier barriers committed.
+-- The detonation is an anchored frame: @ fixes the frame, `at` fills its origin. Here the anchor is the impact binding — the deictic form, the host having resolved the payload's world pos into chunk coordinates (the world-to-chunk (o,S) stays host business); n5 shows the inline mirror-read form (at Firebolt.pos).
 --! registry n6-wand
 --! expect-n 5
 --! expect keys = 0 1 2 5 6
@@ -20,6 +20,6 @@ SparkBolt , Damage += 10 ; +Trigger
 SparkBolt , pos = pos + (24, 0)
 [ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
 Enemy & Hit , Health -= +/ Damage @ SparkBolt
-def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~
-Oil & (x - 6) * (x - 6) + (y - 6) * (y - 6) <= 5 , +Fire
+Oil @ blast(5) at impact , +Fire
 Oil & !Fire & #/ (moore' & Fire) >= 1 , +Fire
+def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~

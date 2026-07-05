@@ -47,6 +47,11 @@ typedef struct {
   /* statement state */
   Frame fr, savedFr;
   int haveSaved;
+  /* shared rule tick (§11): curRule indexes the rule whose effects are being staged
+   * (-1 outside a tick); ruleDisj[r] is the bitmask of rules whose masks are certified
+   * row-disjoint from r by complementary guard literals */
+  int curRule;
+  unsigned ruleDisj[32];
   char selVar[32];       /* current statement's refined selection variable */
   char cntVar[32];       /* copy-space counts (spawn replicate) */
   char idxVar[64];       /* copy-space per-copy index */
@@ -310,12 +315,19 @@ static const char *foldGl(const char *op) {
 static int foldHasId(const char *op) {
   return !strcmp(op,"+") || !strcmp(op,"*") || !strcmp(op,"&") || !strcmp(op,"|") || !strcmp(op,"#");
 }
-/* the set-hop fiber expression for a rel name (forward srel or precomputed inverse) */
+/* the set-hop fiber expression for a rel name (forward srel, precomputed inverse, or a
+ * key-valued column standing in relation position: its fibers are the inverse image over
+ * the stable-id column — the value-level rel, w3-c) */
 static int fiberVar(Em *em, const Node *nd, char **out) {
   const RegEntry *e = find(em, nd->name);
-  if (!e || e->kind != RK_SREL) return fail(em, nd->line, "'%s' is not a set-valued relationship", nd->name);
-  *out = lc(em, e->name);
-  return 0;
+  if (e && e->kind == RK_SREL) { *out = lc(em, e->name); return 0; }
+  if (e && e->kind == RK_COL && e->type == CT_NUM) {
+    char *t = tv(em);
+    stage(em, "%s ← {/%s=𝕩}¨%s", t, lc(em, e->name), idCol(em));
+    *out = t;
+    return 0;
+  }
+  return fail(em, nd->line, "'%s' is not a set-valued relationship or a key column", nd->name);
 }
 
 /* gamma fold: fold/ rel'.Comp | fold/ (rel' & pred) | fold/ rel'  -> per-source column + guard */
@@ -787,6 +799,17 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
   }
 }
 
+/* cell coordinate column for the anchored frame: registered x/y fields win, else the
+ * lattice frame's computed coordinates; NULL when neither exists */
+static char *cellCoord(Em *em, char axis) {
+  const RegEntry *e = find(em, axis == 'x' ? "x" : "y");
+  if (e && (e->kind == RK_FIELD || e->kind == RK_COL)) return lc(em, e->name);
+  if (em->fr.kind == FR_LAT || em->fr.kind == FR_BOARD)
+    return axis == 'y' ? efmt(em, "(⌊(↕%d)÷%d)", em->fr.w * em->fr.h, em->fr.w)
+                       : efmt(em, "(%d|↕%d)", em->fr.w, em->fr.w * em->fr.h);
+  return NULL;
+}
+
 /* mask emission: full frame-length boolean vector, all guards folded in */
 static int emitMask(Em *em, const Node *nd, char **out) {
   switch (nd->kind) {
@@ -841,6 +864,33 @@ static int emitMask(Em *em, const Node *nd, char **out) {
     }
     case N_SCOPE: {
       char *a, *b;
+      if (nd->nkids == 3) {
+        /* mask @ frame at origin — the anchored frame (frame join): @ fixes (o, S) and
+         * `at` fills the origin slot with a mirror-read; the registered frame fn runs
+         * per cell as Fn ⟨cell, origin, args…⟩ and returns the frame mask */
+        if (emitMask(em, nd->kids[0], &a)) return -1;
+        const Node *fnode = nd->kids[1];
+        EV org; if (emitVal(em, nd->kids[2], MODE_WORLD, &org)) return -1;
+        if (!org.unit || !org.pair)
+          return fail(em, nd->line, "frame anchor must be one point (a pair mirror-read)");
+        if (fnode->kind != N_CALL)
+          return fail(em, fnode->line, "anchored frame wants fn(args…) — a registered frame predicate");
+        const RegEntry *e = find(em, fnode->name);
+        if (!e || e->kind != RK_FN)
+          return fail(em, fnode->line, "anchored frame '%s' is not a registered fn", fnode->name);
+        char *xs = cellCoord(em, 'x'), *ys = cellCoord(em, 'y');
+        if (!xs || !ys)
+          return fail(em, fnode->line, "anchored frame needs cell coordinates (x/y fields or a lattice frame)");
+        char *args = efmt(em, "%s", "");
+        for (int i = 0; i < fnode->nkids; i++) {
+          EV av; if (emitVal(em, fnode->kids[i], MODE_WORLD, &av)) return -1;
+          args = efmt(em, "%s, %s", args, av.v);
+        }
+        char *t = tv(em);
+        stage(em, "%s ← {%s ⟨𝕩, ⊑%s%s⟩}¨(%s⋈¨%s)", t, fnv(em, e->name), org.v, args, xs, ys);
+        *out = efmt(em, "(%s∧%s)", a, t);
+        return 0;
+      }
       if (nd->kids[1]->kind == N_SHAPE) { /* frame scope: predicate over the lattice */
         if (emitMask(em, nd->kids[0], &a)) return -1;
         *out = a;
@@ -963,6 +1013,7 @@ typedef struct {
   char fam;            /* merge family: '+' additive, '*' multiplicative, '=' set,
                           '|' presence-add, '&' presence-del, 'v' verb dispatch */
   const char *field;   /* pair-field projection name or NULL */
+  unsigned rules;      /* bitmask of contributing rules in a shared tick (0 outside) */
 } Commit;
 
 /* one spawn group: a statement may batch several spawn effects (§10); each appends
@@ -979,7 +1030,8 @@ typedef struct {
 /* per-statement effect staging */
 typedef struct {
   Commit commits[64]; int ncommits;
-  int despawn;         /* keep = ¬sel */
+  int despawn;         /* keep = ¬despawnSel */
+  char *despawnSel;    /* the mask despawn was staged under (ORs across a rule tick) */
   SpawnG sp[8]; int nsp;
 } Fx;
 
@@ -990,17 +1042,19 @@ static Commit *findCommit(Fx *fx, int colIdx) {
 }
 
 static void addCommit(Em *em, Fx *fx, int colIdx, char *expr, char fam, const char *field) {
+  unsigned bit = em->curRule >= 0 ? 1u << em->curRule : 0;
   for (int i = 0; i < fx->ncommits; i++)
     if (fx->commits[i].colIdx == colIdx) {
       fx->commits[i].newExpr = expr; fx->commits[i].fam = fam; fx->commits[i].field = field;
+      fx->commits[i].rules |= bit;
       return;
     }
   fx->commits[fx->ncommits].colIdx = colIdx;
   fx->commits[fx->ncommits].newExpr = expr;
   fx->commits[fx->ncommits].fam = fam;
   fx->commits[fx->ncommits].field = field;
+  fx->commits[fx->ncommits].rules = bit;
   fx->ncommits++;
-  (void)em;
 }
 
 /* §10 same-column batch: deltas observe pre-state; the commit is their merge. Rebasing a
@@ -1015,6 +1069,11 @@ static char *mergeBase(Em *em, Fx *fx, int colIdx, char *col, char fam, const ch
   int ok = (prev->fam == fam && (fam == '+' || fam == '*' || fam == '|' || fam == '&')) ||
            (prev->fam == '=' && fam == '=' && field && prev->field &&
             strcmp(field, prev->field) != 0);
+  /* §11 third clause: inside a shared rule tick, complementary guard literals certify the
+   * writers' masks row-disjoint, and disjoint writes merge exactly whatever the families */
+  if (!ok && em->curRule >= 0 && prev->rules &&
+      !(prev->rules & ~em->ruleDisj[em->curRule]) && fam != 'v' && prev->fam != 'v')
+    ok = 1;
   if (!ok) {
     fail(em, line, "no merge law: '%s' written twice in one barrier (§10)", name);
     return NULL;
@@ -1097,7 +1156,11 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       addCommit(em, fx, entIdx(em, e), t, fam, NULL);
       return 0;
     }
-    case N_EDESPAWN: fx->despawn = 1; return 0;
+    case N_EDESPAWN:
+      fx->despawnSel = fx->despawn ? efmt(em, "(%s∨%s)", fx->despawnSel, em->selVar)
+                                   : efmt(em, "%s", em->selVar);
+      fx->despawn = 1;
+      return 0;
     case N_ESPAWN: {
       const Node *what = ef->kids[0];
       const Node *cnt = ef->nkids > 1 ? ef->kids[1] : NULL;
@@ -1223,7 +1286,7 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
   char *keep = NULL;
   if (fx->despawn) {
     keep = tv(em);
-    stage(em, "%s ← ¬%s", keep, em->selVar);
+    stage(em, "%s ← ¬%s", keep, fx->despawnSel ? fx->despawnSel : em->selVar);
   }
   int structural = fx->despawn || fx->nsp;
   if (em->fr.kind != FR_ENT && structural && fx->despawn)
@@ -1336,6 +1399,104 @@ static int emitStmt(Em *em, const Node *st) {
 
   if (commitStmt(em, &fx, isCont)) return -1;
 
+  sb_printf(em->out, "%s", em->pre.s ? em->pre.s : "");
+  return 0;
+}
+
+/* Inputs: a rule's selection. Output: positive / negated name literals from its top-level
+ * &-chain, resolved to registry entries (defs expand; non-literals and unresolved names
+ * are skipped). These are the §11 disjointness certificates: !X in one rule's guard and X
+ * in another's prove the two masks share no row of one pre-state. */
+#define MAXLITS 16
+static void guardLits(Em *em, const Node *sel, const RegEntry **pos, int *np,
+                      const RegEntry **neg, int *nn) {
+  if (!sel) return;
+  if (sel->kind == N_AND) {
+    guardLits(em, sel->kids[0], pos, np, neg, nn);
+    guardLits(em, sel->kids[1], pos, np, neg, nn);
+    return;
+  }
+  if (sel->kind == N_SCOPE) { guardLits(em, sel->kids[0], pos, np, neg, nn); return; }
+  if (sel->kind == N_NAME) {
+    const Node *d = findDef(em, sel->name);
+    if (d) { guardLits(em, d->kids[0], pos, np, neg, nn); return; }
+    const RegEntry *e = find(em, sel->name);
+    if (e && *np < MAXLITS) pos[(*np)++] = e;
+    return;
+  }
+  if (sel->kind == N_NOT && sel->kids[0]->kind == N_NAME) {
+    const Node *d = findDef(em, sel->kids[0]->name);
+    if (d) return;
+    const RegEntry *e = find(em, sel->kids[0]->name);
+    if (e && *nn < MAXLITS) neg[(*nn)++] = e;
+  }
+}
+
+/* the shared rule barrier (§11): every rule active in the tick gathers the one pre-state,
+ * every effect stages into one commit set, the set scatters once. Same-column writes
+ * across rules go through the §10 merge laws, widened by the guard-complement
+ * certificates computed here. A single rule degenerates to the plain statement barrier. */
+static int emitRuleTick(Em *em, const Node **rules, int nrules) {
+  if (nrules == 1) return emitStmt(em, rules[0]);
+  if (nrules > 32) return fail(em, rules[0]->line, "rule tick: more than 32 rules");
+  em->stmt++;
+  sb_printf(em->out, "\n# s%d: %d rules, one shared barrier\n", em->stmt, nrules);
+  em->pre.len = 0;
+  em->pipeExpand[0] = 0;
+  Fx fx; memset(&fx, 0, sizeof fx);
+  /* pairwise disjointness certificates from complementary guard literals */
+  const RegEntry *pos[32][MAXLITS], *neg[32][MAXLITS];
+  int np[32], nn[32];
+  for (int r = 0; r < nrules; r++) {
+    np[r] = nn[r] = 0;
+    guardLits(em, rules[r]->kids[0], pos[r], &np[r], neg[r], &nn[r]);
+    em->ruleDisj[r] = 0;
+  }
+  for (int r = 0; r < nrules; r++)
+    for (int s = 0; s < nrules; s++) {
+      if (r == s) continue;
+      int dis = 0;
+      for (int i = 0; i < np[r] && !dis; i++)
+        for (int j = 0; j < nn[s] && !dis; j++) dis = pos[r][i] == neg[s][j];
+      for (int i = 0; i < nn[r] && !dis; i++)
+        for (int j = 0; j < np[s] && !dis; j++) dis = neg[r][i] == pos[s][j];
+      if (dis) em->ruleDisj[r] |= 1u << s;
+    }
+  /* one tick, one frame: every rule must select in the same habitat */
+  setFrame(em, rules[0]->kids[0]);
+  Frame f0 = em->fr;
+  for (int r = 1; r < nrules; r++) {
+    setFrame(em, rules[r]->kids[0]);
+    if (em->fr.kind != f0.kind || em->fr.w != f0.w || em->fr.h != f0.h)
+      return fail(em, rules[r]->line, "rule tick: rules select different frames");
+  }
+  em->fr = f0;
+  /* every mask against the one pre-state */
+  char *masks[32] = {0};
+  for (int r = 0; r < nrules; r++) {
+    const Node *pred = stripFrame(em, rules[r]->kids[0]);
+    char *msk;
+    if (!pred) msk = efmt(em, "(1¨↕%s)", frN(em));
+    else if (emitMask(em, pred, &msk)) return -1;
+    masks[r] = efmt(em, "s%dr%dm", em->stmt, r);
+    stage(em, "%s ← %s", masks[r], msk);
+  }
+  /* every effect, staged into the one commit set; reads stay pre-state (commits land
+   * only in commitStmt), so ordering across rules is invisible */
+  for (int r = 0; r < nrules; r++) {
+    snprintf(em->selVar, sizeof em->selVar, "%s", masks[r]);
+    em->curRule = r;
+    for (int i = 1; i < rules[r]->nkids; i++)
+      if (emitEffect(em, rules[r]->kids[i], &fx)) { em->curRule = -1; return -1; }
+  }
+  em->curRule = -1;
+  /* the antecedent is the union of the tick's masks */
+  char *uni = masks[0];
+  for (int r = 1; r < nrules; r++) uni = efmt(em, "%s∨%s", uni, masks[r]);
+  stage(em, "anoSel ↩ %s", uni);
+  em->savedFr = em->fr; em->haveSaved = 1;
+  snprintf(em->selVar, sizeof em->selVar, "%s", masks[0]);
+  if (commitStmt(em, &fx, 0)) return -1;
   sb_printf(em->out, "%s", em->pre.s ? em->pre.s : "");
   return 0;
 }
@@ -1585,26 +1746,40 @@ int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
   em.err = err; em.errsz = errsz;
   em.fr.kind = FR_ENT;
   em.savedFr.kind = FR_ENT;
+  em.curRule = -1;
 
   emitFixture(&em);
 
+  /* def only installs; the clock fires. anoc has no clock, so it pretends one clock
+   * edge at the end of each unbroken run of installs (plain defs don't end a run; a
+   * performed statement or EOF does). Each edge fires EVERY rule installed so far in
+   * one shared barrier — installs persist, an earlier rule fires again at a later
+   * edge exactly as it would on the engine's next tick. */
+  const Node *installed[32]; int ninst = 0, fresh = 0;
   int rc = 0;
   for (int i = 0; i < prog->nkids && !rc; i++) {
     const Node *st = prog->kids[i];
+    const Node *rule = NULL;
+    if (st->kind == N_DEFSTMT) {
+      if (em.ndefs < 128) em.defs[em.ndefs++] = st;
+      if (st->kids[0]->kind == N_STMT) rule = st->kids[0];
+    } else if (st->kind == N_STMT && (st->flags & F_RULE)) rule = st;
+    if (rule) {
+      if (ninst >= 32) { snprintf(err, errsz, "emit: more than 32 installed rules"); rc = -1; break; }
+      installed[ninst++] = rule;
+      fresh = 1;
+      continue;
+    }
+    if (st->kind == N_DEFSTMT) continue;
+    if (fresh) { rc = emitRuleTick(&em, installed, ninst); fresh = 0; if (rc) break; }
     switch (st->kind) {
-      case N_DEFSTMT:
-        if (em.ndefs < 128) em.defs[em.ndefs++] = st;
-        if (st->kids[0]->kind == N_STMT) {
-          /* standing rule: perform one tick (single rule => one barrier) */
-          rc = emitStmt(&em, st->kids[0]);
-        }
-        break;
       case N_STMT: rc = emitStmt(&em, st); break;
       case N_QUERY: rc = emitQuery(&em, st); break;
       case N_COMPR: rc = emitCompr(&em, st); break;
       default: snprintf(err, errsz, "emit: unexpected top-level node %d", st->kind); rc = -1;
     }
   }
+  if (!rc && fresh) rc = emitRuleTick(&em, installed, ninst);
   if (!rc) rc = emitExpects(&em);
   sb_free(&em.pre);
   arena_free(&a);

@@ -1,0 +1,7 @@
+-- Quotation (w6): eval — APL's ⍎, constrained to what stays analyzable. Twin of w6-eval.bqn.
+-- The quotation is a literal string holding one statement; anoc re-lexes it and splices the statement at parse time, so the spliced footprint is still visible to every static check (§11's conflict analysis included) — the quoted barrier below is indistinguishable from writing the line directly. Dynamic strings are a different animal (opaque footprint, interpreter territory) and are not this; templates with holes stay open in ano-limitations.md.
+--! registry w6-eval
+--! expect damage = 23 23 8
+
+SparkBolt , Damage += 10
+eval "SparkBolt , Damage += 10"
