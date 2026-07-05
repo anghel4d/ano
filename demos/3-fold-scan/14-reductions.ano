@@ -1,6 +1,6 @@
 -- Scoped-global folds +/ */ &/ |/ #/: one scalar per query (ex14). Twin of 14-reductions.bqn.
 -- The four trailing queries pin the empty-scope identities over None (the .bqn's none mask, 8 zeros): +/ is 0, */ is 1, &/ is 1, |/ is 0 — the identity, never an error.
--- Omitted here, left to the .bqn twin: the gather-order equivariance checks (fold of reversed gather).
+-- Omitted here, left to the .bqn twin: the gather-order equivariance checks (fold of reversed gather). The census tail (merchant, Whiterun) is ano-side only.
 --! registry 14-reductions
 
 --! out 150
@@ -31,3 +31,16 @@
 
 --! out 0
 |/ Burning @ None
+
+-- The Skyrim census: fold scopes compose. A parenthesized mask is the whole scope. Unparenthesized, @ (level 12) binds tighter than & (level 6), so the fold closes over Merchant alone and its scalar total broadcasts pointwise onto the remaining masks: the total at non-Whiterun merchants, zero elsewhere. Deterministic and well-typed either way. Both spellings pinned.
+--! out 3
+#/ (Merchant & !Whiterun)
+
+--! out 180
++/ Gold @ Merchant
+
+--! out 30
++/ Gold @ (Nord & Merchant & !Whiterun)
+
+--! out 0 180 0 180 180 180 0 180
++/ Gold @ Merchant & !^Whiterun

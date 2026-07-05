@@ -10,5 +10,5 @@ Examples 40-49 of ano-examples.md, the Japanese surface mode, modeled as BQN col
 - 45-fold-noun-phrase.bqn — +/ Gold @ Nord as a pure noun phrase; the scoped fold is one scalar.
 - 46-spatial-recurrence.bqn — Version A is one stencil step (shift, not carry); Version B fib(index) is canonical.
 - 47-counters-becoming.bqn — 3mo as a unit-typed literal; masked doubling via Price×1+mask.
-- 48-zero-subject.bqn — ゼロが: the host default subject @cursor takes spawn Wheat.
+- 48-zero-subject.bqn — ゼロが: the host default subject ^cursor takes spawn Wheat.
 - 49-block-anaphora.bqn — ~ is a new barrier over the saved mask; ghosts survive the despawn.

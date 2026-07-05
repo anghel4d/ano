@@ -837,7 +837,7 @@ static const Tok t01[] = { TN("Nord"), TK(T_AMP), TN("TwoHanded"), TK(T_GT), TV(
   TK(T_COMMA), TN("Gold"), TK(T_PLUSEQ), TV(1000), TK(T_EOF) };
 static const char *w01 = "(PROGRAM (STMT (AND (NAME Nord) (CMP > (NAME TwoHanded) (NUM 60))) (EASSIGN + (NAME Gold) (NUM 1000))))";
 
-/* Bandit & !Dead & Faction == `Bandit , Faction = `Hostile */
+/* Bandit & !Dead & Faction == :Bandit , Faction = :Hostile */
 static const Tok t02[] = { TN("Bandit"), TK(T_AMP), TK(T_BANG), TN("Dead"), TK(T_AMP),
   TN("Faction"), TK(T_EQEQ), TS("Bandit"), TK(T_COMMA), TN("Faction"), TK(T_EQ), TS("Hostile"), TK(T_EOF) };
 static const char *w02 = "(PROGRAM (STMT (AND (AND (NAME Bandit) (NOT (NAME Dead))) (CMP = (NAME Faction) (SYM Bandit))) (EASSIGN = (NAME Faction) (SYM Hostile))))";
@@ -847,7 +847,7 @@ static const Tok t03[] = { TN("Frenzy"), TK(T_DOT), TN("targets"), TK(T_TICK),
   TK(T_COMMA), TK(T_PLUS), TN("Frenzied"), TK(T_EOF) };
 static const char *w03 = "(PROGRAM (STMT (HOP (NAME Frenzy) (SETHOP targets (NAME targets))) (EADD Frenzied)))";
 
-/* @cursor , Knockback 5 ; Flash `Red ; -Shielded */
+/* ^cursor , Knockback 5 ; Flash :Red ; -Shielded */
 static const Tok t04[] = { TKN(T_ALIAS, "cursor"), TK(T_COMMA), TN("Knockback"), TV(5),
   TK(T_SEMI), TN("Flash"), TS("Red"), TK(T_SEMI), TK(T_MINUS), TN("Shielded"), TK(T_EOF) };
 static const char *w04 = "(PROGRAM (STMT (ALIAS cursor) (EVERB Knockback (NUM 5)) (EVERB Flash (SYM Red)) (EDEL Shielded)))";

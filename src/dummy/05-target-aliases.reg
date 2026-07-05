@@ -1,6 +1,6 @@
 # ex05 — target aliases fixture (mirrors demos/1-selection/05-target-aliases.bqn)
 # player ships as an alias mask to reproduce the .bqn's mask column verbatim;
-# @selected is deliberately non-singleton (2 rows).
+# ^selected is deliberately non-singleton (2 rows).
 n 5
 alias cursor 0 0 1 0 0
 alias observer 0 1 0 0 0

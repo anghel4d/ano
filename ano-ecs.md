@@ -93,7 +93,7 @@ Element access is `dir[slot >> PAGE_SHIFT]->bytes` at `slot & PAGE_LO`. A NULL d
 
 Compound components (`pos`) are SoA. The registry maps `pos.x`, `pos.y` to sibling columns sharing one presence bitmap. Field projection (dot role 3) resolves to a column handle at plan time, zero runtime cost.
 
-Symbols intern once, globally. `T_SYM` cells are u32 indices. `` Faction == `Bandit `` is an integer compare. The intern table is append-only within a run and serialized with saves, so symbol identity is replay-stable.
+Symbols intern once, globally. `T_SYM` cells are u32 indices. `Faction == :Bandit` is an integer compare. The intern table is append-only within a run and serialized with saves, so symbol identity is replay-stable.
 
 Why ano's store refuses sparse sets (EnTT) internally: the sparse→dense indirection puts a dependent load on every hop, and two components' dense arrays share no index space, so `Nord & TwoHanded > 60` cannot be a bitmap AND. Why it refuses archetype tables (Flecs, Bevy): the hop becomes ID→record→(table,row)→column, two indirections against the spec's one indexed read. Structural effects become migration storms. Grade, scan, and reshape want one flat column, not a column shattered across tables. Both layouts optimize entity iteration. Ano does not iterate entities. None of this binds the host. An archetyped or sparse-set host registers its columns anyway and pays a transpose at ingest (§11). Ano never pays per-hop indirection. That trade is what the boundary exists to make.
 

@@ -541,7 +541,7 @@ static int emitCall(Em *em, const Node *nd, Mode m, EV *ev) {
   return fail(em, nd->line, "callable arity %d unsupported", nd->nkids);
 }
 
-/* hop chains: rel.Comp, Player.pos, @cursor.pos, prev.prev.X, neighbor(clamp).X, pos.x */
+/* hop chains: rel.Comp, Player.pos, ^cursor.pos, prev.prev.X, neighbor(clamp).X, pos.x */
 static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
   memset(ev, 0, sizeof *ev);
   const Node *base = nd->kids[0], *field = nd->kids[1];
@@ -655,7 +655,7 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
     case N_NAME: return emitNameVal(em, nd, m, ev);
     case N_ALIAS: {
       const RegEntry *e = find(em, nd->name);
-      if (!e) return fail(em, nd->line, "unregistered alias '@%s'", nd->name);
+      if (!e) return fail(em, nd->line, "unregistered alias '^%s'", nd->name);
       ev->v = inMode(em, lc(em, e->name), m); return 0;
     }
     case N_ARITH: {
@@ -816,7 +816,7 @@ static int emitMask(Em *em, const Node *nd, char **out) {
     case N_NAME: return emitNameMask(em, nd, out);
     case N_ALIAS: {
       const RegEntry *e = find(em, nd->name);
-      if (!e) return fail(em, nd->line, "unregistered alias '@%s'", nd->name);
+      if (!e) return fail(em, nd->line, "unregistered alias '^%s'", nd->name);
       *out = lc(em, e->name);
       return 0;
     }
@@ -1376,7 +1376,7 @@ static int emitStmt(Em *em, const Node *st) {
     else stage(em, "%s ← anoSel", sv);
   } else if (isCont) {
     const RegEntry *cur = find(em, "cursor");
-    if (!cur) return fail(em, st->line, "elided subject with no antecedent and no @cursor alias");
+    if (!cur) return fail(em, st->line, "elided subject with no antecedent and no ^cursor alias");
     stage(em, "%s ← %s", sv, lc(em, cur->name));
   } else {
     const Node *pred = stripFrame(em, sel);

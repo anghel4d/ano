@@ -4,4 +4,4 @@
 --! registry s08-masked-scatter
 --! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly
 
-Bandit , Faction = `Hostile
+Bandit , Faction = :Hostile

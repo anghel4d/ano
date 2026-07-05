@@ -6,3 +6,6 @@
 --! expect silver = 1 20 30 4
 
 Trickster , Gold = Silver ; Silver = Gold
+
+-- Not actually bound to anything lol.
+-- Nord , Septims = "Draugr Coin" ; "Draugr Coin" ; Septims

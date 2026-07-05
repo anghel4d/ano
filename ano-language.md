@@ -61,7 +61,7 @@ Roughly 20 lines, and that's already assuming a clean API. In practice this is a
 
 The Ano version:
 ```haskell
-NPC & Tunic = `Red & (Nord | Khajiit) & Faction = Player.Faction ,
+NPC & Tunic = :Red & (Nord | Khajiit) & Faction = Player.Faction ,
   spawn CheeseWheel * 122 at pos + phyllotaxis(index)
 ```
 
@@ -85,7 +85,7 @@ A bare component name is the set of entities carrying it. `&` `|` `!` build the 
 ```haskell
 Nord , Gold += 100
 Dragon , Health = 0
-Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
+Bandit & !Dead & Faction == :Bandit , Faction = :Hostile
 ```
 
 or, scoped to a region:
@@ -103,11 +103,13 @@ Merchant @ Whiterun , Gold += 5000
 The cursor and the viewpoint are predicates with short names, resolved per evaluation. They sit beside component masks.
 
 ```haskell
-@cursor , Health = 0
-@observer , Faction = `Friendly
+^cursor , Health = 0
+^observer , Faction = :Friendly
 Player , Gold += 9999
-@selected , Damage *= 2
+^selected , Damage *= 2
 ```
+
+`^cursor` is a pronoun, not a name. `Player` is a proper noun: the referent was chosen once, at registration, and never moves. `^cursor` is the word "you" — who it refers to is decided at the moment of speaking, by the engine, not the script. The registry supplies a resolver (a raycast from the mouse, the camera's focus), and every gather re-runs it, so `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: the reader must know this name can move between statements. In C# it is an expression-bodied property, never a field — `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, `DateTime.Now` against a stored timestamp. In Haskell it is `asks cursor` in a Reader — the script is a function of an environment the engine rebuilds each tick — and pointedly not an `IORef`: nothing can store or write it. In filesystem terms `Player` is `/home/pyrus` and `^cursor` is `./`, the same spelling landing somewhere different depending on where you stand. Against a component name the difference is arity: `Nord` is a mask over many rows; `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`).
 
 ### 3. Pattern-match selectors (Erlang)
 
@@ -174,7 +176,7 @@ def master = Human & Nord & TwoHanded > 60
 def rich   = Gold > 10000
 
 master , Gold += 1000
-rich , Faction = `Hostile ; +Marked
+rich , Faction = :Hostile ; +Marked
 master & rich , +Legendary
 ```
 
@@ -206,8 +208,8 @@ faction[⍸bandit] ← `hostile  ⍝ overwrite where the mask holds: ⍸ turns t
 ```
 
 ```haskell
-Bandit , Faction = `Hostile
-Dead , Loot = `Empty
+Bandit , Faction = :Hostile
+Dead , Loot = :Empty
 ```
 
 ### 9. Structural effects (relational, archetype-changing)
@@ -236,7 +238,7 @@ A ⊢ B ⊢ C                    ⍝ all evaluated against the same pre-state
 Every top-level statement is exactly one gather-effect-scatter barrier. `;` batches effects to the right of one comma into that barrier: all observe the statement's pre-state, and they must commute under the registered merge laws. The scatter commits at the end of the statement; the next statement's gather observes it. Effects become visible across statements exactly at statement boundaries, in program order. `;` within one statement is the only barrier-sharing form; there is no multi-statement block barrier.
 
 ```haskell
-@cursor , Knockback 5 ; Flash `Red ; -Shielded
+^cursor , Knockback 5 ; Flash :Red ; -Shielded
 Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 ```
 
@@ -258,7 +260,7 @@ A leading comma continues the antecedent explicitly, the same continuation with 
    , spawn Cheese at Player.pos + (offset, 0)   -- same subject, next barrier
 ```
 
-A continuation line — `~`, a leading comma, or an elided-subject effect — is a new statement and a new barrier: it reuses the antecedent's saved selection mask, not its pre-state. Here the ghosts spawned by the first line survive the second, because the despawn applies the mask saved at the first gather, never a re-gather. The binding rule for the elided subject: `~` and the leading comma always bind the saved mask; a bare effect takes ゼロが — the antecedent's saved mask when one exists, the host default `@cursor` when the block opens cold.
+A continuation line — `~`, a leading comma, or an elided-subject effect — is a new statement and a new barrier: it reuses the antecedent's saved selection mask, not its pre-state. Here the ghosts spawned by the first line survive the second, because the despawn applies the mask saved at the first gather, never a re-gather. The binding rule for the elided subject: `~` and the leading comma always bind the saved mask; a bare effect takes ゼロが — the antecedent's saved mask when one exists, the host default `^cursor` when the block opens cold.
 
 ### 11. Standing rules (the naru register)
 
@@ -280,7 +282,7 @@ Conflicts: all standing rules active in a tick share one barrier — the `;` law
 The register scales from field rules to campaign logic. A quest is data — a stage column, objectives as entities, advancement as a standing rule per stage — the paradigm StarCraft 2's trigger editor shipped a whole campaign on: events, conditions, actions over live game state, here with a relational predicate language in place of the editor's condition list. Timers ride the host's monotonic tick counter; the statement log makes a mission a text file that replays identically anywhere. What stays with the host is the coroutine kingdom — cinematic sequencing, UI, per-instance branching — and little else.
 
 ```haskell
-def stage3 = Quest & Id == `Liberation & Stage == 3 & #/ (objectives' & Complete) == 3 => Stage = 4 ; spawn Convoy at rally
+def stage3 = Quest & Id == :Liberation & Stage == 3 & #/ (objectives' & Complete) == 3 => Stage = 4 ; spawn Convoy at rally
 ```
 
 The stage-4 rules stand inert until the data says otherwise; on advance, `stage3` must withdraw — the retraction question is load-bearing exactly here.
@@ -476,7 +478,7 @@ Version B of the source-elided form:
 
 Space is the same calculus with the raggedness removed. A lattice is dense and rectangular, so every operator above applies, and most are more natural here. There is no spatial keyword: a numeric shape in the source slot is the generator, `w h` carrying `x y` per cell. Acting on cells that already exist is a predicate on the position column; generating cells that hold nothing is the shape, the one job a predicate cannot do, since a filter cannot invent a key. A named region is a scope (`@ Frontier`); a path or sightline is an ordered index line (`↕` plus arithmetic).
 
-Space may denote infinity; a statement demands a finite window or a symbolic field clipped by `@scope`. Coordinates enter world-space by `pos = o + S·k`.
+Space may denote infinity; a statement demands a finite window or a symbolic field clipped by `@scope`. Coordinates enter world-space by the affine column `pos = φ(k) = o + S·k`. The `@` scope fixes the frame `(o, S)`. The origin defaults to the cursor's raycast, and the こそあど deixis names it: `^cursor` proximal, `^world` distal. The anchored form `mask @ frame(args) at origin` spells the frame in full. The same locative `at` that places a spawn fills o, with a mirror-read (`at Firebolt.pos`) or a bound point (`at impact`). The registered frame fn is the predicate, run per cell as `Fn ⟨cell, origin, args⟩` (demos 11-noita n5/n6). The counter check is the unit consistency of φ.
 
 ### 20. Patterns from the coordinate lattice (outer product)
 
@@ -669,8 +671,8 @@ The registry. The registry is ano's entire contact surface with the host: a scri
 - A mutable column: an ordinary component column, read and write footprints declared, the Tier 1/2 territory every effect targets.
 - A readonly column: a column whose write footprint is declared empty, so no effect buffer can name it as a target — statically, at installation, not by runtime check; this is where the host exposes hot-path state (physics positions, render data) that scripts may predicate on but only C may move. Readonly does not exempt a column from the clock: ano observes it at the tick's ingest snapshot, so host mutation lands between ticks as far as any script can tell, and the determinism claim survives.
 - A callable function: host code invoked by name (`fib(index)`, `polar`, `phyllotaxis`), the Tier 3 dispatch path — the host runs it, the script keys off the returned column.
-- An alias: a deictic resolver (`@cursor`, `@observer`, `@world`), re-resolved per evaluation — the こそあど engine (§2, the grammar appendix). The registry supplies the resolver, never a stored ID.
-- An explicit binding: a bare proper noun bound as a constant (`Player`, `rally`, `Whiterun`). The sigil splits the last two kinds: `@name` moves with the context, a bare proper noun is fixed at registration. `Player.pos` mirror-reads through one, `spawn Convoy at rally` places by one, `Merchant @ Whiterun` scopes by one. What the constant denotes — an entity key, a pre-baked selection, an archetype — is open (Open Questions, Explicit bindings); the surface reads identically under all three, and the opacity is the point: the registry carries the denotation so the script never spells it.
+- An alias: a deictic resolver (`^cursor`, `^observer`, `^world`), re-resolved per evaluation — the こそあど engine (§2, the grammar appendix). The registry supplies the resolver, never a stored ID.
+- An explicit binding: a bare proper noun bound as a constant (`Player`, `rally`, `Whiterun`). The sigil splits the last two kinds: `^name` moves with the context, a bare proper noun is fixed at registration. `Player.pos` mirror-reads through one, `spawn Convoy at rally` places by one, `Merchant @ Whiterun` scopes by one. What the constant denotes — an entity key, a pre-baked selection, an archetype — is open (Open Questions, Explicit bindings); the surface reads identically under all three, and the opacity is the point: the registry carries the denotation so the script never spells it.
 
 The namespace is flat. Five kinds, one namespace, and no sigil marks provenance. The reserved words are a small closed set the lexer owns — the verbs, the hinge, the connectives; every other name in a script is a registry row, and sentence position alone fixes its syntactic kind: a name applied to arguments is a callable, a name in a value position is a column, a bare name in a predicate is a mask, a proper noun in source position is a binding. Where a row came from is invisible to the grammar by design: `polar` is prelude, a row ano ships with; `phyllotaxis` arrives with the host; an author's `def` adds a third shipper — and the script reads identically under all of them, the way C holds `sin` from libm and a user's function in one flat identifier space and leaves the coloring to the editor's symbol table. Provenance is metadata, and metadata is tooling's job — hover, color, the registry inspector — never a glyph. The surface spends its one sigil on deixis, a semantic axis, not a provenance one.
 
@@ -734,7 +736,7 @@ Three tiers, ordered by what a write into the data costs — and the cost is fix
 
 English. The index is a *place*, not a thing. A coordinate carries order and geometry but no durable identity of its own, because the ground is regenerable. Writing into position-space inscribes a figure on a conserved ground. So the full calculus applies: free rank change, scan, reduce, reshape, grade, annihilate cells. No closure demand, no contract, no types. It doesn't *keep* a promise; it has none. It just IS.
 
-Math. The content of the tier is the key asymmetry. The index of space is **regenerable**: `I = ↕shape`, a definable key, recomputable from the shape alone at any time. The index of records is **nominal**: an allocated key, held only by the store, unrecoverable once dropped. That asymmetry is exactly why the rank-changing index operations — `(¬m)/c`, reshape, a fold to lower rank — are free over space and forbidden as record write-backs: over space no address is lost that `↕` cannot remint; over records a dropped key is gone. Cells are still referred to durably — `Water = 100`, `+Cliff`, moisture diffusion all store state at cells across ticks — so nothing here says the figure is owed to no one; only the ground under it is definable, and that alone buys the freedom. What the tier demands is coherence at the de/at boundary, not symmetry of the operator: the frame check `pos = φ(k) = o + S·k`, with `@` fixing `(o, S)` per the resolved frames rule, and the counter identity `[world] = [world] + [world/cell]·[cell]` — the unit consistency the counter-typed numeral enforces. A reduction, note, is a fold, a catamorphism `+/ : ℝⁿ → ℝ`, not a projection and not a deletion; the read consumes nothing and the field persists.
+Math. The content of the tier is the key asymmetry. The index of space is **regenerable**: `I = ↕shape`, a definable key, recomputable from the shape alone at any time. The index of records is **nominal**: an allocated key, held only by the store, unrecoverable once dropped. That asymmetry is exactly why the rank-changing index operations — `(¬m)/c`, reshape, a fold to lower rank — are free over space and forbidden as record write-backs: over space no address is lost that `↕` cannot remint; over records a dropped key is gone. Cells are still referred to durably — `Water = 100`, `+Cliff`, moisture diffusion all store state at cells across ticks — so nothing here says the figure is owed to no one; only the ground under it is definable, and that alone buys the freedom. What the tier demands is coherence at the de/at boundary, not symmetry of the operator: the frame check `pos = φ(k) = o + S·k`, with `@` fixing `(o, S)` (Part IV), and the counter identity `[world] = [world] + [world/cell]·[cell]` — the unit consistency the counter-typed numeral enforces. A reduction, note, is a fold, a catamorphism `+/ : ℝⁿ → ℝ`, not a projection and not a deletion; the read consumes nothing and the field persists.
 
 BQN:
 ```bqn
@@ -787,7 +789,7 @@ Ano:
 ```haskell
 Node , OutDeg = +/ Adj@row          -- matrix view: Tier 1, full calculus
 Hostile , shortestPath via Adj      -- graph view: Tier 3, host runs Dijkstra, writes a column back
-@cursor , runBehaviorTree           -- opaque: select + dispatch, ano never looks inside
+^cursor , runBehaviorTree           -- opaque: select + dispatch, ano never looks inside
 ```
 
 ---
@@ -825,9 +827,9 @@ Fourteen levels, loosest to tightest. Everything else in the document is a conse
 - 9 — fold and scan prefixes: `f/ f\`, `reduce(f)`, `scan(f) … along`, `grade`, `top k`.
 - 10 — additive arithmetic: `+ -`.
 - 11 — multiplicative arithmetic: `* / %`.
-- 12 — `@` scope: locative on a mask (`Cheese @ cellar`) and fold scope (`Gold @ Nord`), one meaning: evaluate within this scope. The scope may take an anchor tail — `mask @ frame(args) at origin` — the level-4 locative `at` reappearing to fill the frame's origin o (Open Questions, Coordinate frames).
+- 12 — `@` scope: locative on a mask (`Cheese @ cellar`) and fold scope (`Gold @ Nord`), one meaning: evaluate within this scope. The scope may take an anchor tail — `mask @ frame(args) at origin` — the level-4 locative `at` reappearing to fill the frame's origin o (Part IV).
 - 13 — hops: the dot `.` and the set-hop tick `'`, the gather, the tightest operator.
-- 14 (tightest) — atoms: names, the `@alias` sigil (lexical, part of the identifier), backtick symbols, counter-typed numerals (`3mo`), parens and comprehension brackets.
+- 14 (tightest) — atoms: names, the `^alias` sigil (lexical, part of the identifier), colon symbols (`:Sym`), counter-typed numerals (`3mo`), parens and comprehension brackets.
 
 Resolution, worked: `Cheese @ cellar & Aged > 3mo` parses as `(Cheese @ cellar) & (Aged > 3mo)` — `@` (12) binds its scope before `&` (6), and `>` (8) binds before `&`. `Cow & Weight < avg/ Weight @ Cow` parses as `Cow & (Weight < (avg/ (Weight @ Cow)))` — the fold prefix (9) outbinds the comparison (8).
 
@@ -838,8 +840,8 @@ Every surface form is the one form `source & predicate , effect`; sugar only eli
 ```haskell
 Nord , Gold += 100                         -- world & Nord , Gold += 100: source elided, the live world
 Merchant @ Whiterun , Gold += 5000         -- world & (Merchant @ Whiterun) , …: the locative is part of the predicate
-@cursor , Health = 0                       -- world & @cursor , …: an alias is a named predicate with a unique resolve
-spawn Wheat                                -- @cursor , spawn Wheat: subject elided, ゼロが supplies the antecedent
+^cursor , Health = 0                       -- world & ^cursor , …: an alias is a named predicate with a unique resolve
+spawn Wheat                                -- ^cursor , spawn Wheat: subject elided, ゼロが supplies the antecedent
 ~                                          -- saved mask , ~: continuation, a new statement and barrier over the antecedent's saved mask (§10)
 , spawn Cheese at Player.pos + (offset, 0) -- saved mask , effect: the leading-comma continuation, same rule spelled with an effect (§10)
 def master = Human & Nord                  -- names a predicate; folds into any selection slot at plan time (§6)
@@ -850,17 +852,17 @@ Spawner |> expand Count , spawn Minion     -- replicate: each source row emits C
 12 , offset = fib(index)                   -- a numeric shape in source position is the generator (↕12), predicate empty (§21)
 8 8 & x == y , spawn Pillar                -- the rank-2 generator (↕ 8‿8), coordinates as columns (§20)
 "…" to 8 8 , spawn (pieceOf char)          -- reshape pours the literal into a lattice source (§26)
-Oil @ blast(5) at Firebolt.pos , +Fire     -- the anchored frame: the locative fixes (o, S) and `at` fills o with a mirror-read or a bound point (Open Questions, Coordinate frames)
+Oil @ blast(5) at Firebolt.pos , +Fire     -- the anchored frame: the locative fixes (o, S) and `at` fills o with a mirror-read or a bound point (Part IV)
 eval "Nord , Gold += 100"                  -- the quotation splice: a literal one-statement string, re-lexed and parsed in place at compile time (Open Questions, Staging)
 def spread = Plot & p => +Planted          -- the naru hinge: same form, installed instead of performed, re-gathered once per tick (§11)
 ```
 
 ### The enum sigil
 
-The backtick, q's symbol literal: `` `Bandit `` is the enum value; `Bandit` is the component mask. The comparison rule is lexical, never a registry lookup: a bare name in a value position always denotes a column (component or derived); a backtick name is a symbol atom; `` Col == `Sym `` is a pointwise mask against the constant; `Col == Col2` is a pointwise column comparison; a bare name that resolves to no registered column is a compile error, never a silent symbol. Zero new lexicon: the spec's own APL and q lines have written `` race=`nord `` all along; the sigil is what the document has been using on the right-hand side of every worked example.
+The colon is the atom literal: `:Bandit` is the enum value, `Bandit` the component mask. The rule is lexical, never a registry lookup. A bare name in a value position denotes a column (component or derived). A colon name is a symbol atom. `Col == :Sym` is a pointwise mask against the constant. `Col == Col2` is a pointwise column comparison. A bare name that resolves to no registered column is a compile error, never a silent symbol. The lineage is the atom of Erlang and Ruby and the Lisp keyword.
 
 ```haskell
-Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
+Bandit & !Dead & Faction == :Bandit , Faction = :Hostile
 ```
 
 ### The equals glyph
@@ -868,14 +870,16 @@ Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
 One glyph, position decides — the SQL rule. Left of the hinge (`,` or `=>`) `=` is comparison, identical to `==`; right of it, assignment. The first `=` after `def name` is definitional, and a def body is selection position, so any further `=` inside it compares. The readings never collide: assignment cannot parse in a predicate, and a comparison nested inside an effect's right-hand expression is spelled `==`. `==` stays legal everywhere.
 
 ```haskell
-NPC & Tunic = `Red & Faction = Player.Faction , Gold = 0   -- two comparisons, one assignment
+NPC & Tunic = :Red & Faction = Player.Faction , Gold = 0   -- two comparisons, one assignment
 ```
 
 ### Dot and `@`
 
-Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` — one ID, one indexed read, left-join-null, chainable (`mentor.mentor.Dead`); (2) the mirror-read, the same hop rooted at a named singleton or alias (`Player.pos`, `@cursor.pos`) — an arity-one gather usable inside effect expressions; (3) field projection into a registered compound component (`pos.x`) — registry-resolved, no join; (4) the shift pseudo-relations on an ordered view or lattice (`prev`, `prev.prev`, `neighbor(clamp)`) — functional single-step hops whose link is the view's order, boundary policy per registration; shifts, never carries; (5) the gather inside a set hop (`neighbors'.Moisture`) — the tick marks the fan-out, the dot still means gather. Dot never groups, never scopes, never folds.
+Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` — one ID, one indexed read, left-join-null, chainable (`mentor.mentor.Dead`); (2) the mirror-read, the same hop rooted at a named singleton or alias (`Player.pos`, `^cursor.pos`) — an arity-one gather usable inside effect expressions; (3) field projection into a registered compound component (`pos.x`) — registry-resolved, no join; (4) the shift pseudo-relations on an ordered view or lattice (`prev`, `prev.prev`, `neighbor(clamp)`) — functional single-step hops whose link is the view's order, boundary policy per registration; shifts, never carries; (5) the gather inside a set hop (`neighbors'.Moisture`) — the tick marks the fan-out, the dot still means gather. Dot never groups, never scopes, never folds.
 
-`@`, three roles: (1) locative scope on a selection (`Merchant @ Whiterun`, `Cheese @ cellar`), which also fixes the coordinate frame `(o, S)` — explicitly so in the anchored form `mask @ frame(args) at origin`, the locative `at` filling o with a mirror-read or a bound point; (2) fold and scan scope (`+/ Gold @ Nord`, `+/ Elevation @ 64 64`) — always scoped-global, one scalar per fold; `@` never marks grouping, grouping is the tick; (3) the lexical alias sigil (`@cursor`, `@observer`, `@world`), part of the identifier, the こそあど deixis, not an operator. The `@spawn` verb form is retired. The lexical rule: `@` immediately followed by a name, no whitespace, in term position, is the sigil and belongs to the identifier; `@` with an expression on each side is the scope operator. Roles 1 and 2 are one meaning — evaluate within this scope — since result arity is carried by fold-vs-tick, never by `@`.
+`@`, two roles, one meaning: evaluate within this scope. (1) locative scope on a selection (`Merchant @ Whiterun`, `Cheese @ cellar`), which also fixes the coordinate frame `(o, S)`. The anchored form `mask @ frame(args) at origin` spells the frame explicitly, the locative `at` filling o with a mirror-read or a bound point. (2) fold and scan scope (`+/ Gold @ Nord`, `+/ Elevation @ 64 64`), always scoped-global, one scalar per fold. `@` never marks grouping. Grouping is the tick. Result arity is carried by fold-vs-tick, never by `@`.
+
+The alias sigil `^` is not an operator: `^` glued to a name is one identifier (`^cursor`, `^observer`, `^world`), the こそあど deixis, re-resolved per evaluation. `^` appears nowhere else in the grammar, so `^name` never needs disambiguating.
 
 ## Open Questions, Next Steps
 
@@ -883,20 +887,9 @@ Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` —
 /\/\/\/\/\/\/\/\
 ```
 
-- How to distinguish ano-native keywords from registered functions, AND
-- Distinguishing bindings/aliases for THINGS from a normal column entry.
-
-- Registered functions vs. bindings vs. derived columns. The surface currently
-  uses `def` for both selections and derived columns, distinguished by body
-  type. A clearer lexical or sigil scheme to separate host-registered
-  primitives, user bindings, and derived columns is wanted. The `@spawn`
-  verb-form is retired pending this.
-
 - Explicit bindings, the denotation. The registry binds a bare proper noun as a constant, and the surface reads identically whether that constant is an entity key (`Player`), a pre-baked selection (`Whiterun`), or an archetype. The options are not exclusive: a binding could declare its denotation at registration and resolve by context — the mirror-read `Player.pos` demands a unique entity, the scope `@ Whiterun` demands a region, `at rally` demands a point. Whether one name may carry several faces or must declare exactly one is open; context dispatch fits the language's inference stance, one face per name is easier to check and easier to read.
 
-- Dot and `@`, the role inventory. Pinned in the grammar appendix: dot has five roles, all gathers; `@` has one operator meaning (evaluate within this scope) plus the lexical alias sigil, disambiguated by whitespace. The residual overload stands anyway — operator `@` and sigil `@` are two meanings on one glyph, a reading cost the lexical rule bounds but does not remove. Whether the sigil should move to another glyph is open.
-
-- Recurrences. `offset = prev.offset + prev.prev.offset` is not a recurrence under the one evaluation rule: the comma is gather-effect-scatter, every read observes pre-state, so `prev` is a parallel shift and the statement is one stencil step; no statement can carry a value along the line it is writing, and iterating it gives k stencil steps, never the order-carried sequence. A true recurrence is a scan whose step need not be associative, and §14's scan is a read-side column expression over a declared order; a scan that feeds its own column's scatter breaks the barrier by construction, so scans cannot live behind the barrier. Options, each with a cost: keep recurrences host-side as registered functions (`fib(index)`, the current Version B — the host runs the recursion and hands back a column, which a statement may key positions off in the same breath), or admit a sequential `scan(f) along order` with non-associative f, legal only where its write footprint does not intersect its read footprint, or admit a generator subclause — corecursion consumed under bounded demand, the lazy-list/Python-generator shape, total because the take is finite even when the definition is not, and read-side by construction so it never touches the barrier. Whether the host-registered form deserves a lexical sigil (`@fib` / `#fib`) folds into the registered-functions sigil question above. A fixpoint/iterate form stays rejected — totality comes from bounded demand, not a general fixpoint. One boundary note: under a fixed-tickrate host the game loop is itself the scan — state[t+1] = F(state[t]), one barrier per tick — so recurrences across ticks are already expressible, and a stage counter advanced by standing rules is one running; only the within-statement form is open. A neighboring form that is NOT a recurrence landed with the wand demos: the correlated order join ("next projectile at or after each modifier") is per-row over an ordered line, and it runs read-side twice — as data, an order-derived srel consumed by γ, and as value, a key column computed by scan-along standing in relation position with its inverse fibers feeding the same γ (demos 11-noita w3-b/w3-c); neither carries a value along the line it writes, so the barrier is untouched. Unresolved; the Fibonacci examples are glossed as one stencil step, Version B canonical.
+- Recurrences. `offset = prev.offset + prev.prev.offset` is not a recurrence under the one evaluation rule: the comma is gather-effect-scatter, every read observes pre-state, so `prev` is a parallel shift and the statement is one stencil step; no statement can carry a value along the line it is writing, and iterating it gives k stencil steps, never the order-carried sequence. A true recurrence is a scan whose step need not be associative, and §14's scan is a read-side column expression over a declared order; a scan that feeds its own column's scatter breaks the barrier by construction, so scans cannot live behind the barrier. Options, each with a cost: keep recurrences host-side as registered functions (`fib(index)`, the current Version B — the host runs the recursion and hands back a column, which a statement may key positions off in the same breath), or admit a sequential `scan(f) along order` with non-associative f, legal only where its write footprint does not intersect its read footprint, or admit a generator subclause — corecursion consumed under bounded demand, the lazy-list/Python-generator shape, total because the take is finite even when the definition is not, and read-side by construction so it never touches the barrier. A fixpoint/iterate form stays rejected — totality comes from bounded demand, not a general fixpoint. One boundary note: under a fixed-tickrate host the game loop is itself the scan — state[t+1] = F(state[t]), one barrier per tick — so recurrences across ticks are already expressible, and a stage counter advanced by standing rules is one running; only the within-statement form is open. A neighboring form that is NOT a recurrence landed with the wand demos: the correlated order join ("next projectile at or after each modifier") is per-row over an ordered line, and it runs read-side twice — as data, an order-derived srel consumed by γ, and as value, a key column computed by scan-along standing in relation position with its inverse fibers feeding the same γ (demos 11-noita w3-b/w3-c); neither carries a value along the line it writes, so the barrier is untouched. Unresolved; the Fibonacci examples are glossed as one stencil step, Version B canonical.
 
 - Identity. The intensional/extensional boundary: how does a script say "the same bandit as last tick"? A predicate re-resolves per evaluation, so the surface is intensional at the statement level; yet relationship components already store entity IDs — extensional handles — so the data level is extensional, and the surface cannot reach what the data already holds. The saved-mask continuation rule gives one statement of extension inside a script; nothing spans ticks. The options pull against each other: a surface form that holds a resolved selection across ticks is a handle, which breaks the predicate-is-the-reference stance; a component that freezes the match (`+Marked`) keeps the stance but makes identity state the script must manage and retract. A third option rides the clock: a host with tick-stamped history (Anoptic plans a monotonic tick counter at a fixed rate) makes "the same bandit as last tick" an as-of join against the t−1 partition — q's `aj` — an extensional read recovered through the time axis, with no handle on the surface; identity becomes an indexing question. Where the boundary between intensional statements and extensional data sits is the design. Unresolved.
 
@@ -909,12 +902,6 @@ Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp` —
   (`cross f A B`) as a first-class value is open.
 
 - Space operations and their spelling. Working. Three primitives cover Part IV: filter (`/`, keep existing cells), generate (`↕`, a bare numeric shape, mint a lattice where nothing exists), reshape (`⥊`, fold existing data into a shape, spelled `to`). The generate-vs-reshape boundary is decided by whether the operands already exist. The reshape spelling (`to` vs the `⥊` glyph) and whether `to` (a shape) and the locative `at` (a point) stay separate are unsettled.
-
-- Coordinate frames. Resolved. A position is the affine column pos = φ(k) = o + S·k; the frame (o, S) is set by the @scope and defaults to the cursor's raycast. The counter check is the unit consistency of φ, and the こそあど deixis carries the origin: @cursor proximal, @world distal. The anchored-frame surface landed with the wand demos: `mask @ frame(args) at origin` — the same locative `at` that places a spawn fills o, with a mirror-read (`at Firebolt.pos`, reference by description) or a bound point (`at impact`, the deictic form); the registered frame fn is the predicate, per cell Fn ⟨cell, origin, args⟩ (demos 11-noita n5/n6).
-
-- Scan ordering. Resolved. Scan runs along the leading axis. Over space the lattice supplies that order; over entities an abstract selector has no canonical order, so a scan must use a declared source-view order or supply `along`/grade (⍋) to manufacture one.
-
-- Effect commutativity. Resolved enough for the compiler rule. `;`-batched effects observe the pre-state and are accepted when registered footprints and effect-specific merge laws prove a deterministic merge. Disjoint write-footprints are the trivial case; overlapping writes may still commute when the effect algebra says so, e.g. additive increments to the same numeric column.
 
 - Bootstrap host. The first compiler may be written in APL, Haskell, or OCaml
   before the self-hosted toolchain. The bytecode VM and JIT target are fixed;

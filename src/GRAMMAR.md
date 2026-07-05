@@ -6,8 +6,8 @@ The implementation contract for the C transpiler in this directory. Derived from
 
 - Comments: `--` to end of line. `--!` is a harness directive, not a comment (below).
 - Names: `[A-Za-z][A-Za-z0-9_]*`. Case is preserved; resolution against the registry is case-insensitive on the first letter only (surface `Gold`, registry column `gold`). A name is component, callable, binding, or def — sentence position decides (spec, flat namespace).
-- Alias sigil: `@` immediately followed by a name with no whitespace, in term position (start of statement, or after an operator, `(`, `[`, `,`, `;`, `&`, `|`, `!`), lexes as one T_ALIAS token. `@` in any other position is the scope operator T_AT. `Adj@row` is `NAME AT NAME`: the `@` there has an expression on its left.
-- Symbols: `` ` `` immediately followed by a name: T_SYM.
+- Alias sigil: `^` immediately followed by a name, no whitespace, lexes as one T_ALIAS token. A bare `^` is a lex error. `@` is always the scope operator T_AT: `Merchant @ Whiterun` and `Adj@row` are both `… AT …`, spacing irrelevant.
+- Symbols: `:` immediately followed by a name: T_SYM. A backtick is a lex error.
 - Numbers: integers and decimals (`60`, `0.5`, `1.05`). A number immediately followed by a name with no whitespace is a counter-typed numeral T_COUNTER (`3mo`: value 3, unit `mo`).
 - Strings: `"..."`, no escapes needed for the demos: T_STR.
 - Wildcard: `_` alone: T_WILD (`to 4 _`, `(Nord, TwoHanded _)`).
@@ -39,7 +39,7 @@ A program is a sequence of lines. Blank lines and comments are skipped. Each sur
 - `<selection> => <effects>` — anonymous standing rule.
 - `, <effects>` — leading-comma continuation: new statement, new barrier, over the antecedent's saved mask.
 - `~` alone — despawn the saved mask (continuation).
-- `<effects>` with no hinge and an effect-verb head (`spawn`, `+Name`, `-Name`, registered effect verb) — elided subject: the saved mask when one exists, else the host default `@cursor`.
+- `<effects>` with no hinge and an effect-verb head (`spawn`, `+Name`, `-Name`, registered effect verb) — elided subject: the saved mask when one exists, else the host default `^cursor`.
 - anything else — a query statement: evaluate, print (checked by `--! out`).
 
 ## Precedence (loosest to tightest, from the spec appendix)
@@ -52,12 +52,12 @@ The fold prefix at level 9 takes the longest expression at level ≥10 to its ri
 
 ## Selection forms
 
-- name (component mask), `@alias`, proper-noun binding, `def` name.
+- name (component mask), `^alias`, proper-noun binding, `def` name.
 - `&` `|` `!` over masks; comparisons over column expressions (`=` compares left of the hinge).
 - `(A, B, ...)` presence tuple in predicate position: `(Nord, TwoHanded > 60)` present+constrained, `(Nord, TwoHanded _)` present any, `(Nord, !TwoHanded)` absent.
 - `rel.Comp` functional hop (dangling `¯1` fails the row), chainable. `sel.rel'` image (source position). `rel'` fiber (under folds/quantifiers only). `rel'.Comp` gathered fiber column. A key-valued num column may itself stand in relation position: `Col'` fibers are the inverse image over the stable-id column — the value-level rel (w3-c).
 - `mask @ Binding` locative scope. `expr @ w h` / `expr @ n` fold scope over a lattice/line.
-- `mask @ frame(args…) at originExpr` — the anchored frame: `@` fixes the frame, the locative `at` fills its origin. The origin must be one point: a pair mirror-read (`Firebolt.pos`, `@cursor.pos`) or a `point` binding (`impact`) — a bare alias is a mask, not a point, and is rejected. The registered frame fn runs per cell as `Fn ⟨cell, origin, args…⟩` over the x/y coordinates (registered fields win, else the lattice frame's computed coords) and its mask ANDs into the left arm.
+- `mask @ frame(args…) at originExpr` — the anchored frame: `@` fixes the frame, the locative `at` fills its origin. The origin must be one point: a pair mirror-read (`Firebolt.pos`, `^cursor.pos`) or a `point` binding (`impact`) — a bare alias is a mask, not a point, and is rejected. The registered frame fn runs per cell as `Fn ⟨cell, origin, args…⟩` over the x/y coordinates (registered fields win, else the lattice frame's computed coords) and its mask ANDs into the left arm.
 - numeric shape in source position: `12` (line), `8 8` (lattice; coordinate columns x, y).
 - `"glyphs" to 8 8` board literal source, `char` the per-cell column.
 - pipeline: `src |> order by <col> [desc] |> take k |> expand <col>` in any sensible order.
@@ -72,7 +72,7 @@ The fold prefix at level 9 takes the longest expression at level ≥10 to its ri
 - `+Comp` / `-Comp` — add/remove component (presence write).
 - `~` — despawn.
 - `spawn Proto` | `spawn Proto * countExpr` | `spawn Proto at posExpr` | `spawn (pieceOf char) ...` — mint rows; `index` is bound per copy (0.. within each source's copies); copies read their source's columns. A statement may batch several spawn effects: each appends its own row group in effect order, keys mint once across the batch.
-- `Verb args` — registered effect verb (`Knockback 5`, `Flash `Red`, `runBehaviorTree`).
+- `Verb args` — registered effect verb (`Knockback 5`, `Flash :Red`, `runBehaviorTree`).
 - `fn via Col` — Tier-3 dispatch (`shortestPath via Adj`).
 
 Same-column batches commit through the spec's merge laws (§10): the additive family (`+=` `-=`) and the multiplicative family (`*=` `/=`) compose by rebasing the later accumulate on the earlier commit (each RHS still observes pre-state); presence writes of one kind compose idempotently; pair-field SETs compose when the fields differ. Any other pair on one column — `+=` beside `*=`, a double SET, anything beside a verb — is rejected at emit time ("no merge law: written twice in one barrier").

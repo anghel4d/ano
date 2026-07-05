@@ -2,12 +2,12 @@
 # ano: def master = Human & Nord & TwoHanded > 60
 # ano: def rich   = Gold > 10000
 # ano: master , Gold += 1000
-# ano: rich , Faction = `Hostile ; +Marked
+# ano: rich , Faction = :Hostile ; +Marked
 # ano: master & rich , +Legendary
 # Semantics: a def names a predicate, not a saved mask — it folds into each statement's gather, so statement 1's scatter can move an entity into rich for statement 2; ;-batched effects share one barrier.
 # Invariant: the entity at 9500 gold is rich only after the masters' +1000 commits.
 
-symHostile‿symFriendly ← ↕2         # enum codes standing in for `Hostile `Friendly
+symHostile‿symFriendly ← ↕2         # enum codes standing in for :Hostile :Friendly
 
 human     ← 1‿1‿1‿0‿1
 nord      ← 1‿1‿0‿1‿1
@@ -23,7 +23,7 @@ IsRich   ← {𝕤 ⋄ gold > 10000}
 # master , Gold += 1000
 gold +↩ 1000 × IsMaster @
 
-# rich , Faction = `Hostile ; +Marked  — one barrier, two commuting effects on one mask
+# rich , Faction = :Hostile ; +Marked  — one barrier, two commuting effects on one mask
 rich ← IsRich @
 faction ↩ (symHostile¨)⌾(rich⊸/) faction
 marked ∨↩ rich

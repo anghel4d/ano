@@ -1,9 +1,9 @@
 # Assignment scatter, the corrected idiom (spec §8).
-# ano: Bandit , Faction = `Hostile
+# ano: Bandit , Faction = :Hostile
 # Semantics: assignment overwrites where the mask holds; the mask must become indices before the scatter — APL's faction[bandit] ← `hostile indexes by the mask's 0s and 1s, so the fix is faction[⍸bandit], and the BQN model is (value)-under-mask-compress.
 # Invariant: under-mask-compress equals a hand scatter at /Bandit; the buggy mask-as-index read writes only rows 0 and 1.
 
-symBandit‿symHostile‿symFriendly ← ↕3   # enum codes standing in for `Bandit `Hostile `Friendly
+symBandit‿symHostile‿symFriendly ← ↕3   # enum codes standing in for :Bandit :Hostile :Friendly
 
 bandit  ← 0‿1‿0‿1‿1‿0
 faction ← symFriendly‿symBandit‿symFriendly‿symBandit‿symBandit‿symFriendly

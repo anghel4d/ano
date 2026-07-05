@@ -9,5 +9,5 @@
 def master = Human & Nord & TwoHanded > 60
 def rich   = Gold > 10000
 master , Gold += 1000
-rich , Faction = `Hostile ; +Marked
+rich , Faction = :Hostile ; +Marked
 master & rich , +Legendary

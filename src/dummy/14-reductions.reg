@@ -10,3 +10,6 @@ col forest bool 0 0 0 0 1 1 1 1
 col burning bool 0 0 1 0 0 1 0 0
 col twoHanded num 70 80 61 60 90 10 65 50
 col none bool 0 0 0 0 0 0 0 0
+# census addendum (ano-side only): merchant and the Whiterun membership mask, for the compound-scope and broadcast pins
+col merchant bool 1 1 0 1 0 1 0 0
+bind Whiterun mask 1 0 1 0 0 0 1 0

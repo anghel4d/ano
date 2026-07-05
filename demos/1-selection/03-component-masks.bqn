@@ -1,11 +1,11 @@
 # Component masks (ex3).
 # ano: Nord , Gold += 100
 # ano: Dragon , Health = 0
-# ano: Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
-# Semantics: bare names are presence masks combined by & | !; `Bandit is the enum symbol, Bandit the mask — Faction == `Bandit is a pointwise mask against the constant.
+# ano: Bandit & !Dead & Faction == :Bandit , Faction = :Hostile
+# Semantics: bare names are presence masks combined by & | !; :Bandit is the enum symbol, Bandit the mask — Faction == :Bandit is a pointwise mask against the constant.
 # Invariant: each statement rewrites exactly its masked rows; assignment scatters the constant under mask-compress ((v¨)⌾(mask⊸/)), never scalar-Under.
 
-symBandit‿symHostile‿symFriendly‿symNone ← ↕4   # enum codes standing in for `Bandit `Hostile `Friendly `None
+symBandit‿symHostile‿symFriendly‿symNone ← ↕4   # enum codes standing in for :Bandit :Hostile :Friendly :None
 
 nord    ← 1‿0‿1‿0‿1‿0
 dragon  ← 0‿1‿0‿0‿1‿0

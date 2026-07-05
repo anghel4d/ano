@@ -5,5 +5,5 @@
 --! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly
 --! expect loot = Empty Gems Coins Empty Coins Gems
 
-Bandit , Faction = `Hostile
-Dead , Loot = `Empty
+Bandit , Faction = :Hostile
+Dead , Loot = :Empty

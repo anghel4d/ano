@@ -1,6 +1,6 @@
 /* lex.c — anoc tokenizer: the ASCII surface and the Japanese spaced skin (--! ja).
  * Contract: ano.h (Tok, ano_lex), GRAMMAR.md "Lexical". ASCII mode fuses fold/scan
- * tokens and decides @alias vs @ by term position. JA mode lexes space-separated
+ * tokens; ^ begins the alias sigil, : a symbol, @ is always the scope operator. JA mode lexes space-separated
  * words — registry ja aliases, the particle table, a kanji numeral reader — then
  * normalizes per demos/9-nihongo/40-tokenizer-skin.bqn: drop the に TGT marker and
  * re-root each postfix operator before its operand. The postfix flag lives beside
@@ -46,25 +46,6 @@ static int lex_err(char *err, size_t errsz, int line, const char *fmt, ...) {
   return -1;
 }
 
-/* Inputs: buffer. Output: 1 when the next token sits in term position — line
- * start, or after an operator/keyword — per GRAMMAR.md's alias-sigil rule. */
-static int termpos(const TokBuf *b) {
-  if (b->n == 0) return 1;
-  TokKind k = b->t[b->n - 1].kind;
-  if (k >= T_DEF && k < T_KINDCOUNT) return 1;
-  switch (k) {
-    case T_NL: case T_COMMA: case T_ARROW: case T_SEMI: case T_PIPEGT:
-    case T_AMP: case T_BAR: case T_BANG:
-    case T_EQEQ: case T_NE: case T_LT: case T_LE: case T_GT: case T_GE: case T_EQ:
-    case T_PLUSEQ: case T_MINUSEQ: case T_STAREQ: case T_SLASHEQ:
-    case T_PLUS: case T_MINUS: case T_STAR: case T_SLASH: case T_PCT:
-    case T_AT: case T_DOT: case T_LP: case T_LB: case T_LARROW:
-      return 1;
-    default:
-      return 0;
-  }
-}
-
 /* Inputs: a lexed name. Output: its keyword kind, or 0 (T_EOF) when not one. */
 static TokKind kwkind(const char *nm) {
   static const struct { const char *w; TokKind k; } tab[] = {
@@ -81,7 +62,7 @@ static TokKind kwkind(const char *nm) {
 /* Inputs: source (directives already blanked), token buffer, err. Output: 0/-1;
  * tokens appended, T_NL between nonempty lines, no trailing NL and no EOF.
  * Invariants: folds/scans fused with no interior whitespace; NAME+'/' folds only
- * for max/min/avg and never before '='; @alias only in term position. */
+ * for max/min/avg and never before '='; ^ begins the alias sigil, @ is always T_AT. */
 static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
   int line = 1;
   size_t i = 0;
@@ -145,8 +126,8 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
       Tok *t = tb_push(b, T_STR, line); memcpy(t->name, src + i + 1, len);
       i = j + 1; continue;
     }
-    if (c == '`') {
-      if (!nstart((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "backtick needs a name");
+    if (c == ':') {
+      if (!nstart((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "':' needs a name: symbols are :Name");
       size_t j = i + 2;
       while (nchar((unsigned char)src[j])) j++;
       size_t len = j - i - 1;
@@ -154,6 +135,7 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
       Tok *t = tb_push(b, T_SYM, line); memcpy(t->name, src + i + 1, len);
       i = j; continue;
     }
+    if (c == '`') return lex_err(err, errsz, line, "'`' is not an ano token: symbols are :Name");
     if (c == '_') {
       if (nchar((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "names cannot start with '_'");
       tb_push(b, T_WILD, line); i++; continue;
@@ -219,15 +201,16 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
         if (d == '/') { Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, "#"); i += 2; }
         else return lex_err(err, errsz, line, "'#' begins only the fold '#/'");
         break;
-      case '@':
-        if (nstart(d) && termpos(b)) {                         /* @alias sigil */
+      case '@': tb_push(b, T_AT, line); i++; break;
+      case '^':
+        if (nstart(d)) {                                       /* ^alias sigil, the deictic pronoun */
           size_t j = i + 2;
           while (nchar((unsigned char)src[j])) j++;
           size_t len = j - i - 1;
           if (len >= ANO_NAMESZ) return lex_err(err, errsz, line, "alias name too long");
           Tok *t = tb_push(b, T_ALIAS, line); memcpy(t->name, src + i + 1, len);
           i = j;
-        } else { tb_push(b, T_AT, line); i++; }
+        } else return lex_err(err, errsz, line, "'^' begins only the ^alias sigil");
         break;
       case '\'': return lex_err(err, errsz, line, "stray tick: ' is postfix on a name");
       case '\\': return lex_err(err, errsz, line, "stray '\\': scans are +\\ *\\ max\\");
@@ -514,7 +497,7 @@ int main(void) {
     "FOLD:+:0","NAME:Gold:0","AT::0","NAME:Nord:0","EOF::0",
   };
   static const char *srcB =
-    "@cursor , Knockback 5 ; Flash `Red ; -Shielded\n"
+    "^cursor , Knockback 5 ; Flash :Red ; -Shielded\n"
     "Node , OutDeg = +/ Adj@row\n"
     "Cheese @ cellar & Aged > 3mo , Price *= 2\n"
     "\"RNBQKBNR\" to 8 8 , spawn (pieceOf char)\n"

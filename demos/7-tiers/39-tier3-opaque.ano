@@ -8,4 +8,4 @@
 
 Node , OutDeg = +/ Adj@row
 Hostile , shortestPath via Adj
-@cursor , runBehaviorTree
+^cursor , runBehaviorTree

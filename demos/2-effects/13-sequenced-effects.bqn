@@ -1,10 +1,10 @@
 # Sequenced effects (ex13): `;`-batched effects share one statement's barrier.
-# ano: @cursor , Knockback 5 ; Flash `Red ; -Shielded
+# ano: ^cursor , Knockback 5 ; Flash :Red ; -Shielded
 #      Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 # Semantics: the selection gathers once; every batched effect reads that pre-state and the merged delta scatters once. Knockback 5 is a registered verb, modeled as +5 along x. The batch must commute: disjoint write columns here.
 # Invariant: each batched effect lands on exactly the gathered rows, off-mask cells are bit-identical to pre-state, and applying the batch in reverse order gives the same post-state.
 
-sNone‿sRed ← 0‿1   # Flash symbols: `None `Red
+sNone‿sRed ← 0‿1   # Flash symbols: :None :Red
 
 cursor    ← 0‿0‿1‿0‿0‿0    # the alias: a one-hot mask
 pos       ← 0‿10‿20‿30‿40‿50

@@ -51,7 +51,7 @@ update effect from source where predicate
 
 ## 3 - Component masks
 
-Use component presence and boolean operations as masks over the entity view. `` `Bandit `` is the enum symbol, `Bandit` the component mask; mask-vs-value is decided lexically.
+Use component presence and boolean operations as masks over the entity view. `:Bandit` is the enum symbol, `Bandit` the component mask; mask-vs-value is decided lexically.
 
 ```haskell
 北に、金を百与える。
@@ -63,14 +63,14 @@ Ano:
 ```haskell
 Nord , Gold += 100
 Dragon , Health = 0
-Bandit & !Dead & Faction == `Bandit , Faction = `Hostile
+Bandit & !Dead & Faction == :Bandit , Faction = :Hostile
 ```
 
 Verification:
 ```bqn
 gold +↩ 100×nord
 health ↩ (0¨)⌾(dragon⊸/) health                # constants scatter as (v¨)⌾(mask⊸/), never scalar-Under
-faction ↩ (symHostile¨)⌾((bandit ∧ (¬dead) ∧ faction=symBandit)⊸/) faction   # symX stands in for `X
+faction ↩ (symHostile¨)⌾((bandit ∧ (¬dead) ∧ faction=symBandit)⊸/) faction   # symX stands in for :X
 ```
 ```q
 update Gold:Gold+100 from w where Nord
@@ -112,10 +112,10 @@ Resolve dynamic aliases as singleton or small masks and apply ordinary effects.
 
 Ano:
 ```haskell
-@cursor , Health = 0
-@observer , Faction = `Friendly
+^cursor , Health = 0
+^observer , Faction = :Friendly
 Player , Gold += 9999
-@selected , Damage *= 2
+^selected , Damage *= 2
 ```
 
 Verification:
@@ -240,7 +240,7 @@ def master = Human & Nord & TwoHanded > 60
 def rich   = Gold > 10000
 
 master , Gold += 1000
-rich , Faction = `Hostile ; +Marked
+rich , Faction = :Hostile ; +Marked
 master & rich , +Legendary
 ```
 
@@ -304,8 +304,8 @@ Replace selected values in an aligned component column.
 
 Ano:
 ```haskell
-Bandit , Faction = `Hostile
-Dead , Loot = `Empty
+Bandit , Faction = :Hostile
+Dead , Loot = :Empty
 ```
 
 Verification:
@@ -358,7 +358,7 @@ Batch multiple effects against the same pre-state selection and merge the deltas
 
 Ano:
 ```haskell
-@cursor , Knockback 5 ; Flash `Red ; -Shielded
+^cursor , Knockback 5 ; Flash :Red ; -Shielded
 Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 ```
 
@@ -1144,7 +1144,7 @@ Ano:
 ```haskell
 Node , OutDeg = +/ Adj@row
 Hostile , shortestPath via Adj
-@cursor , runBehaviorTree
+^cursor , runBehaviorTree
 ```
 
 Verification:
@@ -1358,7 +1358,7 @@ Omit the left side; the effect supplies or requests a host default subject.
 ```
 
 ```haskell
-あの @cursor が spawn Wheat
+あの ^cursor が spawn Wheat
 ```
 
 Ano:

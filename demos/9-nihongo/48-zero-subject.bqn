@@ -1,6 +1,6 @@
 # Ex48 — Zero subject default: the omitted left side is ゼロが, supplied by the host.
 # ano: 小麦を生やす。
-# ano: あの @cursor が spawn Wheat
+# ano: あの ^cursor が spawn Wheat
 # ano: spawn Wheat
 # Semantics: with no subject the host's registered default supplies one — the cursor's raycast point — and spawn appends one row there; the retired @spawn verb form is spelled as the bare effect with the default subject.
 # Invariant: the world gains exactly one row, typed wheat, positioned at the cursor, and every prior row is untouched.
