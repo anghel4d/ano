@@ -115,7 +115,7 @@ typedef struct {
 } Registry;
 
 /* registry.c
- * File format (src/dummy/NAME.reg), line-based, space-separated, `#` comments:
+ * File format (NAME.reg beside a demo), line-based, space-separated, `#` comments:
  *   n 6
  *   col gold num 100 200 300 400 500 600
  *   col faction sym Bandit Player Bandit Nord Nord Nord

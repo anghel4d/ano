@@ -227,17 +227,21 @@ int main(int argc, char **argv) {
   dirs.expects = (Expect *)arena_alloc(&a, MAXEXPECT * sizeof(Expect));
   if (parse_directives(src, &dirs, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
 
-  /* registry: flag wins over directive; '/'-or-.reg is a path, else <exedir>/dummy/<name>.reg */
+  /* registry: flag wins over directive; a '/'-bearing or .reg-suffixed spec is a path,
+   * else a bare name loads <source-dir>/<name>.reg beside the demo twin. */
   Registry reg; memset(&reg, 0, sizeof reg);
-  char exed[512]; exe_dir(exed, sizeof exed);
   const char *rspec = regFlag ? regFlag : (dirs.registry[0] ? dirs.registry : NULL);
   if (rspec) {
     char regpath[1024];
     size_t rl = strlen(rspec);
     if (strchr(rspec, '/') || (rl > 4 && !strcmp(rspec + rl - 4, ".reg")))
       snprintf(regpath, sizeof regpath, "%s", rspec);
-    else
-      snprintf(regpath, sizeof regpath, "%s/dummy/%s.reg", exed, rspec);
+    else {
+      char dir[512]; snprintf(dir, sizeof dir, "%s", path);    /* dirname(source), "." if none */
+      char *slash = strrchr(dir, '/');
+      if (slash) *slash = 0; else snprintf(dir, sizeof dir, ".");
+      snprintf(regpath, sizeof regpath, "%s/%s.reg", dir, rspec);
+    }
     if (reg_load(regpath, &reg, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
   }
 
@@ -267,7 +271,7 @@ int main(int argc, char **argv) {
 
   char rtpath[1024];
   if (rtFlag) snprintf(rtpath, sizeof rtpath, "%s", rtFlag);
-  else snprintf(rtpath, sizeof rtpath, "%s/rt.bqn", exed);
+  else { char exed[512]; exe_dir(exed, sizeof exed); snprintf(rtpath, sizeof rtpath, "%s/rt.bqn", exed); }
   size_t rtlen = 0;
   char *rt = read_file(rtpath, &rtlen);
   if (!rt) { fprintf(stderr, "%s: cannot read runtime %s: %s\n", path, rtpath, strerror(errno)); return 2; }

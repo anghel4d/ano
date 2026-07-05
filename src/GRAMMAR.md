@@ -22,7 +22,7 @@ The implementation contract for the C transpiler in this directory. Derived from
 
 `--! key rest-of-line`, harness-owned, one per line:
 
-- `--! registry <name>` — load `src/dummy/<name>.reg` as the world.
+- `--! registry <name>` — load `<name>.reg` from beside the source file as the world.
 - `--! expect <col> = v v v ...` — post-state assertion on a numeric/bool column, world order. For symbol columns values are bare names (`Hostile`). For a lattice field, row-major.
 - `--! expect-n <k>` — post-state world row count (after spawn/despawn).
 - `--! out <v v v ...>` — the next query statement's printed value equals this (scalar or vector).
