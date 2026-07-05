@@ -1,6 +1,6 @@
 -- Japanese dotted hop (ex41): の is the relationship gather feeding the predicate. Twin of 41-dotted-hop.bqn.
 -- ASCII gloss: Nord & mentor.TwoHanded > 80 , Gold += 1000. All links valid; the dangling case is ex44.
---! registry 41-dotted-hop
+--! registry ../registries/41-dotted-hop.reg
 --! ja
 --! expect gold = 1000 1010 1020 30 40 50
 

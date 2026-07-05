@@ -1,6 +1,6 @@
 -- Target aliases (ex5). Twin of 05-target-aliases.bqn.
 -- Aliases are ordinary predicates with short names, resolved per evaluation; ^selected is deliberately non-singleton (rows 2, 3). *= 2 down a mask is v×1+mask, never gather/multiply/scatter with a scalar.
---! registry 05-target-aliases
+--! registry ../registries/05-target-aliases.reg
 --! expect health = 50 60 0 80 90
 --! expect faction = None Friendly None None None
 --! expect gold = 10000 2 3 4 5

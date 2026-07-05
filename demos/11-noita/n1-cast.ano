@@ -1,7 +1,7 @@
 -- The cast (n1): a projectile spell is an append — keys mint, parent records the caster, the muzzle is source-column math. Twin of n1-cast.bqn.
 -- Double Spell is the one-barrier batch: two prototypes minted in one statement, keys minted once across the batch, the drain beside them (§10). The batch is legal because neither spawn reads what the other writes; the .bqn witnesses the same law as mint arithmetic — one mint of two equals two mints of one.
 -- Formation — Trifurcated: the replicate binds index per copy, the fan is polar math off the caster's own pos; each cast drains the wand in the same barrier it fires.
---! registry n1-cast
+--! registry ../registries/n1-cast.reg
 --! expect-n 7
 --! expect keys = 0 1 2 3 4 5 6
 --! expect parent = -1 0 0 0 0 0 0

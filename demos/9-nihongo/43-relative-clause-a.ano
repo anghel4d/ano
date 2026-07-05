@@ -1,6 +1,6 @@
 -- Relative-clause selection (ex43): the attributive clause before the noun is the selector. Twin of 43-relative-clause.bqn.
 -- Japanese surface: 両手が六十を超える北に、金を千与える。(full-sentence register, not the spaced skin; the canonical ASCII line below). Row 5 has TwoHanded=60 exactly: strict > excludes it.
---! registry 43-relative-clause-a
+--! registry ../registries/43-relative-clause-a.reg
 --! expect gold = 1005 5 5 1005 5 5
 
 Nord & TwoHanded > 60 , Gold += 1000

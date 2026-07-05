@@ -3,7 +3,7 @@
 -- the two non-enemies carry the highest raw threat (95, 99) and must never be picked.
 -- The bare query twins the .bqn's chosen assert (world rows of the top-5 enemies, grade order);
 -- the buggy branch (untranslated filtered indices) has no ano surface and stays in the .bqn twin.
---! registry 19-pipeline-topk
+--! registry ../registries/19-pipeline-topk.reg
 --! out 6 3 4 0 7
 --! expect targeted = 1 1 0 1 1 0 1 1
 

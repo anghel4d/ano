@@ -1,6 +1,6 @@
 -- The interleaved wand (w3-b): [DP, Triple, SB, DP, SB, SB] — the general binding, first spelling: gamma over an order-derived srel. Twin of w3-modifier-chain.bqn (the interleaved section).
 -- binds' is geometry from the slot ground: fiber of each projectile = the modifiers whose next-projectile-at-or-after is that slot (the .bqn's NextP, inverted), derived the way moore derives from the lattice and listed the same way. The damage write is then the ex36 grouped fold — DP0 rides through the Triple onto its first bolt, DP3 onto the next, and the shortcut's answer (both on the block's first projectile) is provably wrong here.
---! registry w3-modifier-chain-b
+--! registry ../registries/w3-modifier-chain-b.reg
 --! expect bal = 0 1 3 2 2 1 0
 --! expect minBal = 0 1 1 1 1 1 0
 --! expect member = 0 1 1 1 1 1 1

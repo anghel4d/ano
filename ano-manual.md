@@ -44,7 +44,7 @@ The demo tree comes in twins. Every `.bqn` file is a witness: the semantics work
 nix flake check        # both suites, hermetically
 ```
 
-An `.ano` file is statements plus harness directives. A directive line starts `--!` (a plain comment starts `--`) and there are five: `--! registry <name>` loads the world fixture `<name>.reg` from beside the `.ano`; `--! expect <col> = v v v ...` asserts a column's post-state in world order; `--! expect-n <k>` asserts the row count after spawns and despawns; `--! out <v ...>` asserts what a query statement prints; `--! ja` says the statement lines are in the Japanese surface (a later chapter). Here is the whole first demo, `demos/1-selection/01-canonical-masked-update.ano`:
+An `.ano` file is statements plus harness directives. A directive line starts `--!` (a plain comment starts `--`) and there are five: `--! registry ../registries/<name>.reg` loads the world fixture (a bare `<name>` instead loads `<name>.reg` from beside the `.ano`); `--! expect <col> = v v v ...` asserts a column's post-state in world order; `--! expect-n <k>` asserts the row count after spawns and despawns; `--! out <v ...>` asserts what a query statement prints; `--! ja` says the statement lines are in the Japanese surface (a later chapter). Here is the whole first demo, `demos/1-selection/01-canonical-masked-update.ano`:
 
 ```haskell
 --! registry 01-canonical-masked-update
@@ -57,7 +57,7 @@ Your first exercise is to break it. Change the 1400 to 1401, run it, and watch t
 
 ## The registry, or: worlds on six rows
 
-A script can name nothing the host did not register. The registry is ano's entire contact surface with its engine, and in this repository the `.reg` file format stands in for that engine. The world your first demo ran against, `demos/1-selection/01-canonical-masked-update.reg`:
+A script can name nothing the host did not register. The registry is ano's entire contact surface with its engine, and in this repository the `.reg` file format stands in for that engine. The world your first demo ran against, `demos/registries/01-canonical-masked-update.reg`:
 
 ```text
 n 6

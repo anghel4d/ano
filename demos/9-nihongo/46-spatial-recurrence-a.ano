@@ -1,6 +1,6 @@
 -- Spatial recurrence (ex46), Version A: one stencil step, shift not carry. Twin of 46-spatial-recurrence.bqn (first assertion).
 -- prev is a parallel shift over pre-state, zero-filled at the boundary; one barrier gives exactly one two-back stencil step over Height = 1..8, and can never generate Fibonacci (Version B, the canonical form, is the -c twin over the same fixture).
---! registry 46-spatial-recurrence-a
+--! registry ../registries/46-spatial-recurrence-a.reg
 --! expect height = 0 1 3 5 7 9 11 13
 
 Cell @ row , Height = prev.Height + prev.prev.Height

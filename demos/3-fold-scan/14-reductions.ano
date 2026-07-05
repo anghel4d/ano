@@ -1,7 +1,7 @@
 -- Scoped-global folds +/ */ &/ |/ #/: one scalar per query (ex14). Twin of 14-reductions.bqn.
 -- The four trailing queries pin the empty-scope identities over None (the .bqn's none mask, 8 zeros): +/ is 0, */ is 1, &/ is 1, |/ is 0 — the identity, never an error.
 -- Omitted here, left to the .bqn twin: the gather-order equivariance checks (fold of reversed gather). The census tail (merchant, Whiterun) is ano-side only.
---! registry 14-reductions
+--! registry ../registries/14-reductions.reg
 
 --! out 150
 +/ Gold @ Nord

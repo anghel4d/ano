@@ -1,7 +1,7 @@
 -- Explicit ordered scan source: along carries path order; the mask spelling of the same cells loses it (ex17). Twin of 17-scan-along.bqn.
 -- pathCells is an ordered index sequence (visit entity 4, then 2, then 7, then 1), registered as a vec binding — compiling along down to a mask is the exact bug this pair of prefixes catches.
 -- Omitted, left to the .bqn twin: the fold total in path order (a fold has no along; a vec binding is not a mask scope) and the explicit prefix-inequality witness — it follows from the two pinned vectors.
---! registry 17-scan-along
+--! registry ../registries/17-scan-along.reg
 
 --! out 2 5 9 10
 scan(+) Weight along pathCells

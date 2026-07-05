@@ -3,7 +3,7 @@
 -- The .bqn is half decision record: its ordinal-rank branch (⍋⍋gold -> 1 2 0, the retired "ties are stable" reading)
 -- and the Sym(I)-equivariance permutation check (p = 1 0 2 swaps the tied pair) have NO ano surface and stay in the .bqn twin;
 -- the equivariance fact is pinned at fixture level: permuting rows 0,1 leaves gold bitwise identical, so Rank must come out identical.
---! registry s13-rank-ties
+--! registry ../registries/s13-rank-ties.reg
 --! expect rank = 1 1 0
 
 Unit , Rank = rank(Gold)

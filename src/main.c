@@ -227,20 +227,24 @@ int main(int argc, char **argv) {
   dirs.expects = (Expect *)arena_alloc(&a, MAXEXPECT * sizeof(Expect));
   if (parse_directives(src, &dirs, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
 
-  /* registry: flag wins over directive; a '/'-bearing or .reg-suffixed spec is a path,
-   * else a bare name loads <source-dir>/<name>.reg beside the demo twin. */
+  /* registry: flag wins over directive. Absolute spec used verbatim; a relative one
+   * resolves against the source file's directory — a '/'-bearing or .reg-suffixed spec
+   * as a literal path (../registries/x.reg), a bare name as <dir>/<name>.reg beside the
+   * twin. Both layouts work; the demos keep their fixtures in demos/registries/. */
   Registry reg; memset(&reg, 0, sizeof reg);
   const char *rspec = regFlag ? regFlag : (dirs.registry[0] ? dirs.registry : NULL);
   if (rspec) {
     char regpath[1024];
     size_t rl = strlen(rspec);
-    if (strchr(rspec, '/') || (rl > 4 && !strcmp(rspec + rl - 4, ".reg")))
-      snprintf(regpath, sizeof regpath, "%s", rspec);
+    int isPath = strchr(rspec, '/') || (rl > 4 && !strcmp(rspec + rl - 4, ".reg"));
+    if (rspec[0] == '/')
+      snprintf(regpath, sizeof regpath, "%s", rspec);          /* absolute: verbatim */
     else {
       char dir[512]; snprintf(dir, sizeof dir, "%s", path);    /* dirname(source), "." if none */
       char *slash = strrchr(dir, '/');
       if (slash) *slash = 0; else snprintf(dir, sizeof dir, ".");
-      snprintf(regpath, sizeof regpath, "%s/%s.reg", dir, rspec);
+      if (isPath) snprintf(regpath, sizeof regpath, "%s/%s", dir, rspec);
+      else        snprintf(regpath, sizeof regpath, "%s/%s.reg", dir, rspec);
     }
     if (reg_load(regpath, &reg, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
   }

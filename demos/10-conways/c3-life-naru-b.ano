@@ -1,6 +1,6 @@
 -- The two-rule flora pair (c3-b): bloom and wither in ONE tick, one shared barrier (§11). Twin of c3-life-naru.bqn (shared-barrier section).
 -- Both rules gather the tick's pre-state and the commit set scatters once. Both write planted with no common merge family, and the admissibility certificate is the complementary guard literals — bloom selects under !Planted, wither under Planted, so the two masks share no row of one pre-state and the writes merge exactly in either order. The per-rule-barrier breakage (ring / lone, order-dependent) stays pinned in the .bqn.
---! registry c3-life-naru
+--! registry ../registries/c3-life-naru.reg
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
 
 def kin = #/ (moore' & Planted)

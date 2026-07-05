@@ -3,7 +3,7 @@
 -- The .bqn's flash symbol column is registered as `tint`: an effect verb cannot share its target column's name (registry lookup is first-match). tint None/Red mirrors sNone/sRed.
 -- Statement 2: rows 0 and 3 are Nord with TwoHanded > 60; row 2 has 90 but not Nord, row 5 has 99 but not Nord; row 1 keeps pre-existing Blessed.
 -- The .bqn's reverse-order commutation witness and its `sel` binding are BQN-internal; this twin pins the post-state.
---! registry 13-sequenced-effects
+--! registry ../registries/13-sequenced-effects.reg
 --! expect pos = 0 10 25 30 40 50
 --! expect tint = None None Red None None None
 --! expect shielded = 1 1 0 0 1 0

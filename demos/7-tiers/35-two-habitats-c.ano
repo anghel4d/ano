@@ -2,7 +2,7 @@
 -- World: four source entities (col unit) with spawn multiplicities count 2 0 1 3 and density 1 0 2 1; minted copies record their source through the parent column, so the .bqn's count/↕4 = 0 0 2 3 3 3 and density/↕4 = 0 2 2 3 land in parent's appended tail. Originals carry the -1 sentinel.
 -- The table rows are subjectless; the runnable form names the source selection: Unit. Spawned copies are not Units, so the second spawn re-gathers exactly the four originals.
 -- The space half (spawn Tree * Density) is modeled in the same entity world: the .bqn asserts only the source-ids-per-copy vector, identical either way.
---! registry 35-two-habitats-c
+--! registry ../registries/35-two-habitats-c.reg
 --! expect-n 14
 --! expect parent = -1 -1 -1 -1 0 0 2 3 3 3 0 2 2 3
 --! expect minion = 0 0 0 0 1 1 1 1 1 1 0 0 0 0

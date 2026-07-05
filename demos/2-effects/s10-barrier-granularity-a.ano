@@ -2,7 +2,7 @@
 -- Two dead Nords (keys 0 and 3) each spawn one Ghost; minted keys 6 and 7.
 -- Ghosts keep Nord and Dead (registry spawn defaults 1), so a wrong re-gather at the next barrier WOULD match them; the .bqn's `saved ≡ 0‿3` mask witness is BQN-internal.
 -- The .bqn's id column is registered as `keys` so the spawn mints fresh ids (the emitter's minted-key convention).
---! registry s10-barrier-granularity-a
+--! registry ../registries/s10-barrier-granularity-a.reg
 --! expect-n 8
 --! expect keys = 0 1 2 3 4 5 6 7
 --! expect nord = 1 1 0 1 0 0 1 1

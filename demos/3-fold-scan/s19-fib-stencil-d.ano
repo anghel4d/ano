@@ -1,5 +1,5 @@
 -- Version A pinned semantics, point 4: eleven statements are eleven stencil steps — the binomial ridge z^11(1+z)^12 truncated to the line, only the trailing coefficient survives (spec §21, pre-renumbering §19). Twin of s19-fib-stencil.bqn (the n-1-step assertion). Program: the -c prefix extended to n-1 statements, same seed fixture.
---! registry s19-fib-stencil-b
+--! registry ../registries/s19-fib-stencil-b.reg
 --! expect offset = 0 0 0 0 0 0 0 0 0 0 0 1
 --! expect fib = 1 1 2 3 5 8 13 21 34 55 89 144
 

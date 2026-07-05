@@ -1,6 +1,6 @@
 -- The interleaved wand (w3-c): the general binding, second spelling: the bind column computed in-program, then the column IS the relation. Twin of w3-modifier-chain.bqn (the interleaved section).
 -- scan(min) along revDeck is the .bqn's NextP with the wand row left out — non-projectiles carry their key plus 99, the reverse min-scan finds the next projectile at or after each slot, and the write-back conjugates through the order's grade (Tier 2). A key-valued column has exactly a functional relation's shape, so Bind' resolves to its inverse fibers — the value-level rel — and the damage write is the same grouped fold as w3-b. Same wand, same answer, the relation as value instead of data.
---! registry w3-modifier-chain-c
+--! registry ../registries/w3-modifier-chain-c.reg
 --! expect bal = 0 1 3 2 2 1 0
 --! expect minBal = 0 1 1 1 1 1 0
 --! expect member = 0 1 1 1 1 1 1

@@ -1,7 +1,7 @@
 -- The trigger (n4): a hit becomes a cast at the impact. Twin of n4-trigger.bqn.
 -- The collision pass is the theta-join comprehension marking both sides; plain bolts break on impact; the trigger card is a standing rule — spawn the payload at the carrier's own pos and consume the carrier, one barrier.
 -- The payload's parent records the trigger bolt's gather-time row, and that row no longer exists after the barrier — the intensional/extensional boundary (spec Open Questions, Identity), pinned here as data.
---! registry n4-trigger
+--! registry ../registries/n4-trigger.reg
 --! expect-n 5
 --! expect keys = 2 3 4 5 6
 --! expect sparkBolt = 1 0 0 0 0

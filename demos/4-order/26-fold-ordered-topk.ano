@@ -3,7 +3,7 @@
 -- deliberately carry the extreme dps and threat values, so any index-space slip shows in the sum.
 -- fixed = 37+17+23+11+41+29+5+31+19+13 = 226; the buggy branch (filtered grade indices into the
 -- unfiltered threat, sum 3150) has no ano surface and stays in the .bqn twin.
---! registry 26-fold-ordered-topk
+--! registry ../registries/26-fold-ordered-topk.reg
 --! out 226
 
 +/ threat @ (Enemy |> order by dps desc |> take 10)

@@ -8,7 +8,7 @@ A temporary transpiler through BQN or OCaml might be considered at a later point
 
 We use BQN to work through and verify the semantics of ano language ahead of time. An implementation in src/ is verified against the BQN post-states by differential testing.
 
-That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every .bqn demo has an .ano twin beside it — the demo's own `# ano:` statements as a runnable program, a `<name>.reg` registry beside it reproducing the .bqn fixture, and `--!` directives pinning the same post-state as BQN assertions. `src/anoc --run demo.ano` compiles the program, runs it under CBQN, and exits nonzero on any divergence. Split twins (-a/-b/-c) pin intermediate program points; the two .bqn files with no ano surface (s16-keygen, t1-reverse) stay BQN-only witnesses.
+That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every .bqn demo has an .ano twin beside it — the demo's own `# ano:` statements as a runnable program, a `<name>.reg` registry in `demos/registries/` reproducing the .bqn fixture, and `--!` directives pinning the same post-state as BQN assertions. `src/anoc --run demo.ano` compiles the program, runs it under CBQN, and exits nonzero on any divergence. Split twins (-a/-b/-c) pin intermediate program points; the two .bqn files with no ano surface (s16-keygen, t1-reverse) stay BQN-only witnesses.
 
 ## Layout
 
@@ -23,5 +23,7 @@ That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every 
 - `9-nihongo/` — the Japanese surface examples (ex40-49).
 - `10-conways/` — Conway's Game of Life: the synchronous step as one barrier, the glider flipbook, the naru pair under the shared rule barrier — bloom+wither in one tick, the guard-complement certificate (c1-c3, c3-b).
 - `11-noita/` — Noita's wand, card by card: casts and multicast, modifier order, homing as marker-plus-rule, the trigger, lattice alchemy with the anchored frame and the spread+consume tick, the assembled wand (n1-n6, n5-b/-c); the wand-construction stress test — the draw scan, the wrap, the modifier chain and its two general-join spellings, the Greek letters, the timeless ledger, the eval splice (w1-w6; what stays open, ano-limitations.md).
+- `12-registry-forms/` — the two registry-resolution layouts as one witness: `r1-beside` loads a `.reg` sitting next to it (bare name), `r2-central` runs the same program and world from `../registries/` (the path form every other demo uses).
+- `registries/` — the world fixtures, one `<name>.reg` per twin; a twin loads its own with `--! registry ../registries/<name>.reg`.
 - `check.sh` — runs every .bqn under demos/, one ok/FAIL line per file, nonzero exit on any failure.
 - `../src/check-ano.sh` — the same contract over every .ano twin, through `anoc --run` (build anoc first: `make -C src`).

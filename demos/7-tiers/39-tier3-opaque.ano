@@ -2,7 +2,7 @@
 -- Adj is registered as a set-valued fiber-matrix: fiber i holds row i's BITS, so the matrix view's row fold +/ Adj@row is the out-degree 2 1 3 0 2 (node 3's all-zero row folds to the identity 0).
 -- shortestPath and runBehaviorTree are identity-envelope verbs: the host receives the selection and the whole payload, ano writes nothing. expect btree pins the payloads bit-identical after dispatch; expect outDeg doubling as the stmt-2 no-write witness.
 -- Left to the .bqn twin: env ≡ 1 3 4 and /cursor ≡ ⟨3⟩ (the envelopes are exactly the hostile/cursor fixtures, definitional), adj bit-identity (a set-valued column has no expect form), and the "patrol" payload gather (BQN-internal).
---! registry 39-tier3-opaque
+--! registry ../registries/39-tier3-opaque.reg
 --! expect outDeg = 2 1 3 0 2
 --! expect btree = seek flee guard patrol idle
 

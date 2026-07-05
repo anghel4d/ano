@@ -1,7 +1,7 @@
 -- Version B, canonical: the recurrence lives in the registered host fn fib; the statement witnesses only the committed column (spec §21, pre-renumbering §19). Twin of s19-fib-scan.bqn.
 -- The .bqn's order-carried scan step {⟨1⊑𝕨, +´𝕨⟩} IS the semantic content of fib — the carry has no legal ano spelling (it breaks the barrier by construction), so the .reg registers it re-rooted per index, called Fib¨ index by the emitter.
 -- Omitted, left to the .bqn twin: the shift-add contrast from the same seed (pinned by the s19-fib-stencil-* twins instead).
---! registry s19-fib-scan
+--! registry ../registries/s19-fib-scan.reg
 --! expect offset = 1 1 2 3 5 8 13 21 34 55 89 144
 
 12 , offset = fib(index)

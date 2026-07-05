@@ -6,7 +6,7 @@
 -- Statements follow the .bqn body order; archetype masks Target/Plot/Pen gate each to its sub-world, so every expect is over the full column with untouched rows at their fixture initials.
 -- Pinned gotchas: the image is a mask, so entity 4 (reachable from both frenzied sources) takes the ;-batch once — health row 4 = 90, not 80 (idempotent scatter); in-degree lives in the gamma fold over the inverse fiber — hits row 4 = 2; the count statement reads pre-statement Planted, so crops spread one ring — planted row 13 (count 1) stays 0; the empty fiber takes the fold identity — pen row 22 with no livestock IS Certified (&/ of the empty fiber is true) and its Headcount is 0.
 -- Left to the .bqn twin: `image ≡ hits>0` (cross-witness between two derived arrays) and the raw empty-fiber identity triple `1‿0‿0 ≡ ⟨∧´⟨⟩, ∨´⟨⟩, +´⟨⟩⟩` — pure BQN-internal witnesses with no single ano statement.
---! registry s05-set-hop
+--! registry ../registries/s05-set-hop.reg
 --! expect frenzied = 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 --! expect health = 100 100 100 90 90 90 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100
 --! expect hits = 0 0 0 1 2 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

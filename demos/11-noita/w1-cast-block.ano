@@ -1,7 +1,7 @@
 -- The cast block (w1): Noita's draw algorithm is a scan. Twin of w1-cast-block.bqn (main wand).
 -- Wand [Double, SB, SB, SB, DP, SB]. Each card carries drawAdd (multicast 2/3, modifier 1, projectile 0); the block's running balance is 1 + the scan of (drawAdd - 1) along slot order, and the block ends where the balance first touches zero.
 -- Membership needs the running MINIMUM, not the balance itself (the -b twin is the trap); min-scan is the negated max-scan; the membership gather reads prev over the deck view — slot 0 enters by fiat, everything after enters iff every earlier balance stayed positive.
---! registry w1-cast-block
+--! registry ../registries/w1-cast-block.reg
 --! expect bal = 0 2 1 0 -1 -1 -2
 --! expect minBal = 0 2 1 0 -1 -1 -2
 --! expect member = 0 1 1 1 0 0 0

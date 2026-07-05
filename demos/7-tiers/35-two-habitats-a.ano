@@ -5,7 +5,7 @@
 --   grade rows `top 5 (grade Threat)` / `top 8 (grade Safety @ 64 64)` are pinned at the .bqn's k and grade direction: top 3 (grade desc Threat), top 2 (grade desc Safety @ 3 2).
 --   space scopes say 3 2 where the table says 64 64: the fixture's own shape.
 --   the rank-2 generator (↕ w‿h) has no query surface; its assertion stays in the .bqn twin.
---! registry 35-two-habitats-a
+--! registry ../registries/35-two-habitats-a.reg
 --! expect g = 0 0 0 1 2 3
 
 -- generator: the ground is minted by iota, rank 1

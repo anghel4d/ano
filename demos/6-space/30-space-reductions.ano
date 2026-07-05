@@ -3,7 +3,7 @@
 -- The scoped fold filters BEFORE folding: frontier max is 7, not the world max 9. The one-axis scan and the summed-area table are pinned cell-by-cell as DIFFERENT fields — row i of ones scans to all i+1, the SAT cell (i,j) is (i+1)(j+1) and its corner 64 is the whole-lattice fold.
 -- The sightline: Height is the ordered ray column and Eye + ↕n * north resolves to its ids 0..7 (eye bound as the 8-fold zero origin vec, north 1, n 8) — a stable ordered scope, not a sorted one.
 -- Left to the .bqn twin: 9 = ⌈´threat (the unscoped world max has no canonical statement), the axis-commute witness +`+`˘ ≡ +`˘+`, and the explicit oneAxis ≢ sat inequality (carried here by the two differing out lines).
---! registry 30-space-reductions
+--! registry ../registries/30-space-reductions.reg
 --! out 2016
 --! out 7
 --! out 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5 6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7 8 8 8 8 8 8 8 8

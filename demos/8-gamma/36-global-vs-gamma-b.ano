@@ -1,6 +1,6 @@
 -- The defect gamma fixes, both halves (ex36): broadcast scalar vs per-pen gamma column, plus conservation. Twin of 36-global-vs-gamma.bqn.
 -- Program extends 36-global-vs-gamma-a: the ticked form overwrites the broadcast 5 5 5 5 with the per-pen column 2 3 0 0 — the two program points across the -a/-b pair pin the .bqn broadcast ≢ perPen witness. The final query folds the gamma column back to the global scalar (identity 0 keeps empty pen row 10 in the sum).
---! registry 36-farm-gamma-a
+--! registry ../registries/36-farm-gamma-a.reg
 --! out 5
 --! out 5
 --! expect headcount = -1 -1 -1 -1 -1 -1 -1 2 3 0 0

@@ -1,7 +1,7 @@
 -- Density fields, tree half (ex32). Twin of 32-density-fields.bqn — prefix program pinning the .bqn's intermediate point after the tree spawn (treePos ≡ 1 1 2 4 4 4 6 7 7, 9 = ≠worldPos).
 -- Modeled on the demo's 8-cell strip as an 8 1 lattice (the doc's 64 64 is the same statement at scale); each cell contributes Density copies of the spawn row at its own cell index, zero-count cells (0 3 5) spawn nothing.
 -- pos records each spawned cell as a (cell, 0) pair per the emitter's lattice spawn convention; the tree archetype column stands in for the .bqn's worldType 'T' run.
---! registry 32-density-fields-a
+--! registry ../registries/32-density-fields-a.reg
 --! expect tree = 1 1 1 1 1 1 1 1 1
 --! expect crop = 0 0 0 0 0 0 0 0 0
 --! expect pos = 1 0 1 0 2 0 4 0 4 0 4 0 6 0 7 0 7 0

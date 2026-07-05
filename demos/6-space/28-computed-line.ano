@@ -3,7 +3,7 @@
 -- fib is a registered host function carrying the recurrence (scalar dfn, called Fib¨ index); polar is the dyadic dfn r Polar¨ theta with theta in DEGREES — the pair-zip fix, never a catenated 24-list.
 -- Spawns append: 12 cheese at (100+fib_i, 200) ending at (189,200), 12 cheese on the phyllotaxis spiral (r=0 sits on the player), 8 pillars at (100+2i, 200). Spiral floats are pinned as exact doubles from the flake's CBQN (the .bqn asserts within 1e-9).
 -- Left to the .bqn twin: the Version A stencil witness (step = one shift-add barrier step over fresh zeros stays 12⥊0 and is not Fibonacci) and the zip-shape counterexamples (12 = ≠pairs, 24 = ≠(↕12)∾137.5×↕12).
---! registry 28-computed-line
+--! registry ../registries/28-computed-line.reg
 --! expect offset = 0 1 1 2 3 5 8 13 21 34 55 89 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 --! expect cheese = 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0
 --! expect pillar = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1

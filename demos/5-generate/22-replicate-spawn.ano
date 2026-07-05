@@ -1,7 +1,7 @@
 -- Replicate spawn (ex22): a per-source count emits that many fresh rows. Twin of 22-replicate-spawn.bqn.
 -- One entity world (the .bqn's two tables concatenated): rows 0-4 the spawner table (keys 0-4, rows 3-4 bystanders), rows 5-7 the nest table (keys 100-102).
 -- Remap: fresh keys mint from 1+max live key = 103, so the .bqn's 5..9 land as 103..107 and the eggs as 108..111; parent stores world row ids, so eggparent 100 101 101 101 lands as rows 5 6 6 6; -1 is the no-parent sentinel on pre-existing rows.
---! registry 22-replicate-spawn
+--! registry ../registries/22-replicate-spawn.reg
 --! expect-n 17
 --! expect keys = 0 1 2 3 4 100 101 102 103 104 105 106 107 108 109 110 111
 --! expect parent = -1 -1 -1 -1 -1 -1 -1 -1 0 0 2 2 2 5 6 6 6

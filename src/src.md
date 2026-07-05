@@ -16,7 +16,7 @@ The source code of the ano lang's infrastructure:
 - `emit.c` — AST to BQN codegen against the registry; carries the semantic conventions (sym columns as strings, pair columns, id-space fiber membership, fold identities and row-drop, Tier-1 field inscription vs entity spawn).
 - `rt.bqn` — the runtime prelude (Ano-prefixed helpers: dense rank, scatter-under-mask, fiber image, inverse fibers, clamp shift).
 - `main.c` — driver: `anoc [--tokens] [--emit] [--run] file.ano`; `--!` directives name the registry and pin expectations, compiled into BQN assertions, so `--run`'s exit code is the differential-test verdict.
-- world fixtures — a `<name>.reg` beside each demo `.ano` in `demos/` reproduces that demo's initial world exactly; `--! registry <name>` loads it from there.
+- world fixtures — a `<name>.reg` in `demos/registries/` reproduces each demo's initial world exactly; the twin's `--! registry ../registries/<name>.reg` loads it. A bare `--! registry <name>` still resolves beside the `.ano`, so a fixture may sit next to its twin instead.
 - `check-ano.sh` — runs every demos/**/*.ano through `anoc --run`, ok/FAIL per file (mirrors demos/check.sh).
 
 Build and test (inside the dev shell for CBQN): `make -C src && ./src/check-ano.sh`, or `make -C src test`.

@@ -7,7 +7,7 @@
 -- The two bare queries twin the .bqn's top8/top5 asserts and pin the stable grade-desc tie order:
 -- safety d2=1 quadruple 18 25 27 34 kept in index order; d2=2 group truncated mid-tie to 17 19 33 (35 drops);
 -- resource 42-tie 55 before 62; 35-tie keeps 47, drops 61.
---! registry 31-spatial-topk
+--! registry ../registries/31-spatial-topk.reg
 --! out 26 18 25 27 34 17 19 33
 --! out 63 55 62 54 47
 --! expect miningNode = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0
