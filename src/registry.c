@@ -35,22 +35,6 @@ static int rerr(char *err, size_t errsz, int line, const char *fmt, ...) {
   return -1;
 }
 
-/* Inputs: path, arena, out byte count. Output: NUL-terminated contents in arena, or NULL
- * on I/O failure. Invariant: buffer outlives the registry (same arena). */
-static char *read_file(const char *path, Arena *a, long *outlen) {
-  FILE *f = fopen(path, "rb");
-  if (!f) return NULL;
-  if (fseek(f, 0, SEEK_END)) { fclose(f); return NULL; }
-  long len = ftell(f);
-  if (len < 0 || fseek(f, 0, SEEK_SET)) { fclose(f); return NULL; }
-  char *buf = (char *)arena_alloc(a, (size_t)len + 1);
-  size_t rd = fread(buf, 1, (size_t)len, f);
-  fclose(f);
-  buf[rd] = 0;
-  *outlen = (long)rd;
-  return buf;
-}
-
 /* Inputs: mutable line. Output: none; truncates at a word-boundary '#' and trims
  * trailing whitespace/CR in place. Invariant: mid-word '#' is preserved. */
 static void strip_line(char *line) {
@@ -140,17 +124,17 @@ static RegEntry *find_exact(Registry *reg, const char *name) {
 int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz) {
   memset(reg, 0, sizeof *reg);
   if (err && errsz) err[0] = 0;
-  long flen = 0;
-  char *buf = read_file(path, a, &flen);
+  size_t flen = 0;
+  char *buf = fs_read(path, a, &flen);
   if (!buf) return rerr(err, errsz, 0, "cannot read '%s'", path);
 
   /* physical lines; index i is line i+1 */
   int nlines = 1;
-  for (long i = 0; i < flen; i++) if (buf[i] == '\n') nlines++;
+  for (size_t i = 0; i < flen; i++) if (buf[i] == '\n') nlines++;
   char **lines = (char **)arena_alloc(a, (size_t)nlines * sizeof *lines);
   int li = 0;
   lines[li++] = buf;
-  for (long i = 0; i < flen; i++)
+  for (size_t i = 0; i < flen; i++)
     if (buf[i] == '\n') { buf[i] = 0; if (li < nlines) lines[li++] = buf + i + 1; }
   for (int i = 0; i < nlines; i++) strip_line(lines[i]);
 

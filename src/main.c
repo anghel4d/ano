@@ -38,36 +38,6 @@ static int usage(void) {
   return 2;
 }
 
-/* Inputs: path. Output: malloc'd NUL-terminated contents, *lenOut set when non-NULL;
- * NULL on failure (errno holds the cause). */
-static char *read_file(const char *path, size_t *lenOut) {
-  FILE *f = fopen(path, "rb");
-  if (!f) return NULL;
-  if (fseek(f, 0, SEEK_END)) { fclose(f); return NULL; }
-  long sz = ftell(f);
-  if (sz < 0) { fclose(f); return NULL; }
-  rewind(f);
-  char *buf = (char *)malloc((size_t)sz + 1);
-  if (!buf) { fclose(f); return NULL; }
-  size_t got = fread(buf, 1, (size_t)sz, f);
-  fclose(f);
-  buf[got] = 0;
-  if (lenOut) *lenOut = got;
-  return buf;
-}
-
-/* Inputs: out buffer + size. Output: directory of the running binary via
- * readlink(/proc/self/exe); "." when the link is unreadable. */
-static void exe_dir(char *buf, size_t sz) {
-  ssize_t n = readlink("/proc/self/exe", buf, sz - 1);
-  if (n <= 0) { snprintf(buf, sz, "."); return; }
-  buf[n] = 0;
-  char *slash = strrchr(buf, '/');
-  if (!slash) snprintf(buf, sz, ".");
-  else if (slash == buf) buf[1] = 0;
-  else *slash = 0;
-}
-
 /* Inputs: cursor into a NUL-terminated line. Output: next space/tab-separated word,
  * NUL-terminated in place, or NULL at end; cursor advances past it. */
 static char *word(char **pp) {
@@ -149,21 +119,21 @@ static int parse_directives(char *src, Directives *dirs, Arena *a, char *err, si
   return 0;
 }
 
-/* Inputs: stream, token array. Output: one 'KIND name num' line per token. */
-static void print_toks(FILE *f, const Tok *t, int n) {
-  for (int i = 0; i < n; i++)
-    fprintf(f, "%s %s %g\n", tokname[t[i].kind] ? tokname[t[i].kind] : "?", t[i].name, t[i].num);
+/* Inputs: stream, token columns. Output: one 'KIND name num' line per token. */
+static void print_toks(FILE *f, const Toks *t) {
+  for (int i = 0; i < t->n; i++)
+    fprintf(f, "%s %s %g\n", tokname[t->kind[i]] ? tokname[t->kind[i]] : "?", t->name[i], t->num[i]);
 }
 
-/* Inputs: two token arrays. Output: 1 when kind/name/num sequences match ignoring
+/* Inputs: two token streams. Output: 1 when kind/name/num sequences match ignoring
  * T_NL/T_EOF, else 0. Invariant: nums compare exactly — both streams come from ano_lex. */
-static int same_stream(const Tok *x, int nx, const Tok *y, int ny) {
+static int same_stream(const Toks *x, const Toks *y) {
   int i = 0, j = 0;
   for (;;) {
-    while (i < nx && (x[i].kind == T_NL || x[i].kind == T_EOF)) i++;
-    while (j < ny && (y[j].kind == T_NL || y[j].kind == T_EOF)) j++;
-    if (i >= nx || j >= ny) return i >= nx && j >= ny;
-    if (x[i].kind != y[j].kind || strcmp(x[i].name, y[j].name) || x[i].num != y[j].num) return 0;
+    while (i < x->n && (x->kind[i] == T_NL || x->kind[i] == T_EOF)) i++;
+    while (j < y->n && (y->kind[j] == T_NL || y->kind[j] == T_EOF)) j++;
+    if (i >= x->n || j >= y->n) return i >= x->n && j >= y->n;
+    if (x->kind[i] != y->kind[j] || strcmp(x->name[i], y->name[j]) || x->num[i] != y->num[j]) return 0;
     i++; j++;
   }
 }
@@ -218,10 +188,10 @@ int main(int argc, char **argv) {
   if (!path) return usage();
 
   char err[ANO_ERRSZ]; err[0] = 0;
-  char *src = read_file(path, NULL);
+  Arena a = {0};
+  char *src = fs_read(path, &a, NULL);
   if (!src) { fprintf(stderr, "%s: cannot read: %s\n", path, strerror(errno)); return 2; }
 
-  Arena a = {0};
   Directives dirs; memset(&dirs, 0, sizeof dirs);
   dirs.expectN = -1;
   dirs.expects = (Expect *)arena_alloc(&a, MAXEXPECT * sizeof(Expect));
@@ -234,51 +204,55 @@ int main(int argc, char **argv) {
   Registry reg; memset(&reg, 0, sizeof reg);
   const char *rspec = regFlag ? regFlag : (dirs.registry[0] ? dirs.registry : NULL);
   if (rspec) {
-    char regpath[1024];
     size_t rl = strlen(rspec);
     int isPath = strchr(rspec, '/') || (rl > 4 && !strcmp(rspec + rl - 4, ".reg"));
-    if (rspec[0] == '/')
-      snprintf(regpath, sizeof regpath, "%s", rspec);          /* absolute: verbatim */
-    else {
-      char dir[512]; snprintf(dir, sizeof dir, "%s", path);    /* dirname(source), "." if none */
-      char *slash = strrchr(dir, '/');
-      if (slash) *slash = 0; else snprintf(dir, sizeof dir, ".");
-      if (isPath) snprintf(regpath, sizeof regpath, "%s/%s", dir, rspec);
-      else        snprintf(regpath, sizeof regpath, "%s/%s.reg", dir, rspec);
+    AnoPath dir = fs_dirname(path);
+    char spec[ANO_PATHSZ];
+    int sl = snprintf(spec, sizeof spec, "%s%s", rspec, isPath ? "" : ".reg");
+    AnoPath regp = {0};
+    if (dir.len && sl > 0 && sl < (int)sizeof spec) {
+      regp = fs_join(dir.str, spec);                 /* absolute rspec passes verbatim */
+      fs_canon(&regp);
     }
-    if (reg_load(regpath, &reg, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
+    if (!regp.len) { fprintf(stderr, "%s: registry path too long: %s\n", path, rspec); return 2; }
+    if (reg_load(regp.str, &reg, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
   }
 
-  Tok *toks = NULL; int ntoks = 0;
-  if (ano_lex(src, dirs.ja, &reg, &a, &toks, &ntoks, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
+  Toks toks = {0};
+  if (ano_lex(src, dirs.ja, &reg, &a, &toks, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
 
-  if (modeTokens) { print_toks(stdout, toks, ntoks); return 0; }
+  if (modeTokens) { print_toks(stdout, &toks); return 0; }
 
   /* ex40 equivalence: the ASCII directive line must lex to the file's own stream */
   if (dirs.sameTokens[0]) {
-    Tok *dtoks = NULL; int ndtoks = 0;
-    if (ano_lex(dirs.sameTokens, 0, &reg, &a, &dtoks, &ndtoks, err, sizeof err)) { fprintf(stderr, "%s: same-tokens: %s\n", path, err); return 2; }
-    if (!same_stream(toks, ntoks, dtoks, ndtoks)) {
+    Toks dtoks = {0};
+    if (ano_lex(dirs.sameTokens, 0, &reg, &a, &dtoks, err, sizeof err)) { fprintf(stderr, "%s: same-tokens: %s\n", path, err); return 2; }
+    if (!same_stream(&toks, &dtoks)) {
       fprintf(stderr, "%s: same-tokens mismatch\n-- file stream:\n", path);
-      print_toks(stderr, toks, ntoks);
+      print_toks(stderr, &toks);
       fprintf(stderr, "-- directive stream:\n");
-      print_toks(stderr, dtoks, ndtoks);
+      print_toks(stderr, &dtoks);
       return 1;
     }
   }
 
-  Node *prog = ano_parse(toks, ntoks, &a, err, sizeof err);
+  Node *prog = ano_parse(&toks, &a, err, sizeof err);
   if (!prog) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
 
   StrBuf out = {0};
   if (ano_emit(prog, &reg, &dirs, &out, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
 
-  char rtpath[1024];
-  if (rtFlag) snprintf(rtpath, sizeof rtpath, "%s", rtFlag);
-  else { char exed[512]; exe_dir(exed, sizeof exed); snprintf(rtpath, sizeof rtpath, "%s/rt.bqn", exed); }
+  AnoPath rtp;
+  if (rtFlag) rtp = fs_path(rtFlag);
+  else {
+    AnoPath exed = fs_exe_dir();                     /* len 0: /proc unreadable, fall back to "." */
+    rtp = fs_join(exed.len ? exed.str : ".", "rt.bqn");
+    fs_canon(&rtp);
+  }
+  if (!rtp.len) { fprintf(stderr, "%s: runtime path too long\n", path); return 2; }
   size_t rtlen = 0;
-  char *rt = read_file(rtpath, &rtlen);
-  if (!rt) { fprintf(stderr, "%s: cannot read runtime %s: %s\n", path, rtpath, strerror(errno)); return 2; }
+  char *rt = fs_read(rtp.str, &a, &rtlen);
+  if (!rt) { fprintf(stderr, "%s: cannot read runtime %s: %s\n", path, rtp.str, strerror(errno)); return 2; }
 
   int code;
   if (modeRun) code = run_bqn(path, rt, rtlen, &out);
@@ -288,6 +262,6 @@ int main(int argc, char **argv) {
     if (out.s) fwrite(out.s, 1, out.len, stdout);
     code = 0;
   }
-  free(rt); free(src); sb_free(&out); arena_free(&a);
+  sb_free(&out); arena_free(&a);                     /* src and rt live in the arena */
   return code;
 }

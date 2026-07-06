@@ -1,6 +1,7 @@
 /* ano.h — the one contract for anoc: tokens, AST, registry, directives, module APIs.
  * anoc pipeline: main.c (directives, driver) -> registry.c (world fixtures)
- * -> lex.c (ASCII + JA skins) -> parse.c (Pratt, 14 levels) -> emit.c (BQN codegen).
+ * -> lex.c (ASCII + JA skins) -> parse.c (Pratt, 14 levels) -> emit.c (BQN codegen);
+ * fs.c (path values, the one file reader) serves main.c and registry.c.
  * The emitted BQN runs under CBQN with src/rt.bqn prepended; assertions carry the verdict.
  */
 #ifndef ANO_H
@@ -10,11 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdint.h>
 
 #define ANO_ERRSZ 512
 #define ANO_NAMESZ 256
 
-/* ---------- utils: arena + string buffer (header-only) ---------- */
+/* ---------- utils: arena + string buffer + intern pool (header-only) ---------- */
 
 typedef struct AnoArena { char *base; size_t used, cap; struct AnoArena *next; } Arena;
 
@@ -42,12 +44,11 @@ static inline void arena_free(Arena *a) {
 
 typedef struct { char *s; size_t len, cap; } StrBuf;
 
-/* Inputs: buffer, printf format. Output: appended, NUL-kept. Invariant: s always valid. */
-static inline void sb_printf(StrBuf *b, const char *fmt, ...) {
-  va_list ap; va_start(ap, fmt);
+/* Inputs: buffer, printf format, va_list. Output: appended, NUL-kept. Invariant: s always valid. */
+static inline void sb_vprintf(StrBuf *b, const char *fmt, va_list ap) {
   va_list ap2; va_copy(ap2, ap);
   int need = vsnprintf(NULL, 0, fmt, ap2); va_end(ap2);
-  if (need < 0) { va_end(ap); return; }
+  if (need < 0) return;
   if (b->len + (size_t)need + 1 > b->cap) {
     size_t cap = b->cap ? b->cap : 256;
     while (cap < b->len + (size_t)need + 1) cap *= 2;
@@ -56,9 +57,74 @@ static inline void sb_printf(StrBuf *b, const char *fmt, ...) {
   }
   vsnprintf(b->s + b->len, b->cap - b->len, fmt, ap);
   b->len += (size_t)need;
+}
+static inline void sb_printf(StrBuf *b, const char *fmt, ...) {
+  va_list ap; va_start(ap, fmt);
+  sb_vprintf(b, fmt, ap);
   va_end(ap);
 }
 static inline void sb_free(StrBuf *b) { free(b->s); b->s = NULL; b->len = b->cap = 0; }
+
+/* interned strings: dedup + one canonical NUL-terminated copy per distinct spelling
+ * (anoptic anostr_intern, miniaturized to char*). Open addressing over FNV-1a 64,
+ * power-of-two capacity, growth at 70% load; canonical bytes and slot arrays live in
+ * the arena, so the pool dies with everything it names. */
+typedef struct { const char **key; uint64_t *hv; size_t used, cap; } Intern;
+
+/* Inputs: bytes + length (need not be NUL-terminated). Output: FNV-1a 64 hash. */
+static inline uint64_t ano_fnv1a(const char *s, size_t n) {
+  uint64_t h = 0xcbf29ce484222325u;
+  for (size_t i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 0x100000001b3u; }
+  return h;
+}
+
+/* Inputs: pool, arena, bytes + length. Output: the canonical copy; equal spellings
+ * return the same pointer. Invariant: old slot blocks stay stranded in the arena,
+ * the same growth discipline as the token columns. */
+static inline const char *intern(Intern *it, Arena *a, const char *s, size_t n) {
+  if (!it->cap) {
+    it->cap = 256;
+    it->key = (const char **)arena_alloc(a, it->cap * sizeof *it->key);
+    it->hv = (uint64_t *)arena_alloc(a, it->cap * sizeof *it->hv);
+  }
+  uint64_t h = ano_fnv1a(s, n);
+  size_t m = it->cap - 1, j = (size_t)h & m;
+  while (it->key[j]) {
+    if (it->hv[j] == h && !strncmp(it->key[j], s, n) && !it->key[j][n]) return it->key[j];
+    j = (j + 1) & m;
+  }
+  const char *c = arena_strdup(a, s, n);
+  it->key[j] = c; it->hv[j] = h; it->used++;
+  if (it->used * 10 > it->cap * 7) {
+    size_t ncap = it->cap * 2;
+    const char **nk = (const char **)arena_alloc(a, ncap * sizeof *nk);
+    uint64_t *nh = (uint64_t *)arena_alloc(a, ncap * sizeof *nh);
+    for (size_t k = 0; k < it->cap; k++) {
+      if (!it->key[k]) continue;
+      size_t q = (size_t)it->hv[k] & (ncap - 1);
+      while (nk[q]) q = (q + 1) & (ncap - 1);
+      nk[q] = it->key[k]; nh[q] = it->hv[k];
+    }
+    it->key = nk; it->hv = nh; it->cap = ncap;
+  }
+  return c;
+}
+
+/* ---------- fs.c — path values and file reading ---------- */
+
+#define ANO_PATHSZ 1024
+
+/* A path as a value (anoptic ano_fspath, compiler-sized): str always NUL-terminated,
+ * len == 0 means unresolved or did-not-fit — truncation is an error, never silent. */
+typedef struct { unsigned len; char str[ANO_PATHSZ]; } AnoPath;
+
+AnoPath fs_path(const char *s);                    /* checked copy */
+AnoPath fs_exe_dir(void);                          /* dir of the running binary */
+AnoPath fs_dirname(const char *path);              /* "." when slash-free, "/" kept at root */
+AnoPath fs_join(const char *dir, const char *rel); /* absolute rel passes verbatim */
+void fs_norm(AnoPath *p);                          /* lexical ./.. collapse, in place */
+void fs_canon(AnoPath *p);                         /* realpath when it exists, fs_norm when not */
+char *fs_read(const char *path, Arena *a, size_t *lenOut); /* NUL-terminated or NULL, errno set */
 
 /* ---------- tokens ---------- */
 
@@ -81,12 +147,17 @@ typedef enum {
   T_KINDCOUNT
 } TokKind;
 
+/* The token stream, struct-of-arrays: four index-aligned columns, the world store's
+ * discipline applied to the compiler's own data. name holds interned or static text,
+ * "" when absent, never NULL — a row costs ~24 bytes against the ~280 of the old
+ * inline-buffer Tok. */
 typedef struct {
-  TokKind kind;
-  char name[ANO_NAMESZ];  /* NAME/ALIAS/SYM/STR text; FOLD/SCANOP op spelling ("+","*","&","|","#","max","min","avg"); COUNTER unit */
-  double num;             /* NUM/COUNTER value */
-  int line;
-} Tok;
+  int n;
+  TokKind *kind;
+  const char **name;  /* NAME/ALIAS/SYM/STR text; FOLD/SCANOP op spelling ("+","*","&","|","#","max","min","avg"); COUNTER unit */
+  double *num;        /* NUM/COUNTER value */
+  int *line;
+} Toks;
 
 /* ---------- registry ---------- */
 
@@ -151,7 +222,7 @@ typedef enum {
   N_SCOPE,  /* l @ r */
   N_HOP,    /* l . r  (r: N_NAME field/comp, or nested N_HOP chain) */
   N_SETHOP, /* name' ; kids[0] = N_NAME rel; kids[1] = optional gathered comp (rel'.Comp) */
-  N_CALL,   /* name(args...) ; name in tok.name, kids = args */
+  N_CALL,   /* name(args...) ; callee in name, kids = args */
   N_FOLD,   /* op in name ("+","*","&","|","#","max","min","avg", or reducer name); kids[0]=operand; kids[1]=optional @scope */
   N_SCANEXPR, /* scan: same layout as N_FOLD; flag F_SCAN2 for scan2 */
   N_SCANALONG,/* scan(f) col along order ; kids: col, order; op in name */
@@ -191,7 +262,7 @@ typedef struct Node {
   char op;
   int flags;
   double num;
-  char name[ANO_NAMESZ];
+  const char *name;   /* interned or static; "" when absent, never NULL */
   struct Node **kids; int nkids;
   int line;
 } Node;
@@ -219,17 +290,18 @@ typedef struct {
 /* ---------- module APIs ---------- */
 
 /* lex.c — Inputs: full source (directives already stripped to blank by main), ja flag,
- * registry (JA aliases), arena. Output: token array ending in T_EOF, T_NL between lines;
- * JA mode: space-separated words mapped (registry ja, particle table, kanji numerals),
- * then normalized: TGT dropped, each postfix operator swapped before its operand (ex40).
+ * registry (JA aliases), arena. Output: token columns ending in T_EOF, T_NL between
+ * lines; the source is validated as strict UTF-8 once at this boundary. JA mode:
+ * space-separated words mapped (registry ja, particle table, kanji numerals), then
+ * normalized: TGT dropped, each postfix operator swapped before its operand (ex40).
  * Returns 0 / -1 with err set. */
 int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
-            Tok **toks, int *ntoks, char *err, size_t errsz);
+            Toks *toks, char *err, size_t errsz);
 
 /* parse.c — Inputs: token stream. Output: N_PROGRAM whose kids are statements in order.
  * Implements GRAMMAR.md: the hinge split, precedence 1-14, selection/effect forms,
  * comprehensions, defs, continuations, queries. Returns NULL with err set on failure. */
-Node *ano_parse(const Tok *toks, int ntoks, Arena *a, char *err, size_t errsz);
+Node *ano_parse(const Toks *toks, Arena *a, char *err, size_t errsz);
 
 /* emit.c — Inputs: program, registry, directives. Output: complete BQN program appended
  * to out (rt.bqn is prepended by the driver). Fixture bindings from the registry, one

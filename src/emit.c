@@ -24,7 +24,7 @@ typedef enum { FR_ENT, FR_LAT, FR_LINE, FR_BOARD } FrameKind;
 typedef struct {
   FrameKind kind;
   int w, h;          /* FR_LAT/FR_BOARD dims; FR_LINE: w = length */
-  char lit[512];     /* FR_BOARD glyphs */
+  const char *lit;   /* FR_BOARD glyphs (interned; arena lifetime) */
 } Frame;
 
 typedef enum { MODE_WORLD, MODE_SEL, MODE_COPY } Mode;
@@ -55,7 +55,7 @@ typedef struct {
   char selVar[32];       /* current statement's refined selection variable */
   char cntVar[32];       /* copy-space counts (spawn replicate) */
   char idxVar[64];       /* copy-space per-copy index */
-  char pipeExpand[128];  /* selection-space counts from a pipeline expand stage */
+  const char *pipeExpand;  /* selection-space counts from a pipeline expand stage (arena) */
   StrBuf pre;            /* staged lines for the current statement */
   int tmp;
   int outIdx;
@@ -83,11 +83,12 @@ static int fail(Em *em, int line, const char *fmt, ...) {
 
 /* fresh temp name */
 static char *tv(Em *em) { return efmt(em, "t%d", em->tmp++); }
-/* stage a prologue line */
+/* stage a prologue line (appends directly; no fixed line buffer) */
 static void stage(Em *em, const char *fmt, ...) {
   va_list ap; va_start(ap, fmt);
-  char line[4096]; vsnprintf(line, sizeof line, fmt, ap); va_end(ap);
-  sb_printf(&em->pre, "%s\n", line);
+  sb_vprintf(&em->pre, fmt, ap);
+  va_end(ap);
+  sb_printf(&em->pre, "\n");
 }
 
 /* registry-var spelling: first letter lowercased */
@@ -926,7 +927,7 @@ static int emitMask(Em *em, const Node *nd, char **out) {
     case N_PIPE: {
       View vw; if (emitPipe(em, nd, &vw)) return -1;
       if (vw.expandCnt) /* Spawner |> expand Count , spawn X : counts feed the spawn */
-        snprintf(em->pipeExpand, sizeof em->pipeExpand, "%s", vw.expandCnt);
+        em->pipeExpand = vw.expandCnt;
       *out = efmt(em, "((↕%s)∊%s)", frN(em), viewWorldIds(em, &vw));
       return 0;
     }
@@ -963,7 +964,7 @@ static const Node *findShapeScope(const Node *nd) {
 
 /* set em->fr from the selection; emit board/lattice bindings when needed */
 static void setFrame(Em *em, const Node *sel) {
-  em->fr.kind = FR_ENT; em->fr.w = em->fr.h = 0; em->fr.lit[0] = 0;
+  em->fr.kind = FR_ENT; em->fr.w = em->fr.h = 0; em->fr.lit = "";
   if (!sel) { em->fr = em->savedFr; return; }
   const Node *lm = leftmost(sel);
   if (lm->kind == N_SHAPE) {
@@ -975,7 +976,7 @@ static void setFrame(Em *em, const Node *sel) {
     em->fr.kind = FR_BOARD;
     em->fr.w = (int)lm->kids[0]->kids[0]->num;
     em->fr.h = lm->kids[0]->nkids > 1 ? (int)lm->kids[0]->kids[1]->num : 1;
-    snprintf(em->fr.lit, sizeof em->fr.lit, "%s", lm->kids[1]->name);
+    em->fr.lit = lm->kids[1]->name;
     stage(em, "brd%d ← \"%s\"", em->stmt, em->fr.lit);
     return;
   }
@@ -1363,7 +1364,7 @@ static int emitStmt(Em *em, const Node *st) {
   em->stmt++;
   sb_printf(em->out, "\n# s%d\n", em->stmt);
   em->pre.len = 0;
-  em->pipeExpand[0] = 0;
+  em->pipeExpand = "";
   Fx fx; memset(&fx, 0, sizeof fx);
 
   const Node *sel = st->kids[0];
@@ -1442,7 +1443,7 @@ static int emitRuleTick(Em *em, const Node **rules, int nrules) {
   em->stmt++;
   sb_printf(em->out, "\n# s%d: %d rules, one shared barrier\n", em->stmt, nrules);
   em->pre.len = 0;
-  em->pipeExpand[0] = 0;
+  em->pipeExpand = "";
   Fx fx; memset(&fx, 0, sizeof fx);
   /* pairwise disjointness certificates from complementary guard literals */
   const RegEntry *pos[32][MAXLITS], *neg[32][MAXLITS];
@@ -1744,8 +1745,9 @@ int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
   Arena a = {0};
   em.reg = reg; em.dirs = dirs; em.out = out; em.a = &a;
   em.err = err; em.errsz = errsz;
-  em.fr.kind = FR_ENT;
-  em.savedFr.kind = FR_ENT;
+  em.fr.kind = FR_ENT; em.fr.lit = "";
+  em.savedFr.kind = FR_ENT; em.savedFr.lit = "";
+  em.pipeExpand = "";
   em.curRule = -1;
 
   emitFixture(&em);

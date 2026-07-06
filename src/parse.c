@@ -1,4 +1,4 @@
-/* parse.c — Pratt parser for anoc: Tok stream -> AST per GRAMMAR.md's 14 levels.
+/* parse.c — Pratt parser for anoc: token columns (Toks) -> AST per GRAMMAR.md's 14 levels.
  * Statement classification: def / continuation (~ or leading ,) / comprehension /
  * elided-effect head / selection-hinge-effects / bare query. Line splicing: a line
  * whose first token is T_TO or T_PIPEGT continues the previous line (ex34 board literal).
@@ -12,7 +12,7 @@
  * Invariant: never NULL (arena aborts on OOM). */
 Node *node_new(Arena *a, NodeKind k, int line) {
   Node *n = (Node *)arena_alloc(a, sizeof *n);
-  n->kind = k; n->line = line;
+  n->kind = k; n->line = line; n->name = "";
   return n;
 }
 
@@ -31,15 +31,18 @@ void node_addkid(Arena *a, Node *n, Node *kid) {
 /* ---------- parser state ---------- */
 
 typedef struct {
-  const Tok *t; int n, i;
+  const Toks *t; int i;
   Arena *a;
   char *err; size_t errsz;
+  int depth;                /* parse_expr nesting; bounded so degenerate input errors, not overflows */
 } P;
 
-static TokKind pk(P *p) { return p->t[p->i].kind; }
-static TokKind pk2(P *p, int k) { int j = p->i + k; return j < p->n ? p->t[j].kind : T_EOF; }
-static const Tok *cur(P *p) { return &p->t[p->i]; }
-static const Tok *adv(P *p) { const Tok *t = &p->t[p->i]; if (p->i < p->n - 1) p->i++; return t; }
+static TokKind pk(P *p) { return p->t->kind[p->i]; }
+static TokKind pk2(P *p, int k) { int j = p->i + k; return j < p->t->n ? p->t->kind[j] : T_EOF; }
+static const char *tname(P *p) { return p->t->name[p->i]; }
+static double tnum(P *p) { return p->t->num[p->i]; }
+static int tline(P *p) { return p->t->line[p->i]; }
+static void adv(P *p) { if (p->i < p->t->n - 1) p->i++; }
 
 /* Inputs: parser, line, printf args. Output: NULL; first error wins. */
 static Node *perrf(P *p, int line, const char *fmt, ...) {
@@ -55,12 +58,12 @@ static Node *perrf(P *p, int line, const char *fmt, ...) {
 
 /* Inputs: parser, expected kind, description. Output: 0 and consumed / -1 with err. */
 static int expect(P *p, TokKind k, const char *what) {
-  if (pk(p) != k) { perrf(p, cur(p)->line, "expected %s", what); return -1; }
+  if (pk(p) != k) { perrf(p, tline(p), "expected %s", what); return -1; }
   adv(p);
   return 0;
 }
 
-static void setname(Node *n, const char *s) { snprintf(n->name, ANO_NAMESZ, "%s", s); }
+static void setname(Node *n, const char *s) { n->name = s; }   /* interned or static; no copy */
 
 /* ---------- token classes ---------- */
 
@@ -123,8 +126,8 @@ static Node *parse_effect(P *p);
 
 /* Input: parser at T_NAME. Output: N_NAME node, token consumed. */
 static Node *mkname(P *p) {
-  Node *n = node_new(p->a, N_NAME, cur(p)->line);
-  setname(n, cur(p)->name);
+  Node *n = node_new(p->a, N_NAME, tline(p));
+  setname(n, tname(p));
   adv(p);
   return n;
 }
@@ -132,7 +135,7 @@ static Node *mkname(P *p) {
 /* Input: name node. Output: N_SETHOP wrapping it (name copied, kids[0]=name node). */
 static Node *mksethop(P *p, Node *nm) {
   Node *s = node_new(p->a, N_SETHOP, nm->line);
-  memcpy(s->name, nm->name, ANO_NAMESZ);
+  s->name = nm->name;
   node_addkid(p->a, s, nm);
   return s;
 }
@@ -140,16 +143,16 @@ static Node *mksethop(P *p, Node *nm) {
 /* Input: parser at NUM (after @ or after to). Output: N_SHAPE of 1-2 dims.
  * allowWild permits T_WILD dims (the `to 4 _` form). */
 static Node *parse_shape(P *p, int allowWild) {
-  Node *sh = node_new(p->a, N_SHAPE, cur(p)->line);
+  Node *sh = node_new(p->a, N_SHAPE, tline(p));
   for (int d = 0; d < 2; d++) {
     if (pk(p) == T_NUM) {
-      Node *nn = node_new(p->a, N_NUM, cur(p)->line); nn->num = cur(p)->num;
+      Node *nn = node_new(p->a, N_NUM, tline(p)); nn->num = tnum(p);
       adv(p); node_addkid(p->a, sh, nn);
     } else if (allowWild && pk(p) == T_WILD) {
-      node_addkid(p->a, sh, node_new(p->a, N_WILD, cur(p)->line));
+      node_addkid(p->a, sh, node_new(p->a, N_WILD, tline(p)));
       adv(p);
     } else if (d == 0) {
-      return perrf(p, cur(p)->line, "expected shape dimension");
+      return perrf(p, tline(p), "expected shape dimension");
     } else break;
   }
   return sh;
@@ -157,7 +160,7 @@ static Node *parse_shape(P *p, int allowWild) {
 
 /* Input: parser at T_TO. Output: N_TO, kids[0]=N_SHAPE (dims NUM or WILD). */
 static Node *parse_to(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   adv(p);
   Node *to = node_new(p->a, N_TO, line);
   Node *sh = parse_shape(p, 1);
@@ -168,8 +171,8 @@ static Node *parse_to(P *p) {
 
 /* Input: parser at T_NAME with '(' next. Output: N_CALL, args comma-separated at min 5. */
 static Node *parse_call(P *p) {
-  Node *c = node_new(p->a, N_CALL, cur(p)->line);
-  setname(c, cur(p)->name);
+  Node *c = node_new(p->a, N_CALL, tline(p));
+  setname(c, tname(p));
   adv(p); adv(p);                                     /* name ( */
   if (pk(p) != T_RP) {
     for (;;) {
@@ -202,13 +205,13 @@ static Node *parse_tupelem(P *p, int min) {
 /* Input: parser at T_LP. Output: parenthesized expr, N_TUPLE on top-level comma,
  * or juxtaposed N_CALL when a bare name is followed by atoms ((pieceOf char)). */
 static Node *parse_paren(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   adv(p);
   Node *e = parse_tupelem(p, 2);
   if (!e) return NULL;
   if (e->kind == N_NAME && atomstart(pk(p))) {        /* juxtaposed call */
     Node *c = node_new(p->a, N_CALL, e->line);
-    memcpy(c->name, e->name, ANO_NAMESZ);
+    c->name = e->name;
     while (atomstart(pk(p))) {
       Node *arg = parse_expr(p, 10);
       if (!arg) return NULL;
@@ -233,23 +236,23 @@ static Node *parse_paren(P *p) {
 
 /* Input: parser at level-14 position. Output: atom node. */
 static Node *parse_atom(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   switch (pk(p)) {
     case T_NUM: {
-      Node *n = node_new(p->a, N_NUM, line); n->num = cur(p)->num; adv(p); return n;
+      Node *n = node_new(p->a, N_NUM, line); n->num = tnum(p); adv(p); return n;
     }
     case T_COUNTER: {
       Node *n = node_new(p->a, N_COUNTER, line);
-      n->num = cur(p)->num; setname(n, cur(p)->name); adv(p); return n;
+      n->num = tnum(p); setname(n, tname(p)); adv(p); return n;
     }
     case T_SYM: {
-      Node *n = node_new(p->a, N_SYM, line); setname(n, cur(p)->name); adv(p); return n;
+      Node *n = node_new(p->a, N_SYM, line); setname(n, tname(p)); adv(p); return n;
     }
     case T_STR: {
-      Node *n = node_new(p->a, N_STR, line); setname(n, cur(p)->name); adv(p); return n;
+      Node *n = node_new(p->a, N_STR, line); setname(n, tname(p)); adv(p); return n;
     }
     case T_ALIAS: {
-      Node *n = node_new(p->a, N_ALIAS, line); setname(n, cur(p)->name); adv(p); return n;
+      Node *n = node_new(p->a, N_ALIAS, line); setname(n, tname(p)); adv(p); return n;
     }
     case T_WILD: adv(p); return node_new(p->a, N_WILD, line);
     case T_NAME:
@@ -270,7 +273,7 @@ static Node *parse_atom(P *p) {
 
 /* Input: parser at an order-by head. Output: N_ORDERBY kids[0]=key, F_DESC on desc. */
 static Node *parse_orderby(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   adv(p);
   if (expect(p, T_BY, "'by' after 'order'")) return NULL;
   Node *n = node_new(p->a, N_ORDERBY, line);
@@ -284,13 +287,13 @@ static Node *parse_orderby(P *p) {
 /* Input: parser at a pipeline stage head. Output: stage node
  * (N_ORDERBY | N_TAKE | N_EXPAND | juxtaposed N_CALL). */
 static Node *parse_stage(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   switch (pk(p)) {
     case T_ORDER: return parse_orderby(p);
     case T_TAKE: {
       adv(p);
-      if (pk(p) != T_NUM) return perrf(p, cur(p)->line, "expected count after 'take'");
-      Node *n = node_new(p->a, N_TAKE, line); n->num = cur(p)->num; adv(p); return n;
+      if (pk(p) != T_NUM) return perrf(p, tline(p), "expected count after 'take'");
+      Node *n = node_new(p->a, N_TAKE, line); n->num = tnum(p); adv(p); return n;
     }
     case T_EXPAND: {
       adv(p);
@@ -302,7 +305,7 @@ static Node *parse_stage(P *p) {
     }
     case T_NAME: {
       Node *n = node_new(p->a, N_CALL, line);
-      setname(n, cur(p)->name);
+      setname(n, tname(p));
       adv(p);
       while (atomstart(pk(p))) {
         Node *arg = parse_expr(p, 10);
@@ -324,8 +327,8 @@ static int parse_opname(P *p, Node *n) {
     case T_STAR:  setname(n, "*"); break;
     case T_AMP:   setname(n, "&"); break;
     case T_BAR:   setname(n, "|"); break;
-    case T_NAME:  setname(n, cur(p)->name); break;
-    default: perrf(p, cur(p)->line, "expected operator or reducer name"); return -1;
+    case T_NAME:  setname(n, tname(p)); break;
+    default: perrf(p, tline(p), "expected operator or reducer name"); return -1;
   }
   adv(p);
   return 0;
@@ -335,7 +338,7 @@ static int parse_opname(P *p, Node *n) {
  * reduce/scan-along/scan2/cross at 9; order-by head at 3) or an atom. Fold-family
  * operands parse at min 10 so @ (12) and . (13) fall inside the operand. */
 static Node *parse_prefix(P *p, int min) {
-  int line = cur(p)->line;
+  int line = tline(p);
   TokKind k = pk(p);
   if (k == T_BANG && min <= 7) {
     adv(p);
@@ -348,7 +351,7 @@ static Node *parse_prefix(P *p, int min) {
   if (min <= 9) switch (k) {
     case T_FOLD: case T_SCANOP: {
       Node *n = node_new(p->a, k == T_FOLD ? N_FOLD : N_SCANEXPR, line);
-      setname(n, cur(p)->name);
+      setname(n, tname(p));
       adv(p);
       Node *x = parse_expr(p, 10);
       if (!x) return NULL;
@@ -366,9 +369,9 @@ static Node *parse_prefix(P *p, int min) {
     }
     case T_TOP: {
       adv(p);
-      if (pk(p) != T_NUM) return perrf(p, cur(p)->line, "expected count after 'top'");
+      if (pk(p) != T_NUM) return perrf(p, tline(p), "expected count after 'top'");
       Node *n = node_new(p->a, N_TOP, line);
-      n->num = cur(p)->num; adv(p);
+      n->num = tnum(p); adv(p);
       Node *x = parse_expr(p, 10);
       if (!x) return NULL;
       node_addkid(p->a, n, x);
@@ -378,8 +381,8 @@ static Node *parse_prefix(P *p, int min) {
       adv(p);
       Node *n = node_new(p->a, N_REDUCE, line);
       if (expect(p, T_LP, "'(' after 'reduce'")) return NULL;
-      if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected reducer name");
-      setname(n, cur(p)->name); adv(p);
+      if (pk(p) != T_NAME) return perrf(p, tline(p), "expected reducer name");
+      setname(n, tname(p)); adv(p);
       if (expect(p, T_RP, "')' after reducer")) return NULL;
       Node *x = parse_expr(p, 10);
       if (!x) return NULL;
@@ -416,8 +419,8 @@ static Node *parse_prefix(P *p, int min) {
     case T_CROSS: {
       adv(p);
       Node *n = node_new(p->a, N_CROSSV, line);
-      if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected function after 'cross'");
-      setname(n, cur(p)->name); adv(p);
+      if (pk(p) != T_NAME) return perrf(p, tline(p), "expected function after 'cross'");
+      setname(n, tname(p)); adv(p);
       Node *x = parse_expr(p, 10);
       if (!x) return NULL;
       node_addkid(p->a, n, x);
@@ -440,10 +443,10 @@ static Node *parse_binloop(P *p, Node *l, int min) {
     TokKind k = pk(p);
     int lv = binlevel(k);
     if (!lv || lv < min) return l;
-    int line = cur(p)->line;
+    int line = tline(p);
     if (k == T_DOT) {
       adv(p);
-      if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected name after '.'");
+      if (pk(p) != T_NAME) return perrf(p, tline(p), "expected name after '.'");
       Node *h = node_new(p->a, N_HOP, line);
       node_addkid(p->a, h, l);
       node_addkid(p->a, h, mkname(p));
@@ -493,25 +496,30 @@ static Node *parse_binloop(P *p, Node *l, int min) {
   }
 }
 
-/* Inputs: parser, min level. Output: full expression at that level. */
+/* Inputs: parser, min level. Output: full expression at that level.
+ * Invariant: depth-capped, so a degenerate paren tower is a parse error, never
+ * stack exhaustion. */
 static Node *parse_expr(P *p, int min) {
+  if (p->depth >= 4096) return perrf(p, tline(p), "expression nested too deeply");
+  p->depth++;
   Node *l = parse_prefix(p, min);
-  if (!l) return NULL;
-  return parse_binloop(p, l, min);
+  Node *r = l ? parse_binloop(p, l, min) : NULL;
+  p->depth--;
+  return r;
 }
 
 /* ---------- effects ---------- */
 
 /* Input: parser at an effect head. Output: one effect node per GRAMMAR.md level 4. */
 static Node *parse_effect(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   switch (pk(p)) {
     case T_PLUS: case T_MINUS: {
       NodeKind nk = pk(p) == T_PLUS ? N_EADD : N_EDEL;
       adv(p);
-      if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected component name");
+      if (pk(p) != T_NAME) return perrf(p, tline(p), "expected component name");
       Node *n = node_new(p->a, nk, line);
-      setname(n, cur(p)->name); adv(p);
+      setname(n, tname(p)); adv(p);
       return n;
     }
     case T_TILDE: adv(p); return node_new(p->a, N_EDESPAWN, line);
@@ -520,7 +528,7 @@ static Node *parse_effect(P *p) {
       Node *what;
       if (pk(p) == T_NAME) what = pk2(p, 1) == T_LP ? parse_call(p) : mkname(p);
       else if (pk(p) == T_LP) what = parse_paren(p);
-      else return perrf(p, cur(p)->line, "expected prototype after 'spawn'");
+      else return perrf(p, tline(p), "expected prototype after 'spawn'");
       if (!what) return NULL;
       Node *count = NULL, *pos = NULL;
       if (pk(p) == T_STAR) { adv(p); count = parse_expr(p, 10); if (!count) return NULL; }
@@ -535,15 +543,15 @@ static Node *parse_effect(P *p) {
       Node *tgt = mkname(p);
       if (pk(p) == T_VIA) {                            /* fn via Col */
         adv(p);
-        if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected relation after 'via'");
+        if (pk(p) != T_NAME) return perrf(p, tline(p), "expected relation after 'via'");
         Node *n = node_new(p->a, N_EVIA, line);
-        memcpy(n->name, tgt->name, ANO_NAMESZ);
+        n->name = tgt->name;
         node_addkid(p->a, n, mkname(p));
         return n;
       }
       while (pk(p) == T_DOT) {                         /* pos.x target chain */
         adv(p);
-        if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected field after '.'");
+        if (pk(p) != T_NAME) return perrf(p, tline(p), "expected field after '.'");
         Node *h = node_new(p->a, N_HOP, line);
         node_addkid(p->a, h, tgt);
         node_addkid(p->a, h, mkname(p));
@@ -562,7 +570,7 @@ static Node *parse_effect(P *p) {
       }
       if (tgt->kind == N_NAME) {                       /* registered verb */
         Node *n = node_new(p->a, N_EVERB, line);
-        memcpy(n->name, tgt->name, ANO_NAMESZ);
+        n->name = tgt->name;
         while (atomstart(pk(p))) {
           Node *arg = parse_expr(p, 10);
           if (!arg) return NULL;
@@ -570,7 +578,7 @@ static Node *parse_effect(P *p) {
         }
         return n;
       }
-      return perrf(p, cur(p)->line, "expected assignment after target");
+      return perrf(p, tline(p), "expected assignment after target");
     }
     default: return perrf(p, line, "expected effect");
   }
@@ -591,7 +599,7 @@ static int parse_effects(P *p, Node *stmt) {
 
 /* Input: parser at T_LB. Output: N_COMPR: sel, effect, then binders and filters. */
 static Node *parse_compr(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   adv(p);
   Node *c = node_new(p->a, N_COMPR, line);
   Node *sel = parse_expr(p, 5);
@@ -604,8 +612,8 @@ static Node *parse_compr(P *p) {
   if (expect(p, T_BAR, "'|' before comprehension binders")) return NULL;
   for (;;) {
     if (pk(p) == T_NAME && pk2(p, 1) == T_LARROW) {
-      Node *b = node_new(p->a, N_BINDER, cur(p)->line);
-      setname(b, cur(p)->name);
+      Node *b = node_new(p->a, N_BINDER, tline(p));
+      setname(b, tname(p));
       adv(p); adv(p);
       Node *src = parse_expr(p, 5);
       if (!src) return NULL;
@@ -626,13 +634,13 @@ static Node *parse_compr(P *p) {
 /* Input: parser at the first token of a line (never NL/EOF). Output: one statement:
  * N_DEFSTMT | N_STMT (F_RULE/F_CONT/F_ELIDED) | N_QUERY | N_COMPR. */
 static Node *parse_stmt(P *p) {
-  int line = cur(p)->line;
+  int line = tline(p);
   TokKind k = pk(p);
   if (k == T_DEF) {
     adv(p);
-    if (pk(p) != T_NAME) return perrf(p, cur(p)->line, "expected name after 'def'");
+    if (pk(p) != T_NAME) return perrf(p, tline(p), "expected name after 'def'");
     Node *d = node_new(p->a, N_DEFSTMT, line);
-    setname(d, cur(p)->name); adv(p);
+    setname(d, tname(p)); adv(p);
     if (expect(p, T_EQ, "'=' after def name")) return NULL;
     Node *body = parse_expr(p, 2);
     if (!body) return NULL;
@@ -667,13 +675,13 @@ static Node *parse_stmt(P *p) {
   /* eval "<statement>" — APL's ⍎ constrained to a literal: the quotation is re-lexed and
    * spliced HERE, at parse time, so the spliced statement's footprint stays visible to
    * every later static check. One statement per quotation; dynamic strings are not this. */
-  if (k == T_NAME && !strcmp(cur(p)->name, "eval") && pk2(p, 1) == T_STR &&
+  if (k == T_NAME && !strcmp(tname(p), "eval") && pk2(p, 1) == T_STR &&
       (pk2(p, 2) == T_NL || pk2(p, 2) == T_EOF)) {
-    const char *quoted = p->t[p->i + 1].name;
+    const char *quoted = p->t->name[p->i + 1];
     adv(p); adv(p);
-    Tok *ts = NULL; int nts = 0;
-    if (ano_lex(quoted, 0, NULL, p->a, &ts, &nts, p->err, p->errsz)) return NULL;
-    P q = { ts, nts, 0, p->a, p->err, p->errsz };
+    Toks ts = {0};
+    if (ano_lex(quoted, 0, NULL, p->a, &ts, p->err, p->errsz)) return NULL;
+    P q = { &ts, 0, p->a, p->err, p->errsz, 0 };
     while (pk(&q) == T_NL) adv(&q);
     if (pk(&q) == T_EOF) return perrf(p, line, "eval of an empty quotation");
     Node *s = parse_stmt(&q);
@@ -695,7 +703,7 @@ static Node *parse_stmt(P *p) {
   Node *sel = NULL;
   if (k == T_STR && pk2(p, 1) == T_TO) {               /* "glyphs" to 8 8 */
     Node *s = node_new(p->a, N_STR, line);
-    setname(s, cur(p)->name); adv(p);
+    setname(s, tname(p)); adv(p);
     Node *to = parse_to(p);
     if (!to) return NULL;
     node_addkid(p->a, to, s);
@@ -727,7 +735,7 @@ static Node *parse_stmt(P *p) {
     st->flags |= F_ELIDED;
     node_addkid(p->a, st, NULL);
     Node *v = node_new(p->a, N_EVERB, sel->line);
-    memcpy(v->name, sel->name, ANO_NAMESZ);
+    v->name = sel->name;
     while (atomstart(pk(p))) {
       Node *arg = parse_expr(p, 10);
       if (!arg) return NULL;
@@ -742,42 +750,52 @@ static Node *parse_stmt(P *p) {
     }
     return st;
   }
-  return perrf(p, cur(p)->line, "unexpected token after selection");
+  return perrf(p, tline(p), "unexpected token after selection");
 }
 
 /* ---------- entry ---------- */
 
-/* Inputs: token stream (T_EOF-terminated or not), count, arena, err buffer.
+/* Inputs: token stream (T_EOF-terminated or not), arena, err buffer.
  * Output: N_PROGRAM of statements, or NULL with err set. Splices continuation
- * lines (NL run followed by T_TO or T_PIPEGT) before classifying. */
-Node *ano_parse(const Tok *toks, int ntoks, Arena *a, char *err, size_t errsz) {
+ * lines (NL run followed by T_TO or T_PIPEGT) before classifying — a per-column
+ * gather into fresh arrays, never a struct move. */
+Node *ano_parse(const Toks *toks, Arena *a, char *err, size_t errsz) {
   if (err && errsz) err[0] = 0;
-  Tok *ts = (Tok *)arena_alloc(a, ((size_t)ntoks + 1) * sizeof *ts);
+  int ntoks = toks->n;
+  Toks ts;
+  ts.kind = (TokKind *)arena_alloc(a, ((size_t)ntoks + 1) * sizeof *ts.kind);
+  ts.name = (const char **)arena_alloc(a, ((size_t)ntoks + 1) * sizeof *ts.name);
+  ts.num = (double *)arena_alloc(a, ((size_t)ntoks + 1) * sizeof *ts.num);
+  ts.line = (int *)arena_alloc(a, ((size_t)ntoks + 1) * sizeof *ts.line);
   int m = 0;
   for (int i = 0; i < ntoks; i++) {
-    if (toks[i].kind == T_EOF) break;
-    if (toks[i].kind == T_NL) {
+    TokKind k = toks->kind[i];
+    if (k == T_EOF) break;
+    if (k == T_NL) {
       int j = i;
-      while (j < ntoks && toks[j].kind == T_NL) j++;
-      if (j < ntoks && (toks[j].kind == T_TO || toks[j].kind == T_PIPEGT)) { i = j - 1; continue; }
-      ts[m++] = toks[i];                               /* collapse the run to one NL */
+      while (j < ntoks && toks->kind[j] == T_NL) j++;
+      if (j < ntoks && (toks->kind[j] == T_TO || toks->kind[j] == T_PIPEGT)) { i = j - 1; continue; }
+      ts.kind[m] = T_NL; ts.name[m] = ""; ts.num[m] = 0; ts.line[m] = toks->line[i];
+      m++;                                             /* collapse the run to one NL */
       i = j - 1;
       continue;
     }
-    ts[m++] = toks[i];
+    ts.kind[m] = k; ts.name[m] = toks->name[i]; ts.num[m] = toks->num[i]; ts.line[m] = toks->line[i];
+    m++;
   }
-  Tok eof = { T_EOF, "", 0, m ? ts[m - 1].line : 1 };
-  ts[m++] = eof;
-  P p = { ts, m, 0, a, err, errsz };
+  ts.kind[m] = T_EOF; ts.name[m] = ""; ts.num[m] = 0; ts.line[m] = m ? ts.line[m - 1] : 1;
+  m++;
+  ts.n = m;
+  P p = { &ts, 0, a, err, errsz, 0 };
   Node *prog = node_new(a, N_PROGRAM, 1);
   for (;;) {
     while (pk(&p) == T_NL) adv(&p);
     if (pk(&p) == T_EOF) break;
     Node *s = parse_stmt(&p);
-    if (!s) { if (err && errsz && !err[0]) snprintf(err, errsz, "line %d: parse error", cur(&p)->line); return NULL; }
+    if (!s) { if (err && errsz && !err[0]) snprintf(err, errsz, "line %d: parse error", tline(&p)); return NULL; }
     node_addkid(a, prog, s);
     if (pk(&p) == T_NL) adv(&p);
-    else if (pk(&p) != T_EOF) return perrf(&p, cur(&p)->line, "trailing tokens on line");
+    else if (pk(&p) != T_EOF) return perrf(&p, tline(&p), "trailing tokens on line");
   }
   return prog;
 }
@@ -788,10 +806,27 @@ Node *ano_parse(const Tok *toks, int ntoks, Arena *a, char *err, size_t errsz) {
 /* stub for standalone compilation: the eval splice needs the real lexer (link lex.c);
  * no self-test case quotes a statement */
 int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
-            Tok **toks, int *ntoks, char *err, size_t errsz) {
-  (void)src; (void)ja; (void)reg; (void)a; (void)toks; (void)ntoks;
+            Toks *toks, char *err, size_t errsz) {
+  (void)src; (void)ja; (void)reg; (void)a; (void)toks;
   snprintf(err, errsz, "ano_lex stub (PARSE_TEST)");
   return -1;
+}
+
+/* case tables stay array-of-structs for literal ergonomics; adapted per run */
+typedef struct { TokKind kind; const char *name; double num; int line; } Tok;
+
+/* Inputs: AoS case table, count, arena. Output: the SoA stream the parser takes. */
+static Toks toks_of(const Tok *t, int n, Arena *a) {
+  Toks s;
+  s.n = n;
+  s.kind = (TokKind *)arena_alloc(a, (size_t)n * sizeof *s.kind);
+  s.name = (const char **)arena_alloc(a, (size_t)n * sizeof *s.name);
+  s.num = (double *)arena_alloc(a, (size_t)n * sizeof *s.num);
+  s.line = (int *)arena_alloc(a, (size_t)n * sizeof *s.line);
+  for (int i = 0; i < n; i++) {
+    s.kind[i] = t[i].kind; s.name[i] = t[i].name; s.num[i] = t[i].num; s.line[i] = t[i].line;
+  }
+  return s;
 }
 
 /* Input: node kind. Output: static name string (enum order of ano.h). */
@@ -1037,7 +1072,8 @@ int main(void) {
     Arena a = {0};
     char err[ANO_ERRSZ] = "";
     StrBuf b = {0};
-    Node *prog = ano_parse(cases[i].toks, cases[i].n, &a, err, sizeof err);
+    Toks ts = toks_of(cases[i].toks, cases[i].n, &a);
+    Node *prog = ano_parse(&ts, &a, err, sizeof err);
     if (!prog) {
       printf("FAIL %-16s parse error: %s\n", cases[i].label, err);
       fails++;

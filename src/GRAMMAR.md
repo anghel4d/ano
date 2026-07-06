@@ -4,6 +4,7 @@ The implementation contract for the C transpiler in this directory. Derived from
 
 ## Lexical
 
+- Source is strict UTF-8, validated whole before either mode lexes: overlongs, encoded surrogates, and codepoints past U+10FFFF are a lex error ("malformed UTF-8"). A well-formed but unexpected character reports by codepoint (`unknown character U+00E9`).
 - Comments: `--` to end of line. `--!` is a harness directive, not a comment (below).
 - Names: `[A-Za-z][A-Za-z0-9_]*`. Case is preserved; resolution against the registry is case-insensitive on the first letter only (surface `Gold`, registry column `gold`). A name is component, callable, binding, or def — sentence position decides (spec, flat namespace).
 - Alias sigil: `^` immediately followed by a name, no whitespace, lexes as one T_ALIAS token. A bare `^` is a lex error. `@` is always the scope operator T_AT: `Merchant @ Whiterun` and `Adj@row` are both `… AT …`, spacing irrelevant.
@@ -11,7 +12,7 @@ The implementation contract for the C transpiler in this directory. Derived from
 - Numbers: integers and decimals (`60`, `0.5`, `1.05`). A number immediately followed by a name with no whitespace is a counter-typed numeral T_COUNTER (`3mo`: value 3, unit `mo`).
 - Strings: `"..."`, no escapes needed for the demos: T_STR.
 - Wildcard: `_` alone: T_WILD (`to 4 _`, `(Nord, TwoHanded _)`).
-- Fold tokens: `+/ */ &/ |/ #/` and `max/ min/ avg/` lex as one T_FOLD with an op payload; likewise a name directly followed by `/` where the name is a registered reducer. Scan tokens: `+\ *\ max\` lex as T_SCAN with op payload. No whitespace inside either.
+- Fold tokens: `+/ */ &/ |/ #/` and `max/ min/ avg/` lex as one T_FOLD with an op payload; likewise a name directly followed by `/` where the name is a registered reducer. Scan tokens: `+\ *\ max\` lex as T_SCANOP with op payload. No whitespace inside either.
 - `/` between value expressions is division; the fold reading requires the `f/` form at expression head (term position). Same for `\`.
 - Iota: `↕` (UTF-8) is T_IOTA.
 - Operators: `, => ; |> & | ! == != < <= > >= = += -= *= /= + - * / % @ . ' ( ) [ ] <- ~`.
@@ -81,10 +82,10 @@ RHS evaluation space: a column expression on the effect side is evaluated over t
 
 ## Japanese skin (`--! ja`)
 
-Token-level, space-separated surface per ano_nihongo.md and ex40-49. The JA lexer maps each token: registry names via their registered ja aliases (`北`→Nord), particles to operators (`と`→`&`, `の`→`.`, `で`→`@` scope, `より`→`>` postfix, `、`→hinge `,`, `に`→TGT, `は`→hinge (topic), `が`→hinge), effect verbs (`たす`→`+=` postfix, `にする`→`=` postfix, ...), kanji numerals (`六十`→60, `千`→1000, `九千九百九十九`→9999, `一・〇五`→1.05, `三ヶ月`→counter 3mo). Normalization re-roots each postfix operator immediately before its operand and drops the fused TGT (ex40's permutation), yielding the ASCII token stream; parsing proceeds identically. `--tokens` prints the normalized stream for the ex40 equivalence check.
+Token-level, space-separated surface per ano_nihongo.md and ex40-49. The JA lexer maps each token: registry names via their registered ja aliases (`北`→Nord), particles to operators (`と`→`&`, `の`→`.`, `で`→`@` scope, `より`→`>` postfix, `、`→hinge `,`, `に`→TGT, `は`→hinge (topic), `が`→hinge), effect verbs (`たす`→`+=` postfix, `にする`→`=` postfix, ...), kanji and fullwidth numerals (`六十`→60, `千`→1000, `九千九百九十九`→9999, `一・〇五`→1.05, `１２３`→123, `１・０５`→1.05, `三ヶ月`→counter 3mo). Normalization re-roots each postfix operator immediately before its operand and drops the fused TGT (ex40's permutation), yielding the ASCII token stream; parsing proceeds identically. `--tokens` prints the normalized stream for the ex40 equivalence check.
 
 ## Pipeline: anoc
 
-`anoc [--tokens] [--emit] [--run] [--registry <path>] file.ano`
+`anoc [--tokens] [--emit] [--run] [--rt <path>] [--registry <path-or-name>] file.ano`
 
 Parse directives → load registry → lex (ASCII or JA) → parse → emit BQN (fixture bindings, then per statement: gather mask, compute deltas against pre-state, scatter; expectations as BQN assertions) → `--run` pipes the program to `bqn` (from PATH; the nix dev shell provides CBQN). Exit status is the differential-test verdict.

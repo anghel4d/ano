@@ -1,10 +1,14 @@
 /* lex.c — anoc tokenizer: the ASCII surface and the Japanese spaced skin (--! ja).
- * Contract: ano.h (Tok, ano_lex), GRAMMAR.md "Lexical". ASCII mode fuses fold/scan
- * tokens; ^ begins the alias sigil, : a symbol, @ is always the scope operator. JA mode lexes space-separated
- * words — registry ja aliases, the particle table, a kanji numeral reader — then
- * normalizes per demos/9-nihongo/40-tokenizer-skin.bqn: drop the に TGT marker and
- * re-root each postfix operator before its operand. The postfix flag lives beside
- * the token buffer and never escapes this file. */
+ * Contract: ano.h (Toks, ano_lex), GRAMMAR.md "Lexical". The stream is columnar
+ * (kind/name/num/line grown together) and token text is interned — one canonical
+ * copy per spelling, no per-token buffers. Source is validated as strict UTF-8 once
+ * at the ano_lex boundary (overlongs, surrogates, and out-of-range rejected), so
+ * both skins may decode without checking. ASCII mode fuses fold/scan tokens;
+ * ^ begins the alias sigil, : a symbol, @ is always the scope operator. JA mode
+ * lexes space-separated words — registry ja aliases, the particle table, a kanji
+ * numeral reader — then normalizes per demos/9-nihongo/40-tokenizer-skin.bqn: drop
+ * the に TGT marker and re-root each postfix operator before its operand. The
+ * postfix flag lives beside the token columns and never escapes this file. */
 #include "ano.h"
 
 /* internal に target marker; deleted in normalization, never returned */
@@ -15,25 +19,38 @@ static int nstart(int c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z
 static int nchar(int c)  { return nstart(c) || (c >= '0' && c <= '9') || c == '_'; }
 static int dig(int c)    { return c >= '0' && c <= '9'; }
 
-/* growing token buffer; post[] marks JA postfix operators, internal only */
-typedef struct { Tok *t; unsigned char *post; int n, cap; Arena *a; } TokBuf;
+static int ucp(const unsigned char *s, size_t n, unsigned *cp);
 
-/* Inputs: buffer, kind, line. Output: pointer to the zeroed appended token.
- * Invariant: t and post grow together; old blocks stay in the arena. */
-static Tok *tb_push(TokBuf *b, TokKind k, int line) {
+/* growing token columns; post[] marks JA postfix operators, internal only */
+typedef struct {
+  TokKind *kind; const char **name; double *num; int *line;
+  unsigned char *post;
+  int n, cap;
+  Arena *a; Intern *it;
+} TokBuf;
+
+/* Inputs: buffer, kind, line. Output: index of the appended token (name "", num 0).
+ * Invariant: all five columns grow together; old blocks stay in the arena. */
+static int tb_push(TokBuf *b, TokKind k, int line) {
   if (b->n == b->cap) {
     int cap = b->cap ? b->cap * 2 : 128;
-    Tok *nt = (Tok *)arena_alloc(b->a, (size_t)cap * sizeof *nt);
+    TokKind *nk = (TokKind *)arena_alloc(b->a, (size_t)cap * sizeof *nk);
+    const char **nn = (const char **)arena_alloc(b->a, (size_t)cap * sizeof *nn);
+    double *nv = (double *)arena_alloc(b->a, (size_t)cap * sizeof *nv);
+    int *nl = (int *)arena_alloc(b->a, (size_t)cap * sizeof *nl);
     unsigned char *np = (unsigned char *)arena_alloc(b->a, (size_t)cap);
-    if (b->n) { memcpy(nt, b->t, (size_t)b->n * sizeof *nt); memcpy(np, b->post, (size_t)b->n); }
-    b->t = nt; b->post = np; b->cap = cap;
+    if (b->n) {
+      memcpy(nk, b->kind, (size_t)b->n * sizeof *nk);
+      memcpy(nn, b->name, (size_t)b->n * sizeof *nn);
+      memcpy(nv, b->num, (size_t)b->n * sizeof *nv);
+      memcpy(nl, b->line, (size_t)b->n * sizeof *nl);
+      memcpy(np, b->post, (size_t)b->n);
+    }
+    b->kind = nk; b->name = nn; b->num = nv; b->line = nl; b->post = np; b->cap = cap;
   }
-  Tok *t = &b->t[b->n];
-  memset(t, 0, sizeof *t);
-  t->kind = k; t->line = line;
-  b->post[b->n] = 0;
-  b->n++;
-  return t;
+  int ix = b->n++;
+  b->kind[ix] = k; b->name[ix] = ""; b->num[ix] = 0; b->line[ix] = line; b->post[ix] = 0;
+  return ix;
 }
 
 /* Inputs: err buffer, line, printf format. Output: -1; err = "line N: ...". */
@@ -65,11 +82,11 @@ static TokKind kwkind(const char *nm) {
  * for max/min/avg and never before '='; ^ begins the alias sigil, @ is always T_AT. */
 static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
   int line = 1;
-  size_t i = 0;
+  size_t i = 0, n = strlen(src);
   while (src[i]) {
     unsigned char c = (unsigned char)src[i];
     if (c == '\n') {
-      if (b->n && b->t[b->n - 1].kind != T_NL) tb_push(b, T_NL, line);
+      if (b->n && b->kind[b->n - 1] != T_NL) tb_push(b, T_NL, line);
       line++; i++; continue;
     }
     if (c == ' ' || c == '\t' || c == '\r') { i++; continue; }
@@ -77,20 +94,18 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
     if (nstart(c)) {
       size_t j = i + 1;
       while (nchar((unsigned char)src[j])) j++;
-      size_t len = j - i;
-      if (len >= ANO_NAMESZ) return lex_err(err, errsz, line, "name too long");
-      char nm[ANO_NAMESZ]; memcpy(nm, src + i, len); nm[len] = 0;
+      const char *nm = intern(b->it, b->a, src + i, j - i);
       /* reducer fold: max/ min/ avg/ — no whitespace, and 'max/= 2' stays SLASHEQ */
       int red = !strcmp(nm, "max") || !strcmp(nm, "min") || !strcmp(nm, "avg");
       if (red && src[j] == '/' && src[j + 1] != '=') {
-        Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, nm); i = j + 1; continue;
+        { int ix = tb_push(b, T_FOLD, line); b->name[ix] = nm; } i = j + 1; continue;
       }
       if (!strcmp(nm, "max") && src[j] == '\\') {
-        Tok *t = tb_push(b, T_SCANOP, line); strcpy(t->name, nm); i = j + 1; continue;
+        { int ix = tb_push(b, T_SCANOP, line); b->name[ix] = nm; } i = j + 1; continue;
       }
       TokKind kk = kwkind(nm);
       if (kk) { tb_push(b, kk, line); i = j; continue; }
-      Tok *t = tb_push(b, T_NAME, line); strcpy(t->name, nm);
+      { int ix = tb_push(b, T_NAME, line); b->name[ix] = nm; }
       if (src[j] == '\'') { tb_push(b, T_TICK, line); j++; }   /* postfix tick */
       i = j; continue;
     }
@@ -107,11 +122,11 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
       if (nstart((unsigned char)src[j])) {                     /* counter: 3mo */
         size_t k = j + 1;
         while (nchar((unsigned char)src[k])) k++;
-        if (k - j >= ANO_NAMESZ) return lex_err(err, errsz, line, "counter unit too long");
-        Tok *t = tb_push(b, T_COUNTER, line); t->num = v; memcpy(t->name, src + j, k - j);
+        int ix = tb_push(b, T_COUNTER, line);
+        b->num[ix] = v; b->name[ix] = intern(b->it, b->a, src + j, k - j);
         i = k;
       } else {
-        Tok *t = tb_push(b, T_NUM, line); t->num = v;
+        { int ix = tb_push(b, T_NUM, line); b->num[ix] = v; }
         i = j;
       }
       continue;
@@ -120,27 +135,26 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
       size_t j = i + 1;
       while (src[j] && src[j] != '"' && src[j] != '\n') j++;
       if (src[j] != '"') return lex_err(err, errsz, line, "unterminated string");
-      size_t len = j - i - 1;
-      if (len >= ANO_NAMESZ)
-        return lex_err(err, errsz, line, "string longer than %d bytes (Tok.name contract)", ANO_NAMESZ - 1);
-      Tok *t = tb_push(b, T_STR, line); memcpy(t->name, src + i + 1, len);
+      { int ix = tb_push(b, T_STR, line); b->name[ix] = intern(b->it, b->a, src + i + 1, j - i - 1); }
       i = j + 1; continue;
     }
     if (c == ':') {
       if (!nstart((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "':' needs a name: symbols are :Name");
       size_t j = i + 2;
       while (nchar((unsigned char)src[j])) j++;
-      size_t len = j - i - 1;
-      if (len >= ANO_NAMESZ) return lex_err(err, errsz, line, "symbol too long");
-      Tok *t = tb_push(b, T_SYM, line); memcpy(t->name, src + i + 1, len);
+      { int ix = tb_push(b, T_SYM, line); b->name[ix] = intern(b->it, b->a, src + i + 1, j - i - 1); }
       i = j; continue;
     }
     if (c == '_') {
       if (nchar((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "names cannot start with '_'");
       tb_push(b, T_WILD, line); i++; continue;
     }
-    if (c == 0xE2 && (unsigned char)src[i + 1] == 0x86 && (unsigned char)src[i + 2] == 0x95) {
-      tb_push(b, T_IOTA, line); i += 3; continue;              /* ↕ */
+    if (c >= 0x80) {                                           /* non-ASCII: ↕ only */
+      unsigned cp;
+      int l = ucp((const unsigned char *)src + i, n - i, &cp);
+      if (!l) return lex_err(err, errsz, line, "malformed UTF-8");
+      if (cp == 0x2195) { tb_push(b, T_IOTA, line); i += (size_t)l; continue; }
+      return lex_err(err, errsz, line, "unknown character U+%04X", cp);
     }
     unsigned char d = (unsigned char)src[i + 1];
     switch (c) {
@@ -171,17 +185,17 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
         break;
       case '|':
         if (d == '>') { tb_push(b, T_PIPEGT, line); i += 2; }
-        else if (d == '/') { Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, "|"); i += 2; }
+        else if (d == '/') { { int ix = tb_push(b, T_FOLD, line); b->name[ix] = "|"; } i += 2; }
         else { tb_push(b, T_BAR, line); i++; }
         break;
       case '&':
-        if (d == '/') { Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, "&"); i += 2; }
+        if (d == '/') { { int ix = tb_push(b, T_FOLD, line); b->name[ix] = "&"; } i += 2; }
         else { tb_push(b, T_AMP, line); i++; }
         break;
       case '+':
         if (d == '=') { tb_push(b, T_PLUSEQ, line); i += 2; }
-        else if (d == '/') { Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, "+"); i += 2; }
-        else if (d == '\\') { Tok *t = tb_push(b, T_SCANOP, line); strcpy(t->name, "+"); i += 2; }
+        else if (d == '/') { { int ix = tb_push(b, T_FOLD, line); b->name[ix] = "+"; } i += 2; }
+        else if (d == '\\') { { int ix = tb_push(b, T_SCANOP, line); b->name[ix] = "+"; } i += 2; }
         else { tb_push(b, T_PLUS, line); i++; }
         break;
       case '-':
@@ -189,15 +203,15 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
         break;
       case '*':
         if (d == '=') { tb_push(b, T_STAREQ, line); i += 2; }
-        else if (d == '/') { Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, "*"); i += 2; }
-        else if (d == '\\') { Tok *t = tb_push(b, T_SCANOP, line); strcpy(t->name, "*"); i += 2; }
+        else if (d == '/') { { int ix = tb_push(b, T_FOLD, line); b->name[ix] = "*"; } i += 2; }
+        else if (d == '\\') { { int ix = tb_push(b, T_SCANOP, line); b->name[ix] = "*"; } i += 2; }
         else { tb_push(b, T_STAR, line); i++; }
         break;
       case '/':
         if (d == '=') { tb_push(b, T_SLASHEQ, line); i += 2; } else { tb_push(b, T_SLASH, line); i++; }
         break;
       case '#':
-        if (d == '/') { Tok *t = tb_push(b, T_FOLD, line); strcpy(t->name, "#"); i += 2; }
+        if (d == '/') { { int ix = tb_push(b, T_FOLD, line); b->name[ix] = "#"; } i += 2; }
         else return lex_err(err, errsz, line, "'#' begins only the fold '#/'");
         break;
       case '@': tb_push(b, T_AT, line); i++; break;
@@ -205,9 +219,7 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
         if (nstart(d)) {                                       /* ^alias sigil, the deictic pronoun */
           size_t j = i + 2;
           while (nchar((unsigned char)src[j])) j++;
-          size_t len = j - i - 1;
-          if (len >= ANO_NAMESZ) return lex_err(err, errsz, line, "alias name too long");
-          Tok *t = tb_push(b, T_ALIAS, line); memcpy(t->name, src + i + 1, len);
+          { int ix = tb_push(b, T_ALIAS, line); b->name[ix] = intern(b->it, b->a, src + i + 1, j - i - 1); }
           i = j;
         } else return lex_err(err, errsz, line, "'^' begins only the ^alias sigil");
         break;
@@ -219,24 +231,30 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
   return 0;
 }
 
-/* Inputs: s at a UTF-8 char boundary. Outputs: *cp. Output: byte length 1-4, 0 malformed. */
-static int ucp(const unsigned char *s, unsigned *cp) {
-  if (s[0] < 0x80) { *cp = s[0]; return 1; }
-  if ((s[0] & 0xE0) == 0xC0 && (s[1] & 0xC0) == 0x80) {
-    *cp = ((unsigned)(s[0] & 0x1F) << 6) | (s[1] & 0x3F); return 2;
+/* Inputs: s at a UTF-8 char boundary, n bytes available. Outputs: *cp. Output: byte
+ * length 1-4, 0 malformed. Strict (anoptic utf8_decode): rejects overlongs, encoded
+ * surrogates, cp > U+10FFFF, and truncation — decoder and validator in one. */
+static int ucp(const unsigned char *s, size_t n, unsigned *cp) {
+  unsigned char b0 = s[0];
+  if (b0 < 0x80) { *cp = b0; return 1; }
+  int need; unsigned r, min;
+  if      ((b0 & 0xE0) == 0xC0) { need = 1; r = b0 & 0x1F; min = 0x80; }
+  else if ((b0 & 0xF0) == 0xE0) { need = 2; r = b0 & 0x0F; min = 0x800; }
+  else if ((b0 & 0xF8) == 0xF0) { need = 3; r = b0 & 0x07; min = 0x10000; }
+  else return 0;                                     /* continuation or F8-FF lead */
+  if (n - 1 < (size_t)need) return 0;                /* truncated at end */
+  for (int k = 1; k <= need; k++) {
+    if ((s[k] & 0xC0) != 0x80) return 0;
+    r = (r << 6) | (s[k] & 0x3F);
   }
-  if ((s[0] & 0xF0) == 0xE0 && (s[1] & 0xC0) == 0x80 && (s[2] & 0xC0) == 0x80) {
-    *cp = ((unsigned)(s[0] & 0x0F) << 12) | ((unsigned)(s[1] & 0x3F) << 6) | (s[2] & 0x3F); return 3;
-  }
-  if ((s[0] & 0xF8) == 0xF0 && (s[1] & 0xC0) == 0x80 && (s[2] & 0xC0) == 0x80 && (s[3] & 0xC0) == 0x80) {
-    *cp = ((unsigned)(s[0] & 0x07) << 18) | ((unsigned)(s[1] & 0x3F) << 12)
-        | ((unsigned)(s[2] & 0x3F) << 6) | (s[3] & 0x3F); return 4;
-  }
-  return 0;
+  if (r < min || r > 0x10FFFF || (r >= 0xD800 && r <= 0xDFFF)) return 0;
+  *cp = r;
+  return 1 + need;
 }
 
-/* Inputs: codepoint. Output: kanji digit value 0-9, or -1. */
+/* Inputs: codepoint. Output: digit value 0-9 — kanji 〇一..九 or fullwidth ０-９ — or -1. */
 static int jadig(unsigned cp) {
+  if (cp >= 0xFF10 && cp <= 0xFF19) return (int)(cp - 0xFF10);
   switch (cp) {
     case 0x3007: return 0; case 0x4E00: return 1; case 0x4E8C: return 2;
     case 0x4E09: return 3; case 0x56DB: return 4; case 0x4E94: return 5;
@@ -283,7 +301,7 @@ static int ja_numeral(const char *w, double *val, char *unit) {
   size_t p = 0;
   while (buf[p]) {
     unsigned cp;
-    int l = ucp((const unsigned char *)buf + p, &cp);
+    int l = ucp((const unsigned char *)buf + p, len - p, &cp);
     if (!l || n >= 32) return 0;
     p += (size_t)l;
     int d = jadig(cp), m = jamag(cp);
@@ -345,24 +363,34 @@ static const struct { const char *w; TokKind k; int post; } jatab[] = {
  * survive this function. */
 static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, size_t errsz) {
   int line = 1;
-  size_t i = 0;
+  size_t i = 0, n = strlen(src);
   while (src[i]) {
     unsigned char c = (unsigned char)src[i];
     if (c == '\n') {
-      if (b->n && b->t[b->n - 1].kind != T_NL) tb_push(b, T_NL, line);
+      if (b->n && b->kind[b->n - 1] != T_NL) tb_push(b, T_NL, line);
       line++; i++; continue;
     }
     if (c == ' ' || c == '\t' || c == '\r') { i++; continue; }
-    if (c == 0xE3 && (unsigned char)src[i + 1] == 0x80 && (unsigned char)src[i + 2] == 0x80) {
-      i += 3; continue;                                        /* U+3000 ideographic space */
+    if (c >= 0x80) {
+      unsigned cp;
+      int l = ucp((const unsigned char *)src + i, n - i, &cp);
+      if (!l) return lex_err(err, errsz, line, "malformed UTF-8");
+      if (cp == 0x3000) { i += (size_t)l; continue; }          /* ideographic space */
     }
     if (c == '-' && src[i + 1] == '-') { while (src[i] && src[i] != '\n') i++; continue; }
-    /* word: run to the next space/newline */
+    /* word: run to the next space/newline (ASCII or U+3000) */
     size_t j = i;
     while (src[j]) {
       unsigned char d = (unsigned char)src[j];
       if (d == ' ' || d == '\t' || d == '\r' || d == '\n') break;
-      if (d == 0xE3 && (unsigned char)src[j + 1] == 0x80 && (unsigned char)src[j + 2] == 0x80) break;
+      if (d >= 0x80) {
+        unsigned cp;
+        int l = ucp((const unsigned char *)src + j, n - j, &cp);
+        if (!l) return lex_err(err, errsz, line, "malformed UTF-8");
+        if (cp == 0x3000) break;
+        j += (size_t)l;
+        continue;
+      }
       j++;
     }
     char w[128];
@@ -371,8 +399,7 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
     i = j;
     const char *cn = reg ? reg_ja(reg, w) : NULL;
     if (cn) {
-      if (strlen(cn) >= ANO_NAMESZ) return lex_err(err, errsz, line, "registry name too long");
-      Tok *t = tb_push(b, T_NAME, line); strcpy(t->name, cn);
+      { int ix = tb_push(b, T_NAME, line); b->name[ix] = cn; }   /* canonical name lives in the registry */
       continue;
     }
     int hit = 0;
@@ -384,44 +411,66 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
       }
     }
     if (hit) continue;
-    double v; char u[ANO_NAMESZ];
+    double v; char u[8];
     if (ja_numeral(w, &v, u)) {
-      Tok *t = tb_push(b, u[0] ? T_COUNTER : T_NUM, line);
-      t->num = v; strcpy(t->name, u);
+      int ix = tb_push(b, u[0] ? T_COUNTER : T_NUM, line);
+      b->num[ix] = v;
+      if (u[0]) b->name[ix] = intern(b->it, b->a, u, strlen(u));
       continue;
     }
     return lex_err(err, errsz, line, "unknown word '%s'", w);
   }
-  /* normalize, step 1: delete the fused TGT markers */
+  /* normalize, step 1: delete the fused TGT markers (compact every column) */
   int m = 0;
-  for (int k = 0; k < b->n; k++)
-    if (b->t[k].kind != K_TGT) { b->t[m] = b->t[k]; b->post[m] = b->post[k]; m++; }
+  for (int k = 0; k < b->n; k++) {
+    if (b->kind[k] == K_TGT) continue;
+    b->kind[m] = b->kind[k]; b->name[m] = b->name[k]; b->num[m] = b->num[k];
+    b->line[m] = b->line[k]; b->post[m] = b->post[k];
+    m++;
+  }
   b->n = m;
   /* step 2: re-root each postfix operator before its operand (never across T_NL) */
   for (int k = 0; k < b->n; k++) {
     if (!b->post[k]) continue;
-    if (k == 0 || b->t[k - 1].kind == T_NL)
-      return lex_err(err, errsz, b->t[k].line, "postfix operator with no operand");
-    Tok tmp = b->t[k]; b->t[k] = b->t[k - 1]; b->t[k - 1] = tmp;
+    if (k == 0 || b->kind[k - 1] == T_NL)
+      return lex_err(err, errsz, b->line[k], "postfix operator with no operand");
+    TokKind tk = b->kind[k]; b->kind[k] = b->kind[k - 1]; b->kind[k - 1] = tk;
+    const char *tn = b->name[k]; b->name[k] = b->name[k - 1]; b->name[k - 1] = tn;
+    double tv = b->num[k]; b->num[k] = b->num[k - 1]; b->num[k - 1] = tv;
+    int tl = b->line[k]; b->line[k] = b->line[k - 1]; b->line[k - 1] = tl;
     b->post[k] = 0; b->post[k - 1] = 0;
   }
   return 0;
 }
 
 /* Inputs: full source (directives blanked by main), ja flag, registry, arena.
- * Outputs: *toks and *ntoks — the stream, T_NL between lines, ending in T_EOF.
+ * Outputs: *toks — the column stream, T_NL between lines, ending in T_EOF.
  * Output: 0 ok / -1 with err set. Invariant: blank lines emit nothing. */
 int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
-            Tok **toks, int *ntoks, char *err, size_t errsz) {
+            Toks *toks, char *err, size_t errsz) {
   TokBuf b = {0};
-  b.a = a;
+  Intern it = {0};
+  b.a = a; b.it = &it;
   if (err && errsz) err[0] = 0;
   if (!src) src = "";
+  /* strict well-formedness once at the boundary; skins then decode unchecked */
+  {
+    size_t n = strlen(src);
+    int pl = 1;
+    for (size_t i = 0; i < n;) {
+      unsigned char c = (unsigned char)src[i];
+      if (c < 0x80) { pl += c == '\n'; i++; continue; }
+      unsigned cp;
+      int l = ucp((const unsigned char *)src + i, n - i, &cp);
+      if (!l) return lex_err(err, errsz, pl, "malformed UTF-8");
+      i += (size_t)l;
+    }
+  }
   int rc = ja ? lex_ja(src, reg, &b, err, errsz) : lex_ascii(src, &b, err, errsz);
   if (rc) return -1;
-  if (b.n && b.t[b.n - 1].kind == T_NL) b.n--;   /* NL separates, never terminates */
-  int line = b.n ? b.t[b.n - 1].line : 1;
+  if (b.n && b.kind[b.n - 1] == T_NL) b.n--;     /* NL separates, never terminates */
+  int line = b.n ? b.line[b.n - 1] : 1;
   tb_push(&b, T_EOF, line);
-  *toks = b.t; *ntoks = b.n;
+  toks->n = b.n; toks->kind = b.kind; toks->name = b.name; toks->num = b.num; toks->line = b.line;
   return 0;
 }

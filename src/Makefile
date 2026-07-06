@@ -3,7 +3,7 @@ CC ?= cc
 CFLAGS ?= -std=c23 -O2 -Wall -Wextra
 LDLIBS = -lm
 
-OBJS = lex.o parse.o registry.o emit.o main.o
+OBJS = lex.o parse.o registry.o emit.o fs.o main.o
 
 all: anoc
 
