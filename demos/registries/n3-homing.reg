@@ -9,3 +9,12 @@ col posx num 10 10 40 0
 col velx num 6 6 0 0
 col health num 0 0 25 0
 rel target 2 -1 -1 -1
+ja 火花弾 sparkBolt
+ja 追尾 homing
+ja 敵 enemy
+ja 体力 health
+ja 標的物 target
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

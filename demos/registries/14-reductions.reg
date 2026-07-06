@@ -13,3 +13,19 @@ col none bool 0 0 0 0 0 0 0 0
 # census addendum (ano-side only): merchant and the Whiterun membership mask, for the compound-scope and broadcast pins
 col merchant bool 1 1 0 1 0 1 0 0
 bind Whiterun mask 1 0 1 0 0 0 1 0
+ja 北 Nord
+ja 金 Gold
+ja 抵抗 Resist
+ja 命中 Hits
+ja 生存 Alive
+ja 一党 Party
+ja 燃焼 Burning
+ja 森 Forest
+ja 無 None
+ja 商人 Merchant
+ja 両手 TwoHanded
+ja ホワイトラン Whiterun
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

@@ -7,3 +7,13 @@ col greedy bool 0 0 0 0 1
 col stamina num 5 30 10 50 4
 col weight num 10 20 10 60 4
 col speed num 8 6 4 2 10
+ja 金 gold
+ja 体力 health
+ja 強欲 greedy
+ja 持久 stamina
+ja 重量 weight
+ja 速度 speed
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

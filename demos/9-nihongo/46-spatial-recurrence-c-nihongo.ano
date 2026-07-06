@@ -1,0 +1,6 @@
+-- Japanese conjugate of 46-c (spatial recurrence, version B): the recurrence runs host-side; fib(番号) maps the registered host fn over the selection ordinal.
+--! registry ../registries/46-spatial-recurrence-a.reg
+--! ja
+--! expect height = 1 1 2 3 5 8 13 21
+
+升目 行 で 、 高さ に fib ( 番号 ) にする

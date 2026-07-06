@@ -17,3 +17,19 @@ col member bool 0 0 0 0 0 0 0
 col bind num 0 0 0 0 0 0 0
 bind deck mask 1 1 1 1 1 1 1
 bind revDeck vec 6 5 4 3 2 1
+ja 杖 wand
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 改 mod
+ja 抜追加 drawAdd
+ja 損傷 damage
+ja 残高 bal
+ja 最低残高 minBal
+ja 成員 member
+ja 山札 deck
+ja 逆山札 revDeck
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

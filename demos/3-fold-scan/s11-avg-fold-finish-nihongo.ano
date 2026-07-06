@@ -1,0 +1,11 @@
+-- Japanese conjugate of s11 (avg fold-and-finish). 平均 = avg/, 総数 = #/, 総和 = +/; で postfix scope.
+--! registry ../registries/s11-avg-fold-finish.reg
+--! ja
+--! out 600
+平均 重量 牛 で
+
+--! out 4
+総数 牛
+
+--! out 2400
+総和 重量 牛 で

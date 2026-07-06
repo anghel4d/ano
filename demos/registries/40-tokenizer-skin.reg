@@ -7,3 +7,7 @@ col gold num 100 100 100 100 100 100
 ja 北 Nord
 ja 両手 TwoHanded
 ja 金 Gold
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

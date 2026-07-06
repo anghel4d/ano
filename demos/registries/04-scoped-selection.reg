@@ -6,3 +6,11 @@ col merchant bool 1 1 0 1 0 1
 col region sym Whiterun Riften Whiterun Whiterun Riften Riften
 bind Whiterun mask 1 0 1 1 0 0
 col gold num 100 100 100 100 100 100
+ja 商人 merchant
+ja 地域 region
+ja ホワイトラン Whiterun
+ja 金 gold
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

@@ -7,3 +7,12 @@ col sparkBolt bool 0 1 1 1 0
 col bomb bool 0 0 0 0 1
 col damage num 0 3 3 3 8
 col speed num 0 6 6 6 2
+ja 杖 wand
+ja 火花弾 sparkBolt
+ja 爆弾 bomb
+ja 損傷 damage
+ja 速度 speed
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

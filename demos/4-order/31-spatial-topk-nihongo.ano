@@ -1,0 +1,11 @@
+-- Japanese conjugate of 31 (spatial top-k). で postfix; spawn 生成 is prefix.
+--! registry ../registries/31-spatial-topk.reg
+--! ja
+--! out 26 18 25 27 34 17 19 33
+--! out 63 55 62 54 47
+--! expect-n 72
+
+上位 8 ( 格付 降順 安全 8 8 で )
+上位 5 ( 格付 降順 資源 )
+8 8 と 上位 5 ( 格付 降順 資源 ) 、 採掘点 付
+上位 8 ( 格付 降順 安全 8 8 で ) 、 生成 歩哨

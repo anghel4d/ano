@@ -1,0 +1,12 @@
+-- Japanese conjugate of 05 (target aliases). ^cursor/^observer/^selected keep ASCII sigils (no ja alias); player -> 勇者. ^selected is non-singleton (rows 2,3).
+--! registry ../registries/05-target-aliases.reg
+--! ja
+--! expect health = 50 60 0 80 90
+--! expect faction = None Friendly None None None
+--! expect gold = 10000 2 3 4 5
+--! expect damage = 10 20 60 80 50
+
+^cursor 、 体力 に 0 にする
+^observer 、 派閥 に :Friendly にする
+勇者 、 金 に 9999 たす
+^selected 、 損傷 に 2 かける

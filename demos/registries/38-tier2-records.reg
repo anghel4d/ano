@@ -6,3 +6,12 @@ col nord bool 1 1 0 1 0 1
 col twoHanded num 70 50 80 90 61 65
 col gold num 100 250 40 10 520 305
 col rank num 0 0 0 0 0 0
+ja 部隊 unit
+ja 北 nord
+ja 両手 twoHanded
+ja 金 gold
+ja 順位 rank
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

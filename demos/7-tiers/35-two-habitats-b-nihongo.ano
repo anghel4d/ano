@@ -1,0 +1,9 @@
+-- Japanese conjugate of 35-two-habitats-b: outer-row comprehension as value-form cross, and the checkerboard as a parity predicate over the same table. 交差 cross; & → と; == → 同.
+--! registry ../registries/35-two-habitats-b.reg
+--! ja
+
+--! out 11 21 12 22 13 23
+交差 f A B
+
+--! out 1 0 1 0 0 1 0 1 1 0 1 0 0 1 0 1
+4 4 と ( ( x + y ) % 2 ) 0 同

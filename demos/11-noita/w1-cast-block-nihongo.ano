@@ -1,0 +1,10 @@
+-- Japanese conjugate of w1 (the cast block: Noita's draw algorithm is a scan). で scope, 累和/累大 scans, 前 の hop, か = |.
+--! registry ../registries/w1-cast-block.reg
+--! ja
+--! expect bal = 0 2 1 0 -1 -1 -2
+--! expect minBal = 0 2 1 0 -1 -1 -2
+--! expect member = 0 1 1 1 0 0 0
+
+呪文 、 残高 に ( 1 + ( 累和 ( 抜追加 - 1 ) 呪文 で ) ) にする
+呪文 、 最低残高 に ( 0 - ( 累大 ( 0 - 残高 ) 呪文 で ) ) にする
+呪文 山札 で と ( 枠 0 同 か 前 の 最低残高 0 より ) 、 成員 付

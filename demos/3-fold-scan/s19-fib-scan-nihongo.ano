@@ -1,0 +1,6 @@
+-- Japanese conjugate of s19-fib-scan (fib recurrence via registered host fn). = effect set → に…にする; fib(番号) single-call RHS needs no parens.
+--! registry ../registries/s19-fib-scan.reg
+--! ja
+--! expect offset = 1 1 2 3 5 8 13 21 34 55 89 144
+
+12 、 変位 に fib ( 番号 ) にする

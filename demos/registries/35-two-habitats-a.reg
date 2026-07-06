@@ -11,3 +11,15 @@ field elevation num 1 2 3 4 5 6
 field cost num 1 1 1 1 1 1
 field safety num 3 1 4 1 5 9
 field g num 1 2 3 4 5 6
+ja 金 gold
+ja 北 nord
+ja 損傷 damage
+ja 脅威 threat
+ja x x
+ja 標高 elevation
+ja 費用 cost
+ja 安全 safety
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

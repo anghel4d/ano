@@ -9,3 +9,12 @@ col pos num
 lattice 8 1
 field density num 0 2 1 0 3 0 1 2
 field fertility num 2 0 -1 3 0 1 4 0
+ja 木 tree
+ja 作物 crop
+ja 位置 pos
+ja 密度 density
+ja 肥沃 fertility
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

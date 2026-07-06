@@ -345,22 +345,85 @@ static int ja_numeral(const char *w, double *val, char *unit) {
   *val = v; strcpy(unit, u); return 1;
 }
 
-/* particle/verb table; post marks operators the surface puts after their operand */
-static const struct { const char *w; TokKind k; int post; } jatab[] = {
-  {"と", T_AMP, 0},   {"か", T_BAR, 0},     {"の", T_DOT, 0},     {"で", T_AT, 1},
-  {"、", T_COMMA, 0}, {"が", T_COMMA, 0},   {"は", T_COMMA, 0},
-  {"より", T_GT, 1},  {"超", T_GT, 1},      {"未満", T_LT, 1},    {"同", T_EQEQ, 1},
-  {"たす", T_PLUSEQ, 1}, {"ひく", T_MINUSEQ, 1}, {"かける", T_STAREQ, 1},
-  {"わる", T_SLASHEQ, 1}, {"にする", T_EQ, 1},
-  {"に", K_TGT, 0},
+/* particle/verb/keyword table; post marks operators the surface puts after their
+ * operand (re-rooted before it in normalization); nm is the op payload for folds/scans. */
+static const struct { const char *w; TokKind k; int post; const char *nm; } jatab[] = {
+  /* structural particles */
+  {"と", T_AMP, 0, 0},   {"か", T_BAR, 0, 0},   {"の", T_DOT, 0, 0},   {"で", T_AT, 1, 0},
+  {"、", T_COMMA, 0, 0}, {"が", T_COMMA, 0, 0}, {"は", T_COMMA, 0, 0}, {"に", K_TGT, 0, 0},
+  /* comparisons (postfix on the comparand) */
+  {"より", T_GT, 1, 0}, {"超", T_GT, 1, 0},  {"未満", T_LT, 1, 0}, {"同", T_EQEQ, 1, 0},
+  {"以上", T_GE, 1, 0}, {"以下", T_LE, 1, 0}, {"不同", T_NE, 1, 0}, {"ない", T_BANG, 1, 0},
+  /* assignment family (postfix; に marks the target) */
+  {"たす", T_PLUSEQ, 1, 0}, {"ひく", T_MINUSEQ, 1, 0}, {"かける", T_STAREQ, 1, 0},
+  {"わる", T_SLASHEQ, 1, 0}, {"にする", T_EQ, 1, 0},
+  /* presence writes (postfix on the component), despawn, sequencing, rule/def hinge */
+  {"付", T_PLUS, 1, 0}, {"除", T_MINUS, 1, 0}, {"消", T_TILDE, 0, 0},
+  {"て", T_SEMI, 0, 0}, {"なる", T_ARROW, 0, 0},
+  /* folds (prefix, op payload) */
+  {"総和", T_FOLD, 0, "+"}, {"総積", T_FOLD, 0, "*"}, {"総数", T_FOLD, 0, "#"},
+  {"最大", T_FOLD, 0, "max"}, {"最小", T_FOLD, 0, "min"}, {"平均", T_FOLD, 0, "avg"},
+  {"皆", T_FOLD, 0, "&"}, {"或", T_FOLD, 0, "|"},
+  /* scans (prefix, op payload) */
+  {"累和", T_SCANOP, 0, "+"}, {"累積", T_SCANOP, 0, "*"}, {"累大", T_SCANOP, 0, "max"},
+  /* keywords */
+  {"定義", T_DEF, 0, 0}, {"生成", T_SPAWN, 0, 0}, {"於", T_ATKW, 0, 0}, {"至", T_TO, 0, 0},
+  {"経由", T_VIA, 0, 0}, {"沿", T_ALONG, 0, 0}, {"整列", T_ORDER, 0, 0}, {"別", T_BY, 0, 0},
+  {"取", T_TAKE, 0, 0}, {"降順", T_DESC, 0, 0}, {"上位", T_TOP, 0, 0}, {"格付", T_GRADE, 0, 0},
+  {"縮約", T_REDUCE, 0, 0}, {"走査", T_SCANKW, 0, 0}, {"二重走査", T_SCAN2, 0, 0},
+  {"交差", T_CROSS, 0, 0}, {"展開", T_EXPAND, 0, 0},
+  /* ASCII structural glyphs, usable directly in JA source */
+  {"(", T_LP, 0, 0}, {")", T_RP, 0, 0}, {"[", T_LB, 0, 0}, {"]", T_RB, 0, 0},
+  {";", T_SEMI, 0, 0}, {"<-", T_LARROW, 0, 0}, {"|>", T_PIPEGT, 0, 0}, {"'", T_TICK, 0, 0},
+  {"_", T_WILD, 0, 0}, {"↕", T_IOTA, 0, 0},
+  {"+", T_PLUS, 0, 0}, {"-", T_MINUS, 0, 0}, {"*", T_STAR, 0, 0}, {"/", T_SLASH, 0, 0},
+  {"%", T_PCT, 0, 0}, {"=", T_EQ, 0, 0}, {"|", T_BAR, 0, 0},
 };
+
+/* Inputs: token columns, index j of an operand's last token. Output: index of that
+ * primary's first token — a matched (…)/[…] group (with a leading callee name and a
+ * postfix tick folded in), else the atom at j. Invariant: never crosses T_NL or 0. */
+static int grab_primary(const TokBuf *b, int j) {
+  if (j < 0 || b->kind[j] == T_NL) return j;
+  if (b->kind[j] == T_RP || b->kind[j] == T_RB) {
+    TokKind open = b->kind[j] == T_RP ? T_LP : T_LB, close = b->kind[j];
+    int depth = 0, o = j;
+    while (o >= 0 && b->kind[o] != T_NL) {
+      if (b->kind[o] == close) depth++;
+      else if (b->kind[o] == open) { if (--depth == 0) break; }
+      o--;
+    }
+    if (o < 0 || b->kind[o] != open) return j;                 /* unbalanced: bail */
+    if (o > 0 && (b->kind[o-1] == T_NAME || b->kind[o-1] == T_ALIAS)) o--;  /* callee */
+    return o;
+  }
+  if (b->kind[j] == T_TICK && j > 0 && b->kind[j-1] == T_NAME) return j - 1;
+  return j;                                                    /* single atom */
+}
+
+/* Inputs: token columns, index k of a postfix operator. Output: index where the operator
+ * re-roots — the start of the primary ending at k-1, extended left over hop chains
+ * (a.b.c), a numeric/wildcard shape run (8 8, 4 _), and a leading `to`. K_TGT (に) is
+ * still present and barriers an assignment target from the callee grab. */
+static int operand_start(const TokBuf *b, int k) {
+  int j = grab_primary(b, k - 1);
+  for (;;) {
+    if (j >= 2 && b->kind[j-1] == T_DOT) { j = grab_primary(b, j - 2); continue; }
+    if (j >= 1 && (b->kind[j] == T_NUM || b->kind[j] == T_WILD)
+               && (b->kind[j-1] == T_NUM || b->kind[j-1] == T_WILD)) { j--; continue; }
+    if (j >= 1 && b->kind[j-1] == T_TO) { j--; break; }
+    break;
+  }
+  return j;
+}
 
 /* Inputs: source, registry (ja aliases), token buffer, err. Output: 0/-1; the
  * normalized ASCII-equivalent stream, T_NL between nonempty lines, no trailing NL.
- * Per word, in order: registry ja alias -> T_NAME (canonical name); particle table;
- * kanji/Arabic numeral; else error. Then ex40 normalization: delete K_TGT, swap each
- * postfix operator with the token before it. Invariant: K_TGT and post flags never
- * survive this function. */
+ * Per word, in order: ^alias / :sym sigils; registry ja alias -> T_NAME; particle,
+ * keyword, and fold/scan table (with op payload); kanji/Arabic numeral; bare ASCII
+ * identifier (keyword or name); "strings"; else error. Then normalization: re-root each
+ * postfix operator before its operand (span-aware), then delete the fused K_TGT markers.
+ * Invariant: K_TGT and post flags never survive this function. */
 static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, size_t errsz) {
   int line = 1;
   size_t i = 0, n = strlen(src);
@@ -378,6 +441,13 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
       if (cp == 0x3000) { i += (size_t)l; continue; }          /* ideographic space */
     }
     if (c == '-' && src[i + 1] == '-') { while (src[i] && src[i] != '\n') i++; continue; }
+    if (c == '"') {                                            /* ASCII string, may hold spaces */
+      size_t s = i + 1;
+      while (src[s] && src[s] != '"' && src[s] != '\n') s++;
+      if (src[s] != '"') return lex_err(err, errsz, line, "unterminated string");
+      { int ix = tb_push(b, T_STR, line); b->name[ix] = intern(b->it, b->a, src + i + 1, s - i - 1); }
+      i = s + 1; continue;
+    }
     /* word: run to the next space/newline (ASCII or U+3000) */
     size_t j = i;
     while (src[j]) {
@@ -397,6 +467,15 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
     if (j - i >= sizeof w) return lex_err(err, errsz, line, "word too long");
     memcpy(w, src + i, j - i); w[j - i] = 0;
     i = j;
+    /* sigils: ^alias, :symbol (identifiers, not particles — kept ASCII) */
+    if (w[0] == '^' && nstart((unsigned char)w[1])) {
+      int ix = tb_push(b, T_ALIAS, line); b->name[ix] = intern(b->it, b->a, w + 1, strlen(w) - 1);
+      continue;
+    }
+    if (w[0] == ':' && nstart((unsigned char)w[1])) {
+      int ix = tb_push(b, T_SYM, line); b->name[ix] = intern(b->it, b->a, w + 1, strlen(w) - 1);
+      continue;
+    }
     const char *cn = reg ? reg_ja(reg, w) : NULL;
     if (cn) {
       { int ix = tb_push(b, T_NAME, line); b->name[ix] = cn; }   /* canonical name lives in the registry */
@@ -405,8 +484,9 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
     int hit = 0;
     for (size_t k = 0; k < sizeof jatab / sizeof *jatab; k++) {
       if (!strcmp(w, jatab[k].w)) {
-        tb_push(b, jatab[k].k, line);
-        b->post[b->n - 1] = (unsigned char)jatab[k].post;
+        int ix = tb_push(b, jatab[k].k, line);
+        b->post[ix] = (unsigned char)jatab[k].post;
+        if (jatab[k].nm) b->name[ix] = jatab[k].nm;
         hit = 1; break;
       }
     }
@@ -418,9 +498,35 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
       if (u[0]) b->name[ix] = intern(b->it, b->a, u, strlen(u));
       continue;
     }
+    /* bare ASCII identifier: system builtin / fn / proto kept in the Latin surface */
+    if (nstart((unsigned char)w[0])) {
+      size_t p = 1;
+      while (w[p] && nchar((unsigned char)w[p])) p++;
+      if (!w[p]) {
+        const char *nm = intern(b->it, b->a, w, strlen(w));
+        TokKind kk = kwkind(nm);
+        if (kk) tb_push(b, kk, line);
+        else { int ix = tb_push(b, T_NAME, line); b->name[ix] = nm; }
+        continue;
+      }
+    }
     return lex_err(err, errsz, line, "unknown word '%s'", w);
   }
-  /* normalize, step 1: delete the fused TGT markers (compact every column) */
+  /* normalize, step 1: re-root each postfix operator before its operand span. K_TGT is
+   * still present so an assignment target (Col に …) is not grabbed as a call callee. */
+  for (int k = 0; k < b->n; k++) {
+    if (!b->post[k]) continue;
+    if (k == 0 || b->kind[k - 1] == T_NL)
+      return lex_err(err, errsz, b->line[k], "postfix operator with no operand");
+    int s = operand_start(b, k);
+    TokKind ok = b->kind[k]; const char *on = b->name[k]; double ov = b->num[k]; int ol = b->line[k];
+    for (int m = k; m > s; m--) {
+      b->kind[m] = b->kind[m-1]; b->name[m] = b->name[m-1]; b->num[m] = b->num[m-1];
+      b->line[m] = b->line[m-1]; b->post[m] = b->post[m-1];
+    }
+    b->kind[s] = ok; b->name[s] = on; b->num[s] = ov; b->line[s] = ol; b->post[s] = 0;
+  }
+  /* step 2: delete the fused TGT markers (compact every column) */
   int m = 0;
   for (int k = 0; k < b->n; k++) {
     if (b->kind[k] == K_TGT) continue;
@@ -429,17 +535,6 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
     m++;
   }
   b->n = m;
-  /* step 2: re-root each postfix operator before its operand (never across T_NL) */
-  for (int k = 0; k < b->n; k++) {
-    if (!b->post[k]) continue;
-    if (k == 0 || b->kind[k - 1] == T_NL)
-      return lex_err(err, errsz, b->line[k], "postfix operator with no operand");
-    TokKind tk = b->kind[k]; b->kind[k] = b->kind[k - 1]; b->kind[k - 1] = tk;
-    const char *tn = b->name[k]; b->name[k] = b->name[k - 1]; b->name[k - 1] = tn;
-    double tv = b->num[k]; b->num[k] = b->num[k - 1]; b->num[k - 1] = tv;
-    int tl = b->line[k]; b->line[k] = b->line[k - 1]; b->line[k - 1] = tl;
-    b->post[k] = 0; b->post[k - 1] = 0;
-  }
   return 0;
 }
 

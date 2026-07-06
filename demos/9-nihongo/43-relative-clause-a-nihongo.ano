@@ -1,0 +1,6 @@
+-- Japanese conjugate of 43 (relative-clause selection): the attributive clause before the noun is the selector.
+--! registry ../registries/43-relative-clause-a.reg
+--! ja
+--! expect gold = 1005 5 5 1005 5 5
+
+北 と 両手 六十 より 、 金 に 千 たす

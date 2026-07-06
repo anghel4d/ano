@@ -14,3 +14,16 @@ col health num 0 0 0 25 25 0
 col pos vec 40 5 | 60 4 | 20 30 | 40 6 | 61 5 | 0 0
 col parent num -1 -1 -1 -1 -1 -1
 fn dist {√+´×˜(𝕨⊑pos)-𝕩⊑pos}
+ja 火花弾 sparkBolt
+ja 起爆 trigger
+ja 火炎弾 firebolt
+ja 損傷 damage
+ja 命中 hit
+ja 敵 enemy
+ja 体力 health
+ja 位置 pos
+ja 親 parent
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

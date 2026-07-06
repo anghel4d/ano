@@ -4,3 +4,11 @@ col bandit bool 0 1 0 1 1 0
 col dead bool 1 0 0 1 0 0
 col faction sym Friendly Bandit Friendly Bandit Bandit Friendly
 col loot sym Coins Gems Coins Gems Coins Gems
+ja 山賊 bandit
+ja 死 dead
+ja 派閥 faction
+ja 戦利品 loot
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

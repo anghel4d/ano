@@ -2,3 +2,9 @@
 n 3
 col alive bool 1 0 1
 col hp num 100 100 100
+ja 生存 alive
+ja 生命 hp
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

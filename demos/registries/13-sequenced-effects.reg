@@ -12,3 +12,14 @@ col gold num 5 10 15 20 25 30
 col blessed bool 0 1 0 0 0 0
 fn knockback pos {s 𝕊 c‿k: c+k×s}
 fn flash tint {s 𝕊 c‿v: s‿((+´s)⥊v) AnoScat c}
+ja 位置 pos
+ja 色合 tint
+ja 防護 shielded
+ja 北 nord
+ja 両手 twoHanded
+ja 金 gold
+ja 祝福 blessed
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

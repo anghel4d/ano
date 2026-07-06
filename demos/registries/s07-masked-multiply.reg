@@ -2,3 +2,9 @@
 n 6
 col merchant bool 0 1 0 0 1 0
 col gold num 100 200 300 400 500 600
+ja 商人 merchant
+ja 金 gold
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

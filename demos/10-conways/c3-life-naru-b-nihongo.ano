@@ -1,0 +1,8 @@
+-- Japanese conjugate of c3-life-naru-b (two-rule flora pair, one shared barrier: bloom under !Planted, wither under Planted).
+--! registry ../registries/c3-life-naru.reg
+--! ja
+--! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
+
+定義 kin = 総数 ( 近傍 ' と 植栽 )
+定義 bloom = 区画 と 植栽 ない と kin 3 同 なる 植栽 付
+定義 wither = 区画 と 植栽 と kin 2 不同 と kin 3 不同 なる 植栽 除

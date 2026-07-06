@@ -6,3 +6,10 @@ col gold num 5 5 3
 col rank num -1 -1 -1
 # the .bqn's equivariance permutation (BQN-only witness; inert here, kept as the decision record)
 bind p vec 1 0 2
+ja 部隊 unit
+ja 金 gold
+ja 順位 rank
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

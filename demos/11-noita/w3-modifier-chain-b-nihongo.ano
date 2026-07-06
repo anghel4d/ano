@@ -1,0 +1,12 @@
+-- Japanese conjugate of w3-b (the interleaved wand): the general binding — gamma over an order-derived srel (束縛群 '), the ex36 grouped fold. で scope, 累和/累大 scans, 総数 fold, 前 の hop, か = |.
+--! registry ../registries/w3-modifier-chain-b.reg
+--! expect bal = 0 1 3 2 2 1 0
+--! expect minBal = 0 1 1 1 1 1 0
+--! expect member = 0 1 1 1 1 1 1
+--! expect damage = 0 0 0 13 0 13 3
+--! ja
+
+呪文 、 残高 に ( 1 + ( 累和 ( 抜追加 - 1 ) 呪文 で ) ) にする
+呪文 、 最低残高 に ( 0 - ( 累大 ( 0 - 残高 ) 呪文 で ) ) にする
+呪文 山札 で と ( 枠 0 同 か 前 の 最低残高 0 より ) 、 成員 付
+呪文 と 投射 と 成員 、 損傷 に ( 10 * ( 総数 ( 束縛群 ' と ( 改 と 成員 ) ) ) ) たす

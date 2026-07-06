@@ -1,0 +1,14 @@
+-- Japanese conjugate of c2-life-glider: the glider flipbook, one barrier per generation (B3/S23).
+--! registry ../registries/c2-life-glider.reg
+--! ja
+--! out 5
+--! out 5
+--! expect planted = 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+定義 kin = 総数 ( 近傍 ' と 植栽 )
+総数 ( 植栽 )
+区画 、 植栽 に ( kin 3 同 か 植栽 と kin 2 同 ) にする
+区画 、 植栽 に ( kin 3 同 か 植栽 と kin 2 同 ) にする
+区画 、 植栽 に ( kin 3 同 か 植栽 と kin 2 同 ) にする
+区画 、 植栽 に ( kin 3 同 か 植栽 と kin 2 同 ) にする
+総数 ( 植栽 )

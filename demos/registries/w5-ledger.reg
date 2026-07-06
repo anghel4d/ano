@@ -13,3 +13,18 @@ col addMana bool 0 1 0 0 0
 col manaCost num 0 0 5 5 1
 col castDelay num 0 0 5 5 -17
 col rechargeTime num 0 0 10 10 -20
+ja 杖 wand
+ja 魔力 mana
+ja 遅延 delay
+ja 再充填 recharge
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 加魔 addMana
+ja 消費魔力 manaCost
+ja 詠唱遅延 castDelay
+ja 再充填時間 rechargeTime
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

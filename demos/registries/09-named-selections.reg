@@ -8,3 +8,14 @@ col gold num 9500 2000 20000 15000 500
 col faction sym Friendly Friendly Friendly Friendly Friendly
 col marked bool 0 0 0 0 0
 col legendary bool 0 0 0 0 0
+ja 人間 human
+ja 北 nord
+ja 両手 twoHanded
+ja 金 gold
+ja 派閥 faction
+ja 標付 marked
+ja 伝説 legendary
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

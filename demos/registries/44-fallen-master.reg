@@ -5,3 +5,11 @@ rel mentor 3 -1 3 4 0 4
 col dead bool 1 0 0 1 0 0
 col nord bool 1 1 1 1 1 0
 col trained bool 1 1 1 0 1 1
+ja 師匠 mentor
+ja 死 dead
+ja 北 nord
+ja 訓練 trained
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

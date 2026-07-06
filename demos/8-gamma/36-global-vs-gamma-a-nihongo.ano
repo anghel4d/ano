@@ -1,0 +1,8 @@
+-- Japanese conjugate of 36-global-vs-gamma-a: the scoped-global fold #/ (Cattle) is one scalar, 5, broadcast under the Pen mask. #/ → 総数; = effect set → に…にする; the fold RHS is more than one primary, so wrap it in parens.
+--! registry ../registries/36-farm-gamma-a.reg
+--! ja
+--! out 5
+--! expect headcount = -1 -1 -1 -1 -1 -1 -1 5 5 5 5
+
+総数 ( 肉牛 )
+囲い 、 頭数 に ( 総数 ( 肉牛 ) ) にする

@@ -10,3 +10,14 @@ col mod bool 0 1 0 0 0
 col multi bool 0 0 0 0 1
 col copy bool 0 0 0 0 0
 col parent num -1 -1 -1 -1 -1
+ja 杖 wand
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 改 mod
+ja 複製 copy
+ja 親 parent
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

@@ -2,3 +2,9 @@
 n 6
 col nord bool 1 0 1 1 0 1
 col gold num 100 250 300 50 999 150
+ja 北 nord
+ja 金 gold
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

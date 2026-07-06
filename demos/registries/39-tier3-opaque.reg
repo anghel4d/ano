@@ -10,3 +10,12 @@ alias cursor 0 0 0 1 0
 srel adj 0 1 1 0 0 | 0 0 1 0 0 | 1 0 0 1 1 | 0 0 0 0 0 | 0 1 0 0 1
 fn shortestPath outDeg {s 𝕊 t‿g: t}
 fn runBehaviorTree btree {s 𝕊 x: ⊑x}
+ja 節点 node
+ja 出次数 outDeg
+ja 隣接 adj
+ja 敵対 hostile
+ja 行 row
+ja 行動木 btree
+ja 前 prev
+ja 番号 index
+ja 字 char

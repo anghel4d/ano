@@ -1,0 +1,14 @@
+-- Japanese conjugate of 25 (derived columns: def as effect source, predicate, fold source, ordering key).
+--! registry ../registries/25-derived-columns.reg
+--! ja
+--! expect priority = 9 30 120 200 40 9
+--! expect dangerous = 0 0 1 1 0 1
+
+定義 threat = 損傷 * 速度 / 射程
+定義 dps    = 損傷 / 再使用
+敵 、 優先 に threat にする
+敵 と threat 百 より 、 危険 付
+--! out 390
+総和 threat 敵 で
+--! out 3 2 4 1 0 5
+整列 別 threat 降順

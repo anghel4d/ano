@@ -8,3 +8,8 @@ bind Whiterun mask 1 1 0 1 0 1
 ja 商人 Merchant
 ja ホワイトラン Whiterun
 ja 金 Gold
+ja 地域 region
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

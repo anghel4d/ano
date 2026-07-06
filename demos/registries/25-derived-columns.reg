@@ -7,3 +7,14 @@ col cooldown num 5 4 3 8 10 6
 col enemy bool 0 1 1 1 1 0
 col priority num 9 9 9 9 9 9
 col dangerous bool 0 0 0 0 0 1
+ja 損傷 damage
+ja 速度 speed
+ja 射程 range
+ja 再使用 cooldown
+ja 敵 enemy
+ja 優先 priority
+ja 危険 dangerous
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

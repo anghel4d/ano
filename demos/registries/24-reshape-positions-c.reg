@@ -4,3 +4,9 @@
 n 25
 col archer bool 1 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 1 0 0
 col pos num -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+ja 射手 archer
+ja 位置 pos
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

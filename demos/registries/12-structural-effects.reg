@@ -8,3 +8,13 @@ srel targets 2 4 | | | 4 5 | | | |
 col frenzied bool 0 0 0 0 0 0 0 1
 col burdened bool 0 0 1 0 0 1 0 0
 col encumbered bool 0 0 1 0 1 1 0 0
+ja 死 dead
+ja 狂乱 frenzy
+ja 標的群 targets
+ja 熱狂 frenzied
+ja 重荷 burdened
+ja 荷重 encumbered
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

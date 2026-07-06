@@ -14,3 +14,13 @@ col inRange bool 0 0 0 0 0 0 0 0 0 0 0
 col collide bool 0 0 0 0 0 0 0 0 0 0 0
 fn dist {√+´×˜(𝕨⊑pos)-𝕩⊑pos}
 fn overlap {((⊑𝕨⊑span)<1⊑𝕩⊑span)∧(⊑𝕩⊑span)<1⊑𝕨⊑span}
+ja 塔 tower
+ja クリープ creep
+ja 物体 body
+ja 射程内 inRange
+ja 衝突 collide
+ja 位置 pos
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

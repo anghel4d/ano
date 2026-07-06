@@ -1,0 +1,6 @@
+-- Japanese conjugate of t2-ties: rank under ties is value-only. On the tied 5 5 3 fixture rank(Gold) must be the dense 1 1 0, not the ordinal 1 2 0. RHS is a single call so にする grabs it without parens.
+--! registry ../registries/t2-ties.reg
+--! ja
+--! expect rank = 1 1 0
+
+部隊 、 順位 に rank ( 金 ) にする

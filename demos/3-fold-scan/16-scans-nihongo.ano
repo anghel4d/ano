@@ -1,0 +1,12 @@
+-- Japanese twin of 16 (scans +\ *\ max\ over index-order mask scopes). で postfix; 累和/累積/累大.
+--! registry ../registries/16-scans.reg
+--! ja
+
+--! out 3 4 8 10 15
+累和 重量 経路 で
+
+--! out 2 6 9 18
+累積 倍率 連鎖 で
+
+--! out 3 3 4 4 5
+累大 高さ 光線 で

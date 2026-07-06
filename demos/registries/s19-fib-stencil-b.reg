@@ -2,3 +2,8 @@
 n 12
 col offset num 1 1 0 0 0 0 0 0 0 0 0 0
 col fib num 1 1 2 3 5 8 13 21 34 55 89 144   # reference column, never written — producing it in offset is the bug
+ja 変位 offset
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

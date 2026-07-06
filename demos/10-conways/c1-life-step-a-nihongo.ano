@@ -1,0 +1,7 @@
+-- Japanese conjugate of c1 (Life, one synchronous B3/S23 generation; fused value form).
+--! registry ../registries/c1-life-step-a.reg
+--! ja
+--! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
+
+定義 kin = 総数 ( 近傍 ' と 植栽 )
+区画 、 植栽 に ( kin 3 同 か 植栽 と kin 2 同 ) にする

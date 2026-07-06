@@ -9,3 +9,13 @@ col bomb bool 0
 col pos vec 5 5
 col parent num -1
 fn polar {𝕨×(•math.Cos 𝕩×π÷180)⋈•math.Sin 𝕩×π÷180}
+ja 杖 wand
+ja 火花弾 sparkBolt
+ja 爆弾 bomb
+ja 魔力 mana
+ja 位置 pos
+ja 番号 index
+ja 親 parent
+ja 前 prev
+ja 行 row
+ja 字 char

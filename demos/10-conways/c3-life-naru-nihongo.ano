@@ -1,0 +1,7 @@
+-- Japanese conjugate of c3-life-naru (one installed rule, the fused value form; the tick gathers the pre-state and scatters once — one generation of the blinker).
+--! registry ../registries/c3-life-naru.reg
+--! ja
+--! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
+
+定義 kin = 総数 ( 近傍 ' と 植栽 )
+定義 life = 区画 なる 植栽 に ( kin 3 同 か 植栽 と kin 2 同 ) にする

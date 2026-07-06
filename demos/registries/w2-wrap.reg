@@ -13,3 +13,17 @@ col drawPos num 0 0 0
 col bal num 0 0 0
 col damage num 0 3 0
 bind rot vec 2 1
+ja 杖 wand
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 改 mod
+ja 抜追加 drawAdd
+ja 抜札位置 drawPos
+ja 残高 bal
+ja 損傷 damage
+ja 回転 rot
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

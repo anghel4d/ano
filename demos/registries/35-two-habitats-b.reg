@@ -7,3 +7,7 @@ col a bool 1 1 1 0 0
 col b bool 0 0 0 1 1
 fn f {(𝕨⊑val)+𝕩⊑val}
 lattice 4 4
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

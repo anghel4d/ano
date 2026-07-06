@@ -2,3 +2,9 @@
 n 6
 col cow bool 1 1 0 1 1 0
 col weight num 400 500 50 600 900 70
+ja 牛 cow
+ja 重量 weight
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

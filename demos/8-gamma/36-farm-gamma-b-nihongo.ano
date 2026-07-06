@@ -1,0 +1,6 @@
+-- Japanese conjugate of 36-farm-gamma-b (crops spread: masked +Planted gated by a gamma count over the neighbor fiber, one barrier step).
+--! registry ../registries/36-farm-gamma-b.reg
+--! ja
+--! expect planted = 0 0 0 0 0 0 1 1 1 0 0 1 1 1 0 0 1 1 1 0 0 0 0 0 0
+
+区画 と 植栽 ない と 総数 ( 隣人 ' と 植栽 ) 2 以上 、 植栽 付

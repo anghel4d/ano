@@ -1,0 +1,12 @@
+-- Japanese conjugate of n1 (the cast).
+--! registry ../registries/n1-cast.reg
+--! ja
+--! expect-n 7
+--! expect sparkBolt = 0 1 1 0 1 1 1
+--! expect bomb = 0 0 0 1 0 0 0
+--! expect mana = 50 0 0 0 0 0 0
+--! expect pos = 5 5 17 5 17 5 9 5 5 -7 17 5 5 17
+
+杖 、 生成 火花弾 於 位置 + ( 12 、 0 ) て 魔力 に 5 ひく
+杖 、 生成 火花弾 於 位置 + ( 12 、 0 ) て 生成 爆弾 於 位置 + ( 4 、 0 ) て 魔力 に 30 ひく
+杖 、 生成 火花弾 * 3 於 位置 + polar ( 12 、 ( 番号 - 1 ) * 90 ) て 魔力 に 15 ひく

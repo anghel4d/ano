@@ -1,0 +1,5 @@
+-- Japanese conjugate of 15 (named reducer). 縮約 ( threat ) folds the registered peak-damage reducer; で postfix = @ scope.
+--! registry ../registries/15-named-reducer.reg
+--! ja
+--! out 30
+縮約 ( threat ) 損傷 敵勢 で

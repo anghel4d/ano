@@ -1,0 +1,9 @@
+-- Japanese conjugate of 39 (Tier-3 opaque dispatch). で postfix inside the folded RHS.
+--! registry ../registries/39-tier3-opaque.reg
+--! ja
+--! expect outDeg = 2 1 3 0 2
+--! expect btree = seek flee guard patrol idle
+
+節点 、 出次数 に ( 総和 隣接 行 で ) にする
+敵対 、 shortestPath 経由 隣接
+^cursor 、 runBehaviorTree

@@ -10,3 +10,14 @@ col fertility num 0 0 0 0 0 1 3 0
 col minion bool 0 0 0 0 0 0 0 0
 col egg bool 0 0 0 0 0 0 0 0
 col parent num -1 -1 -1 -1 -1 -1 -1 -1
+ja 生成器 spawner
+ja 数 count
+ja 手先 minion
+ja 巣 nest
+ja 肥沃 fertility
+ja 卵 egg
+ja 親 parent
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char

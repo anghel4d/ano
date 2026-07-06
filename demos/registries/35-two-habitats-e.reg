@@ -7,3 +7,11 @@ col spd num 3 5 2
 col rng num 5 3 4
 lattice 4 4
 field ridge num -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+ja 損傷 dmg
+ja 速度 spd
+ja 射程 rng
+ja 尾根 ridge
+ja 前 prev
+ja 行 row
+ja 番号 index
+ja 字 char
