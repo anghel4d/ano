@@ -347,9 +347,9 @@ Target , Hits += #/ attackers'                -- in-degree, folded at the target
 Accumulate a column along an ordered selection. Returns a column of equal length. Unordered selections need `along`.
 
 ```haskell
-+\ Weight @ (↕steps |> route A B)   -- cumulative movement cost along a route
-*\ Multiplier @ comboChain          -- running combo multiplier
-max\ Height @ (Eye + ↕n * fwd)      -- running peak along a sightline (occlusion)
++\ Weight @ (til steps |> route A B) -- cumulative movement cost along a route
+*\ Multiplier @ comboChain           -- running combo multiplier
+max\ Height @ (Eye + til n * fwd)    -- running peak along a sightline (occlusion)
 ```
 
 or, with an explicit ordering:
@@ -472,7 +472,7 @@ Composed, the array operations chain:
 
 ## Part IV — Space
 
-Space is the same calculus with the raggedness removed. A lattice is dense and rectangular, so every operator above applies, and most are more natural here. There is no spatial keyword. A numeric shape in the source slot is the generator, `w h` carrying `x y` per cell. Acting on cells that already exist is a predicate on the position column. Generating cells that hold nothing is the shape, the one job a predicate cannot do, since a filter cannot invent a key. A named region is a scope (`@ Frontier`). A path or sightline is an ordered index line (`↕` plus arithmetic).
+Space is the same calculus with the raggedness removed. A lattice is dense and rectangular, so every operator above applies, and most are more natural here. There is no spatial keyword. A numeric shape in the source slot is the generator, `w h` carrying `x y` per cell. Acting on cells that already exist is a predicate on the position column. Generating cells that hold nothing is the shape, the one job a predicate cannot do, since a filter cannot invent a key. A named region is a scope (`@ Frontier`). A path or sightline is an ordered index line (`til` plus arithmetic).
 
 Space may denote infinity. A statement demands a finite window or a symbolic field clipped by `@scope`. Coordinates enter world-space by the affine column `pos = φ(k) = o + S·k`. The `@` scope fixes the frame `(o, S)`. The origin defaults to the cursor's raycast, and the こそあど deixis names it: `^cursor` proximal, `^world` distal. The anchored form `mask @ frame(args) at origin` spells the frame in full. The same locative `at` that places a spawn fills o, with a mirror-read (`at Firebolt.pos`) or a bound point (`at impact`). The registered frame fn is the predicate, run per cell as `Fn ⟨cell, origin, args⟩` (demos 11-noita n5/n6). The counter check is the unit consistency of φ.
 
@@ -529,10 +529,10 @@ Coin , pos = Player.pos + polar(index, index * 137.5)   -- spiral, assigned from
 ```
 
 ```haskell
-+/ Elevation @ 64 64                 -- total elevation of the map
-max/ Threat @ Frontier               -- hottest cell in a zone
-scan2(+) Cost @ 64 64                -- summed-area table over a cost field
-max\ Height @ (Eye + ↕n * north)     -- occlusion test along a sightline
++/ Elevation @ 64 64                -- total elevation of the map
+max/ Threat @ Frontier              -- hottest cell in a zone
+scan2(+) Cost @ 64 64               -- summed-area table over a cost field
+max\ Height @ (Eye + til n * north) -- occlusion test along a sightline
 ```
 
 `+\` is a leading-axis scan. The summed-area table needs the two-axis `scan2`.

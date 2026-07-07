@@ -1,0 +1,6 @@
+-- Bilingual bridge (s52): English columns plus ja aliases, scripted in kanji. The alias is a pure name alias applied at resolution — the emitted BQN is byte-identical to the English twin's.
+--! registry ../registries/s52-bilingual-bridge.reg
+--! ja
+--! expect morale = 40 50 50 40 50
+
+斥候 と 兵糧 二十 未満 、 士気 に 十 ひく

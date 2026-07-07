@@ -6,7 +6,3 @@ col bandit bool 0 1 0 1 1 0
 col faction sym Friendly Bandit Friendly Bandit Bandit Friendly
 ja 山賊 bandit
 ja 派閥 faction
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

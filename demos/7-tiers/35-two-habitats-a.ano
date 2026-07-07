@@ -10,7 +10,7 @@
 
 -- generator: the ground is minted by iota, rank 1
 --! out 0 1 2 3 4
-↕5
+til 5
 
 -- reduce: scoped fold to one scalar, both habitats
 --! out 42

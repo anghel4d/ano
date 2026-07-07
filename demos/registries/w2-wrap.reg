@@ -23,7 +23,3 @@ ja 抜札位置 drawPos
 ja 残高 bal
 ja 損傷 damage
 ja 回転 rot
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

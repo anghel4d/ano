@@ -6,7 +6,3 @@ bind row mask 1 1 1 1 1 1 1 1
 fn fib {⊑{⟨1⊑𝕩,+´𝕩⟩}⍟𝕩 1‿1}
 ja 升目 cell
 ja 高さ height
-ja 行 row
-ja 前 prev
-ja 番号 index
-ja 字 char

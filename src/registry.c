@@ -1,4 +1,4 @@
-/* registry.c — registry loader for anoc: reg_load, reg_find, reg_ja per ano.h.
+/* registry.c — registry loader for anoc: reg_load, reg_find per ano.h.
  *
  * Conventions this loader sets where ano.h lacks a field (emit.c must follow):
  * - vec columns (`col pos vec 0 0 | 1 2 | ...`): RK_COL with type CT_NUM, pairs flattened
@@ -82,6 +82,15 @@ static int wname(const char *w, char *dst, size_t dstsz, char *err, size_t errsz
   size_t l = strlen(w);
   if (l == 0 || l >= dstsz) return rerr(err, errsz, ln, "bad name '%s'", w);
   memcpy(dst, w, l + 1);
+  return 0;
+}
+
+/* Inputs: an entry name or ja alias source word. Output: 0 / -1 via rerr when the
+ * lexer owns the word on either surface (lex_reserved) — the name is the address, and
+ * a word the closed grammar resolves first is unaddressable. */
+static int wfree(const char *w, char *err, size_t errsz, int ln) {
+  if (lex_reserved(w))
+    return rerr(err, errsz, ln, "'%s' is lexer-reserved and cannot name an entry", w);
   return 0;
 }
 
@@ -183,6 +192,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (isField && rows <= 0) return rerr(err, errsz, ln, "field before lattice");
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = isField ? RK_FIELD : RK_COL;
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       const char *ty = words[2];
       if (strcmp(ty, "num") == 0 || strcmp(ty, "bool") == 0) {
@@ -245,6 +255,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (nw < 2) return rerr(err, errsz, ln, "usage: %s <name> <values>", k);
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = k[0] == 'r' ? RK_REL : RK_ALIAS;
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       if (wnums(words, 2, nw, reg->n, a, &e->nums, &e->nnums, err, errsz, ln)) return -1;
 
@@ -252,6 +263,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (nw < 2) return rerr(err, errsz, ln, "usage: srel <name> <fibers>");
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = RK_SREL;
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       int nfib = 1, nvals = 0;
       for (int j = 2; j < nw; j++) strcmp(words[j], "|") == 0 ? nfib++ : nvals++;
@@ -279,6 +291,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
         return rerr(err, errsz, ln, "inv: no functional rel '%s'", words[2]);
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = RK_SREL;
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       if (wname(words[2], e->invOf, sizeof e->invOf, err, errsz, ln)) return -1;
       /* fiber for target t: ascending source ids with rel==t; nfib = world n */
@@ -299,6 +312,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (nw < 3) return rerr(err, errsz, ln, "usage: bind <name> <kind> <values>");
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = RK_BIND;
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       const char *bk = words[2];
       int expect;
@@ -314,11 +328,13 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (nw < 2) return rerr(err, errsz, ln, "usage: fn <name> [bqn]");
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = RK_FN;
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       if (raw2) store_string(a, e, raw2); /* verbatim BQN body convention */
 
     } else if (strcmp(k, "ja") == 0) {
       if (nw != 3) return rerr(err, errsz, ln, "usage: ja <word> <name>");
+      if (wfree(words[1], err, errsz, ln)) return -1;
       if (wname(words[1], reg->jaFrom[reg->nja], ANO_NAMESZ, err, errsz, ln)) return -1;
       if (wname(words[2], reg->jaTo[reg->nja], ANO_NAMESZ, err, errsz, ln)) return -1;
       reg->nja++;
@@ -330,8 +346,10 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
   return 0;
 }
 
-/* Inputs: registry, surface name. Output: entry or NULL. Invariant: case-insensitive on
- * the first letter only ('Gold' matches 'gold'), exact bytes on the rest. */
+/* Inputs: registry, surface name. Output: entry or NULL. Exact entry names first,
+ * case-insensitive on the first letter only ('Gold' matches 'gold'), exact bytes on
+ * the rest; then the ja alias hop, exact bytes on both the word and the target —
+ * a pure name alias, outranked by real entries, identical from either surface. */
 const RegEntry *reg_find(const Registry *reg, const char *name) {
   for (int i = 0; i < reg->nents; i++) {
     const char *e = reg->ents[i].name;
@@ -339,13 +357,11 @@ const RegEntry *reg_find(const Registry *reg, const char *name) {
         (name[0] == 0 || strcmp(e + 1, name + 1) == 0))
       return &reg->ents[i];
   }
-  return NULL;
-}
-
-/* Inputs: registry, JA surface word. Output: mapped registry name or NULL.
- * Invariant: exact byte match on the word. */
-const char *reg_ja(const Registry *reg, const char *jaWord) {
   for (int i = 0; i < reg->nja; i++)
-    if (strcmp(reg->jaFrom[i], jaWord) == 0) return reg->jaTo[i];
+    if (strcmp(reg->jaFrom[i], name) == 0) {
+      for (int j = 0; j < reg->nents; j++)
+        if (strcmp(reg->ents[j].name, reg->jaTo[i]) == 0) return &reg->ents[j];
+      return NULL;
+    }
   return NULL;
 }

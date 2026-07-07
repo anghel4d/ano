@@ -9,7 +9,3 @@ fn polar {𝕨×(•math.Cos 𝕩×π÷180)⋈•math.Sin 𝕩×π÷180}
 ja 硬貨 coin
 ja 位置 pos
 ja 勇者 player
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

@@ -1,6 +1,6 @@
 # compiler.md — anoc, the architecture of record
 
-Status: target. This file describes the design the branch ends on, not the tree as it stands; NEXT.md executes the delta. When implementation and this file agree, change this line to "Status: implemented" and delete the sentence before it.
+Status: implemented.
 
 anoc compiles ano — both surfaces — to a BQN program evaluated against a registry-loaded world, and asserts the resulting post-state against pins written in the demo itself. One binary, six C files, one `cc` invocation, whole-program, every time. There is no build cache, no incremental mode, and there never will be. BQN is the reference back-end and the semantic oracle; the fixed future target is the bytecode VM and JIT, and nothing in this file changes when that lands except the box after `emit`.
 
@@ -39,8 +39,8 @@ anoc compiles ano — both surfaces — to a BQN program evaluated against a reg
                  │                      non-ASCII names mangled to stable BQN identifiers
                  ▼
            BQN program text — --emit taps here
-                 │  + rt.bqn prepended (the runtime)
-                 │  + --! expect/out compiled to ! assertions (main.c)
+                 │  + rt.bqn prepended (the runtime, main.c)
+                 │  + --! expect/out compiled to ! assertions (emit.c)
                  ▼
            cbqn — exit 0 iff every pinned post-state holds
                  │
@@ -51,7 +51,7 @@ anoc compiles ano — both surfaces — to a BQN program evaluated against a reg
 
 ## The parts
 
-main.c — the driver. Reads the demo, strips `--!` directives (registry path, the ja flag, the expected post-state), orchestrates lex → parse → emit, compiles the pins into BQN assertions appended to the program, and runs the result under cbqn via a temp file. `--tokens` and `--emit` dump the two intermediate representations; there are only two.
+main.c — the driver. Reads the demo, strips `--!` directives (registry path, the ja flag, the expected post-state), orchestrates lex → parse → emit — the emitter appends the pins as BQN assertions — and runs the result under cbqn via a temp file. `--tokens` and `--emit` dump the two intermediate representations; there are only two.
 
 registry.c — the world loader. A `.reg` file is the extensional database: entity count, columns, relationships and their inverses, binds, verbatim BQN fn bodies, lattice fields. Entry names are any legal identifier, UTF-8 included; a Japanese world is registered exactly like an English one. `ja` lines are pure name aliases, (surface word → entry name) pairs and nothing more — they carry no data, they exist only so one world can be scripted idiomatically from both surfaces, and a registry that wants only one vocabulary needs none.
 

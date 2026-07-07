@@ -24,7 +24,3 @@ ja 加魔 addMana
 ja 消費魔力 manaCost
 ja 詠唱遅延 castDelay
 ja 再充填時間 rechargeTime
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

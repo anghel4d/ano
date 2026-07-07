@@ -205,10 +205,13 @@ typedef struct {
  *   lattice 8 8
  *   field elevation num 0 1 2 ...      # w*h values, row-major
  *   ja 北 nord
+ * Entry names and ja source words must not be lexer-reserved (lex_reserved): the closed
+ * grammar outranks all nouns, so a reserved word is unaddressable — rejected at load.
  * Inputs: path, out registry, err buffer. Output: 0 ok / -1 with err set. */
 int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz);
-const RegEntry *reg_find(const Registry *reg, const char *name);      /* case-insensitive on first letter */
-const char *reg_ja(const Registry *reg, const char *jaWord);          /* NULL when unmapped */
+/* exact entry name first (case-insensitive on the first letter), then the ja alias
+ * table (exact bytes, both hops) — the alias is a pure name alias, surface-agnostic */
+const RegEntry *reg_find(const Registry *reg, const char *name);
 
 /* ---------- AST ---------- */
 
@@ -290,13 +293,18 @@ typedef struct {
 /* ---------- module APIs ---------- */
 
 /* lex.c — Inputs: full source (directives already stripped to blank by main), ja flag,
- * registry (JA aliases), arena. Output: token columns ending in T_EOF, T_NL between
- * lines; the source is validated as strict UTF-8 once at this boundary. JA mode:
- * space-separated words mapped (registry ja, particle table, kanji numerals), then
- * normalized: TGT dropped, each postfix operator swapped before its operand (ex40).
+ * arena. Output: token columns ending in T_EOF, T_NL between lines; the source is
+ * validated as strict UTF-8 once at this boundary. Both skins are registry-blind:
+ * identifiers (any codepoint >= U+0080 outside a small blacklist, plus the ASCII class)
+ * become T_NAME carrying the surface spelling, resolved at emit. JA mode: space-separated
+ * words mapped grammar-first (particle table, kanji numerals), then normalized: TGT
+ * dropped, each postfix operator swapped before its operand (ex40).
  * Returns 0 / -1 with err set. */
-int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
+int ano_lex(const char *src, int ja, Arena *a,
             Toks *toks, char *err, size_t errsz);
+/* 1 when the closed grammar owns the word on either surface (keywords, jatab, numerals,
+ * fused reducers); such a word can name no registry entry and source no ja alias */
+int lex_reserved(const char *w);
 
 /* parse.c — Inputs: token stream. Output: N_PROGRAM whose kids are statements in order.
  * Implements GRAMMAR.md: the hinge split, precedence 1-14, selection/effect forms,

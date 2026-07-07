@@ -20,7 +20,3 @@ ja 物体 body
 ja 射程内 inRange
 ja 衝突 collide
 ja 位置 pos
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

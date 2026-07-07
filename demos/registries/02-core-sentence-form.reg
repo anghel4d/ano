@@ -4,7 +4,3 @@ col source num 10 20 30 40 50
 col predicate bool 1 0 1 0 1
 ja 源 source
 ja 述語 predicate
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

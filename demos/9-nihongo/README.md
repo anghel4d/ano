@@ -12,3 +12,7 @@ Examples 40-49 of ano-examples.md, the Japanese surface mode, modeled as BQN col
 - 47-counters-becoming.bqn — 3mo as a unit-typed literal; masked doubling via Price×1+mask.
 - 48-zero-subject.bqn — ゼロが: the host default subject ^cursor takes spawn Wheat.
 - 49-block-anaphora.bqn — ~ is a new barrier over the saved mask; ghosts survive the despawn.
+- s50-native-registry — the kanji nouns ARE the columns, no ja aliases; scripted from both surfaces, byte-identical BQN.
+- s51-mixed-surface — English nouns under Japanese grammar, then kanji and Latin nouns in one statement; aliases are surface-agnostic.
+- s52-bilingual-bridge — English columns plus ja aliases, scripted idiomatically from both surfaces: the alias mechanism's one legitimate job.
+- s53-native-kinds-{a,b,c,d} — every registry entry kind under a Japanese name: cols in every type, pres and default, rel with inv, srel, binds in every kind, kanji fns with verbatim BQN bodies, a lattice with fields — the coverage witness for the emitter's name mangler.

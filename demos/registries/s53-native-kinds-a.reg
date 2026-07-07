@@ -1,0 +1,17 @@
+# s53a — native Japanese entity world: col num/bool/sym, pres, rel with inv, srel,
+# bind entity/mask/num, and a kanji-named fn — every name the kanji itself, no ja lines.
+# 両手 rows 2 and 5 carry junk (99, 77) behind absent presence — decoys per ex06.
+n 6
+col 北 bool 1 1 0 1 0 1
+col 金 num 100 200 300 400 500 600
+col 両手 num 80 55 99 61 90 77
+pres 両手 1 1 0 1 1 0
+col 派閥 sym Bandit Player Bandit Nord Nord Nord
+col 打撃 num 0 0 0 0 0 0
+rel 師匠 2 -1 4 2 -1 1
+inv 弟子団 師匠
+srel 標的 3 4 | 4 5 | | | |
+bind 主人公 entity 2
+bind 城内 mask 1 1 0 0 1 1
+bind 補給 num 50
+fn 脅威 {𝕨⌈𝕩}

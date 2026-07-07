@@ -14,8 +14,4 @@ ja 節点 node
 ja 出次数 outDeg
 ja 隣接 adj
 ja 敵対 hostile
-ja 行 row
 ja 行動木 btree
-ja 前 prev
-ja 番号 index
-ja 字 char

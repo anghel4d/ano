@@ -19,7 +19,3 @@ inv r rto
 ja 源 source
 ja 標的物 target
 ja 選択 picked
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

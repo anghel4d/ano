@@ -313,3 +313,11 @@ The gap between this document and a draft is mostly literature positioning: enga
 - 池上嘉彦 (Ikegami Yoshihiko). 『「する」と「なる」の言語学』 (*Suru to Naru no Gengogaku*). 大修館書店, 1981. The する-language/なる-language typology behind point 2.
 - Jay Rubin. *Making Sense of Japanese: What the Textbooks Don't Tell You*. Kodansha International, 1998. The zero pronoun behind ゼロが.
 - Susumu Kuno. *The Structure of the Japanese Language*. MIT Press, 1973. Exhaustive-listing が against thematic は — the live literature.
+
+## Settled in anoc
+
+Two facts from the implementation, recorded so the sections above stay as written.
+
+The spaced skin ships as the pure lexer table claimed above, with one measured boundary: a postfix operator re-roots before exactly one primary — an atom, a matched group, a hop chain, a shape run — so an operand wider than one primary must be author-parenthesized (`金 に ( 千 + 三 ) たす`), and the unparenthesized form is a hard error, never a silent misparse. That parenthesization rule is where the lexer-table claim measurably ends; everything else in the table held.
+
+Registry nouns are natively UTF-8. A world declares `col 金 num …` and both surfaces address 金 by that name — identifiers on either surface admit any codepoint at or above U+0080, and the closed grammar (particles, keywords, numerals) outranks all nouns, so no registry name can shadow と or 千; the loader rejects the collision by word. `ja` lines remain as an optional cross-surface alias — `ja 北 nord` lets one world be scripted idiomatically from both surfaces — applied at name resolution after exact entry names, never in the lexer.

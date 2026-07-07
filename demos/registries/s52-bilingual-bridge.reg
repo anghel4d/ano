@@ -1,0 +1,9 @@
+# s52 — the bilingual bridge: English columns plus ja aliases — one world scripted
+# idiomatically from both surfaces. The alias mechanism's one legitimate job.
+n 5
+col scout bool 1 0 1 1 0
+col supplies num 10 40 25 5 60
+col morale num 50 50 50 50 50
+ja 斥候 scout
+ja 兵糧 supplies
+ja 士気 morale

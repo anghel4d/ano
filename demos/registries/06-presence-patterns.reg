@@ -7,12 +7,8 @@ pres twoHanded 1 1 0 1 1 0
 col gold num 0 0 0 0 0 0
 col trained bool 0 0 0 0 0 0
 col untrained bool 0 0 0 0 0 0
-ja 北 Nord
-ja 両手 TwoHanded
-ja 金 Gold
+ja 北 nord
+ja 両手 twoHanded
+ja 金 gold
 ja 訓練 trained
 ja 未訓練 untrained
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

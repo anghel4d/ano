@@ -1,6 +1,6 @@
 # TODO
 
-Live items only. Anything unresolved that the suites surfaced lives in `ano-limitations.md`; unsettled design lives in the spec's "Open Questions, Next Steps".
+Live items only. Anything unresolved that the suites surfaced lives in `ISSUES.md`; unsettled design lives in the spec's "Open Questions, Next Steps".
 
 1. **Consider shipping proven-affine compilation.** Every statement is affine and alias-free by grammar, so the polyhedral arsenal (fusion, tiling, vectorization, parallelization) applies to all statements with no legality analysis. A backend that proves the schedule and emits raw column instructions is the Groq/TPU bet scoped to ano's fragment; the same property gives the CUDA lowering for free. Grading and lineage: `ano-sky.md`, "The speed claim, graded". (Added 2026-07-05.)
 

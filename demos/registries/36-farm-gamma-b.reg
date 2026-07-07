@@ -7,7 +7,3 @@ srel neighbors 1 5 | 0 2 6 | 1 3 7 | 2 4 8 | 3 9 | 0 6 10 | 1 5 7 11 | 2 6 8 12 
 ja 区画 plot
 ja 植栽 planted
 ja 隣人 neighbors
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

@@ -7,7 +7,3 @@ col rank num 0 0 0 0 0
 ja 部隊 unit
 ja 金 gold
 ja 順位 rank
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

@@ -7,7 +7,3 @@ col threat num 1000 5 7 2000 11 13 17 19 23 29 31 37 41 43
 ja 敵 enemy
 ja 毎秒損傷 dps
 ja 脅威 threat
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

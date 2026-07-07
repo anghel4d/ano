@@ -20,7 +20,3 @@ ja 位置 pos
 ja x x
 ja y y
 ja 建設可 buildable
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

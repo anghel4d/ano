@@ -3,11 +3,13 @@
  * (kind/name/num/line grown together) and token text is interned — one canonical
  * copy per spelling, no per-token buffers. Source is validated as strict UTF-8 once
  * at the ano_lex boundary (overlongs, surrogates, and out-of-range rejected), so
- * both skins may decode without checking. ASCII mode fuses fold/scan tokens;
- * ^ begins the alias sigil, : a symbol, @ is always the scope operator. JA mode
- * lexes space-separated words — registry ja aliases, the particle table, a kanji
- * numeral reader — then normalizes per demos/9-nihongo/40-tokenizer-skin.bqn: drop
- * the に TGT marker and re-root each postfix operator before its operand. The
+ * both skins may decode without checking. Both skins are registry-blind: names keep
+ * their surface spelling and resolve at emit. Identifiers admit any codepoint >=
+ * U+0080 outside a small blacklist. ASCII mode fuses fold/scan tokens; ^ begins the
+ * alias sigil, : a symbol, @ is always the scope operator. JA mode lexes
+ * space-separated words — the closed grammar (particle/keyword/fold table, kanji
+ * numerals) outranks nouns — then normalizes per demos/9-nihongo/40-tokenizer-skin.bqn:
+ * drop the に TGT marker and re-root each postfix operator before its operand. The
  * postfix flag lives beside the token columns and never escapes this file. */
 #include "ano.h"
 
@@ -19,7 +21,30 @@ static int nstart(int c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z
 static int nchar(int c)  { return nstart(c) || (c >= '0' && c <= '9') || c == '_'; }
 static int dig(int c)    { return c >= '0' && c <= '9'; }
 
+/* Inputs: codepoint >= U+0080. Output: 1 when it is never an identifier char — the
+ * whitespace/numeral machinery (U+3000 ideographic space, U+3001 、, U+30FB ・) and the
+ * retired generator glyph U+2195 ↕, kept out so a stale ↕ errors by codepoint. */
+static int ublack(unsigned cp) {
+  return cp == 0x3000 || cp == 0x3001 || cp == 0x30FB || cp == 0x2195;
+}
+
 static int ucp(const unsigned char *s, size_t n, unsigned *cp);
+
+/* Inputs: src (validated UTF-8), total length n, index i inside an identifier.
+ * Output: index one past its last char — ASCII [A-Za-z0-9_] plus any non-blacklisted
+ * codepoint >= U+0080; maximal munch stops at ASCII operator bytes and blacklist. */
+static size_t nspan(const char *src, size_t n, size_t i) {
+  for (;;) {
+    unsigned char c = (unsigned char)src[i];
+    if (nchar(c)) { i++; continue; }
+    if (c >= 0x80) {
+      unsigned cp;
+      int l = ucp((const unsigned char *)src + i, n - i, &cp);
+      if (l && !ublack(cp)) { i += (size_t)l; continue; }
+    }
+    return i;
+  }
+}
 
 /* growing token columns; post[] marks JA postfix operators, internal only */
 typedef struct {
@@ -69,7 +94,7 @@ static TokKind kwkind(const char *nm) {
     {"def",T_DEF},{"spawn",T_SPAWN},{"at",T_ATKW},{"to",T_TO},{"via",T_VIA},
     {"along",T_ALONG},{"order",T_ORDER},{"by",T_BY},{"take",T_TAKE},{"desc",T_DESC},
     {"top",T_TOP},{"grade",T_GRADE},{"reduce",T_REDUCE},{"scan",T_SCANKW},
-    {"scan2",T_SCAN2},{"cross",T_CROSS},{"expand",T_EXPAND},
+    {"scan2",T_SCAN2},{"cross",T_CROSS},{"expand",T_EXPAND},{"til",T_IOTA},
   };
   for (size_t k = 0; k < sizeof tab / sizeof *tab; k++)
     if (!strcmp(nm, tab[k].w)) return tab[k].k;
@@ -92,8 +117,7 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
     if (c == ' ' || c == '\t' || c == '\r') { i++; continue; }
     if (c == '-' && src[i + 1] == '-') { while (src[i] && src[i] != '\n') i++; continue; }
     if (nstart(c)) {
-      size_t j = i + 1;
-      while (nchar((unsigned char)src[j])) j++;
+      size_t j = nspan(src, n, i + 1);
       const char *nm = intern(b->it, b->a, src + i, j - i);
       /* reducer fold: max/ min/ avg/ — no whitespace, and 'max/= 2' stays SLASHEQ */
       int red = !strcmp(nm, "max") || !strcmp(nm, "min") || !strcmp(nm, "avg");
@@ -149,12 +173,15 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
       if (nchar((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "names cannot start with '_'");
       tb_push(b, T_WILD, line); i++; continue;
     }
-    if (c >= 0x80) {                                           /* non-ASCII: ↕ only */
+    if (c >= 0x80) {                                           /* UTF-8 identifier */
       unsigned cp;
       int l = ucp((const unsigned char *)src + i, n - i, &cp);
       if (!l) return lex_err(err, errsz, line, "malformed UTF-8");
-      if (cp == 0x2195) { tb_push(b, T_IOTA, line); i += (size_t)l; continue; }
-      return lex_err(err, errsz, line, "unknown character U+%04X", cp);
+      if (ublack(cp)) return lex_err(err, errsz, line, "unknown character U+%04X", cp);
+      size_t j = nspan(src, n, i + (size_t)l);
+      { int ix = tb_push(b, T_NAME, line); b->name[ix] = intern(b->it, b->a, src + i, j - i); }
+      if (src[j] == '\'') { tb_push(b, T_TICK, line); j++; }   /* postfix tick */
+      i = j; continue;
     }
     unsigned char d = (unsigned char)src[i + 1];
     switch (c) {
@@ -366,6 +393,12 @@ static const struct { const char *w; TokKind k; int post; const char *nm; } jata
   {"皆", T_FOLD, 0, "&"}, {"或", T_FOLD, 0, "|"},
   /* scans (prefix, op payload) */
   {"累和", T_SCANOP, 0, "+"}, {"累積", T_SCANOP, 0, "*"}, {"累大", T_SCANOP, 0, "max"},
+  /* the generator (prefix): ASCII spells it til */
+  {"連番", T_IOTA, 0, 0},
+  /* system nouns, global: payload is the resolution-level name; a registry entry of
+   * that name wins at emit (the !find guards), exactly as it does on the ASCII surface */
+  {"前", T_NAME, 0, "prev"}, {"行", T_NAME, 0, "row"},
+  {"番号", T_NAME, 0, "index"}, {"字", T_NAME, 0, "char"},
   /* keywords */
   {"定義", T_DEF, 0, 0}, {"生成", T_SPAWN, 0, 0}, {"於", T_ATKW, 0, 0}, {"至", T_TO, 0, 0},
   {"経由", T_VIA, 0, 0}, {"沿", T_ALONG, 0, 0}, {"整列", T_ORDER, 0, 0}, {"別", T_BY, 0, 0},
@@ -375,10 +408,44 @@ static const struct { const char *w; TokKind k; int post; const char *nm; } jata
   /* ASCII structural glyphs, usable directly in JA source */
   {"(", T_LP, 0, 0}, {")", T_RP, 0, 0}, {"[", T_LB, 0, 0}, {"]", T_RB, 0, 0},
   {";", T_SEMI, 0, 0}, {"<-", T_LARROW, 0, 0}, {"|>", T_PIPEGT, 0, 0}, {"'", T_TICK, 0, 0},
-  {"_", T_WILD, 0, 0}, {"↕", T_IOTA, 0, 0},
+  {"_", T_WILD, 0, 0},
   {"+", T_PLUS, 0, 0}, {"-", T_MINUS, 0, 0}, {"*", T_STAR, 0, 0}, {"/", T_SLASH, 0, 0},
   {"%", T_PCT, 0, 0}, {"=", T_EQ, 0, 0}, {"|", T_BAR, 0, 0},
 };
+
+/* Inputs: a word. Output: 1 when the closed grammar owns it on either surface — an
+ * ASCII keyword (kwkind, til included), a fused reducer name (max/min/avg), any jatab
+ * word, or any numeral the JA reader accepts (kanji, fullwidth, Arabic, counters).
+ * registry.c consults this at load: a reserved word can name no entry and source no ja
+ * alias, because the lexer resolves it before nouns ever get a chance. */
+int lex_reserved(const char *w) {
+  if (kwkind(w)) return 1;
+  if (!strcmp(w, "max") || !strcmp(w, "min") || !strcmp(w, "avg")) return 1;
+  for (size_t k = 0; k < sizeof jatab / sizeof *jatab; k++)
+    if (!strcmp(w, jatab[k].w)) return 1;
+  double v; char u[8];
+  return ja_numeral(w, &v, u);
+}
+
+/* Inputs: NUL-terminated word (validated UTF-8). Output: 1 when it is a legal
+ * identifier: nstart or a non-blacklisted codepoint >= U+0080 first, nchar or the
+ * same after. */
+static int word_name(const char *w) {
+  size_t n = strlen(w), i = 0;
+  for (int first = 1; i < n; first = 0) {
+    unsigned char c = (unsigned char)w[i];
+    if (c < 0x80) {
+      if (!(first ? nstart(c) : nchar(c))) return 0;
+      i++;
+    } else {
+      unsigned cp;
+      int l = ucp((const unsigned char *)w + i, n - i, &cp);
+      if (!l || ublack(cp)) return 0;
+      i += (size_t)l;
+    }
+  }
+  return n > 0;
+}
 
 /* Inputs: token columns, index j of an operand's last token. Output: index of that
  * primary's first token — a matched (…)/[…] group (with a leading callee name and a
@@ -417,14 +484,15 @@ static int operand_start(const TokBuf *b, int k) {
   return j;
 }
 
-/* Inputs: source, registry (ja aliases), token buffer, err. Output: 0/-1; the
- * normalized ASCII-equivalent stream, T_NL between nonempty lines, no trailing NL.
- * Per word, in order: ^alias / :sym sigils; registry ja alias -> T_NAME; particle,
- * keyword, and fold/scan table (with op payload); kanji/Arabic numeral; bare ASCII
- * identifier (keyword or name); "strings"; else error. Then normalization: re-root each
- * postfix operator before its operand (span-aware), then delete the fused K_TGT markers.
- * Invariant: K_TGT and post flags never survive this function. */
-static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, size_t errsz) {
+/* Inputs: source, token buffer, err. Output: 0/-1; the normalized ASCII-equivalent
+ * stream, T_NL between nonempty lines, no trailing NL. Per word, in order: ^alias /
+ * :sym sigils; the closed grammar — particle, keyword, and fold/scan table (with op
+ * payload); kanji/Arabic numeral; then any legal identifier, ASCII or UTF-8, as a
+ * keyword via kwkind or T_NAME carrying its surface spelling (resolution against the
+ * registry happens at emit, never here); "strings"; else error. Then normalization:
+ * re-root each postfix operator before its operand (span-aware), then delete the fused
+ * K_TGT markers. Invariant: K_TGT and post flags never survive this function. */
+static int lex_ja(const char *src, TokBuf *b, char *err, size_t errsz) {
   int line = 1;
   size_t i = 0, n = strlen(src);
   while (src[i]) {
@@ -476,11 +544,6 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
       int ix = tb_push(b, T_SYM, line); b->name[ix] = intern(b->it, b->a, w + 1, strlen(w) - 1);
       continue;
     }
-    const char *cn = reg ? reg_ja(reg, w) : NULL;
-    if (cn) {
-      { int ix = tb_push(b, T_NAME, line); b->name[ix] = cn; }   /* canonical name lives in the registry */
-      continue;
-    }
     int hit = 0;
     for (size_t k = 0; k < sizeof jatab / sizeof *jatab; k++) {
       if (!strcmp(w, jatab[k].w)) {
@@ -498,17 +561,13 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
       if (u[0]) b->name[ix] = intern(b->it, b->a, u, strlen(u));
       continue;
     }
-    /* bare ASCII identifier: system builtin / fn / proto kept in the Latin surface */
-    if (nstart((unsigned char)w[0])) {
-      size_t p = 1;
-      while (w[p] && nchar((unsigned char)w[p])) p++;
-      if (!w[p]) {
-        const char *nm = intern(b->it, b->a, w, strlen(w));
-        TokKind kk = kwkind(nm);
-        if (kk) tb_push(b, kk, line);
-        else { int ix = tb_push(b, T_NAME, line); b->name[ix] = nm; }
-        continue;
-      }
+    /* identifier, ASCII or UTF-8: keyword, else a name by its surface spelling */
+    if (word_name(w)) {
+      const char *nm = intern(b->it, b->a, w, strlen(w));
+      TokKind kk = kwkind(nm);
+      if (kk) tb_push(b, kk, line);
+      else { int ix = tb_push(b, T_NAME, line); b->name[ix] = nm; }
+      continue;
     }
     return lex_err(err, errsz, line, "unknown word '%s'", w);
   }
@@ -538,10 +597,10 @@ static int lex_ja(const char *src, const Registry *reg, TokBuf *b, char *err, si
   return 0;
 }
 
-/* Inputs: full source (directives blanked by main), ja flag, registry, arena.
+/* Inputs: full source (directives blanked by main), ja flag, arena.
  * Outputs: *toks — the column stream, T_NL between lines, ending in T_EOF.
  * Output: 0 ok / -1 with err set. Invariant: blank lines emit nothing. */
-int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
+int ano_lex(const char *src, int ja, Arena *a,
             Toks *toks, char *err, size_t errsz) {
   TokBuf b = {0};
   Intern it = {0};
@@ -561,7 +620,7 @@ int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
       i += (size_t)l;
     }
   }
-  int rc = ja ? lex_ja(src, reg, &b, err, errsz) : lex_ascii(src, &b, err, errsz);
+  int rc = ja ? lex_ja(src, &b, err, errsz) : lex_ascii(src, &b, err, errsz);
   if (rc) return -1;
   if (b.n && b.kind[b.n - 1] == T_NL) b.n--;     /* NL separates, never terminates */
   int line = b.n ? b.line[b.n - 1] : 1;

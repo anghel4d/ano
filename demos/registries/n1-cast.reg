@@ -14,8 +14,4 @@ ja 火花弾 sparkBolt
 ja 爆弾 bomb
 ja 魔力 mana
 ja 位置 pos
-ja 番号 index
 ja 親 parent
-ja 前 prev
-ja 行 row
-ja 字 char

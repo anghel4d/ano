@@ -6,9 +6,5 @@ n 0
 col proto sym
 col pos num
 fn pieceOf {'.'=𝕩 ? "" ; ⋈𝕩}
-ja 字 char
 ja 駒 proto
 ja 位置 pos
-ja 前 prev
-ja 行 row
-ja 番号 index

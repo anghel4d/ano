@@ -4,11 +4,7 @@ rel mentor 2 3 3 0 5 1
 col twoHanded num 70 85 90 81 60 40
 col nord bool 1 1 1 0 1 0
 col gold num 0 10 20 30 40 50
-ja 北 Nord
+ja 北 nord
 ja 師匠 mentor
-ja 両手 TwoHanded
-ja 金 Gold
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char
+ja 両手 twoHanded
+ja 金 gold

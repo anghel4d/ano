@@ -125,15 +125,21 @@ static void print_toks(FILE *f, const Toks *t) {
     fprintf(f, "%s %s %g\n", tokname[t->kind[i]] ? tokname[t->kind[i]] : "?", t->name[i], t->num[i]);
 }
 
-/* Inputs: two token streams. Output: 1 when kind/name/num sequences match ignoring
- * T_NL/T_EOF, else 0. Invariant: nums compare exactly — both streams come from ano_lex. */
-static int same_stream(const Toks *x, const Toks *y) {
+/* Inputs: two token streams, the registry. Output: 1 when kind/name/num sequences match
+ * ignoring T_NL/T_EOF, else 0. Names carry surface spellings, so two spellings are equal
+ * when they resolve to one registry entry (北 vs Nord); otherwise exact bytes.
+ * Invariant: nums compare exactly — both streams come from ano_lex. */
+static int same_stream(const Toks *x, const Toks *y, const Registry *reg) {
   int i = 0, j = 0;
   for (;;) {
     while (i < x->n && (x->kind[i] == T_NL || x->kind[i] == T_EOF)) i++;
     while (j < y->n && (y->kind[j] == T_NL || y->kind[j] == T_EOF)) j++;
     if (i >= x->n || j >= y->n) return i >= x->n && j >= y->n;
-    if (x->kind[i] != y->kind[j] || strcmp(x->name[i], y->name[j]) || x->num[i] != y->num[j]) return 0;
+    if (x->kind[i] != y->kind[j] || x->num[i] != y->num[j]) return 0;
+    if (strcmp(x->name[i], y->name[j])) {
+      const RegEntry *ex = reg_find(reg, x->name[i]), *ey = reg_find(reg, y->name[j]);
+      if (!ex || ex != ey) return 0;
+    }
     i++; j++;
   }
 }
@@ -219,15 +225,15 @@ int main(int argc, char **argv) {
   }
 
   Toks toks = {0};
-  if (ano_lex(src, dirs.ja, &reg, &a, &toks, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
+  if (ano_lex(src, dirs.ja, &a, &toks, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
 
   if (modeTokens) { print_toks(stdout, &toks); return 0; }
 
   /* ex40 equivalence: the ASCII directive line must lex to the file's own stream */
   if (dirs.sameTokens[0]) {
     Toks dtoks = {0};
-    if (ano_lex(dirs.sameTokens, 0, &reg, &a, &dtoks, err, sizeof err)) { fprintf(stderr, "%s: same-tokens: %s\n", path, err); return 2; }
-    if (!same_stream(&toks, &dtoks)) {
+    if (ano_lex(dirs.sameTokens, 0, &a, &dtoks, err, sizeof err)) { fprintf(stderr, "%s: same-tokens: %s\n", path, err); return 2; }
+    if (!same_stream(&toks, &dtoks, &reg)) {
       fprintf(stderr, "%s: same-tokens mismatch\n-- file stream:\n", path);
       print_toks(stderr, &toks);
       fprintf(stderr, "-- directive stream:\n");

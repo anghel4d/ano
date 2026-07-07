@@ -5,8 +5,10 @@
  * (~ / leading comma / elided subject) reuse the saved mask anoSel, zero-padded to the
  * current world length, never a re-gather.
  * Conventions the .reg fixtures rely on:
- *   - columns emit as their registry spelling (first letter lowercased by reg_find);
- *     presence masks emit as pres_<name>; set-valued rels emit as fiber lists.
+ *   - columns emit as their registry spelling (first letter lowercased); a name that is
+ *     not a BQN-legal identifier emits as jp<i> by registry index, the human spelling
+ *     kept as a comment on its fixture line; presence masks emit as pres_<name> or
+ *     pres_jp<i>; set-valued rels emit as fiber lists.
  *   - symbol columns are lists of BQN strings; comparisons are (<"Sym")≡¨col.
  *   - pair-valued columns (vec) are lists of x‿y pairs; expects compare against ∾col.
  *   - registry fns emit as <Name-with-first-letter-uppercased>; raw BQN from the .reg
@@ -100,12 +102,40 @@ static char *uc(Em *em, const char *n) {
   char *s = arena_strdup(em->a, n, strlen(n));
   s[0] = (char)toupper((unsigned char)s[0]); return s;
 }
-/* registry-fn BQN spelling: Fn_ prefix keeps case-insensitive BQN identifiers from
- * colliding with a column of the same name (fn threat vs col threat) */
-static char *fnv(Em *em, const char *n) { return efmt(em, "Fn_%s", n); }
 
 static const RegEntry *find(Em *em, const char *n) { return reg_find(em->reg, n); }
 static int entIdx(Em *em, const RegEntry *e) { return (int)(e - em->reg->ents); }
+
+/* BQN identifier legality: [A-Za-z][A-Za-z0-9_]*. Legal names emit through lc/pres_/Fn_
+ * exactly as always — the emitted BQN for every ASCII registry is a hard invariant. */
+static int bqnlegal(const char *n) {
+  if (!((n[0] >= 'A' && n[0] <= 'Z') || (n[0] >= 'a' && n[0] <= 'z'))) return 0;
+  for (const char *p = n + 1; *p; p++)
+    if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+          (*p >= '0' && *p <= '9') || *p == '_')) return 0;
+  return 1;
+}
+
+/* Inputs: a registry entry. Output: its BQN variable spelling — lc(name) when BQN-legal,
+ * else jp<i> by registry index: deterministic, stable within a compile, disjoint from
+ * emitter temporaries. The human spelling rides as a comment at the fixture line. */
+static char *bqnv(Em *em, const RegEntry *e) {
+  if (bqnlegal(e->name)) return lc(em, e->name);
+  return efmt(em, "jp%d", entIdx(em, e));
+}
+
+/* the presence-mask spelling beside bqnv: pres_<raw name> stays the fixture convention */
+static char *presv(Em *em, const RegEntry *e) {
+  if (bqnlegal(e->name)) return efmt(em, "pres_%s", e->name);
+  return efmt(em, "pres_jp%d", entIdx(em, e));
+}
+
+/* registry-fn BQN spelling: Fn_ prefix keeps case-insensitive BQN identifiers from
+ * colliding with a column of the same name (fn threat vs col threat) */
+static char *fnv(Em *em, const RegEntry *e) {
+  if (bqnlegal(e->name)) return efmt(em, "Fn_%s", e->name);
+  return efmt(em, "Fn_jp%d", entIdx(em, e));
+}
 
 static const Node *findDef(Em *em, const char *n) {
   for (int i = 0; i < em->ndefs; i++)
@@ -126,7 +156,7 @@ static char *frN(Em *em) {
 static char *idCol(Em *em) {
   const RegEntry *e = reg_find(em->reg, "id");
   if (!e) e = reg_find(em->reg, "keys");
-  if (e && e->kind == RK_COL) return lc(em, e->name);
+  if (e && e->kind == RK_COL) return bqnv(em, e);
   return efmt(em, "(↕%s)", frN(em));
 }
 
@@ -158,7 +188,7 @@ static char *inMode(Em *em, char *worldExpr, Mode m) {
 
 /* presence mask for a column entry, world space; NULL when total */
 static char *presOf(Em *em, const RegEntry *e) {
-  if (e->kind == RK_COL && e->hasPres) return efmt(em, "pres_%s", e->name);
+  if (e->kind == RK_COL && e->hasPres) return presv(em, e);
   return NULL;
 }
 
@@ -189,15 +219,15 @@ static int emitNameVal(Em *em, const Node *nd, Mode m, EV *ev) {
   if (!e) return fail(em, nd->line, "unregistered name '%s'", n);
   switch (e->kind) {
     case RK_COL: case RK_FIELD: {
-      char *v = lc(em, e->name);
+      char *v = bqnv(em, e);
       ev->pair = em->isPair[entIdx(em, e)];
       ev->sym = (e->type == CT_SYM);
       ev->g = presOf(em, e);
       ev->v = inMode(em, v, m);
       return 0;
     }
-    case RK_REL: { ev->v = inMode(em, lc(em, e->name), m); ev->g = efmt(em, "(0≤%s)", lc(em, e->name)); return 0; }
-    case RK_ALIAS: { ev->v = inMode(em, lc(em, e->name), m); return 0; }
+    case RK_REL: { ev->v = inMode(em, bqnv(em, e), m); ev->g = efmt(em, "(0≤%s)", bqnv(em, e)); return 0; }
+    case RK_ALIAS: { ev->v = inMode(em, bqnv(em, e), m); return 0; }
     case RK_BIND:
       if (!strcmp(e->bindKind, "num")) { ev->v = numLit(em, e->nums[0]); ev->unit = 1; return 0; }
       if (!strcmp(e->bindKind, "point")) {
@@ -205,10 +235,10 @@ static int emitNameVal(Em *em, const Node *nd, Mode m, EV *ev) {
         ev->pair = 1; ev->unit = 1; return 0;
       }
       if (!strcmp(e->bindKind, "entity")) { ev->v = numLit(em, e->nums[0]); ev->unit = 1; return 0; }
-      if (!strcmp(e->bindKind, "mask")) { ev->v = inMode(em, lc(em, e->name), m); return 0; }
-      if (!strcmp(e->bindKind, "vec")) { ev->v = lc(em, e->name); ev->unit = 1; return 0; }
+      if (!strcmp(e->bindKind, "mask")) { ev->v = inMode(em, bqnv(em, e), m); return 0; }
+      if (!strcmp(e->bindKind, "vec")) { ev->v = bqnv(em, e); ev->unit = 1; return 0; }
       return fail(em, nd->line, "binding '%s' of kind %s in value position", n, e->bindKind);
-    case RK_SREL: { ev->v = lc(em, e->name); ev->unit = 1; return 0; }
+    case RK_SREL: { ev->v = bqnv(em, e); ev->unit = 1; return 0; }
     default: return fail(em, nd->line, "name '%s' (fn) in value position", n);
   }
 }
@@ -222,11 +252,11 @@ static int emitNameMask(Em *em, const Node *nd, char **out) {
   if (d) return emitMask(em, d->kids[0], out);
   const RegEntry *e = find(em, n);
   if (!e) return fail(em, nd->line, "unregistered mask name '%s'", n);
-  char *v = lc(em, e->name);
+  char *v = bqnv(em, e);
   switch (e->kind) {
     case RK_COL: case RK_FIELD:
-      if (e->type == CT_BOOL) { *out = e->hasPres ? efmt(em, "(pres_%s∧%s)", e->name, v) : v; return 0; }
-      *out = e->hasPres ? efmt(em, "pres_%s", e->name) : efmt(em, "(1¨%s)", v);
+      if (e->type == CT_BOOL) { *out = e->hasPres ? efmt(em, "(%s∧%s)", presv(em, e), v) : v; return 0; }
+      *out = e->hasPres ? presv(em, e) : efmt(em, "(1¨%s)", v);
       return 0;
     case RK_ALIAS: *out = v; return 0;
     case RK_BIND:
@@ -284,12 +314,14 @@ static int emitPipe(Em *em, const Node *nd, View *vw) {
       EV cv; if (emitVal(em, st->kids[0], MODE_WORLD, &cv)) return -1;
       vw->expandCnt = vw->base ? efmt(em, "(%s/%s)", vw->base, cv.v) : cv.v;
     } else if (st->kind == N_CALL) {
+      const RegEntry *fe = find(em, st->name);
+      if (!fe) return fail(em, st->line, "unregistered callable '%s'", st->name);
       char *args = efmt(em, "⟨%s", vw->idx);
       for (int k = 0; k < st->nkids; k++) {
         EV av; if (emitVal(em, st->kids[k], MODE_WORLD, &av)) return -1;
         args = efmt(em, "%s, %s", args, av.v);
       }
-      vw->idx = efmt(em, "(%s %s⟩)", fnv(em, st->name), args);
+      vw->idx = efmt(em, "(%s %s⟩)", fnv(em, fe), args);
       vw->isIota = 1; vw->base = NULL;
     } else return fail(em, st->line, "unsupported pipeline stage");
   }
@@ -321,10 +353,10 @@ static int foldHasId(const char *op) {
  * the stable-id column — the value-level rel, w3-c) */
 static int fiberVar(Em *em, const Node *nd, char **out) {
   const RegEntry *e = find(em, nd->name);
-  if (e && e->kind == RK_SREL) { *out = lc(em, e->name); return 0; }
+  if (e && e->kind == RK_SREL) { *out = bqnv(em, e); return 0; }
   if (e && e->kind == RK_COL && e->type == CT_NUM) {
     char *t = tv(em);
-    stage(em, "%s ← {/%s=𝕩}¨%s", t, lc(em, e->name), idCol(em));
+    stage(em, "%s ← {/%s=𝕩}¨%s", t, bqnv(em, e), idCol(em));
     *out = t;
     return 0;
   }
@@ -444,7 +476,7 @@ static int emitFold(Em *em, const Node *nd, Mode m, EV *ev) {
     const RegEntry *e = find(em, op);
     if (!e || e->kind != RK_FN) return fail(em, nd->line, "unknown reducer '%s'", op);
     char *t = tv(em);
-    stage(em, "%s ← {0=≠𝕩 ? 0 ; %s´ 𝕩} %s", t, fnv(em, e->name), gathered);
+    stage(em, "%s ← {0=≠𝕩 ? 0 ; %s´ 𝕩} %s", t, fnv(em, e), gathered);
     ev->v = t; ev->g = efmt(em, "(0<%s)", cnt);
     return 0;
   }
@@ -521,7 +553,7 @@ static int emitCall(Em *em, const Node *nd, Mode m, EV *ev) {
     return 0;
   }
   const RegEntry *e = find(em, nd->name);
-  const char *fn = e ? fnv(em, e->name) : uc(em, nd->name);
+  const char *fn = e ? fnv(em, e) : uc(em, nd->name);
   if (!e && !strcmp(nd->name, "abs")) fn = "|";
   else if (!e && !strcmp(nd->name, "sin")) fn = "•math.Sin";
   else if (!e) return fail(em, nd->line, "unregistered callable '%s'", nd->name);
@@ -586,7 +618,7 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
     const RegEntry *e = base->kind == N_NAME ? find(em, base->name) : NULL;
     if (e && em->isPair[entIdx(em, e)]) {
       int i = field->name[0] == 'y';
-      ev->v = inMode(em, efmt(em, "(%d⊸⊑¨%s)", i, lc(em, e->name)), m);
+      ev->v = inMode(em, efmt(em, "(%d⊸⊑¨%s)", i, bqnv(em, e)), m);
       return 0;
     }
   }
@@ -603,20 +635,20 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
     if (be && fe && (be->kind == RK_BIND || be->kind == RK_ALIAS) &&
         (fe->kind == RK_COL || fe->kind == RK_FIELD)) {
       char *id = be->kind == RK_BIND ? numLit(em, be->nums[0])
-                                     : efmt(em, "(⊑/%s)", lc(em, be->name));
+                                     : efmt(em, "(⊑/%s)", bqnv(em, be));
       int pair = em->isPair[entIdx(em, fe)];
-      ev->v = pair ? efmt(em, "(<%s⊑%s)", id, lc(em, fe->name))
-                   : efmt(em, "(%s⊑%s)", id, lc(em, fe->name));
+      ev->v = pair ? efmt(em, "(<%s⊑%s)", id, bqnv(em, fe))
+                   : efmt(em, "(%s⊑%s)", id, bqnv(em, fe));
       ev->pair = pair; ev->unit = 1;
       return 0;
     }
     /* functional relationship hop: rel.Comp with ¯1 dangling */
     if (be && be->kind == RK_REL && fe) {
-      char *rel = lc(em, be->name);
-      char *comp = lc(em, fe->name);
+      char *rel = bqnv(em, be);
+      char *comp = bqnv(em, fe);
       char *w = efmt(em, "((0⌈%s)⊏%s)", rel, comp);
       ev->g = efmt(em, "(0≤%s)", rel);
-      if (fe->hasPres) ev->g = gAnd(em, ev->g, efmt(em, "((0⌈%s)⊏pres_%s)", rel, fe->name));
+      if (fe->hasPres) ev->g = gAnd(em, ev->g, efmt(em, "((0⌈%s)⊏%s)", rel, presv(em, fe)));
       ev->sym = fe->type == CT_SYM;
       ev->v = inMode(em, w, m);
       return 0;
@@ -631,7 +663,7 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
     EV bv; if (emitHop(em, base, MODE_WORLD, &bv)) return -1;
     const RegEntry *fe = field->kind == N_NAME ? find(em, field->name) : NULL;
     if (!fe) return fail(em, nd->line, "hop target '%s' unregistered", field->name);
-    char *w = efmt(em, "((0⌈%s)⊏%s)", bv.v, lc(em, fe->name));
+    char *w = efmt(em, "((0⌈%s)⊏%s)", bv.v, bqnv(em, fe));
     ev->g = gAnd(em, bv.g, efmt(em, "(0≤%s)", bv.v));
     ev->sym = fe->type == CT_SYM;
     ev->v = inMode(em, w, m);
@@ -647,7 +679,7 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
     case N_COUNTER: {
       const RegEntry *e = find(em, nd->name);
       ev->unit = 1;
-      ev->v = e ? efmt(em, "(%s×%s)", numLit(em, nd->num), lc(em, e->name))
+      ev->v = e ? efmt(em, "(%s×%s)", numLit(em, nd->num), bqnv(em, e))
                 : numLit(em, nd->num);
       return 0;
     }
@@ -657,7 +689,7 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
     case N_ALIAS: {
       const RegEntry *e = find(em, nd->name);
       if (!e) return fail(em, nd->line, "unregistered alias '^%s'", nd->name);
-      ev->v = inMode(em, lc(em, e->name), m); return 0;
+      ev->v = inMode(em, bqnv(em, e), m); return 0;
     }
     case N_ARITH: {
       EV a, b;
@@ -787,7 +819,7 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
       if (emitMask(em, nd->kids[1], &bm)) return -1;
       const RegEntry *e = find(em, nd->name);
       if (!e || e->kind != RK_FN) return fail(em, nd->line, "cross needs a registered fn");
-      ev->v = efmt(em, "(⥊(/%s)%s⌜(/%s))", am, fnv(em, e->name), bm);
+      ev->v = efmt(em, "(⥊(/%s)%s⌜(/%s))", am, fnv(em, e), bm);
       return 0;
     }
     case N_PIPE: {
@@ -804,7 +836,7 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
  * lattice frame's computed coordinates; NULL when neither exists */
 static char *cellCoord(Em *em, char axis) {
   const RegEntry *e = find(em, axis == 'x' ? "x" : "y");
-  if (e && (e->kind == RK_FIELD || e->kind == RK_COL)) return lc(em, e->name);
+  if (e && (e->kind == RK_FIELD || e->kind == RK_COL)) return bqnv(em, e);
   if (em->fr.kind == FR_LAT || em->fr.kind == FR_BOARD)
     return axis == 'y' ? efmt(em, "(⌊(↕%d)÷%d)", em->fr.w * em->fr.h, em->fr.w)
                        : efmt(em, "(%d|↕%d)", em->fr.w, em->fr.w * em->fr.h);
@@ -818,7 +850,7 @@ static int emitMask(Em *em, const Node *nd, char **out) {
     case N_ALIAS: {
       const RegEntry *e = find(em, nd->name);
       if (!e) return fail(em, nd->line, "unregistered alias '^%s'", nd->name);
-      *out = lc(em, e->name);
+      *out = bqnv(em, e);
       return 0;
     }
     case N_AND: case N_OR: {
@@ -835,7 +867,7 @@ static int emitMask(Em *em, const Node *nd, char **out) {
       if (k->kind == N_NAME) {
         const RegEntry *e = find(em, k->name);
         if (e && e->kind == RK_COL && e->type != CT_BOOL && e->hasPres) {
-          *out = efmt(em, "(¬pres_%s)", e->name);
+          *out = efmt(em, "(¬%s)", presv(em, e));
           return 0;
         }
       }
@@ -847,7 +879,7 @@ static int emitMask(Em *em, const Node *nd, char **out) {
       if (nd->op == '_') { /* presence-any tuple element */
         const RegEntry *e = find(em, nd->kids[0]->name);
         if (!e) return fail(em, nd->line, "unregistered '%s _'", nd->kids[0]->name);
-        *out = e->hasPres ? efmt(em, "pres_%s", e->name) : efmt(em, "(1¨%s)", lc(em, e->name));
+        *out = e->hasPres ? presv(em, e) : efmt(em, "(1¨%s)", bqnv(em, e));
         return 0;
       }
       EV v; if (emitVal(em, nd, MODE_WORLD, &v)) return -1;
@@ -888,7 +920,7 @@ static int emitMask(Em *em, const Node *nd, char **out) {
           args = efmt(em, "%s, %s", args, av.v);
         }
         char *t = tv(em);
-        stage(em, "%s ← {%s ⟨𝕩, ⊑%s%s⟩}¨(%s⋈¨%s)", t, fnv(em, e->name), org.v, args, xs, ys);
+        stage(em, "%s ← {%s ⟨𝕩, ⊑%s%s⟩}¨(%s⋈¨%s)", t, fnv(em, e), org.v, args, xs, ys);
         *out = efmt(em, "(%s∧%s)", a, t);
         return 0;
       }
@@ -1094,7 +1126,7 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (tgt->kind == N_HOP) { coln = tgt->kids[0]; field = tgt->kids[1]->name; }
       const RegEntry *e = find(em, coln->name);
       if (!e) return fail(em, ef->line, "assign to unregistered '%s'", coln->name);
-      char *col = lc(em, e->name);
+      char *col = bqnv(em, e);
       EV rhs;
       /* guards must refine the mask before gathering: pre-scan via world-mode guard probe */
       StrBuf save = em->pre; StrBuf probe = {0}; em->pre = probe;
@@ -1147,7 +1179,7 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       const RegEntry *e = find(em, ef->name);
       if (!e || (e->kind != RK_COL && e->kind != RK_FIELD))
         return fail(em, ef->line, "%cComp on unregistered '%s'", ef->kind == N_EADD ? '+' : '-', ef->name);
-      char *col = lc(em, e->name);
+      char *col = bqnv(em, e);
       char fam = ef->kind == N_EADD ? '|' : '&';
       char *base = mergeBase(em, fx, entIdx(em, e), col, fam, NULL, ef->line, ef->name);
       if (!base) return -1;
@@ -1172,7 +1204,7 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
           what->kind == N_NAME) {
         const RegEntry *fe = find(em, what->name);
         if (fe && fe->kind == RK_FIELD) {
-          char *base = mergeBase(em, fx, entIdx(em, fe), lc(em, fe->name), '|', NULL,
+          char *base = mergeBase(em, fx, entIdx(em, fe), bqnv(em, fe), '|', NULL,
                                  ef->line, what->name);
           if (!base) return -1;
           char *t = tv(em);
@@ -1245,16 +1277,16 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       char target[ANO_NAMESZ]; sscanf(e->syms[0], "%63s", target);
       const RegEntry *tc = find(em, target);
       if (!tc) return fail(em, ef->line, "verb '%s' target column '%s' unregistered", ef->name, target);
-      char *args = efmt(em, "⟨%s", lc(em, tc->name));
+      char *args = efmt(em, "⟨%s", bqnv(em, tc));
       for (int i = 0; i < ef->nkids; i++) {
         EV av; if (emitVal(em, ef->kids[i], MODE_WORLD, &av)) return -1;
         args = efmt(em, "%s, %s", args, av.v);
       }
       args = efmt(em, "%s⟩", args);
-      if (!mergeBase(em, fx, entIdx(em, tc), lc(em, tc->name), 'v', NULL, ef->line, ef->name))
+      if (!mergeBase(em, fx, entIdx(em, tc), bqnv(em, tc), 'v', NULL, ef->line, ef->name))
         return -1;
       char *t = tv(em);
-      stage(em, "%s ← %s %s %s", t, em->selVar, fnv(em, e->name), args);
+      stage(em, "%s ← %s %s %s", t, em->selVar, fnv(em, e), args);
       addCommit(em, fx, entIdx(em, tc), t, 'v', NULL);
       return 0;
     }
@@ -1302,7 +1334,7 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
      * row structure: never filter on despawn, never pad on spawn */
     if (e->kind == RK_SREL && e->nfib != r->n) continue;
     if (e->kind == RK_REL && e->nnums != r->n) continue;
-    char *cur = lc(em, e->name);
+    char *cur = bqnv(em, e);
     char *base = cur;
     for (int c = 0; c < fx->ncommits; c++)
       if (fx->commits[c].colIdx == i) base = fx->commits[c].newExpr;
@@ -1318,7 +1350,7 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
       else for (int g = 0; g < fx->nsp; g++) {
         SpawnG *sg = &fx->sp[g];
         char *piece;
-        int isProto = sg->protoName && !strcmp(lc(em, (char*)sg->protoName), cur);
+        int isProto = sg->protoName && find(em, sg->protoName) == e;
         anyProto |= isProto;
         if (isProto) piece = efmt(em, "(%s⥊1)", sg->tot);
         else if (sg->protoExpr && !strcmp(cur, "proto")) piece = sg->protoExpr;
@@ -1336,12 +1368,12 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
       stage(em, "%s ↩ %s", cur, base);
     }
     if (e->kind == RK_COL && e->hasPres && structural) {
-      char *p = efmt(em, "pres_%s", e->name);
+      char *p = presv(em, e);
       char *kept = keep ? efmt(em, "(%s/%s)", keep, p) : p;
       if (fx->nsp) {
         char *papp = NULL;
         for (int g = 0; g < fx->nsp; g++) {
-          int isProto = fx->sp[g].protoName && !strcmp(lc(em, (char*)fx->sp[g].protoName), cur);
+          int isProto = fx->sp[g].protoName && find(em, fx->sp[g].protoName) == e;
           char *piece = efmt(em, "(%s⥊%d)", fx->sp[g].tot, isProto ? 1 : 0);
           papp = papp ? efmt(em, "%s∾%s", papp, piece) : piece;
         }
@@ -1378,7 +1410,7 @@ static int emitStmt(Em *em, const Node *st) {
   } else if (isCont) {
     const RegEntry *cur = find(em, "cursor");
     if (!cur) return fail(em, st->line, "elided subject with no antecedent and no ^cursor alias");
-    stage(em, "%s ← %s", sv, lc(em, cur->name));
+    stage(em, "%s ← %s", sv, bqnv(em, cur));
   } else {
     const Node *pred = stripFrame(em, sel);
     char *msk;
@@ -1581,11 +1613,11 @@ static int emitCompr(Em *em, const Node *st) {
       if (!e) return fail(em, f->line, "unregistered '%s' in comprehension filter", c->name);
       EV rv; if (emitVal(em, f->kids[1], MODE_WORLD, &rv)) return -1;
       const char *op = f->op == '<' ? "<" : f->op == '>' ? ">" : f->op == 'l' ? "≤" : "≥";
-      stage(em, "%s ↩ %s∧((%s %s⌜ %s)%s%s)", M, M, aI, fnv(em, e->name), bI, op, rv.v);
+      stage(em, "%s ↩ %s∧((%s %s⌜ %s)%s%s)", M, M, aI, fnv(em, e), bI, op, rv.v);
     } else if (f->kind == N_CALL) {
       const RegEntry *e = find(em, f->name);
       if (!e) return fail(em, f->line, "unregistered '%s' in comprehension filter", f->name);
-      stage(em, "%s ↩ %s∧(%s %s⌜ %s)", M, M, aI, fnv(em, e->name), bI);
+      stage(em, "%s ↩ %s∧(%s %s⌜ %s)", M, M, aI, fnv(em, e), bI);
     } else return fail(em, f->line, "unsupported comprehension filter");
   }
   /* effect over both sides: rows/cols with any surviving pair */
@@ -1606,7 +1638,7 @@ static int emitCompr(Em *em, const Node *st) {
       const RegEntry *ce = find(em, e2->name);
       if (ce && ce->kind == RK_COL && ce->type == CT_BOOL) {
         char *t = tv(em);
-        stage(em, "%s ← %s∨%s", t, lc(em, ce->name), sv);
+        stage(em, "%s ← %s∨%s", t, bqnv(em, ce), sv);
         addCommit(em, &fx, entIdx(em, ce), t, '|', NULL);
         continue;
       }
@@ -1630,16 +1662,18 @@ static void emitFixture(Em *em) {
   sb_printf(em->out, "anoSel ← ⟨⟩\n");
   for (int i = 0; i < r->nents; i++) {
     const RegEntry *e = &r->ents[i];
-    char *v = lc(em, e->name);
+    char *v = bqnv(em, e);
+    /* mangled entries keep their human spelling as a comment on the definition line */
+    const char *cm = bqnlegal(e->name) ? "" : efmt(em, "  # %s", e->name);
     switch (e->kind) {
       case RK_COL: case RK_FIELD: {
         int n = e->kind == RK_FIELD ? r->latW * r->latH : r->n;
         if (e->type == CT_SYM) {
           sb_printf(em->out, "%s ← ⟨", v);
           for (int k = 0; k < e->nsyms; k++) sb_printf(em->out, "%s\"%s\"", k ? ", " : "", e->syms[k]);
-          sb_printf(em->out, "⟩\n");
+          sb_printf(em->out, "⟩%s\n", cm);
         } else if (e->type == CT_CHAR) {
-          sb_printf(em->out, "%s ← \"%s\"\n", v, e->syms ? e->syms[0] : "");
+          sb_printf(em->out, "%s ← \"%s\"%s\n", v, e->syms ? e->syms[0] : "", cm);
         } else if (e->nnums == 2 * n && n > 0) {
           em->isPair[i] = 1;
           sb_printf(em->out, "%s ← ⟨", v);
@@ -1649,23 +1683,23 @@ static void emitFixture(Em *em) {
             snprintf(b, sizeof b, "%s", numLit(em, e->nums[2*k+1]));
             sb_printf(em->out, "%s%s‿%s", k ? ", " : "", a, b);
           }
-          sb_printf(em->out, "⟩\n");
+          sb_printf(em->out, "⟩%s\n", cm);
         } else {
           sb_printf(em->out, "%s ← ⟨", v);
           for (int k = 0; k < e->nnums; k++) sb_printf(em->out, "%s%s", k ? ", " : "", numLit(em, e->nums[k]));
-          sb_printf(em->out, "⟩\n");
+          sb_printf(em->out, "⟩%s\n", cm);
         }
         if (e->hasPres) {
-          sb_printf(em->out, "pres_%s ← ⟨", e->name);
+          sb_printf(em->out, "%s ← ⟨", presv(em, e));
           for (int k = 0; k < r->n; k++) sb_printf(em->out, "%s%s", k ? ", " : "", numLit(em, e->pres[k]));
-          sb_printf(em->out, "⟩\n");
+          sb_printf(em->out, "⟩%s\n", cm);
         }
         break;
       }
       case RK_REL: case RK_ALIAS: {
         sb_printf(em->out, "%s ← ⟨", v);
         for (int k = 0; k < e->nnums; k++) sb_printf(em->out, "%s%s", k ? ", " : "", numLit(em, e->nums[k]));
-        sb_printf(em->out, "⟩\n");
+        sb_printf(em->out, "⟩%s\n", cm);
         break;
       }
       case RK_SREL: {
@@ -1676,16 +1710,16 @@ static void emitFixture(Em *em) {
             sb_printf(em->out, "%s%s", k ? ", " : "", numLit(em, e->fibVals[e->fibOff[f] + k]));
           sb_printf(em->out, "⟩");
         }
-        sb_printf(em->out, "⟩\n");
+        sb_printf(em->out, "⟩%s\n", cm);
         break;
       }
       case RK_BIND: {
         if (!strcmp(e->bindKind, "mask") || !strcmp(e->bindKind, "vec")) {
           sb_printf(em->out, "%s ← ⟨", v);
           for (int k = 0; k < e->nnums; k++) sb_printf(em->out, "%s%s", k ? ", " : "", numLit(em, e->nums[k]));
-          sb_printf(em->out, "⟩\n");
+          sb_printf(em->out, "⟩%s\n", cm);
         } else if (!strcmp(e->bindKind, "num")) {
-          sb_printf(em->out, "%s ← %s\n", v, numLit(em, e->nums[0]));
+          sb_printf(em->out, "%s ← %s%s\n", v, numLit(em, e->nums[0]), cm);
         }
         break;
       }
@@ -1694,8 +1728,8 @@ static void emitFixture(Em *em) {
           /* raw form: either "<dfn>" or "<targetcol> <dfn>" (verbs) — bind the dfn part */
           const char *raw = e->syms[0];
           const char *br = strchr(raw, '{');
-          if (br && br != raw) sb_printf(em->out, "%s ← %s\n", fnv(em, e->name), br);
-          else if (br) sb_printf(em->out, "%s ← %s\n", fnv(em, e->name), raw);
+          if (br && br != raw) sb_printf(em->out, "%s ← %s%s\n", fnv(em, e), br, cm);
+          else if (br) sb_printf(em->out, "%s ← %s%s\n", fnv(em, e), raw, cm);
         }
         break;
       }
@@ -1712,7 +1746,7 @@ static int emitExpects(Em *em) {
     if (ex->isOut) continue;
     const RegEntry *e = find(em, ex->col);
     if (!e) { snprintf(em->err, em->errsz, "expect: unknown column '%s'", ex->col); return -1; }
-    char *v = lc(em, e->name);
+    char *v = bqnv(em, e);
     int sym = (e->kind == RK_COL || e->kind == RK_FIELD) && e->type == CT_SYM;
     char *lst = efmt(em, "⟨");
     for (int k = 0; k < ex->nvals; k++) {

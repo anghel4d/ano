@@ -6,7 +6,3 @@ col targeted bool 0 1 0 0 0 0 0 0
 ja 敵 enemy
 ja 脅威 threat
 ja 標的 targeted
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

@@ -5,11 +5,7 @@ col region num 1 1 0 1 2 1
 col merchant bool 1 0 1 1 0 1
 col gold num 10 20 30 40 50 60
 bind Whiterun mask 1 1 0 1 0 1
-ja 商人 Merchant
+ja 商人 merchant
 ja ホワイトラン Whiterun
-ja 金 Gold
+ja 金 gold
 ja 地域 region
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char

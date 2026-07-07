@@ -1,0 +1,5 @@
+-- Bilingual bridge (s52), ASCII twin: English column names scripted in English. The JA conjugate says the same thing through the registry's ja aliases — different surface spellings, one emitted program.
+--! registry ../registries/s52-bilingual-bridge.reg
+--! expect morale = 40 50 50 40 50
+
+Scout & Supplies < 20 , Morale -= 10

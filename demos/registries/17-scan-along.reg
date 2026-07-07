@@ -6,7 +6,3 @@ bind pathCells vec 4 2 7 1
 ja 重量 weight
 ja 面 mask
 ja 経路群 pathCells
-ja 前 prev
-ja 行 row
-ja 番号 index
-ja 字 char
