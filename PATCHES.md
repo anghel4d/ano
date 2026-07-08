@@ -1,6 +1,6 @@
 # anoc — Patch Notes
 
-## Snapshot 26w28a — "That One Over There, Part II"
+## Snapshot 26w28a — 2026-07-07 — "That One Over There, Part II"
 
 The あの native-noun update is now feature-complete. This snapshot clears the entire #2–#8 issue backlog on `feature-jp-lexer`: a world can be declared, spawned into, sigil-matched, and pinned entirely in kanji, and the design docs finally admit what the compiler has quietly been doing. Also, mobs spawn with a parent again in fully-native worlds. Sorry about that one.
 
@@ -64,13 +64,13 @@ An adversarial multi-agent review pass (4 dimensions, 11 agents, plus one indepe
 
 - No existing world was harmed: all STABLE demos are untouched and emit byte-identical BQN.
 - Test suite: 229 demos green under `--run`, 113 conjugate pairs byte-identical under `--emit` (up from 225 / 111).
-- Nothing was committed or pushed. Grab the snapshot by checking out `feature-jp-lexer`; back up your world first, because this one does not commit itself.
+- Nothing was committed or pushed at publication; the author landed the snapshot 2026-07-08 as 178172b ("Plans within plans"). Grab it by checking out `feature-jp-lexer`; back up your world first, because this one does not commit itself.
 
-## Verification Report — 26w28a audited against the working diff
+### Verification Report — 26w28a audited against the working diff
 
 Audited 2026-07-07 against the uncommitted working tree on `feature-jp-lexer` (baseline commit 9b0edd6). Method: every claim above was checked against the actual `git diff`, a fresh `-Wall -Wextra` rebuild, the full harness, a pre-patch binary built from HEAD in a throwaway worktree, and hand-run negative fixtures. Verdict: the snapshot is accurate — every checkable claim holds, the diff contains nothing these notes do not mention, and the audit surfaced one corner-case behavior change the notes miss (finding #1 below).
 
-### Verified
+#### Verified
 
 - Build: the six-file `cc -std=c23 -O2 -Wall -Wextra` build completes with zero warnings; `-flto` is confirmed pre-existing in the Makefile CFLAGS and the diff touches no build file.
 - Suite: `check-ano.sh` reports exactly 229 ok and 113 ok-emit, zero failures — the claimed numbers, the s54/s55 pairs included.

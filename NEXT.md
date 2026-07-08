@@ -1,5 +1,7 @@
 # NEXT — The Purity of the Language. 
 
+Status: closed — fully executed, and committed by the author 2026-07-08 in 178172b ("Plans within plans"). Retained as the record of the native-noun landing; read TODO.md first.
+
 You are picking up verified, in-progress work on branch `feature-jp-lexer`.
 
 The architecture you must land on is specified in `src/compiler.md`, written in end-state present tense with a status line at the top. Read it before touching code. When you finish, verify every sentence of it against the implementation and flip its status line. If the implementation forces a divergence from it, alter the fine details to make it work. The Hierarchy is : The Mathematics > The Semantics > The Grammar > The Syntax > keywords, pipelining, implementation details.

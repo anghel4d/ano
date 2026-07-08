@@ -11,8 +11,8 @@ Transcription of the author's notebook pages (2026-07-07 the editor and the regi
 │                 columns         relations          │           │ read in        │
 │                 race      gold  twohanded  stamina │           ▼                │
 │  ┌ 1 0 3 0 ┐    Nord       300     60        100   │    ┌───────────────┐       │
-│  │ 0 1 0 4 │    Khajit     400     20        110   │    │ binary tables │       │ mv
-│  │ 3 0 1 0 │    NORD        57     28        110   │    │   in-memory   │       │ commit
+│  │ 0 1 0 4 │    Khajit     400     20        110   │◄───│ binary tables │       │ mv
+│  │ 3 0 1 0 │    NORD        57     28        110   │───►│   in-memory   │       │ commit
 │  │ 0 4 0 1 │    Imperial  1000     31        100   │    └───────┬───────┘       │
 │  └ 1 1 1 0 ┘    Nord       800     50         90   │            │ write out     │
 │       ▲                                            │            ▼               │

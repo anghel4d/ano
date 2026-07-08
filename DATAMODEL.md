@@ -60,7 +60,3 @@ One thing is missing on the whole board: the B wiring.
 
 - `Gold + 500` for `Gold += 500`. Effect position already determines the write-back, and the plan IR carries (column, op class, operand, mask) — the delta buffer is keyed by op class (ano-ecs.md §5), so the `=` in `+=` carries zero information. The contraction is pure surface and the author's call: terser, against the explicit read `+=` gives a reviewer, and the asymmetry that plain `=` (set) has no contracted form. Recorded, not resolved.
 - Sparse tag storage (row lists rather than bitmaps): same denotation, a storage class for the C store — ano-ecs.md §16 already holds the sparse-column open question. No .reg change implied, no action here.
-
-## Sequencing
-
-Unchanged from REGFIX.md: patch A is the case contract plus `as` — both arities, the tag included — plus the role-resolver decision; witnesses s56 (roles) and s57 (representation independence); patch B is reg_dump. The two standing gates are still the author's rulings on def-name folding and the role resolver. Total implementation surface of this entire page: one loader arity, one emitter case, one demo pair, three doc lines. No lexer, parser, or emitter architecture changes. The ladder was already load-bearing; now it is written down.
