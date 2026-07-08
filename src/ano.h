@@ -178,11 +178,17 @@ typedef struct {
   double *pres; int hasPres;/* optional presence mask (RK_COL) */
 } RegEntry;
 
+/* system-column roles the emitter routes (spawn key mint, parent, proto, position, and
+ * the stable-id column): a `role <name> <col>` line points one at a natively-named column,
+ * so a kanji `col 位置` can receive `at` positions the way the literal `pos` does. */
+#define ANO_NROLES 8
+
 typedef struct {
   int n;                    /* entity-table row count (0 if pure-space world) */
   int latW, latH;           /* lattice shape; 0 0 when absent */
   RegEntry *ents; int nents;
   char (*jaFrom)[ANO_NAMESZ]; char (*jaTo)[ANO_NAMESZ]; int nja; /* JA alias -> registry name */
+  char roleName[ANO_NROLES][ANO_NAMESZ]; char roleCol[ANO_NROLES][ANO_NAMESZ]; int nroles;
 } Registry;
 
 /* registry.c
@@ -204,6 +210,7 @@ typedef struct {
  *   fn fib
  *   lattice 8 8
  *   field elevation num 0 1 2 ...      # w*h values, row-major
+ *   role pos 位置                       # a system role (keys id parent proto pos) -> a native col
  *   ja 北 nord
  * Entry names and ja source words must not be lexer-reserved (lex_reserved): the closed
  * grammar outranks all nouns, so a reserved word is unaddressable — rejected at load.
@@ -212,6 +219,10 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
 /* exact entry name first (case-insensitive on the first letter), then the ja alias
  * table (exact bytes, both hops) — the alias is a pure name alias, surface-agnostic */
 const RegEntry *reg_find(const Registry *reg, const char *name);
+/* the column playing a system role (keys, id, parent, proto, pos): the `role`-declared
+ * column when one is set, else the column literally named `role` (the ASCII default), else
+ * NULL — so an English world needs no `role` line and a native one routes by declaration. */
+const RegEntry *reg_role(const Registry *reg, const char *role);
 
 /* ---------- AST ---------- */
 

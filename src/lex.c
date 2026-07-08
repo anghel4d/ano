@@ -46,6 +46,20 @@ static size_t nspan(const char *src, size_t n, size_t i) {
   }
 }
 
+/* Inputs: src (validated UTF-8), length n, index i. Output: byte length of an
+ * identifier-start char at i — ASCII nstart or a non-blacklisted codepoint >= U+0080 —
+ * else 0. The `:` and `^` sigils use it so a symbol or alias name may be UTF-8 (:山賊). */
+static size_t nstart_span(const char *src, size_t n, size_t i) {
+  unsigned char c = (unsigned char)src[i];
+  if (nstart(c)) return 1;
+  if (c >= 0x80) {
+    unsigned cp;
+    int l = ucp((const unsigned char *)src + i, n - i, &cp);
+    if (l && !ublack(cp)) return (size_t)l;
+  }
+  return 0;
+}
+
 /* growing token columns; post[] marks JA postfix operators, internal only */
 typedef struct {
   TokKind *kind; const char **name; double *num; int *line;
@@ -163,9 +177,9 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
       i = j + 1; continue;
     }
     if (c == ':') {
-      if (!nstart((unsigned char)src[i + 1])) return lex_err(err, errsz, line, "':' needs a name: symbols are :Name");
-      size_t j = i + 2;
-      while (nchar((unsigned char)src[j])) j++;
+      size_t st = nstart_span(src, n, i + 1);
+      if (!st) return lex_err(err, errsz, line, "':' needs a name: symbols are :Name");
+      size_t j = nspan(src, n, i + 1 + st);
       { int ix = tb_push(b, T_SYM, line); b->name[ix] = intern(b->it, b->a, src + i + 1, j - i - 1); }
       i = j; continue;
     }
@@ -242,14 +256,15 @@ static int lex_ascii(const char *src, TokBuf *b, char *err, size_t errsz) {
         else return lex_err(err, errsz, line, "'#' begins only the fold '#/'");
         break;
       case '@': tb_push(b, T_AT, line); i++; break;
-      case '^':
-        if (nstart(d)) {                                       /* ^alias sigil, the deictic pronoun */
-          size_t j = i + 2;
-          while (nchar((unsigned char)src[j])) j++;
+      case '^': {
+        size_t st = nstart_span(src, n, i + 1);                /* ^alias sigil, the deictic pronoun */
+        if (st) {
+          size_t j = nspan(src, n, i + 1 + st);
           { int ix = tb_push(b, T_ALIAS, line); b->name[ix] = intern(b->it, b->a, src + i + 1, j - i - 1); }
           i = j;
         } else return lex_err(err, errsz, line, "'^' begins only the ^alias sigil");
         break;
+      }
       case '\'': return lex_err(err, errsz, line, "stray tick: ' is postfix on a name");
       case '\\': return lex_err(err, errsz, line, "stray '\\': scans are +\\ *\\ max\\");
       default:   return lex_err(err, errsz, line, "unknown byte 0x%02X", c);
@@ -535,12 +550,12 @@ static int lex_ja(const char *src, TokBuf *b, char *err, size_t errsz) {
     if (j - i >= sizeof w) return lex_err(err, errsz, line, "word too long");
     memcpy(w, src + i, j - i); w[j - i] = 0;
     i = j;
-    /* sigils: ^alias, :symbol (identifiers, not particles — kept ASCII) */
-    if (w[0] == '^' && nstart((unsigned char)w[1])) {
+    /* sigils: ^alias, :symbol (identifiers, not particles — name may be UTF-8, :山賊) */
+    if (w[0] == '^' && word_name(w + 1)) {
       int ix = tb_push(b, T_ALIAS, line); b->name[ix] = intern(b->it, b->a, w + 1, strlen(w) - 1);
       continue;
     }
-    if (w[0] == ':' && nstart((unsigned char)w[1])) {
+    if (w[0] == ':' && word_name(w + 1)) {
       int ix = tb_push(b, T_SYM, line); b->name[ix] = intern(b->it, b->a, w + 1, strlen(w) - 1);
       continue;
     }

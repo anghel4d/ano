@@ -1,0 +1,8 @@
+# s55 — UTF-8 sigils and a char pin: kanji sym values (山賊 勇者 賊軍) written and matched
+# through :Sym, a kanji ^alias (照準), and a kanji char column pinned directly with
+# `--! expect 印 = …`. Every one of these was an ASCII-only surface before native nouns.
+n 6
+col 派閥 sym 山賊 勇者 山賊 勇者 山賊 勇者
+col 印 char .#..#.
+col 打撃 num 0 0 0 0 0 0
+alias 照準 1 0 0 0 0 1

@@ -1,0 +1,10 @@
+-- Native role routing (s54), ASCII twin: a spawn `at` a kanji point binding routes into the kanji 位置 column, mints an id into the kanji 鍵 column, and fills the kanji 親 column with the carrier row — all three declared by `role`, not by the literal names pos/keys/parent — so the fully native world spawns positioned, keyed, parented rows.
+--! registry ../registries/s54-native-roles.reg
+--! expect-n 3
+--! expect 手先 = 0 0 1
+--! expect 位置 = 5 5 6 6 7 8
+--! expect 資金 = 100 200 25
+--! expect 鍵 = 10 20 21
+--! expect 親 = -1 -1 1
+
+生成器 , spawn 手先 at 出現

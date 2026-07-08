@@ -154,8 +154,8 @@ static char *frN(Em *em) {
 /* the world's stable-id column: a registered `id`/`keys` column, else the row iota.
  * Relationship values denote these ids; membership survives structural compaction (ex12). */
 static char *idCol(Em *em) {
-  const RegEntry *e = reg_find(em->reg, "id");
-  if (!e) e = reg_find(em->reg, "keys");
+  const RegEntry *e = reg_role(em->reg, "id");
+  if (!e) e = reg_role(em->reg, "keys");
   if (e && e->kind == RK_COL) return bqnv(em, e);
   return efmt(em, "(↕%s)", frN(em));
 }
@@ -1302,7 +1302,7 @@ static char *spawnDefault(Em *em, const RegEntry *e, SpawnG *g) {
   if (e->kind == RK_REL) return efmt(em, "(%s⥊¯1)", tot);
   if (e->type == CT_SYM) return efmt(em, "(%s⥊<\"\")", tot);
   if (em->isPair[entIdx(em, e)]) return efmt(em, "(%s⥊<¯1‿¯1)", tot);
-  if (!strcmp(e->name, "parent")) return efmt(em, "(%s//%s)", g->cnt, em->selVar);
+  if (e == reg_role(em->reg, "parent")) return efmt(em, "(%s//%s)", g->cnt, em->selVar);
   return efmt(em, "(%s⥊%s)", tot, numLit(em, e->defval));
 }
 
@@ -1345,16 +1345,16 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     char *app = NULL;
     int anyProto = 0;
     if (fx->nsp) { /* spawn appends one row group per spawn effect, in effect order */
-      if (!strcmp(e->name, "keys"))
-        app = efmt(em, "((1+⌈´¯1∾keys)+↕%s)", totAll);  /* one mint across the batch */
+      if (e == reg_role(r, "keys"))
+        app = efmt(em, "((1+⌈´¯1∾%s)+↕%s)", cur, totAll);  /* one mint across the batch */
       else for (int g = 0; g < fx->nsp; g++) {
         SpawnG *sg = &fx->sp[g];
         char *piece;
         int isProto = sg->protoName && find(em, sg->protoName) == e;
         anyProto |= isProto;
         if (isProto) piece = efmt(em, "(%s⥊1)", sg->tot);
-        else if (sg->protoExpr && !strcmp(cur, "proto")) piece = sg->protoExpr;
-        else if (sg->pos && !strcmp(cur, "pos")) { piece = sg->pos; if (sg->posPair) em->isPair[i] = 1; }
+        else if (sg->protoExpr && e == reg_role(r, "proto")) piece = sg->protoExpr;
+        else if (sg->pos && e == reg_role(r, "pos")) { piece = sg->pos; if (sg->posPair) em->isPair[i] = 1; }
         else piece = spawnDefault(em, e, sg);
         app = app ? efmt(em, "%s∾%s", app, piece) : piece;
       }
@@ -1748,6 +1748,17 @@ static int emitExpects(Em *em) {
     if (!e) { snprintf(em->err, em->errsz, "expect: unknown column '%s'", ex->col); return -1; }
     char *v = bqnv(em, e);
     int sym = (e->kind == RK_COL || e->kind == RK_FIELD) && e->type == CT_SYM;
+    int chr = (e->kind == RK_COL || e->kind == RK_FIELD) && e->type == CT_CHAR;
+    if (chr) {
+      /* char column: the fixture holds a BQN string, so the pin is the glyph run
+       * (space-joined when written in parts) compared exactly, never the numeric law.
+       * The directive tokenizer collapses whitespace runs, so a glyph string with
+       * consecutive or edge spaces is not pinnable this way — the demo glyphs are dot/hash. */
+      char *s = efmt(em, "");
+      for (int k = 0; k < ex->nvals; k++) s = efmt(em, "%s%s%s", s, k ? " " : "", ex->vals[k]);
+      sb_printf(em->out, "\"expect %s\" ! \"%s\" ≡ %s\n", ex->col, s, v);
+      continue;
+    }
     char *lst = efmt(em, "⟨");
     for (int k = 0; k < ex->nvals; k++) {
       char *w = ex->vals[k];

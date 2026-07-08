@@ -83,15 +83,18 @@ APL and BQN are unspaced because every token is a single glyph, so lexing is max
 
 General Japanese segmentation is hard because the vocabulary is open. ano's vocabulary is closed. Component names are declared in the registry before evaluation, so at lex time the vocabulary is fixed and known: registry names, the particle and verb set, the numerals. Segmentation is maximal-munch against that closed dictionary, the registry being the dictionary, an ordinary lexer problem. Remaining ambiguity, a component name that ends in a particle homograph, resolves by longest match plus grammar position, since the parser only accepts a particle where an operator is legal. Spaced input needs none of this and is a pure table; ship it first and treat the unspaced reader as the harder tier.
 
+Post-branch note. The shipped spaced skin is registry-blind: every noun lexes to its surface spelling and resolves at emit, the one-parser invariant in src/compiler.md. The unspaced reader inherits that constraint. It may segment by maximal munch, but it resolves the munched spans against the registry after lexing, never during, so the dictionary stays a resolution-time oracle and the two skins keep one parser.
+
 ## Negation, the one that fights back
 
-Japanese negation is a postfix auxiliary, which suits a postfix language, but `死 ない` for not-dead sits next to 死ぬ, which is the verb to die, and the kana run together in unspaced mode. Options are the classical ず, the modern ない, or the kanji prefix 非 which is unambiguous but breaks the postfix rhythm. Unresolved.
+Japanese negation is a postfix auxiliary, which suits a postfix language, but `死 ない` for not-dead sits next to 死ぬ, which is the verb to die, and the kana run together in unspaced mode. Options are the classical ず, the modern ない, or the kanji prefix 非 which is unambiguous but breaks the postfix rhythm. This branch ships ない and makes 非 a legal identifier-start, so 非死 now lexes as one noun; adopting the 非 prefix would need its own table entry and would shadow any 非-initial noun — the collision the open noun space now carries. Unresolved.
 
 ## Open questions
 
 - Direction of comparison. より needs a paired adjective in natural Japanese; 超 and 未満 disambiguate but read as jargon. Pick one scheme and commit.
 - Negation glyph, per above.
-- Reduction and scan. The ASCII surface uses `/` and `\`; the particle forms for fold and scan are not yet chosen.
+- Reduction and scan. Settled: the JA folds are the prefix words 総和 総積 総数 最大 最小 平均 皆 或 and the scans 累和 累積 累大, each carrying the ASCII `/`/`\` op as payload; the whole corpus uses them.
+- Numeral policy per surface. Kanji numerals read as numbers only under `--! ja`; on the ASCII surface 六十 is an ordinary identifier, so the same glyphs mean 60 in one skin and a noun in the other. Deliberate — the ASCII surface owns no kanji-numeral grammar, and a native column may be spelled 六十 — but whether the skins should ever converge is open. Unresolved.
 - Verb-aware case frames. The spaced particle surface is a lexer table because each operator fixes one case frame (に on the column in に…たす). The full-sentence する voice lets the verb pick the frame — 与える puts に on the recipient selection and を on the column — so the same `ASSIGN_ADD` needs a per-verb case-frame table, a grammar rather than a lexer. The なる register ships as the table tier; whether the する register gets verb frames or stays out of the unspaced surface is open.
 - IME ergonomics. Writing kana code needs an input method, and the unspaced form is hard to type as well as to lex. The spaced form is the authoring surface; the unspaced form is accepted but not authored.
 - Whether the printer normalizes mixed kana, or preserves the author's katakana-vs-kanji choices on round-trip.

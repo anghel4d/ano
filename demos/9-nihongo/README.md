@@ -16,3 +16,5 @@ Examples 40-49 of ano-examples.md, the Japanese surface mode, modeled as BQN col
 - s51-mixed-surface — English nouns under Japanese grammar, then kanji and Latin nouns in one statement; aliases are surface-agnostic.
 - s52-bilingual-bridge — English columns plus ja aliases, scripted idiomatically from both surfaces: the alias mechanism's one legitimate job.
 - s53-native-kinds-{a,b,c,d} — every registry entry kind under a Japanese name: cols in every type, pres and default, rel with inv, srel, binds in every kind, kanji fns with verbatim BQN bodies, a lattice with fields — the coverage witness for the emitter's name mangler.
+- s54-native-roles — `role`-declared kanji 位置/鍵/親 take spawn `at` positions, key mints, and the carrier row the way the literal pos/keys/parent do; the fully native world spawns positioned, keyed, parented rows.
+- s55-native-sigils — kanji ^alias and :Sym values written and matched on both surfaces, and a kanji char column pinned directly with `--! expect 印 = …`.

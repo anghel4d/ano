@@ -339,6 +339,21 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (wname(words[2], reg->jaTo[reg->nja], ANO_NAMESZ, err, errsz, ln)) return -1;
       reg->nja++;
 
+    } else if (strcmp(k, "role") == 0) {
+      /* point a system role at a native column; the emitter routes spawn machinery
+       * through reg_role, so `role pos 位置` gives a kanji column the `pos` behaviour. */
+      if (nw != 3) return rerr(err, errsz, ln, "usage: role <role> <col>");
+      static const char *known[] = { "keys", "id", "parent", "proto", "pos" };
+      int ok = 0;
+      for (size_t r = 0; r < sizeof known / sizeof *known; r++) ok |= !strcmp(words[1], known[r]);
+      if (!ok) return rerr(err, errsz, ln, "unknown role '%s' (keys id parent proto pos)", words[1]);
+      RegEntry *c = find_exact(reg, words[2]);
+      if (!c || c->kind != RK_COL) return rerr(err, errsz, ln, "role: no column '%s'", words[2]);
+      if (reg->nroles >= ANO_NROLES) return rerr(err, errsz, ln, "too many roles");
+      if (wname(words[1], reg->roleName[reg->nroles], ANO_NAMESZ, err, errsz, ln)) return -1;
+      if (wname(words[2], reg->roleCol[reg->nroles], ANO_NAMESZ, err, errsz, ln)) return -1;
+      reg->nroles++;
+
     } else {
       return rerr(err, errsz, ln, "unknown kind '%s'", k);
     }
@@ -363,5 +378,22 @@ const RegEntry *reg_find(const Registry *reg, const char *name) {
         if (strcmp(reg->ents[j].name, reg->jaTo[i]) == 0) return &reg->ents[j];
       return NULL;
     }
+  return NULL;
+}
+
+/* Inputs: registry, a system role (keys id parent proto pos). Output: the declared
+ * role column, else the column named `role` — case-insensitive on the first letter, the
+ * same rule reg_find uses, so every ASCII world routes exactly as before — else NULL. */
+const RegEntry *reg_role(const Registry *reg, const char *role) {
+  for (int i = 0; i < reg->nroles; i++)
+    if (strcmp(reg->roleName[i], role) == 0)
+      for (int j = 0; j < reg->nents; j++)
+        if (strcmp(reg->ents[j].name, reg->roleCol[i]) == 0) return &reg->ents[j];
+  for (int i = 0; i < reg->nents; i++) {
+    const char *e = reg->ents[i].name;
+    if (tolower((unsigned char)e[0]) == tolower((unsigned char)role[0]) &&
+        (role[0] == 0 || strcmp(e + 1, role + 1) == 0))
+      return &reg->ents[i];
+  }
   return NULL;
 }
