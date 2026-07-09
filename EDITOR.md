@@ -1,0 +1,48 @@
+# EDITOR — kore, the world at hand.
+
+You are picking up design-ratified work on branch `feature-jp-lexer`, to be landed in one night. The ask is the author's, verbatim (INTERACTIVE.md): an ano editor — "get me a harness for this lang!" — the notebook panel as a TUI. The Hierarchy is: The Mathematics > The Semantics > The Grammar > The Syntax > keywords, pipelining, implementation details. Read src/compiler.md and src/GRAMMAR.md's Registry files section before touching code; read INTERACTIVE.md for the pictures this file turns into panels. Demos are immutable; byte-identity of every existing emit is law. Where this file is silent, the sky is the limit — choose the more alive option.
+
+## Name
+
+kore. これ, "this one here" — ano addresses the world from over there; the editor is where you hold it in your hand. The binary is `kore`, the directory `kore/`. Ratified by the author, 2026-07-10.
+
+## The two rulings this plan obeys
+
+Text boundary (2026-07-10). Steel is ruled: Cano derives from verified Steel, never the inverse, so nothing new may accrue against anoc's C internals. The editor couples to the process and text boundary only — it spawns anoc as a child exactly as anoc spawns cbqn, and its data contract is the .reg format, which the dump fixpoint makes a stable wire format. The same launcher CLI is what Steel re-implements, so kore survives the port untouched. kore never includes ano.h.
+
+The tick. Each REPL submission is one program against the current world: one gather, one barrier, one scatter, then the world file advances — the commit loop from the drawing IS the editor loop (read in → in-memory → staged → mv). A `def … => …` fires its pretend tick inside its own submission; the session log records every submission in order and is itself a valid .ano program, so a session replays end to end and a good session is a demo skeleton. The clock semantics are anoc's own (ISSUES.md, "the clock is the install runs").
+
+## Work items, in order
+
+1. The pipe-back (src/ — the only anoc change). New flag `--save <path>`, requires `--run`: after the program's statements and pins, the emitted BQN prints the post-state data, one line per datum, each line prefixed with the record-separator byte 0x1E so no user-visible print can collide. Lines: `n <k>`, then per data-carrying entry in declaration order — `col <name> <values…>` (num via •Repr so doubles round-trip, bool 0/1, sym bare words, char the exact glyph run, vec 2k numbers), `pres <name> <bits>`, `field <name> <values…>`, `rel <name> <indexes>` with the none sentinel, srel fibers as their `|` rows. Schema never pipes — fns, binds, aliases, roles, and derived tags are load-side and unchanged; tags re-derive from their carriers by construction. main.c: run_bqn gains a pipe (fork/execvp/read loop) — non-sentinel child output forwards verbatim so demos look identical, sentinel lines parse with the loader's own word/number helpers, values patch into the loaded Registry in the arena (n may grow on spawn; allocate fresh arrays), then reg_dump writes `<path>` through fs_write_commit — staged, rename(2), atomic. The serializer is emitted only under the flag: every existing invocation's BQN is byte-identical, and on a nonzero child exit nothing is written. This closes ISSUES.md "dump is pre-state today" — the pipe-back channel that entry names. `--dump` keeps its meaning, the loaded world.
+
+2. kore, the shell (new top-level `kore/`, `kore.c` single file, plus `kore.md` per the directory-doc rule). C23, zero deps: raw ANSI (CSI) rendering plus termios raw mode, no ncurses — a hand-drawn glyph grid is the genre's native medium. Double-buffer each frame into a growable buffer, one write(2) per frame; SGR mouse reporting on (CSI ?1002;?1006h), events parsed beside the keys; SIGWINCH + ioctl(TIOCGWINSZ) for resize; q quits and every exit path restores the terminal and the mouse state (atexit plus signal handlers). CJK, kana, and fullwidth codepoints occupy 2 cells. kore carries its own line-oriented .reg reader (~100 lines): data lines parse into tables for display, schema and unknown lines are preserved verbatim — pass-through, never regeneration.
+
+3. The surfaces — what must be on screen, not where. INTERACTIVE.md's drawing is the spiritual reference; arrangement, borders, proportions, and styling are the implementer's call. Six surfaces, each a data contract:
+   - demos: every .ano under demos/ (walked at startup), scrollable and selectable; selecting one populates the other surfaces; running it is one keystroke or a click. The corpus becomes scrollable, runnable teaching material, which is the point: the author learns the language by walking his own witnesses.
+   - code: the loaded .ano text, editable in place — enough editor to write a demo without leaving kore: navigate, insert, delete, save, run. Directives and comments dim; the hinge comma and `=>` may glow. E still opens $EDITOR on the file for the author's own keys, reloading on return.
+   - world: the current registry's data, whole — every column's values in world order, presence gaps visibly absent, rel columns as row indexes with a visible none, srel fibers, lattice fields in their w×h shape, kanji names at correct width. This surface owns a cell cursor: every data value must be reachable and editable in place.
+   - the space: any world with a lattice or positioned entities also renders as a map — inspire yourself with Dwarf Fortress: the world as a glyph grid you look down at. char fields draw their exact glyphs, num and bool fields shade (░▒▓█ or digits), positioned entities stand on their cells, and the cell cursor and mouse work on the map exactly as on the table. Toggle table ⇄ space: two views, one denotation — the world read as records and read as a place. Running a rule demo with the space up is the payoff: c2's glider walks, n5's spread eats the board.
+   - output: the last run's stdout/stderr verbatim (`--! out` prints land here), one unambiguous verdict line — pins held, which assertion failed, or the compiler error as written — and the save/undo status.
+   - the prompt: the drawing's `>` line, reachable from anywhere, holding the statement being composed; arrow-up history within the session.
+   Mouse: everything the keys reach, a click reaches — click focuses and cursors, wheel scrolls, click the prompt to type, and dragging across world rows or space cells paints a selection whose predicate skeleton pre-fills the prompt. Pointing at the world is the language's founding gesture; the editor gets it literally.
+   Default keys, the implementer may rebind (kore.md records the truth): j/k or arrows scroll, Enter select or edit, Tab cycle focus, r run, `:` or `>` focus the prompt, m toggle table ⇄ space, u undo, w snapshot, E the $EDITOR hop, q quit.
+
+4. The REPL line (the drawing's `>` prompt). `:` or `>` focuses it from anywhere. Enter: kore writes a temp .ano — `--! registry <current world>` plus the one statement — and runs `anoc --run --save <world>`; on success the world panel redraws from the advanced file and the statement appends to the session log; on failure the compiler's error lands in the output panel and the world stands. The session log (`session.ano` beside the world) is a valid .ano program: a session replays, and a good session is a demo skeleton for free.
+
+5. Direct mutation. In the world panel, Enter on a cell opens an inline edit; kore rewrites that value in the .reg text and reloads. Every world advance — REPL or cell edit — first copies the current .reg to `.kore/undo/<seq>.reg`; u steps back. The undo ring is the commit loop's free gift: pre-states are just files. w writes a named snapshot copy for the author (every advance is already staged→rename, so the working file is always committed truth).
+
+6. Entry points. `kore <file.reg>` opens a bare world, REPL-only; `kore <file.ano>` opens the demo form; bare `kore` opens the rail. Never run kore's mutating paths against demos/registries/ directly; the rail runs demos read-only, and mutation requires a copy (kore copies on first mutation and says so in the output surface).
+
+## Docs
+
+src/GRAMMAR.md's pipeline line and src/compiler.md's main.c paragraph gain `--save`; ISSUES.md's dump entry closes citing the pipe-back; kore/kore.md is the editor's own doc (keys and mouse, surfaces as built, the tick semantics, CJK widths); TODO.md crosses the editor item when this lands. Demos untouched; the only anoc change is `--save`.
+
+## Verification, in order
+
+1. Rebuild anoc, zero warnings; suite green — 235 ok / 116 ok-emit / 0 fail.
+2. Byte-identity: every existing demo emits byte-identical BQN under the new anoc (the serializer is flag-gated; any drift is a bug in your change).
+3. `--save` by hand: s57a run+save — saved gold reads 900 600 700 650 221, master 2 / / 4 /; the saved world reloads and fixpoints under `--dump`; a spawn demo's saved n grows; `--save` on nihongo twins round-trips kanji columns exactly; a failing program writes nothing and leaves no staged file.
+4. kore's .reg reader walks all 103 registries without a crash and renders each — table always, space wherever a lattice or positions exist; a cell edit → save → reload round-trips a value on a copy.
+5. Manual smoke, the author driving: scroll the corpus by keys and wheel, run one demo per directory, watch c2's glider walk the space view, edit a statement in the code surface and run it, one full REPL session against a copied world — statement, cell edit, drag-selection, undo, snapshot.
+6. Append the landing to PATCHES.md as its own dated snapshot entry, Minecraft-style. Show the author the full diff and STOP. No commit, no push. Suggest archiving EDITOR.md to .archive/ when the author commits.
