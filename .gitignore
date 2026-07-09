@@ -40,6 +40,9 @@ SKILL.md
 # Scratchpad
 scratch/
 
+# Executed plan docs, archived out of the tree
+.archive/
+
 # Exceptions
 .claude/*
 !.claude/settings.json

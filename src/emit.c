@@ -137,6 +137,7 @@ static char *fnv(Em *em, const RegEntry *e) {
   return efmt(em, "Fn_jp%d", entIdx(em, e));
 }
 
+/* defs are program variables: exact-byte match, outside the registry's case contract */
 static const Node *findDef(Em *em, const char *n) {
   for (int i = 0; i < em->ndefs; i++)
     if (!strcmp(em->defs[i]->name, n)) return em->defs[i];
@@ -192,6 +193,19 @@ static char *presOf(Em *em, const RegEntry *e) {
   return NULL;
 }
 
+/* Inputs: a derived-tag entry. Output: 0 with *out the world-space mask the tag
+ * denotes — present(carrier) ∧ carrier = value, recomputed against the live column
+ * (the left-join-null rule) — or -1 on a dangling carrier. A tag binds no fixture
+ * variable; every use, bare or hopped-onto, expands through here. */
+static int tagMask(Em *em, const RegEntry *e, int line, char **out) {
+  const RegEntry *c = find(em, e->tagCol);
+  if (!c) return fail(em, line, "derived tag '%s': carrier '%s' unregistered", e->name, e->tagCol);
+  char *eq = e->type == CT_SYM ? efmt(em, "((<\"%s\")≡¨%s)", e->syms[0], bqnv(em, c))
+                               : efmt(em, "(%s=%s)", bqnv(em, c), numLit(em, e->nums[0]));
+  *out = (c->kind == RK_COL && c->hasPres) ? efmt(em, "(%s∧%s)", presv(em, c), eq) : eq;
+  return 0;
+}
+
 /* ---------- names as values ---------- */
 
 /* Inputs: name node. Output: EV in mode m. Handles cols, fields, coords, index,
@@ -226,6 +240,12 @@ static int emitNameVal(Em *em, const Node *nd, Mode m, EV *ev) {
       ev->v = inMode(em, v, m);
       return 0;
     }
+    case RK_TAG: {
+      /* the derived tag is its recomputed mask — total by construction, no guard */
+      char *mk; if (tagMask(em, e, nd->line, &mk)) return -1;
+      ev->v = inMode(em, mk, m);
+      return 0;
+    }
     case RK_REL: { ev->v = inMode(em, bqnv(em, e), m); ev->g = efmt(em, "(0≤%s)", bqnv(em, e)); return 0; }
     case RK_ALIAS: { ev->v = inMode(em, bqnv(em, e), m); return 0; }
     case RK_BIND:
@@ -258,6 +278,7 @@ static int emitNameMask(Em *em, const Node *nd, char **out) {
       if (e->type == CT_BOOL) { *out = e->hasPres ? efmt(em, "(%s∧%s)", presv(em, e), v) : v; return 0; }
       *out = e->hasPres ? presv(em, e) : efmt(em, "(1¨%s)", v);
       return 0;
+    case RK_TAG: return tagMask(em, e, nd->line, out);
     case RK_ALIAS: *out = v; return 0;
     case RK_BIND:
       if (!strcmp(e->bindKind, "mask")) { *out = v; return 0; }
@@ -645,11 +666,15 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
     /* functional relationship hop: rel.Comp with ¯1 dangling */
     if (be && be->kind == RK_REL && fe) {
       char *rel = bqnv(em, be);
-      char *comp = bqnv(em, fe);
+      char *comp;
+      if (fe->kind == RK_TAG) {   /* the tag is its recomputed mask; the hop indexes it */
+        if (tagMask(em, fe, nd->line, &comp)) return -1;
+      } else comp = bqnv(em, fe);
       char *w = efmt(em, "((0⌈%s)⊏%s)", rel, comp);
       ev->g = efmt(em, "(0≤%s)", rel);
-      if (fe->hasPres) ev->g = gAnd(em, ev->g, efmt(em, "((0⌈%s)⊏%s)", rel, presv(em, fe)));
-      ev->sym = fe->type == CT_SYM;
+      if (fe->kind != RK_TAG && fe->hasPres)
+        ev->g = gAnd(em, ev->g, efmt(em, "((0⌈%s)⊏%s)", rel, presv(em, fe)));
+      ev->sym = fe->kind != RK_TAG && fe->type == CT_SYM;
       ev->v = inMode(em, w, m);
       return 0;
     }
@@ -663,9 +688,13 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
     EV bv; if (emitHop(em, base, MODE_WORLD, &bv)) return -1;
     const RegEntry *fe = field->kind == N_NAME ? find(em, field->name) : NULL;
     if (!fe) return fail(em, nd->line, "hop target '%s' unregistered", field->name);
-    char *w = efmt(em, "((0⌈%s)⊏%s)", bv.v, bqnv(em, fe));
+    char *comp;
+    if (fe->kind == RK_TAG) {
+      if (tagMask(em, fe, nd->line, &comp)) return -1;
+    } else comp = bqnv(em, fe);
+    char *w = efmt(em, "((0⌈%s)⊏%s)", bv.v, comp);
     ev->g = gAnd(em, bv.g, efmt(em, "(0≤%s)", bv.v));
-    ev->sym = fe->type == CT_SYM;
+    ev->sym = fe->kind != RK_TAG && fe->type == CT_SYM;
     ev->v = inMode(em, w, m);
     return 0;
   }
@@ -1126,6 +1155,11 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (tgt->kind == N_HOP) { coln = tgt->kids[0]; field = tgt->kids[1]->name; }
       const RegEntry *e = find(em, coln->name);
       if (!e) return fail(em, ef->line, "assign to unregistered '%s'", coln->name);
+      /* a derived tag is read-only: setting it true is determined, false is not —
+       * δ_v has no inverse on the complement (DATAMODEL.md) */
+      if (e->kind == RK_TAG)
+        return fail(em, ef->line, "derived tag '%s' is not an effect target: write the carrier column '%s'",
+                    coln->name, e->tagCol);
       char *col = bqnv(em, e);
       EV rhs;
       /* guards must refine the mask before gathering: pre-scan via world-mode guard probe */
@@ -1177,6 +1211,9 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
     }
     case N_EADD: case N_EDEL: {
       const RegEntry *e = find(em, ef->name);
+      if (e && e->kind == RK_TAG)
+        return fail(em, ef->line, "derived tag '%s' is not an effect target: write the carrier column '%s'",
+                    ef->name, e->tagCol);
       if (!e || (e->kind != RK_COL && e->kind != RK_FIELD))
         return fail(em, ef->line, "%cComp on unregistered '%s'", ef->kind == N_EADD ? '+' : '-', ef->name);
       char *col = bqnv(em, e);
@@ -1198,6 +1235,13 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       const Node *what = ef->kids[0];
       const Node *cnt = ef->nkids > 1 ? ef->kids[1] : NULL;
       const Node *at = ef->nkids > 2 ? ef->kids[2] : NULL;
+      /* spawn writes its proto column; a derived tag takes no writes anywhere */
+      if (what->kind == N_NAME) {
+        const RegEntry *we = find(em, what->name);
+        if (we && we->kind == RK_TAG)
+          return fail(em, ef->line, "derived tag '%s' is not an effect target: write the carrier column '%s'",
+                      what->name, we->tagCol);
+      }
       /* Tier-1 inscription: on a lattice frame, a proto registered as a FIELD takes the
        * figure as a monotone OR — the ground is conserved, no rows mint (ex37) */
       if ((em->fr.kind == FR_LAT || em->fr.kind == FR_BOARD) && !cnt &&
@@ -1746,6 +1790,11 @@ static int emitExpects(Em *em) {
     if (ex->isOut) continue;
     const RegEntry *e = find(em, ex->col);
     if (!e) { snprintf(em->err, em->errsz, "expect: unknown column '%s'", ex->col); return -1; }
+    if (e->kind == RK_TAG) {
+      snprintf(em->err, em->errsz, "expect: '%s' is a derived tag; pin the carrier column '%s'",
+               ex->col, e->tagCol);
+      return -1;
+    }
     char *v = bqnv(em, e);
     int sym = (e->kind == RK_COL || e->kind == RK_FIELD) && e->type == CT_SYM;
     int chr = (e->kind == RK_COL || e->kind == RK_FIELD) && e->type == CT_CHAR;
@@ -1808,7 +1857,8 @@ int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
     const Node *st = prog->kids[i];
     const Node *rule = NULL;
     if (st->kind == N_DEFSTMT) {
-      if (em.ndefs < 128) em.defs[em.ndefs++] = st;
+      if (em.ndefs >= 128) { rc = fail(&em, st->line, "more than 128 defs"); break; }
+      em.defs[em.ndefs++] = st;
       if (st->kids[0]->kind == N_STMT) rule = st->kids[0];
     } else if (st->kind == N_STMT && (st->flags & F_RULE)) rule = st;
     if (rule) {

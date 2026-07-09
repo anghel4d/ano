@@ -34,7 +34,7 @@ static const char *tokname[T_KINDCOUNT] = {
 
 /* Inputs: none. Output: usage on stderr. Returns 2 (usage error exit code). */
 static int usage(void) {
-  fprintf(stderr, "usage: anoc [--tokens] [--emit] [--run] [--rt <path>] [--registry <path-or-name>] file.ano\n");
+  fprintf(stderr, "usage: anoc [--tokens] [--emit] [--run] [--dump <path>] [--rt <path>] [--registry <path-or-name>] file.ano\n");
   return 2;
 }
 
@@ -137,6 +137,9 @@ static int same_stream(const Toks *x, const Toks *y, const Registry *reg) {
     if (i >= x->n || j >= y->n) return i >= x->n && j >= y->n;
     if (x->kind[i] != y->kind[j] || x->num[i] != y->num[j]) return 0;
     if (strcmp(x->name[i], y->name[j])) {
+      /* only NAME/ALIAS payloads compare through the resolver — sym, string, and
+       * counter payloads are values, and values never fold (the case contract) */
+      if (x->kind[i] != T_NAME && x->kind[i] != T_ALIAS) return 0;
       const RegEntry *ex = reg_find(reg, x->name[i]), *ey = reg_find(reg, y->name[j]);
       if (!ex || ex != ey) return 0;
     }
@@ -178,13 +181,15 @@ static int run_bqn(const char *path, const char *rt, size_t rtlen, const StrBuf 
 /* Inputs: argv per usage(). Output: exit code 0 ok / 1 test failure / 2 usage or
  * compile error. Default action with no mode flag: --emit to stdout. */
 int main(int argc, char **argv) {
-  int modeTokens = 0, modeRun = 0;
-  const char *rtFlag = NULL, *regFlag = NULL, *path = NULL;
+  int modeTokens = 0, modeRun = 0, modeEmit = 0;
+  const char *rtFlag = NULL, *regFlag = NULL, *dumpFlag = NULL, *path = NULL;
   for (int i = 1; i < argc; i++) {
     const char *s = argv[i];
     if (!strcmp(s, "--tokens")) modeTokens = 1;
-    else if (!strcmp(s, "--emit")) { /* the default mode */ }
+    else if (!strcmp(s, "--emit")) modeEmit = 1;   /* the default mode; tracked so an
+                                                      explicit ask survives --dump */
     else if (!strcmp(s, "--run")) modeRun = 1;
+    else if (!strcmp(s, "--dump")) { if (++i >= argc) return usage(); dumpFlag = argv[i]; }
     else if (!strcmp(s, "--rt")) { if (++i >= argc) return usage(); rtFlag = argv[i]; }
     else if (!strcmp(s, "--registry")) { if (++i >= argc) return usage(); regFlag = argv[i]; }
     else if (s[0] == '-' && s[1]) return usage();
@@ -222,6 +227,14 @@ int main(int argc, char **argv) {
     }
     if (!regp.len) { fprintf(stderr, "%s: registry path too long: %s\n", path, rspec); return 2; }
     if (reg_load(regp.str, &reg, &a, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
+  }
+
+  /* the write-out half of the commit loop: dump the in-memory world (today: the loaded
+   * fixture state) and, with no other mode asked for, stop — the dump was the job */
+  if (dumpFlag) {
+    if (!rspec) { fprintf(stderr, "%s: --dump needs a registry\n", path); return 2; }
+    if (reg_dump(&reg, dumpFlag, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
+    if (!modeRun && !modeTokens && !modeEmit) { arena_free(&a); return 0; }
   }
 
   Toks toks = {0};

@@ -1,5 +1,67 @@
 # anoc — Patch Notes
 
+## Snapshot 26w28b — 2026-07-08 — "The Registry Is the API"
+
+The case-contract update. One rule, no exceptions: registry names are case-insensitive (ASCII fold, non-ASCII bytes exact); everything else — values, defs, binders, every program variable — is case-sensitive. The whole compiler now enforces it through one comparator. Registries learned the `as` directive, roles resolve through one path, and your world can finally save itself: `--dump` writes it back out, atomically. Both findings from 26w28a's verification report are closed.
+
+> Registry Format: now accepts `as` lines — name aliases and derived tags. Loads got stricter: two names that fold together are one name and rejected, as is any name the lexer owns under the fold. Measured against all 100 registries before shipping: nothing live rejects.
+> Emitted BQN Format: **unchanged** — all 229 pre-existing demos compile byte-for-byte identical (verified against a pre-patch snapshot of every emit).
+
+### New Features
+
+- **One comparator.** `names_eq` — ASCII letters fold, every other byte exact — now serves every registry name resolution: entries, aliases, role targets, the loader's own directive lookups. `GOLD` finds `gold`; `:Nord` still refuses `:nord`, because sym values are values; `def ridge` beside a column `Ridge` is two names, because defs are program variables, not registry nouns. Kanji names are untouched by construction.
+- **Added the `as` directive, both arities.** `as <word> <name>` is a pure name alias with `ja`'s exact semantics — one hop, no transitivity, outranked by real entries; both spellings fill one table, and `ja` survives because it documents the Japanese surface at the declaration site. `as <word> <col> <value>` declares a derived tag: the word names the equality mask over the live column (present ∧ col = value), recomputed at each use. Write `as nord race Nord` and `Nord` selects Nords without a stored bit anywhere. Derived tags are read-only as effect targets — the write spells `race = :Nord` — and the error message points you at the carrier.
+- **One resolver for roles.** `reg_role`'s literal-name fallback now calls `reg_find` — entries, then aliases, one path in the whole compiler. A declared `role` line remains the explicit override whenever plumbing must be pinned. Closes 26w28a verification finding #1 (the fallback used to drop the alias hop).
+- **Save files.** `--dump <path>` serializes the in-memory world back to .reg text — everything `reg_load` reads, round-trippable — through a staged file and rename(2): the atomic commit, crash-safe saves for free. load → dump → load → dump fixpoints byte-identically on all 103 registries, and a dumped world passes the same pins as the in-memory one. The world is a column store, so a save is a registry dump.
+- **Added 6 new demos and 3 new world fixtures:**
+  - `s56-native-proto-id` (demos/9-nihongo) — the last two roles proven load-bearing: set-hop membership reads the `role id` kanji 識別 (prime ids, so row indexes would miss) and a board spawn writes computed pieces through `role proto` into the kanji 種別. Delete either role line, a pin fails. With s54, all five system roles are witnessed. Closes 26w28a verification finding #2.
+  - `s57-derived-tag-{a,b}` (demos/12-registry-forms) — one program, two registries: a stores the tag as a bool column, b derives it from a race column via `as`. Identical pins across both — DATAMODEL.md's representation-independence claim as a running test. Delete the `as` line and the program fails at compile.
+
+### Changes
+
+- Loads are strict within name kinds: entry-vs-entry and alias-source-vs-alias-source fold collisions are load errors, and the reserved check folds (`col Til` rejects exactly as `col til`). Alias-vs-entry is deliberately not rejected — entries outrank aliases, that is deterministic shadowing, and the seven `ja x x` identity-alias worlds depend on it.
+- Defs stay case-sensitive. Ruled by the author mid-landing, superseding the def-fold ruling recorded in REGFIX.md: the fold is registry names only — defs, binders, and every other program-level variable match exact-byte, exactly as before this patch. An earlier draft folded defs and renamed two demo rule labels to dodge the new collisions; the folding and the renames are both reverted, the corpus stands untouched. The silent 129th-def drop is now a proper error while we were in there.
+- `--! same-tokens` only routes NAME/ALIAS payloads through the resolver now; sym, string, and counter payloads are values and compare exact bytes — the full fold would otherwise have judged two distinct sym values token-equal through name resolution.
+- Documentation: `GRAMMAR.md` states the case contract and the word-class boundary in the Names policy, and gains a Registry files (.reg) section — every line kind, the `as`-vs-`alias` distinction (name alias vs stored mask value), the shadowing rule, the load rejections; `compiler.md`'s resolution paragraph carries the contract in one line and the invariants gained "Registry names fold, values never"; `src.md` and `ano.h`'s format comment updated to match; `ISSUES.md` records the two tradeoffs this patch surfaced instead of resolving (below).
+
+### Technical Changes
+
+- `ano.h` — `RK_TAG` entry kind and `RegEntry.tagCol`; the alias table generalized to `asFrom`/`asTo`/`asJa`/`nas` (the `asJa` byte keeps the declared spelling so dumps round-trip the surface); `names_eq` and `reg_dump` declared; `fs_write_commit` declared; the `.reg` format comment extended for `as` and the case contract.
+- `registry.c` — `names_eq`; `wuniq`/`wuniq_alias` (the load rejections); `find_exact` → `find_ent` (names_eq, serving pres/default/inv/role/as targets); the `as` branches; `reg_find`/`reg_role` rewritten over the comparator, the role fallback delegating to `reg_find`; `reg_dump` with shortest-round-trip number formatting (format∘parse∘format = format, so dumps fixpoint).
+- `lex.c` — `lex_reserved_fold`, the reserved check under the fold: exact first, then once more on the ASCII-folded word. Only the loader consults it; `lex_reserved` stays exact for the parse-level def-head check, and the lexer's own tables stay exact — folding here never makes `Def` lex as the keyword, it only bars `Def` from naming a registry entry.
+- `emit.c` — `RK_TAG` emission in mask and value positions (carrier presence folded in per the left-join-null rule) and rejection in effect and expect positions; the 129th-def overflow error. `findDef` and the binder compares stay exact strcmp — program variables live outside the comparator.
+- `main.c` — `--dump` flag (dumps right after the registry loads; alone it stops there, with `--run` the pipeline continues); the `same_stream` NAME/ALIAS gate.
+- `fs.c` — `fs_write_commit`: write `<path>.staged`, fsync, rename(2) over the target; staging beside the target keeps both on one filesystem, so the rename is atomic. The one writer, next to the one reader.
+
+### Fixed bugs in 26w28b
+
+- **26w28a finding #1** — `reg_role`'s literal-name fallback dropped `reg_find`'s alias hop → the fallback IS `reg_find` now; one resolution path.
+- **26w28a finding #2** — `role proto` and `role id` were routed but witnessed nowhere → s56 proves both load-bearing.
+- The first-letter-only fold — too narrow to be the rule, too magical to be no rule — is gone in both directions: full fold for names, exact bytes for values, nothing in between.
+
+### Fixed bugs in this snapshot (surfaced during review)
+
+An adversarial multi-agent review pass ran against the working diff — 5 lenses, 23 raw findings, each judged by 3 independent refuters; 19 confirmed, 4 refuted. All 19 resolved before publication:
+
+- **ANO-201** — Hop onto a derived tag (`mentor.nord`) emitted an unbound BQN identifier: anoc exited 0 and the program died at runtime, and hop position could tell the s57 twins apart → both hop branches now expand the tag's recomputed mask, so representation independence holds through hops too
+- **ANO-202** — `spawn <tag>` silently spawned unmarked rows; the read-only-tag rule had a hole at the spawn-proto path → rejected with the same carrier-naming error as assignment and presence writes
+- **ANO-203** — A derived tag over a vec column loaded cleanly, then crashed inside BQN at every use → rejected at load beside the char-carrier rule
+- **ANO-204** — A registry redeclaring `n` or `lattice` mid-file loaded (each line validated against the count current at its line) but dumped an unloadable one-header file, and a stale `pres` could read out of bounds → one header per world: redeclaration is now a load error
+- **ANO-205** — `--emit --dump` silently printed nothing, because `--emit` was an untracked no-op flag → an explicit `--emit` now survives `--dump`
+- **ANO-206** — Four doc sentences overclaimed: GRAMMAR.md said entries shadow all six contextual specials (`index` and `char` never shadowed and still don't) and omitted the exact-matched builtins `rank`/`abs`/`sin` from the closed grammar; compiler.md implied defs resolve after the registry; the .reg section said "n-glyph tail" where the loader counts bytes → all four now state exactly what the code does
+- **ANO-207** — demos.md's 12-registry-forms bullet went stale against the s57 placement → updated
+
+### Known Issues
+
+- `--dump` writes the loaded world: post-state lives and dies inside the bqn child (exit-code-only, nothing pipes back), so "dump the post-state" waits for a world that lives in C memory. The fixpoint and pins axes hold as specified; recorded in ISSUES.md.
+- `demos/demos.md`'s 9-nihongo bullet still enumerates the native witnesses as s50-s53 — stale since s54 landed, untouched here because REGFIX names no other doc targets.
+
+### Behind the Scenes
+
+- Test suite: 235 demos green under `--run` (up from 229), 116 conjugate pairs byte-identical under `--emit` (up from 113), zero failures. All 229 pre-existing demos emit byte-identical BQN to the pre-patch snapshot — the fold widened resolution without moving a single byte of output.
+- The corpus measurement in REGFIX.md was independently re-verified before a line of C changed: zero fold collisions, zero duplicates, zero reserved-fold hits across all 100 registries, and exactly the seven claimed identity-alias worlds. The one gap — it covered registries, not defs — is moot under the final ruling: defs never fold.
+- Nothing was committed or pushed at publication. Suggest archiving REGFIX.md when this lands; PATCHES.md stays, it is the running snapshot ledger.
+
 ## Snapshot 26w28a — 2026-07-07 — "That One Over There, Part II"
 
 The あの native-noun update is now feature-complete. This snapshot clears the entire #2–#8 issue backlog on `feature-jp-lexer`: a world can be declared, spawned into, sigil-matched, and pinned entirely in kanji, and the design docs finally admit what the compiler has quietly been doing. Also, mobs spawn with a parent again in fully-native worlds. Sorry about that one.
@@ -89,7 +151,7 @@ Audited 2026-07-07 against the uncommitted working tree on `feature-jp-lexer` (b
 
 #1 — reg_role's fallback drops reg_find's ja-alias hop
 - S: Pre-patch, `idCol` resolved the stable-id column through `reg_find`, whose fallback ends in the registry's ja-alias hop; the role refactor rerouted it through `reg_role`, whose literal-name fallback stops at the entry table. The ANO-101 line above says the fallback "mirrors reg_find exactly" — it mirrors the first-letter rule, not the alias hop.
-- T: Decide whether a `ja id <col>` alias should still steer `idCol` (restore the hop) or whether `role id <col>` is now the only sanctioned spelling (bless the divergence in one doc line).
+- T: Decide whether a `ja id <col>` alias should still steer `idCol` (restore the hop) or whether `role id <col>` is now the only sanctioned spelling (bless the divergence in one doc line). [Done — 26w28b restored the hop: `reg_role`'s fallback is `reg_find`.]
 - A: Verified the divergence empirically: a world with `ja id 識別`, no literal id/keys column, no role line, and a key column in relation position emits `{/bind=𝕩}¨jp0` pre-patch and `{/bind=𝕩}¨(↕anoN)` post-patch. Grepped the corpus: no registry uses `ja id` or `ja keys`, and the 225-demo byte-identity stands, so nothing live is affected. Not fixed — a design call, surfaced per doctrine, carried into NEXT-2.md.
 - R: Either `reg_role`'s fallback gains the ja hop (one loop, mirroring registry.c:375-380) or compiler.md/GRAMMAR.md states that roles route by declaration or literal name, never through ja aliases.
 - (a) Issue IS: src/registry.c:387-399 (`reg_role`, fallback loop without the ja hop `reg_find` has at src/registry.c:375-380); the inexact sentence is this file's ANO-101 line.
@@ -97,7 +159,7 @@ Audited 2026-07-07 against the uncommitted working tree on `feature-jp-lexer` (b
 
 #2 — role proto and role id have no witnessing demo
 - S: registry.c accepts five role names and emit.c routes all five; s54 declares and load-bearingly witnesses three (pos, keys, parent). proto and id are routed but never exercised through a `role` declaration anywhere in the corpus.
-- T: Witness the remaining two: a spawn-from-proto into a kanji-named proto column, and a set-hop membership over a kanji-named id column (which also covers #1's corner from the sanctioned side).
+- T: Witness the remaining two: a spawn-from-proto into a kanji-named proto column, and a set-hop membership over a kanji-named id column (which also covers #1's corner from the sanctioned side). [Done — 26w28b: s56-native-proto-id.]
 - A: Confirmed by grep: `role proto`/`role id` appear in no `.reg`; the proto route and the idCol id-probe execute only their literal-name fallbacks in every demo. Not added here — new demos are new scope; recorded for NEXT-2.md.
 - R: An s56 pair whose proto and id roles are each proven load-bearing the way s54's are: delete the role line, a pin fails.
 - (a) Issue IS: coverage gap — src/registry.c:346 admits five names; demos/registries/s54-native-roles.reg:13-15 declares only pos/keys/parent; no other `.reg` carries a role line.

@@ -1,0 +1,14 @@
+# s56 — the last two roles, proto and id: a computed spawn lands its piece kinds in the
+# kanji 種別 because `role proto` says so, and the set hop reads membership through the
+# kanji 識別 because `role id` says so — the ids are primes, so row indexes miss and the
+# routing is proven, not coincident. Data mirrors s05's frenzy device (one frenzied
+# source, two targets) and ex34's piece lookup (a glyph spawns its piece; '.' spawns nothing).
+n 4
+col 狂乱 bool 1 0 0 0
+col 識別 num 7 11 13 17
+srel 標的 13 17 | | |
+col 熱狂 bool 0 0 0 0
+col 種別 sym 王 兵 兵 竜
+fn 鋳型 {'.'=𝕩 ? "" ; ⋈𝕩}
+role id 識別
+role proto 種別

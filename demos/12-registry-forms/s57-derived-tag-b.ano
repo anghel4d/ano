@@ -1,0 +1,6 @@
+-- Derived tag (s57b), option B of DATAMODEL.md's tag-three-ways: race carries the value and `as nord race Nord` names δ_Nord ∘ race, the equality mask recomputed against live race at each use. Same program and pins as s57a's stored bool — post-state pins cannot distinguish A from B. The tag is read-only as an effect target (the write spells race = :Nord); nord folds, Nord-the-value never does.
+--! registry ../registries/s57-derived-tag-b.reg
+--! expect gold = 900 600 700 650 221
+--! expect master = 2 -1 -1 4 -1
+
+Nord & Gold > 50 , Gold += 500

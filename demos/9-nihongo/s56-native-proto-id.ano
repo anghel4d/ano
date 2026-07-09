@@ -1,0 +1,11 @@
+-- Native proto and id roles (s56), ASCII twin: the set hop's image takes membership through the `role id` kanji 識別 — its prime ids match the 標的 fibers where row indexes would miss — and the board spawn writes its computed pieces through the `role proto` kanji 種別; delete either role line and a pin fails. Completes s54: all five system roles now proven load-bearing on kanji columns.
+--! registry ../registries/s56-native-proto-id.reg
+--! expect-n 6
+--! expect 狂乱 = 1 0 0 0 0 0
+--! expect 識別 = 7 11 13 17 0 0
+--! expect 熱狂 = 0 0 1 1 0 0
+--! expect 種別 = 王 兵 兵 竜 金 銀
+
+狂乱.標的' , +熱狂
+
+"金銀.." to 2 2 , spawn (鋳型 char)

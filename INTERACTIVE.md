@@ -1,6 +1,6 @@
 # INTERACTIVE — the ano editor.
 
-Transcription of the author's notebook pages (2026-07-07 the editor and the registry, 2026-07-08 the data model). The ask, verbatim: an ano editor — "get me a harness for this lang!" — integrated into anoptic_engine as a debug panel. Rendering candidates from the margin: a space, or ncurses. The registry plan of record is REGFIX.md, the data-model plan is DATAMODEL.md; this file holds the pictures.
+Transcription of the author's notebook pages (2026-07-07 the editor and the registry, 2026-07-08 the data model). The ask, verbatim: an ano editor — "get me a harness for this lang!" — integrated into anoptic_engine as a debug panel. Rendering candidates from the margin: a space, or ncurses. The registry plan (REGFIX.md) and the data-model plan (DATAMODEL.md) are executed — PATCHES.md snapshot 26w28b is the record, `.archive/` holds the plans; this file holds the pictures.
 
 ## The panel and the commit loop
 

@@ -431,8 +431,7 @@ static const struct { const char *w; TokKind k; int post; const char *nm; } jata
 /* Inputs: a word. Output: 1 when the closed grammar owns it on either surface — an
  * ASCII keyword (kwkind, til included), a fused reducer name (max/min/avg), any jatab
  * word, or any numeral the JA reader accepts (kanji, fullwidth, Arabic, counters).
- * registry.c consults this at load: a reserved word can name no entry and source no ja
- * alias, because the lexer resolves it before nouns ever get a chance. */
+ * Exact-byte: program-level names (def heads, parse.c) live outside the fold. */
 int lex_reserved(const char *w) {
   if (kwkind(w)) return 1;
   if (!strcmp(w, "max") || !strcmp(w, "min") || !strcmp(w, "avg")) return 1;
@@ -440,6 +439,24 @@ int lex_reserved(const char *w) {
     if (!strcmp(w, jatab[k].w)) return 1;
   double v; char u[8];
   return ja_numeral(w, &v, u);
+}
+
+/* Inputs: a word. Output: 1 when lex_reserved owns it or its ASCII case fold — registry
+ * names fold, so an entry any spelling of which the lexer resolves first (Til as til) is
+ * unaddressable in that spelling and unusable as an address. Only the loader consults
+ * this; the lexer's own tables stay exact — folding here never makes `Def` lex as the
+ * keyword, it only bars `Def` from naming a registry entry. */
+int lex_reserved_fold(const char *w) {
+  if (lex_reserved(w)) return 1;
+  char f[ANO_NAMESZ];
+  size_t n = strlen(w);
+  if (n >= sizeof f) return 0;      /* longer than any name slot, so than any reserved word */
+  int folded = 0;
+  for (size_t i = 0; i <= n; i++) {
+    f[i] = w[i];
+    if (f[i] >= 'A' && f[i] <= 'Z') { f[i] = (char)(f[i] + 32); folded = 1; }
+  }
+  return folded && lex_reserved(f);
 }
 
 /* Inputs: NUL-terminated word (validated UTF-8). Output: 1 when it is a legal
