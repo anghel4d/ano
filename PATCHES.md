@@ -1,5 +1,36 @@
 # anoc — Patch Notes
 
+## Snapshot 26w28d — 2026-07-10 — "The Game Loop Under a Key"
+
+The kore session update, plus the first shared C module. `common/` arrives: the anoptic strings module ported whole from anoptic_engine — the 16-byte string value, UTF-8 totality, DUCET collation, interning — with its one adaptation, the mimalloc heap swapped for a bump arena (`ano_arena_t`) under the same region contract. kore stops trusting C strings and starts holding its worlds in arenas. And the world loop becomes what it was always meant to be: repeatedly mutable in place until you write.
+
+> Emitted BQN Format: **unchanged** — anoc itself is untouched in this snapshot.
+> Registry Format: **unchanged**. Nothing under demos/ is ever a write target — registries and the demo .ano files both; verified byte-for-byte across the whole battery.
+
+### New Features
+
+- **`common/` — the strings module and its arena** (new top-level directory). `anostr_t`, builders, interning, compile-time SIDs, UTF-8 iteration/classification (UCD 17.0.0 tables), DUCET collation with kana in gojuon order, and `ano_arena_t` — chunked bump regions with per-block size headers so realloc is total and the newest block reallocs and frees in place. `make -C common test` runs the smoke battery. Both kore and (eventually) Cano compile it in directly; no library step, no deps.
+- **The world loop: r / n / u.** `r` is load-and-reset — the pristine registry copied over the demo's play scratch, the pre-reset state staged on the ring first so u steps back across a reset. `n` is next — one tick: the demo's program retargeted at the scratch through `--run --save`, its `--! expect` pins stripped (they witness the pristine run; against any later step they would fail the tick and hold the world still), pre-state staged, repeatable indefinitely. `u` is n's exact inverse (the old r staged nothing, which is why undo could never touch it). The game loop is the scan; n is the scan under a key.
+- **Per-demo play directories.** `.kore/play/<demo-tag>/` holds each demo's scratch world, session log, base snapshot, and (by tag) undo ring — the `.kore/post.reg` collision that let two demos share a session is gone. Reopening a demo whose scratch exists resumes the play world at its recorded step; r is always the way home. Session logs record `-- n:` / `-- r:` seam lines when the world moves underneath them.
+- **Vim vocabulary in the code surface**: `w`/`b` word motions over runes, `gg`/`G`, counts (`5j`, `3dd`, `12G`), `0`/`^`/`$`, `dd`, `/` search with base-letter matching (case- and accent-insensitive, highlights, `n`/`N`), and `u` as code-local undo — a snapshot stack, focus-scoped so the world's ring is untouched. ESC steps out of any panel to the mode's home surface.
+- **The prompt in its own box**, above a dedicated status line that carries the context-sensitive key atlas — and statements span lines: `\⏎`, Shift+Enter (kitty CSI-u / xterm modifyOtherKeys), or Alt+Enter break a line, Enter runs the whole body as one program (its def lines join the session individually). The box grows with its lines and scrolls to the cursor; the cursor's line scrolls horizontally; ↑↓ walk lines then history; the wheel walks history.
+- **The corpus is immutable, code included — and `>reset` is the way home.** The demo .ano joins the registry under copy-on-write: the first `s` (or `E`) on a demo under demos/ writes `.kore/play/<tag>/<demo>.ano` instead, the buffer rides the copy (the title says `play copy`), reopening resumes it, and `n` ticks the edited program. `>reset` at the prompt (`>` opens it pre-filled with the command form) or Ctrl+Shift+R (kitty CSI-u / modifyOtherKeys) asks — y confirms, anything else cancels — then deletes every play copy with its ring: all demos return to the pristine corpus. Snapshots stay. `--edit` refuses corpus paths outright.
+- **Colour.** xterm-256 palette throughout, on a forced dark canvas (bg `234`, ink `252` — pastel accents read identically on light-themed terminals; deriving from the shell theme is TODO item 4): per-panel border accents, .reg value hues by kind (sym lilac, rel salmon, bool teal, char warm), ano syntax tints in the code surface (directives, comments, def heads, numbers, operators, the glowing hinge), origin-tinted output lines, a red verdict when the world stands, violet `-nihongo` twins in the rail, and scroll thumbs on every overflowing panel.
+
+### Changes
+
+- The demos rail sorts by natural collation with extensions stripped: digit runs compare as numbers (`2-` before `10-`, the file-browser order), the stretches between them by DUCET — kana in gojuon order, and `01-x.ano` before `01-x-nihongo.ano`, so the rail no longer opens on the Japanese conjugate because byte `'-' < '.'`.
+- The mouse wheel moves one item per notch in every panel (was three) — the view follows a line at a time instead of leaping.
+- kore's parsed world state allocates from one arena per load and dies with the load that replaces it — no per-entry frees, no leak surface; the loader's per-line tokenizing scratch included (bounded region garbage instead of two free sites an early continue could miss).
+- `kore/Makefile` compiles `../common` in directly; `-std=gnu23`.
+- The old "saving a corpus file announces itself" ruling is gone — announced or not, the corpus was still being written. `s` and `E` now guard exactly as the world does, and `E` under world focus guards too (it used to hand the pristine registry to $EDITOR).
+
+### Verified
+
+- `make -C common test` green (arena seams, string round-trips, UTF-8 totality, collation facts including the twin rule).
+- `kore --check` over the corpus registries: all ok.
+- PTY end-to-end: r → n → n → u leaves the scratch byte-identical to an independently computed one-tick state; repeated n diverges (the world really advances); reopen resumes; two demos hold disjoint scratches; a demo-mode prompt statement logs to that demo's own session; `dd`+`u`+`s` round-trips a file byte-identically; a synthetic rail with 1/2/10/11 directories and 01/2/10 files renders in file-browser order with the twin still second; one wheel notch moves the rail selection exactly one entry and up reverses it; demos/ hashed before and after every battery — untouched; on a synthetic corpus, `s` after an edit leaves the demo byte-identical and lands the edit in `.kore/play/<tag>/`, reopening resumes the play copy, `>reset` cancelled leaves it standing and confirmed removes the whole play tree with the buffer back to pristine, and `--edit` on a corpus registry refuses and mutates nothing.
+
 ## Snapshot 26w28c — 2026-07-10 — "The World at Hand"
 
 The editor update. kore (これ, "this one here") is the ano editor: ano addresses the world from over there, and kore is where you hold it in your hand — a zero-dependency TUI that spawns anoc exactly as anoc spawns cbqn and speaks nothing but the process and text boundary, so it survives the Steel port untouched. Under it, anoc finally closes the loop the dump left open: `--save` pipes the post-state back from the bqn child and commits it, so a played world is a file again. The clock is still the install runs; now you can watch it beat.

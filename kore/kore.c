@@ -8,11 +8,13 @@
  * the world file through the staged-rename commit loop; the undo ring is the loop's
  * free gift (pre-states are files under .kore/undo/).
  *
- * Zero deps: raw ANSI CSI rendering + termios raw mode, double-buffered into one
- * write(2) per frame; SGR mouse reporting; SIGWINCH resize; CJK/kana/fullwidth
- * codepoints occupy 2 cells. kore's .reg reader is line-oriented: data lines parse
- * into tables for display, schema and unknown lines are preserved verbatim —
- * pass-through, never regeneration. Cell edits splice one word in the .reg text.
+ * Zero external deps: raw ANSI CSI rendering + termios raw mode, double-buffered into
+ * one write(2) per frame; SGR mouse reporting; SIGWINCH resize; CJK/kana/fullwidth
+ * codepoints occupy 2 cells. Strings, collation, and the world arena come from
+ * ../common (the anoptic strings module). kore's .reg reader is line-oriented: data
+ * lines parse into tables for display, schema and unknown lines are preserved
+ * verbatim — pass-through, never regeneration. Cell edits splice one word of .reg
+ * text. Each parsed world lives in one arena and dies with the load that replaces it.
  *
  * Entry points: `kore <file.reg>` the bare world, REPL-only; `kore <file.ano>` the
  * demo form; bare `kore` the rail. Headless verification hooks: `kore --check
@@ -37,6 +39,10 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+
+#include "anoptic_memory.h"
+#include "anoptic_strings.h"
+#include "anoptic_strings_utf.h"
 
 #define KMAXENT 512
 #define KMAXDEMO 1024
@@ -114,9 +120,24 @@ static int swidth(const char *s) {
 
 /* ---------- terminal: raw mode, cell grid, one write per frame ---------- */
 
+typedef struct { int x, y, w, h; } Rect;
+
 enum { A_DIM = 1, A_BOLD = 2, A_REV = 4 };
 
-typedef struct { char g[8]; uint8_t attr, fg, cont; } Cell; /* fg: 0 default, else SGR code */
+/* the palette: xterm-256 indexes. The ground is forced — pastel ink needs a dark
+ * canvas, so every cell paints C_BG behind it and fg 0 means C_TEXT, never the
+ * terminal's own colors (TODO.md: derive from the shell theme instead, as nvim does) */
+enum {
+  C_BG = 234, C_TEXT = 252,                     /* near-black canvas, soft off-white ink */
+  C_FRAME = 245,                                /* unfocused borders */
+  C_RAILC = 141, C_CODEC = 179, C_WORLDC = 110, /* per-panel accents: violet, gold, sky */
+  C_OUTC = 108, C_PROMPTC = 114,                /* moss, green */
+  C_GLOW = 222, C_DIRECTIVE = 66, C_NUMLIT = 151, C_OP = 117, C_DEF = 216,
+  C_SYM = 183, C_REL = 210, C_BOOL = 115, C_CHAR = 223, C_HDR = 117, C_ROWLBL = 242,
+  C_OK = 114, C_ERR = 203, C_NIHONGO = 176, C_AT = 213, C_SEARCH = 220,
+};
+
+typedef struct { char g[8]; uint8_t attr, fg, cont; } Cell; /* fg: 0 default, else a palette index */
 
 static struct {
   int rows, cols;
@@ -144,7 +165,7 @@ static void term_size(void) {
   else { T.rows = 24; T.cols = 80; }
   /* a floor keeps every layout rect non-degenerate; drawing past a smaller real
    * terminal just wraps, it never writes out of the grid */
-  if (T.rows < 4) T.rows = 4;
+  if (T.rows < 12) T.rows = 12;
   if (T.cols < 20) T.cols = 20;
   free(T.grid);
   T.grid = xalloc((size_t)T.rows * T.cols * sizeof(Cell));
@@ -238,11 +259,11 @@ static void rev_cell(int x, int y) {
   c->attr |= A_REV;
 }
 
-/* Panel border with a title in the top rule; the focused panel's title glows. */
-static void box(int x, int y, int w, int h, const char *title, int focused) {
+/* Panel border with a title in the top rule; the focused panel glows in its accent. */
+static void box(int x, int y, int w, int h, const char *title, int focused, int accent) {
   if (w < 2 || h < 2) return;
   int a = focused ? A_BOLD : A_DIM;
-  int fg = focused ? 96 : 0;
+  int fg = focused ? accent : C_FRAME;
   put(x, y, a, fg, "┌", 1);
   put(x + w - 1, y, a, fg, "┐", 1);
   put(x, y + h - 1, a, fg, "└", 1);
@@ -253,6 +274,23 @@ static void box(int x, int y, int w, int h, const char *title, int focused) {
     put(x + 2, y, a | A_BOLD, fg, "╴", 1);
     int tw = put(x + 3, y, focused ? A_BOLD : 0, fg, title, w - 6);
     put(x + 3 + tw, y, a | A_BOLD, fg, "╶", 1);
+  }
+}
+
+/* Inputs: box rect, first visible index, visible count, total count, accent. Output: a
+ * thumb on the right border showing where the view sits — drawn only when the content
+ * overflows the window, so a quiet panel keeps its plain rule. */
+static void scrollbar(Rect r, int top, int vis, int total, int accent) {
+  if (total <= vis || r.h <= 3 || vis <= 0) return;
+  int track = r.h - 2;
+  int thumb = vis * track / total;
+  if (thumb < 1) thumb = 1;
+  int maxTop = total - vis;
+  int at = maxTop > 0 ? top * (track - thumb) / maxTop : 0;
+  if (at > track - thumb) at = track - thumb;
+  for (int j = 0; j < track; j++) {
+    int on = j >= at && j < at + thumb;
+    put(r.x + r.w - 1, r.y + 1 + j, on ? 0 : A_DIM, on ? accent : C_FRAME, on ? "┃" : "│", 1);
   }
 }
 
@@ -268,9 +306,9 @@ static void flush_frame(void) {
       Cell *c = &T.grid[y * T.cols + x];
       if (c->cont) continue;
       if (c->attr != cattr || c->fg != cfg) {
-        bprintf(o, "\x1b[0%s%s%s", (c->attr & A_DIM) ? ";2" : "", (c->attr & A_BOLD) ? ";1" : "",
+        bprintf(o, "\x1b[0;48;5;%d%s%s%s", C_BG, (c->attr & A_DIM) ? ";2" : "", (c->attr & A_BOLD) ? ";1" : "",
                 (c->attr & A_REV) ? ";7" : "");
-        if (c->fg) bprintf(o, ";%d", c->fg);
+        bprintf(o, ";38;5;%d", c->fg ? c->fg : C_TEXT);
         bput(o, "m", 1);
         cattr = c->attr;
         cfg = c->fg;
@@ -286,7 +324,7 @@ static void flush_frame(void) {
 /* ---------- input events ---------- */
 
 enum { EV_NONE, EV_CHAR, EV_KEY, EV_MOUSE };
-enum { K_UP = 1, K_DOWN, K_LEFT, K_RIGHT, K_ENTER, K_ESC, K_TAB, K_BS, K_DEL, K_HOME, K_END, K_PGUP, K_PGDN };
+enum { K_UP = 1, K_DOWN, K_LEFT, K_RIGHT, K_ENTER, K_ESC, K_TAB, K_BS, K_DEL, K_HOME, K_END, K_PGUP, K_PGDN, K_NEWLINE, K_RESETALL };
 enum { M_PRESS, M_RELEASE, M_DRAG, M_WHEELUP, M_WHEELDN };
 
 typedef struct { int type, key, mkind, mx, my; uint32_t ch; char u8[8]; } Ev;
@@ -308,6 +346,7 @@ static Ev ev_read(void) {
   if (b == 0x1b) {
     int b2 = rbyte(25);
     if (b2 < 0) { e.type = EV_KEY; e.key = K_ESC; return e; }
+    if (b2 == '\r' || b2 == '\n') { e.type = EV_KEY; e.key = K_NEWLINE; return e; }  /* Alt+Enter */
     if (b2 != '[' && b2 != 'O') return e;            /* Alt chord: swallowed whole */
     char seq[48];
     int n = 0, trunc = 0;
@@ -346,8 +385,22 @@ static Ev ev_read(void) {
       case 'D': e.key = K_LEFT; break;
       case 'H': e.key = K_HOME; break;
       case 'F': e.key = K_END; break;
+      case 'u': {                                    /* kitty CSI-u: modified Enter is a newline */
+        int code = 0, mod = 0;
+        sscanf(seq, "%d;%d", &code, &mod);
+        if (code == 13) e.key = mod >= 2 ? K_NEWLINE : K_ENTER;
+        else if ((code == 114 || code == 82) && mod == 6) e.key = K_RESETALL;  /* ctrl+shift+r */
+        else e.type = EV_NONE;
+        break;
+      }
       case '~': {
         int code = atoi(seq);                        /* "15~" is F5, not Home */
+        if (code == 27) {                            /* xterm modifyOtherKeys: "27;mod;13~" */
+          int m1 = 0, mod = 0, key = 0;
+          sscanf(seq, "%d;%d;%d", &m1, &mod, &key);
+          if (key == 13) { e.key = mod >= 2 ? K_NEWLINE : K_ENTER; break; }
+          if ((key == 114 || key == 82) && mod == 6) { e.key = K_RESETALL; break; }
+        }
         e.key = code == 3 ? K_DEL : code == 5 ? K_PGUP : code == 6 ? K_PGDN
               : (code == 1 || code == 7) ? K_HOME : (code == 4 || code == 8) ? K_END : 0;
         if (!e.key) e.type = EV_NONE;
@@ -444,12 +497,22 @@ typedef struct {
 
 typedef struct {
   char path[PATH_MAX];
+  ano_arena_t *heap;        /* every load's allocations live here and die together */
   char **lines; int nlines; /* the file's raw lines, verbatim — the one source of truth */
   int n, latW, latH;
   Ent ents[KMAXENT]; int nents;
   char posCol[KNAMESZ];     /* role pos target, else "" (falls back to literal `pos`) */
   int loaded;
 } World;
+
+/* strdup into a world's arena; aborts on OOM like xalloc (the terminal restores) */
+static char *adup(ano_arena_t *a, const char *s) {
+  size_t n = strlen(s) + 1;
+  char *p = ano_arena_alloc(a, n);
+  if (!p) abort();
+  memcpy(p, s, n);
+  return p;
+}
 
 /* The loader's case contract: ASCII letters fold, every other byte exact. */
 static int names_eq(const char *a, const char *b) {
@@ -535,31 +598,27 @@ static int wnum(const char *w, double *out) {
 }
 
 static void world_free(World *w) {
-  for (int i = 0; i < w->nlines; i++) free(w->lines[i]);
-  free(w->lines);
-  for (int i = 0; i < w->nents; i++) {
-    Ent *e = &w->ents[i];
-    free(e->nums);
-    for (int j = 0; j < e->ns; j++) free(e->syms[j]);
-    free(e->syms);
-    free(e->chars);
-    free(e->fibOff); free(e->fibLen); free(e->fibVals);
-  }
+  ano_arena_destroy(w->heap);   /* lines, line bytes, ent arrays, syms — one region */
   memset(w, 0, sizeof *w);
 }
 
 /* Inputs: path. Output: 0 with the world parsed for display / -1 with err set.
  * Data lines (n, lattice, col, field, pres, rel, srel, inv) fill tables; everything
  * else — bind, alias, fn, role, as, ja, default, comments, unknown — passes through
- * untouched in lines[]. role pos is noted for the space view. */
+ * untouched in lines[]. role pos is noted for the space view. The whole parsed state
+ * allocates from one arena and dies with the load that replaces it. */
 static int world_load(World *w, const char *path, char *err, size_t errsz) {
   World fresh = { 0 };
   snprintf(fresh.path, sizeof fresh.path, "%s", path);
   size_t flen = 0;
   char *buf = read_file(path, &flen);
   if (!buf) { snprintf(err, errsz, "cannot read %s: %s", path, strerror(errno)); return -1; }
-  int cap = 64;
-  fresh.lines = xalloc((size_t)cap * sizeof(char *));
+  fresh.heap = ano_arena_new(0);
+  if (!fresh.heap) abort();
+  int cap = 2;
+  for (const char *p = buf; *p; p++) cap += *p == '\n';
+  fresh.lines = ano_arena_alloc(fresh.heap, (size_t)cap * sizeof(char *));
+  if (!fresh.lines) abort();
   char *save = NULL;
   for (char *p = buf;; p = NULL) {
     char *ln = p ? p : save;
@@ -569,19 +628,22 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
     /* the empty tail after a final newline is not a line — appending it would grow
      * the file by one blank line per commit cycle */
     if (!nl && !ln[0] && fresh.nlines) break;
-    if (fresh.nlines >= cap) { cap *= 2; fresh.lines = realloc(fresh.lines, (size_t)cap * sizeof(char *)); if (!fresh.lines) abort(); }
     size_t l = strlen(ln);
     if (l && ln[l - 1] == '\r') ln[l - 1] = 0;
-    fresh.lines[fresh.nlines++] = xstrdup(ln);
+    fresh.lines[fresh.nlines++] = adup(fresh.heap, ln);
     if (!nl) break;
   }
   free(buf);
   for (int li = 0; li < fresh.nlines; li++) {
-    char *dup = xstrdup(fresh.lines[li]);
+    /* tokenizing scratch comes from the world's own region: dead after this
+     * iteration, bounded by ~2x the file, gone with the arena at the next load —
+     * no free sites for an early continue to miss */
+    char *dup = adup(fresh.heap, fresh.lines[li]);
     int maxw = (int)(strlen(dup) / 2 + 2);
-    char **words = xalloc((size_t)maxw * sizeof(char *));
+    char **words = ano_arena_zalloc(fresh.heap, (size_t)maxw * sizeof(char *));
+    if (!words) abort();
     int nw = split_words(dup, words, maxw);
-    if (nw == 0) { free(words); free(dup); continue; }
+    if (nw == 0) continue;
     const char *k = words[0];
     double d;
     Ent *e = fresh.nents < KMAXENT ? &fresh.ents[fresh.nents] : NULL;
@@ -599,7 +661,8 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       const char *ty = words[2];
       if (!strcmp(ty, "num") || !strcmp(ty, "bool") || !strcmp(ty, "vec")) {
         e->type = !strcmp(ty, "bool") ? V_BOOL : !strcmp(ty, "vec") ? V_VEC : V_NUM;
-        e->nums = xalloc((size_t)(nw - 3 + 1) * sizeof(double));
+        e->nums = ano_arena_zalloc(fresh.heap, (size_t)(nw - 3 + 1) * sizeof(double));
+        if (!e->nums) abort();
         for (int j = 3; j < nw; j++) {
           if (!strcmp(words[j], "|")) continue;
           if (!wnum(words[j], &e->nums[e->nn])) e->nn++;
@@ -607,17 +670,19 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
         fresh.nents++;
       } else if (!strcmp(ty, "sym")) {
         e->type = V_SYM;
-        e->syms = xalloc((size_t)(nw - 3 + 1) * sizeof(char *));
-        for (int j = 3; j < nw; j++) e->syms[e->ns++] = xstrdup(words[j]);
+        e->syms = ano_arena_zalloc(fresh.heap, (size_t)(nw - 3 + 1) * sizeof(char *));
+        if (!e->syms) abort();
+        for (int j = 3; j < nw; j++) e->syms[e->ns++] = adup(fresh.heap, words[j]);
         fresh.nents++;
       } else if (!strcmp(ty, "char")) {
         e->type = V_CHAR;
         int off, len;
         /* the run is the raw tail from the 4th word — the loader's own read */
         if (char_span(fresh.lines[li], &off, &len) == 0) {
-          e->chars = xalloc((size_t)len + 1);
+          e->chars = ano_arena_zalloc(fresh.heap, (size_t)len + 1);
+          if (!e->chars) abort();
           memcpy(e->chars, fresh.lines[li] + off, (size_t)len);
-        } else e->chars = xstrdup("");
+        } else e->chars = adup(fresh.heap, "");
         fresh.nents++;
       }
     } else if (!strcmp(k, "pres") && nw >= 2 && e) {
@@ -625,7 +690,8 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       e->line = li;
       snprintf(e->name, sizeof e->name, "%.*s", KNAMESZ - 1, words[1]);
       e->type = V_BOOL;
-      e->nums = xalloc((size_t)(nw - 2 + 1) * sizeof(double));
+      e->nums = ano_arena_zalloc(fresh.heap, (size_t)(nw - 2 + 1) * sizeof(double));
+      if (!e->nums) abort();
       for (int j = 2; j < nw; j++) if (!wnum(words[j], &e->nums[e->nn])) e->nn++;
       fresh.nents++;
     } else if ((!strcmp(k, "rel") || !strcmp(k, "alias")) && nw >= 2 && e) {
@@ -634,7 +700,8 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       e->line = li;
       snprintf(e->name, sizeof e->name, "%.*s", KNAMESZ - 1, words[1]);
       e->type = k[0] == 'r' ? V_NUM : V_BOOL;
-      e->nums = xalloc((size_t)(nw - 2 + 1) * sizeof(double));
+      e->nums = ano_arena_zalloc(fresh.heap, (size_t)(nw - 2 + 1) * sizeof(double));
+      if (!e->nums) abort();
       for (int j = 2; j < nw; j++) if (!wnum(words[j], &e->nums[e->nn])) e->nn++;
       fresh.nents++;
     } else if ((!strcmp(k, "srel") || !strcmp(k, "inv")) && nw >= 2 && e) {
@@ -646,9 +713,10 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       if (!e->isInv) {
         int nfib = 1, nvals = 0;
         for (int j = 2; j < nw; j++) !strcmp(words[j], "|") ? nfib++ : nvals++;
-        e->fibOff = xalloc((size_t)nfib * sizeof(int));
-        e->fibLen = xalloc((size_t)nfib * sizeof(int));
-        e->fibVals = xalloc((size_t)(nvals + 1) * sizeof(double));
+        e->fibOff = ano_arena_zalloc(fresh.heap, (size_t)nfib * sizeof(int));
+        e->fibLen = ano_arena_zalloc(fresh.heap, (size_t)nfib * sizeof(int));
+        e->fibVals = ano_arena_zalloc(fresh.heap, (size_t)(nvals + 1) * sizeof(double));
+        if (!e->fibOff || !e->fibLen || !e->fibVals) abort();
         int fib = 0, vi = 0;
         for (int j = 2; j < nw; j++) {
           if (!strcmp(words[j], "|")) { e->fibLen[fib] = vi - e->fibOff[fib]; fib++; e->fibOff[fib] = vi; }
@@ -662,8 +730,6 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       snprintf(fresh.posCol, sizeof fresh.posCol, "%.*s", KNAMESZ - 1, words[2]);
     }
     /* everything else: schema, preserved verbatim in lines[] */
-    free(words);
-    free(dup);
   }
   world_free(w);
   *w = fresh;
@@ -712,12 +778,12 @@ static int world_splice(World *w, int line, int off, int len, const char *repl, 
   const char *old = w->lines[line];
   size_t ol = strlen(old), rl = strlen(repl);
   if (off < 0 || len < 0 || (size_t)off + (size_t)len > ol) { snprintf(err, errsz, "splice: bad span"); return -1; }
-  char *nl = xalloc(ol - (size_t)len + rl + 1);
+  char *nl = ano_arena_alloc(w->heap, ol - (size_t)len + rl + 1);
+  if (!nl) abort();
   memcpy(nl, old, (size_t)off);
   memcpy(nl + off, repl, rl);
   memcpy(nl + off + rl, old + off + len, ol - (size_t)off - (size_t)len + 1);
-  free(w->lines[line]);
-  w->lines[line] = nl;
+  w->lines[line] = nl;  /* the old line stays in the region until the reload below */
   Buf b = { 0 };
   for (int i = 0; i < w->nlines; i++) { bput(&b, w->lines[i], strlen(w->lines[i])); bput(&b, "\n", 1); }
   int rc = write_commit(w->path, b.s ? b.s : "", b.len);
@@ -803,32 +869,73 @@ static void walk_demos(const char *dir) {
   }
   closedir(d);
 }
-static int cmp_str(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
+/* Natural collation: maximal ASCII digit runs compare as numbers (leading zeros
+ * stripped; more significant digits = larger), the stretches between them by DUCET.
+ * Returns <0/0/>0. Overflow-proof: digits compare by count then bytes, never a parse. */
+static int isdig(char c) { return c >= '0' && c <= '9'; }
+static int collate_natural(const char *x, size_t lx, const char *y, size_t ly) {
+  size_t i = 0, j = 0;
+  while (i < lx && j < ly) {
+    int xd = isdig(x[i]), yd = isdig(y[j]);
+    /* digit against non-digit: straight DUCET on the remainders decides */
+    if (xd != yd) return anostr_collate(anostr_view(x + i, lx - i), anostr_view(y + j, ly - j));
+    if (xd) {
+      size_t si = i, sj = j;
+      while (i < lx && isdig(x[i])) i++;
+      while (j < ly && isdig(y[j])) j++;
+      while (si + 1 < i && x[si] == '0') si++;
+      while (sj + 1 < j && y[sj] == '0') sj++;
+      size_t nx = i - si, ny = j - sj;
+      if (nx != ny) return nx < ny ? -1 : 1;
+      int c = memcmp(x + si, y + sj, nx);
+      if (c) return c < 0 ? -1 : 1;
+      /* equal value (01 vs 1): run on, the caller's byte tiebreak settles it */
+    } else {
+      size_t si = i, sj = j;
+      while (i < lx && !isdig(x[i])) i++;
+      while (j < ly && !isdig(y[j])) j++;
+      int c = anostr_collate(anostr_view(x + si, i - si), anostr_view(y + sj, j - sj));
+      if (c) return c;
+    }
+  }
+  return i < lx ? 1 : j < ly ? -1 : 0;
+}
+/* Rail order is human order: natural collation (kana in gojuon, 2- before 10-, the
+ * file-browser order) over the path with its .ano extension stripped — so a stem that
+ * prefixes its own conjugate (01-x before 01-x-nihongo) sorts first, not after byte '-' < '.'. */
+static int cmp_demo(const void *a, const void *b) {
+  const char *x = *(char *const *)a, *y = *(char *const *)b;
+  size_t lx = strlen(x), ly = strlen(y);
+  int c = collate_natural(x, lx > 4 ? lx - 4 : lx, y, ly > 4 ? ly - 4 : ly);
+  return c ? c : strcmp(x, y);
+}
 
 /* ---------- app state ---------- */
 
 enum Focus { F_RAIL, F_CODE, F_WORLD, F_OUT, F_PROMPT };
 enum Mode { MODE_RAIL, MODE_DEMO, MODE_REG };
 
-typedef struct { int x, y, w, h; } Rect;
-
 static struct App {
   enum Mode mode;
   enum Focus focus;
   World world;
-  int worldIsCopy;              /* mutation retargeted to the .kore/play copy */
-  int worldIsPost;              /* world view shows a demo run's post-state scratch */
+  int worldIsCopy;              /* the world is the demo's .kore/play scratch */
   char pristine[PATH_MAX];      /* the demo's own registry (never mutated) */
-  char demoPath[PATH_MAX];
+  char demoPath[PATH_MAX];      /* the demo's identity: tags, sessions, anchors key off it */
+  char demoLive[PATH_MAX + 64]; /* the file backing the code buffer — the corpus demo until the first save, its play copy after */
+  char worldOrig[PATH_MAX];     /* MODE_REG: the corpus .reg the play copy shadows */
+  int confirmReset;             /* >reset armed: y wipes the play tree, any other key cancels */
   char **code; int ncode;
   int codeDirty, codeInsert, ccy, ccx, codeTop;
+  int codePending, codeG, codeD; /* vim state: count, gg chord, dd chord (count stored) */
+  char search[128]; int searchLen, searching;
   int railSel, railTop;
   int spaceView;
   int wSeg, wRow, wCol, wTop;   /* world cursor: segment 0 = entity table, 1.. fields */
   int editing; char editBuf[512]; int editLen;
   Buf outLog; int outScroll;    /* lines scrolled back from the tail */
-  char verdict[512];
-  char prompt[1024]; int plen, pcur;
+  char verdict[512]; int verdictBad;
+  char prompt[1024]; int plen, pcur, pscroll, ptop; /* byte cursor, h-scroll, line scroll */
   char *hist[KMAXHIST]; int nhist, histAt;
   int dragging, dragSeg, dragR0, dragC0, dragR1, dragC1;
   int undoSeq;
@@ -843,30 +950,68 @@ static void say(const char *fmt, ...) {
   va_start(ap, fmt);
   vsnprintf(A.verdict, sizeof A.verdict, fmt, ap);
   va_end(ap);
+  A.verdictBad = 0;
+}
+/* say, but the verdict line draws in the error hue */
+static void sayerr(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(A.verdict, sizeof A.verdict, fmt, ap);
+  va_end(ap);
+  A.verdictBad = 1;
 }
 static void logOut(const char *s, size_t n) { bput(&A.outLog, s, n); A.outScroll = 0; }
 
 /* ---------- .kore scratch: undo ring, play copies, repl program ---------- */
 
-static const char *world_stem(void) {
-  static char stem[PATH_MAX];
-  const char *sl = strrchr(A.world.path, '/');
-  snprintf(stem, sizeof stem, "%s", sl ? sl + 1 : A.world.path);
-  char *dot = strrchr(stem, '.');
-  if (dot) *dot = 0;
-  return stem;
-}
-
-/* scratch names: <stem>-<8-hex FNV of the absolute path>, so two worlds sharing a
- * basename never share an undo ring, play copy, or snapshot series. */
-static const char *world_tag(void) {
-  static char key[PATH_MAX + 16];
-  char rp[PATH_MAX];
-  const char *p = realpath(A.world.path, rp) ? rp : A.world.path;
+/* scratch names: <stem>-<8-hex FNV of the absolute path>, so two files sharing a
+ * basename never share an undo ring, play directory, or snapshot series. */
+static void tag_of(const char *path, char *out, size_t sz) {
+  char rp[PATH_MAX], stem[KNAMESZ];
+  const char *p = realpath(path, rp) ? rp : path;
   uint64_t h = 0xcbf29ce484222325u;
   for (const char *s = p; *s; s++) { h ^= (unsigned char)*s; h *= 0x100000001b3u; }
-  snprintf(key, sizeof key, "%s-%08x", world_stem(), (unsigned)(h & 0xffffffffu));
+  const char *sl = strrchr(path, '/');
+  snprintf(stem, sizeof stem, "%s", sl ? sl + 1 : path);
+  char *dot = strrchr(stem, '.');
+  if (dot) *dot = 0;
+  snprintf(out, sz, "%s-%08x", stem, (unsigned)(h & 0xffffffffu));
+}
+
+static const char *world_tag(void) {
+  static char key[PATH_MAX + 16];
+  tag_of(A.world.path, key, sizeof key);
   return key;
+}
+
+/* the play scratch: .kore/play/<demo tag>/<registry basename> — the demo's own mutable
+ * world, with its session log, base snapshot, and (by tag) undo ring beside it; keyed
+ * by the DEMO's path, so two demos never share a session, and one demo's twins do. */
+static int play_scratch(char *out, size_t sz) {
+  const char *keyPath = A.demoPath[0] ? A.demoPath : A.world.path;
+  const char *src = A.pristine[0] ? A.pristine : A.world.path;
+  char tag[PATH_MAX + 16];
+  tag_of(keyPath, tag, sizeof tag);
+  const char *sl = strrchr(src, '/');
+  return snprintf(out, sz, ".kore/play/%s/%s", tag, sl ? sl + 1 : src) < (int)sz ? 0 : -1;
+}
+
+/* the play code copy: .kore/play/<demo tag>/<demo basename> — the demo's own editable
+ * .ano, created by the first mutating act (s, E); the corpus file is never a write target */
+static int play_code(char *out, size_t sz) {
+  char tag[PATH_MAX + 16];
+  tag_of(A.demoPath, tag, sizeof tag);
+  const char *sl = strrchr(A.demoPath, '/');
+  return snprintf(out, sz, ".kore/play/%s/%s", tag, sl ? sl + 1 : A.demoPath) < (int)sz ? 0 : -1;
+}
+
+/* ensure the scratch's directory exists; path is the scratch file itself */
+static void play_mkdir(const char *scratch) {
+  char dir[PATH_MAX + 64];
+  snprintf(dir, sizeof dir, "%s", scratch);
+  char *sl = strrchr(dir, '/');
+  if (sl) *sl = 0;
+  mkdirs(dir);
 }
 
 /* 1 when the path resolves under a demos/ tree — the immutable corpus */
@@ -901,6 +1046,24 @@ static int undo_push(void) {
   if (copy_file(A.world.path, dst)) return -1;
   return ++A.undoSeq;
 }
+/* drop the whole ring keyed by a play file's path — the file must still exist
+ * (tag_of realpaths it), so wipe before the unlink that orphans the ring */
+static void undo_wipe(const char *path) {
+  char tag[PATH_MAX + 16], pre[PATH_MAX + 24];
+  tag_of(path, tag, sizeof tag);
+  int n = snprintf(pre, sizeof pre, "%s-", tag);
+  DIR *d = opendir(".kore/undo");
+  if (!d || n <= 0) { if (d) closedir(d); return; }
+  struct dirent *de;
+  while ((de = readdir(d))) {
+    if (strncmp(de->d_name, pre, (size_t)n)) continue;
+    char f[PATH_MAX + 64];
+    snprintf(f, sizeof f, ".kore/undo/%s", de->d_name);
+    unlink(f);
+  }
+  closedir(d);
+}
+
 static void undo_drop(void) {
   if (A.undoSeq <= 0) return;
   char p[PATH_MAX + 48];
@@ -912,34 +1075,35 @@ static void undo_pop(void) {
   if (A.undoSeq <= 0) { say("nothing to undo"); return; }
   char p[PATH_MAX + 48], err[256];
   snprintf(p, sizeof p, ".kore/undo/%s-%d.reg", world_tag(), A.undoSeq);
-  if (copy_file(p, A.world.path)) { say("undo: cannot restore %s", p); return; }
+  if (copy_file(p, A.world.path)) { sayerr("undo: cannot restore %s", p); return; }
   unlink(p);
   A.undoSeq--;
   char path[PATH_MAX];
   snprintf(path, sizeof path, "%s", A.world.path);
-  if (world_load(&A.world, path, err, sizeof err)) say("undo: %s", err);
+  if (world_load(&A.world, path, err, sizeof err)) sayerr("undo: %s", err);
   else say("undo → pre-state #%d restored (%d left)", A.undoSeq + 1, A.undoSeq);
 }
 
 static void session_rehydrate(void);
 
-/* demos and their registries are immutable: mutation requires a copy, made once and
- * announced in the output surface. The demo form always copies (its registry is the
- * demo's fixture); a bare .reg world mutates in place unless it sits under demos/. */
+/* demos and their registries are immutable: mutation requires a copy, made once into
+ * the demo's own play directory and announced in the output surface. The demo form
+ * always copies (its registry is the demo's fixture); a bare .reg world mutates in
+ * place unless it sits under demos/. */
 static int world_guard(void) {
   if (A.worldIsCopy || (A.mode == MODE_REG && !in_demos(A.world.path))) return 0;
-  mkdirs(".kore/play");
-  char dst[PATH_MAX + 48], err[256];
-  snprintf(dst, sizeof dst, ".kore/play/%s.reg", world_tag());
-  if (copy_file(A.world.path, dst)) { say("cannot copy world to %s", dst); return -1; }
-  char msg[PATH_MAX + 112];
+  char dst[PATH_MAX + 64], err[256];
+  if (play_scratch(dst, sizeof dst)) { sayerr("play path overlong"); return -1; }
+  play_mkdir(dst);
+  if (copy_file(A.world.path, dst)) { sayerr("cannot copy world to %s", dst); return -1; }
+  char msg[PATH_MAX + 128];
   int mn = snprintf(msg, sizeof msg, "world copied to %s — the corpus stays immutable\n", dst);
   logOut(msg, (size_t)mn);
-  char path[PATH_MAX + 48];
+  snprintf(A.worldOrig, sizeof A.worldOrig, "%s", A.world.path);  /* >reset restores this */
+  char path[PATH_MAX + 64];
   snprintf(path, sizeof path, "%s", dst);
-  if (world_load(&A.world, path, err, sizeof err)) { say("%s", err); return -1; }
+  if (world_load(&A.world, path, err, sizeof err)) { sayerr("%s", err); return -1; }
   A.worldIsCopy = 1;
-  A.worldIsPost = 0;
   A.sessJa = -1;                     /* the session moves beside the copy */
   undo_scan();
   session_rehydrate();
@@ -977,10 +1141,19 @@ static void session_log(const char *stmt, int ja) {
     fprintf(f, "--! registry session-base.reg\n");
     if (ja) fprintf(f, "--! ja\n");
   }
-  if (ja != A.sessJa) fprintf(f, "-- (other surface, not replayable) %s\n", stmt);
-  else fprintf(f, "%s\n", stmt);
+  if (ja != A.sessJa) {
+    /* every line comments out — a half-commented multi-line body would replay */
+    char scopy[1024];
+    snprintf(scopy, sizeof scopy, "%s", stmt);
+    for (char *l = strtok(scopy, "\n"); l; l = strtok(NULL, "\n"))
+      fprintf(f, "-- (other surface, not replayable) %s\n", l);
+  } else fprintf(f, "%s\n", stmt);
   fclose(f);
 }
+
+/* does any line of body redefine this session def? A resubmitted head is excluded
+ * from the prepend so the program holds exactly one copy. */
+static int body_redefines(const char *body, int ja, const char *name);
 
 /* def-head name of a submission (`def kin = …`, 定義 …), or "" — exact bytes, per
  * the def-as-program-variable rule */
@@ -992,8 +1165,19 @@ static void def_head(const char *body, int ja, char *out, size_t outsz) {
   const char *p = body + kl;
   while (*p == ' ') p++;
   size_t i = 0;
-  while (p[i] && p[i] != ' ' && p[i] != '=' && i < outsz - 1) { out[i] = p[i]; i++; }
+  while (p[i] && p[i] != ' ' && p[i] != '=' && p[i] != '\n' && i < outsz - 1) { out[i] = p[i]; i++; }
   out[i] = 0;
+}
+
+static int body_redefines(const char *body, int ja, const char *name) {
+  char bcopy[1024];
+  snprintf(bcopy, sizeof bcopy, "%s", body);
+  for (char *l = strtok(bcopy, "\n"); l; l = strtok(NULL, "\n")) {
+    char dh[128];
+    def_head(l, ja, dh, sizeof dh);
+    if (dh[0] && !strcmp(dh, name)) return 1;
+  }
+  return 0;
 }
 
 /* an existing session log rehydrates its defs, so a reopened world continues the
@@ -1028,6 +1212,8 @@ static void session_rehydrate(void) {
   free(s);
 }
 
+static void kore_command(const char *cmd);
+
 static void repl_submit(void) {
   char stmt[1024];
   snprintf(stmt, sizeof stmt, "%s", A.prompt);
@@ -1036,7 +1222,8 @@ static void repl_submit(void) {
   A.histAt = A.nhist;
   A.prompt[0] = 0;
   A.plen = A.pcur = 0;
-  if (!A.world.loaded) { say("no world loaded"); return; }
+  if (stmt[0] == '>') { kore_command(stmt + 1); return; }
+  if (!A.world.loaded) { sayerr("no world loaded"); return; }
   if (world_guard()) return;
   const char *body = stmt;
   int ja = 0;
@@ -1044,7 +1231,7 @@ static void repl_submit(void) {
   char absw[PATH_MAX];
   if (!realpath(A.world.path, absw)) snprintf(absw, sizeof absw, "%s", A.world.path);
   if (strchr(absw, ' ') || strchr(absw, '\t')) {
-    say("world path contains a space — the --! registry directive is one word");
+    sayerr("world path contains a space — the --! registry directive is one word");
     return;
   }
   /* first statement of a session: snapshot the pre-state the log will replay against */
@@ -1057,20 +1244,19 @@ static void repl_submit(void) {
   }
   mkdirs(".kore");
   /* one submission, one program — with the session's defs prepended (same surface,
-   * the resubmitted head excluded), so a def survives its submission exactly as the
-   * session log replays it, and an installed rule beats once per later submission */
-  char dh[128];
-  def_head(body, ja, dh, sizeof dh);
+   * any resubmitted head excluded), so a def survives its submission exactly as the
+   * session log replays it, and an installed rule beats once per later submission.
+   * The body may hold several lines (\⏎ or shift-enter at the prompt): one program. */
   Buf prog = { 0 };
   bprintf(&prog, "--! registry %s\n%s", absw, ja ? "--! ja\n" : "");
   for (int i = 0; i < A.nsdefs; i++)
-    if (A.sdefJa[i] == ja && (!dh[0] || strcmp(A.sdefName[i], dh)))
+    if (A.sdefJa[i] == ja && !body_redefines(body, ja, A.sdefName[i]))
       bprintf(&prog, "%s\n", A.sdefText[i]);
   bprintf(&prog, "%s\n", body);
-  if (write_commit(".kore/repl.ano", prog.s, prog.len)) { bfree(&prog); say("cannot write .kore/repl.ano"); return; }
+  if (write_commit(".kore/repl.ano", prog.s, prog.len)) { bfree(&prog); sayerr("cannot write .kore/repl.ano"); return; }
   bfree(&prog);
   int seq = undo_push();
-  if (seq < 0) { say("cannot stage undo copy"); return; }
+  if (seq < 0) { sayerr("cannot stage undo copy"); return; }
   Buf cap = { 0 };
   char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", absw, (char *)".kore/repl.ano", NULL };
   int code = run_child(argv, &cap);
@@ -1079,24 +1265,31 @@ static void repl_submit(void) {
   if (code == 0) {
     char err[256], path[PATH_MAX];
     session_log(body, ja);
-    if (dh[0]) {
+    /* every def line of the submission joins the session, exactly as rehydrate reads
+     * the log back — a multi-line body tracks each of its defs individually */
+    char bcopy[1024];
+    snprintf(bcopy, sizeof bcopy, "%s", body);
+    for (char *l = strtok(bcopy, "\n"); l; l = strtok(NULL, "\n")) {
+      char dh[128];
+      def_head(l, ja, dh, sizeof dh);
+      if (!dh[0]) continue;
       int found = -1;
       for (int i = 0; i < A.nsdefs; i++)
         if (A.sdefJa[i] == ja && !strcmp(A.sdefName[i], dh)) found = i;
-      if (found >= 0) { free(A.sdefText[found]); A.sdefText[found] = xstrdup(body); }
+      if (found >= 0) { free(A.sdefText[found]); A.sdefText[found] = xstrdup(l); }
       else if (A.nsdefs < 64) {
-        A.sdefText[A.nsdefs] = xstrdup(body);
+        A.sdefText[A.nsdefs] = xstrdup(l);
         A.sdefJa[A.nsdefs] = ja;
         snprintf(A.sdefName[A.nsdefs], sizeof A.sdefName[0], "%s", dh);
         A.nsdefs++;
       }
     }
     snprintf(path, sizeof path, "%s", A.world.path);
-    if (world_load(&A.world, path, err, sizeof err)) say("%s", err);
-    else say("world advanced · undo #%d staged · session logged", seq);
+    if (world_load(&A.world, path, err, sizeof err)) sayerr("%s", err);
+    else say("world advanced · step %d staged · session logged", seq);
   } else {
     undo_drop();
-    say("statement failed (exit %d) — the world stands", code);
+    sayerr("statement failed (exit %d) — the world stands", code);
   }
   bfree(&cap);
   A.outScroll = 0;
@@ -1106,7 +1299,9 @@ static void repl_submit(void) {
 
 static void code_load(const char *path);
 
-static int demo_registry(const char *anoPath, char *out, size_t outsz) {
+/* the --! registry directive, read from anoPath (the live buffer's file) with relative
+ * specs resolved against anchor's directory — a play copy keeps the corpus demo's home */
+static int demo_registry(const char *anoPath, const char *anchor, char *out, size_t outsz) {
   size_t len = 0;
   char *src = read_file(anoPath, &len);
   if (!src) return -1;
@@ -1119,7 +1314,7 @@ static int demo_registry(const char *anoPath, char *out, size_t outsz) {
     char *e = spec + strlen(spec) - 1;
     while (e > spec && (*e == ' ' || *e == '\r')) *e-- = 0;
     char dir[PATH_MAX];
-    snprintf(dir, sizeof dir, "%s", anoPath);
+    snprintf(dir, sizeof dir, "%s", anchor);
     char *sl = strrchr(dir, '/');
     if (sl) *sl = 0; else snprintf(dir, sizeof dir, ".");
     size_t sl2 = strlen(spec);
@@ -1134,65 +1329,213 @@ static int demo_registry(const char *anoPath, char *out, size_t outsz) {
   return got;
 }
 
+/* corpus .ano files are never a write target: the first mutating act (s, E) copies the
+ * demo into its play directory and retargets the buffer's backing file there — the code
+ * surface's mirror of world_guard. A demo outside demos/ is the author's own file. */
+static int code_guard(void) {
+  if (!A.demoPath[0] || !in_demos(A.demoLive)) return 0;
+  char dst[PATH_MAX + 64];
+  if (play_code(dst, sizeof dst)) { sayerr("play path overlong"); return -1; }
+  play_mkdir(dst);
+  if (copy_file(A.demoLive, dst)) { sayerr("cannot copy code to %s", dst); return -1; }
+  snprintf(A.demoLive, sizeof A.demoLive, "%s", dst);
+  char msg[PATH_MAX + 128];
+  int mn = snprintf(msg, sizeof msg, "code copied to %s — the corpus stays immutable\n", dst);
+  logOut(msg, (size_t)mn);
+  return 0;
+}
+
 static void code_save(void) {
   if (!A.demoPath[0]) return;
+  if (code_guard()) return;
   Buf b = { 0 };
   for (int i = 0; i < A.ncode; i++) { bput(&b, A.code[i], strlen(A.code[i])); bput(&b, "\n", 1); }
-  if (write_commit(A.demoPath, b.s ? b.s : "", b.len)) say("cannot write %s", A.demoPath);
+  if (write_commit(A.demoLive, b.s ? b.s : "", b.len)) sayerr("cannot write %s", A.demoLive);
   else {
     A.codeDirty = 0;
-    /* an explicit s on a corpus file is the author's call — but it is announced */
-    say(in_demos(A.demoPath) ? "saved %s — corpus file edited in place" : "saved %s", A.demoPath);
+    say("saved %s", A.demoLive);
   }
   bfree(&b);
 }
 
-/* r: the demo runs read-only — anoc --run, post-state saved to .kore/post.reg so the
- * world and space surfaces light up with what the program did; the original registry
- * is never written. Rerunning starts from the pristine world again. */
-static void run_current(void) {
-  if (A.mode == MODE_REG) { say("bare world: the prompt is the program (r runs demos)"); return; }
-  if (!A.demoPath[0]) { say("no demo selected"); return; }
+/* a one-line seam in the session log: the world moved by something the log cannot
+ * replay (a tick, a reset), recorded where the statements live */
+static void session_seam(const char *fmt, const char *arg) {
+  char sess[PATH_MAX + 16];
+  session_path(sess, sizeof sess);
+  if (access(sess, F_OK) != 0) return;
+  FILE *f = fopen(sess, "a");
+  if (!f) return;
+  fprintf(f, fmt, arg);
+  fclose(f);
+}
+
+/* adopt the demo's play scratch as the world: load it, resume its ring and session.
+ * copyFirst copies the pristine registry over it beforehand (creation / reset). */
+static int play_adopt(const char *dst, int copyFirst, char *err, size_t errsz) {
+  play_mkdir(dst);
+  if (copyFirst && copy_file(A.pristine, dst)) { snprintf(err, errsz, "cannot copy %.100s to %.100s", A.pristine, dst); return -1; }
+  char path[PATH_MAX + 64];
+  snprintf(path, sizeof path, "%s", dst);
+  if (world_load(&A.world, path, err, errsz)) return -1;
+  if (!A.worldIsCopy) {
+    A.worldIsCopy = 1;
+    A.sessJa = -1;
+    undo_scan();
+    session_rehydrate();
+  }
+  return 0;
+}
+
+/* r: load and reset — the pristine registry copied over the demo's play scratch, the
+ * pre-reset scratch staged on the ring first so u steps back across a reset. The
+ * pristine file itself is only ever read. In a bare world r reloads the file. */
+static void world_reset(void) {
+  char err[256];
+  if (A.mode == MODE_REG) {
+    if (!A.world.loaded) { sayerr("no world loaded"); return; }
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", A.world.path);
+    if (world_load(&A.world, path, err, sizeof err)) sayerr("%s", err);
+    else say("world reloaded from %s", path);
+    return;
+  }
+  if (!A.demoPath[0]) { sayerr("no demo selected"); return; }
+  if (!A.pristine[0]) { sayerr("this demo declares no registry — n runs it for the output"); return; }
+  char dst[PATH_MAX + 64];
+  if (play_scratch(dst, sizeof dst)) { sayerr("play path overlong"); return; }
+  int had = access(dst, F_OK) == 0;
+  if (had) {
+    if (!A.worldIsCopy && play_adopt(dst, 0, err, sizeof err)) { sayerr("%s", err); return; }
+    /* stage the pre-reset state, unless it already equals the pristine bytes */
+    size_t la = 0, lb = 0;
+    char *sa = read_file(A.pristine, &la), *sb = read_file(dst, &lb);
+    int same = sa && sb && la == lb && memcmp(sa, sb, la) == 0;
+    free(sa);
+    free(sb);
+    if (!same) {
+      if (undo_push() < 0) { sayerr("cannot stage undo copy"); return; }
+      session_seam("-- r: world reset to pristine %s (not replayable)\n", A.pristine);
+    }
+  }
+  if (play_adopt(dst, 1, err, sizeof err)) { sayerr("%s", err); return; }
+  A.wSeg = A.wRow = A.wCol = A.wTop = 0;
+  if (had) say("reset → pristine world (n steps it, u steps back)");
+  else say("pristine world loaded → %s (n steps it)", dst);
+}
+
+/* n: next — one tick: the demo's program, its --! registry retargeted at the play
+ * scratch, run through --run --save with the pre-state staged on the ring first.
+ * r resets to step zero; u is n's exact inverse. */
+static void world_next(void) {
+  if (A.mode == MODE_REG) { sayerr("bare world: statements step it — n steps demos"); return; }
+  if (!A.demoPath[0]) { sayerr("no demo selected"); return; }
   /* never silently write the file under the author: saving is an explicit s */
-  if (A.codeDirty) { say("unsaved code — s saves it, then r runs"); return; }
+  if (A.codeDirty) { sayerr("unsaved code — s saves it, then n steps"); return; }
   mkdirs(".kore");
   Buf cap = { 0 };
   int code;
-  char reg[PATH_MAX];
-  int hasReg = demo_registry(A.demoPath, reg, sizeof reg) == 0;
-  if (hasReg) {
-    char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", (char *)".kore/post.reg", A.demoPath, NULL };
+  if (!A.pristine[0]) {
+    /* no registry: nothing to advance — run for the output alone */
+    char *argv[] = { (char *)find_anoc(), (char *)"--run", A.demoLive, NULL };
     code = run_child(argv, &cap);
-  } else {
-    char *argv[] = { (char *)find_anoc(), (char *)"--run", A.demoPath, NULL };
-    code = run_child(argv, &cap);
+    bprintf(&A.outLog, "$ anoc --run %s\n", A.demoLive);
+    if (cap.len) logOut(cap.s, cap.len);
+    bfree(&cap);
+    if (code == 0) say("pins held (no registry — no world to step)");
+    else sayerr("run failed (exit %d) — see output", code);
+    A.outScroll = 0;
+    return;
   }
-  bprintf(&A.outLog, "$ anoc --run %s\n", A.demoPath);
+  if (!A.worldIsCopy) {
+    char dst[PATH_MAX + 64], err[256];
+    if (play_scratch(dst, sizeof dst)) { sayerr("play path overlong"); return; }
+    if (play_adopt(dst, access(dst, F_OK) != 0, err, sizeof err)) { sayerr("%s", err); return; }
+  }
+  char absw[PATH_MAX];
+  if (!realpath(A.world.path, absw)) snprintf(absw, sizeof absw, "%s", A.world.path);
+  if (strchr(absw, ' ') || strchr(absw, '\t')) {
+    sayerr("world path contains a space — the --! registry directive is one word");
+    return;
+  }
+  /* the tick program: the demo verbatim, its registry directive retargeted and its
+   * --! expect pins stripped — the pins witness the pristine run, and against any
+   * later step they would fail the tick and hold the world still */
+  size_t slen = 0;
+  char *src = read_file(A.demoLive, &slen);
+  if (!src) { sayerr("cannot read %s", A.demoLive); return; }
+  Buf prog = { 0 };
+  int retargeted = 0;
+  char *save = NULL;
+  for (char *p = src;; p = NULL) {
+    char *ln = p ? p : save;
+    if (!ln) break;
+    char *nl = strchr(ln, '\n');
+    if (nl) { *nl = 0; save = nl + 1; } else save = NULL;
+    if (!nl && !ln[0]) break;
+    const char *lt = ln;
+    while (*lt == ' ' || *lt == '\t') lt++;
+    if (!retargeted && !strncmp(lt, "--! registry ", 13)) {
+      bprintf(&prog, "--! registry %s\n", absw);
+      retargeted = 1;
+    } else if (!strncmp(lt, "--! expect", 10)) {
+      /* dropped: the tick program is scratch, never written back to the demo */
+    } else bprintf(&prog, "%s\n", ln);
+    if (!nl) break;
+  }
+  free(src);
+  if (!retargeted) { bfree(&prog); sayerr("no --! registry line in %s", A.demoLive); return; }
+  if (write_commit(".kore/next.ano", prog.s, prog.len)) { bfree(&prog); sayerr("cannot write .kore/next.ano"); return; }
+  bfree(&prog);
+  int seq = undo_push();
+  if (seq < 0) { sayerr("cannot stage undo copy"); return; }
+  char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", absw, (char *)".kore/next.ano", NULL };
+  code = run_child(argv, &cap);
+  bprintf(&A.outLog, "$ n — %s against %s\n", A.demoPath, A.world.path);
   if (cap.len) logOut(cap.s, cap.len);
   bfree(&cap);
   if (code == 0) {
-    char err[256];
-    if (hasReg && world_load(&A.world, ".kore/post.reg", err, sizeof err) == 0) {
-      A.worldIsPost = 1;
-      A.worldIsCopy = 0;
-      say("pins held — world shows the post-state (pristine registry untouched)");
-    } else say("pins held");
-  } else say("run failed (exit %d) — see output", code);
+    char err[256], path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", A.world.path);
+    session_seam("-- n: %s ticked the world (not replayable)\n", A.demoPath);
+    if (world_load(&A.world, path, err, sizeof err)) sayerr("%s", err);
+    else say("tick — world advanced · step %d · u steps back", seq);
+  } else {
+    undo_drop();
+    sayerr("tick failed (exit %d) — the world stands", code);
+  }
   A.outScroll = 0;
 }
 
 static void open_demo(const char *path) {
   snprintf(A.demoPath, sizeof A.demoPath, "%s", path);
-  code_load(path);
+  /* an earlier session's play code copy shadows a corpus demo — the buffer rides it */
+  char live[PATH_MAX + 64];
+  int shadowed = in_demos(path) && play_code(live, sizeof live) == 0 && access(live, F_OK) == 0;
+  snprintf(A.demoLive, sizeof A.demoLive, "%s", shadowed ? live : path);
+  code_load(A.demoLive);
+  if (shadowed) {
+    char msg[PATH_MAX + 128];
+    int mn = snprintf(msg, sizeof msg, "code: play copy %s resumed — >reset restores the corpus\n", A.demoLive);
+    logOut(msg, (size_t)mn);
+  }
   char reg[PATH_MAX], err[256];
-  A.worldIsCopy = A.worldIsPost = 0;
+  A.worldIsCopy = 0;
   A.undoSeq = 0;
   A.sessJa = -1;
   for (int i = 0; i < A.nsdefs; i++) free(A.sdefText[i]);
   A.nsdefs = 0;
-  if (demo_registry(path, reg, sizeof reg) == 0) {
+  if (demo_registry(A.demoLive, A.demoPath, reg, sizeof reg) == 0) {
     snprintf(A.pristine, sizeof A.pristine, "%s", reg);
-    if (world_load(&A.world, reg, err, sizeof err)) say("%s", err);
+    char dst[PATH_MAX + 64];
+    /* an earlier session left a play world: resume it — r resets to pristine */
+    if (play_scratch(dst, sizeof dst) == 0 && access(dst, F_OK) == 0 &&
+        play_adopt(dst, 0, err, sizeof err) == 0) {
+      A.wSeg = A.wRow = A.wCol = A.wTop = 0;
+      say("%s — play world resumed at step %d (r resets to pristine)", path, A.undoSeq);
+      return;
+    }
+    if (world_load(&A.world, reg, err, sizeof err)) sayerr("%s", err);
   } else {
     world_free(&A.world);
     A.pristine[0] = 0;
@@ -1201,7 +1544,81 @@ static void open_demo(const char *path) {
   say("%s", path);
 }
 
+/* ---------- >reset: the whole play tree back to the pristine corpus ---------- */
+
+static int play_count(void) {
+  int n = 0;
+  DIR *d = opendir(".kore/play");
+  if (!d) return 0;
+  struct dirent *de;
+  while ((de = readdir(d))) if (de->d_name[0] != '.') n++;
+  closedir(d);
+  return n;
+}
+
+/* confirmed: unlink every play copy, its undo ring, and the tick scratch — every demo
+ * returns to the pristine corpus, including the open one. Snapshots are deliberate; they stay. */
+static void reset_all(void) {
+  int demos = 0, files = 0;
+  DIR *d = opendir(".kore/play");
+  if (d) {
+    struct dirent *de;
+    while ((de = readdir(d))) {
+      if (de->d_name[0] == '.') continue;
+      char dir[PATH_MAX + 64];
+      snprintf(dir, sizeof dir, ".kore/play/%s", de->d_name);
+      DIR *pd = opendir(dir);
+      if (!pd) continue;
+      struct dirent *pe;
+      while ((pe = readdir(pd))) {
+        if (pe->d_name[0] == '.') continue;
+        char f[PATH_MAX + 512];
+        snprintf(f, sizeof f, "%s/%s", dir, pe->d_name);
+        undo_wipe(f);
+        if (!unlink(f)) files++;
+      }
+      closedir(pd);
+      if (!rmdir(dir)) demos++;
+    }
+    closedir(d);
+  }
+  rmdir(".kore/play");
+  unlink(".kore/next.ano");
+  if (A.demoPath[0]) {          /* a demo is open — rail mode or demo mode alike */
+    char keep[PATH_MAX];
+    snprintf(keep, sizeof keep, "%s", A.demoPath);
+    open_demo(keep);
+  } else if (A.mode == MODE_REG && A.worldIsCopy && A.worldOrig[0]) {
+    char err[256];
+    A.worldIsCopy = 0;
+    A.sessJa = -1;
+    for (int i = 0; i < A.nsdefs; i++) free(A.sdefText[i]);
+    A.nsdefs = 0;
+    if (world_load(&A.world, A.worldOrig, err, sizeof err)) { sayerr("%s", err); return; }
+    undo_scan();
+    A.wSeg = A.wRow = A.wCol = A.wTop = 0;
+  }
+  say("reset — %d play cop%s removed (%d file%s); every demo is the pristine corpus again",
+      demos, demos == 1 ? "y" : "ies", files, files == 1 ? "" : "s");
+}
+
+/* the prompt's > form: kore's own verbs, not ano statements */
+static void kore_command(const char *cmd) {
+  while (*cmd == ' ') cmd++;
+  if (!strcmp(cmd, "reset")) {
+    int n = play_count();
+    if (!n) { say("nothing to reset — no play copies exist"); return; }
+    A.confirmReset = 1;
+    sayerr("reset %d play cop%s to the pristine corpus? y confirms — any other key cancels",
+           n, n == 1 ? "y" : "ies");
+    return;
+  }
+  sayerr("unknown command >%.60s — commands: >reset", cmd);
+}
+
 /* ---------- the code surface ---------- */
+
+static void code_undo_clear(void);
 
 static void code_free(void) {
   for (int i = 0; i < A.ncode; i++) free(A.code[i]);
@@ -1214,6 +1631,11 @@ static void code_load(const char *path) {
   code_free();
   size_t len = 0;
   char *src = read_file(path, &len);
+  code_undo_clear();
+  A.codePending = A.codeG = A.codeD = 0;
+  A.searching = 0;
+  A.search[0] = 0;
+  A.searchLen = 0;
   if (!src) {                       /* unreadable: an empty buffer, never a NULL one */
     A.code = xalloc(sizeof(char *));
     A.code[A.ncode++] = xstrdup("");
@@ -1252,6 +1674,177 @@ static int line_byte_at(const char *s, int col) {
     p = q;
   }
   return (int)(p - s);
+}
+
+/* display column of byte offset `at` — line_byte_at's inverse */
+static int line_col_of(const char *s, int at) {
+  int w = 0;
+  const char *p = s;
+  while (*p && (int)(p - s) < at) w += cw(u8next(&p));
+  return w;
+}
+
+/* ---------- vim vocabulary: word motions, the code undo stack, /-search ---------- */
+
+static int rune_is_word(uint32_t c) { return c == '_' || anorune_is_letter(c) || anorune_is_digit(c); }
+
+/* w: leave the current run (word runes or a punct run), skip whitespace, land on the
+ * next head; line ends wrap. b: the mirror, landing on the previous run's head. */
+static void code_word_fwd(void) {
+  const char *ln = A.code[A.ccy];
+  int at = line_byte_at(ln, A.ccx);
+  const char *p = ln + at;
+  if (!*p) {
+    if (A.ccy < A.ncode - 1) { A.ccy++; A.ccx = 0; }
+    return;
+  }
+  const char *q = p;
+  uint32_t c = u8next(&q);
+  if (!anorune_is_whitespace(c)) {
+    int cls = rune_is_word(c);
+    p = q;                                   /* past the head rune */
+    while (*p) {
+      q = p;
+      c = u8next(&q);
+      if (anorune_is_whitespace(c) || rune_is_word(c) != cls) break;
+      p = q;
+    }
+  }
+  while (*p) {
+    q = p;
+    c = u8next(&q);
+    if (!anorune_is_whitespace(c)) break;
+    p = q;
+  }
+  if (!*p) {
+    if (A.ccy < A.ncode - 1) { A.ccy++; A.ccx = 0; } else A.ccx = swidth(ln);
+    return;
+  }
+  A.ccx = line_col_of(ln, (int)(p - ln));
+}
+
+static void code_word_back(void) {
+  const char *ln = A.code[A.ccy];
+  int at = line_byte_at(ln, A.ccx);
+  if (at == 0) {
+    if (A.ccy > 0) { A.ccy--; A.ccx = swidth(A.code[A.ccy]); }
+    return;
+  }
+  anostr_t s = anostr_view(ln, strlen(ln));
+  size_t i = (size_t)at;
+  anorune_t c = anostr_rune_prev(s, &i);
+  while (i > 0 && anorune_is_whitespace(c)) c = anostr_rune_prev(s, &i);
+  int cls = rune_is_word(c);
+  while (i > 0) {
+    size_t j = i;
+    anorune_t d = anostr_rune_prev(s, &j);
+    if (anorune_is_whitespace(d) || rune_is_word(d) != cls) break;
+    i = j;
+  }
+  A.ccx = line_col_of(ln, (int)i);
+}
+
+/* code-local undo: whole-buffer snapshots (u here never touches the world's ring) */
+#define KCUNDO 64
+static struct { char *text; int cy, cx; } cundo[KCUNDO];
+static int ncundo;
+
+static void code_undo_clear(void) {
+  for (int i = 0; i < ncundo; i++) free(cundo[i].text);
+  ncundo = 0;
+}
+static void code_undo_push(void) {
+  if (ncundo == KCUNDO) {
+    free(cundo[0].text);
+    memmove(&cundo[0], &cundo[1], (KCUNDO - 1) * sizeof cundo[0]);
+    ncundo--;
+  }
+  Buf b = { 0 };
+  for (int i = 0; i < A.ncode; i++) { bput(&b, A.code[i], strlen(A.code[i])); bput(&b, "\n", 1); }
+  cundo[ncundo].text = b.s ? b.s : xstrdup("");
+  cundo[ncundo].cy = A.ccy;
+  cundo[ncundo].cx = A.ccx;
+  ncundo++;
+}
+static void code_undo_pop(void) {
+  if (!ncundo) { say("code: nothing to undo"); return; }
+  ncundo--;
+  code_free();
+  char *src = cundo[ncundo].text;
+  int cap = 64;
+  A.code = xalloc((size_t)cap * sizeof(char *));
+  char *save = NULL;
+  for (char *p = src;; p = NULL) {
+    char *ln = p ? p : save;
+    if (!ln) break;
+    char *nl = strchr(ln, '\n');
+    if (nl) { *nl = 0; save = nl + 1; } else save = NULL;
+    if (!nl && !ln[0]) break;
+    if (A.ncode >= cap) { cap *= 2; A.code = realloc(A.code, (size_t)cap * sizeof(char *)); if (!A.code) abort(); }
+    A.code[A.ncode++] = xstrdup(ln);
+    if (!nl) break;
+  }
+  if (!A.ncode) A.code[A.ncode++] = xstrdup("");
+  free(cundo[ncundo].text);
+  A.ccy = cundo[ncundo].cy < A.ncode ? cundo[ncundo].cy : A.ncode - 1;
+  A.ccx = cundo[ncundo].cx;
+  int lw = swidth(A.code[A.ccy]);
+  if (A.ccx > lw) A.ccx = lw;
+  A.codeDirty = 1;
+  say("code undo (%d left)", ncundo);
+}
+
+/* the / search: base-letter matching (case- and accent-insensitive), n/N walk it */
+static void code_search_jump(int dir) {
+  if (!A.search[0]) { say("no search — / sets one"); return; }
+  anostr_t needle = anostr_view(A.search, (size_t)A.searchLen);
+  int total = A.ncode;
+  for (int step = 0; step <= total; step++) {
+    int li = ((A.ccy + dir * step) % total + total) % total;
+    const char *ln = A.code[li];
+    size_t ll = strlen(ln);
+    anostr_t hay = anostr_view(ln, ll);
+    if (dir > 0) {
+      size_t from = 0;
+      if (step == 0) {
+        from = (size_t)line_byte_at(ln, A.ccx) + 1;
+        if (from > ll) continue;
+      }
+      size_t at = anostr_find_base(hay, needle, from);
+      if (at != ANOSTR_NPOS) { A.ccy = li; A.ccx = line_col_of(ln, (int)at); say("/%s", A.search); return; }
+    } else {
+      size_t limit = step == 0 ? (size_t)line_byte_at(ln, A.ccx) : ll + 1;
+      size_t best = ANOSTR_NPOS, at = 0, f;
+      while ((f = anostr_find_base(hay, needle, at)) != ANOSTR_NPOS && f < limit) { best = f; at = f + 1; }
+      if (best != ANOSTR_NPOS) { A.ccy = li; A.ccx = line_col_of(ln, (int)best); say("?%s", A.search); return; }
+    }
+  }
+  sayerr("no match: %s", A.search);
+}
+
+/* keys while typing the / pattern */
+static void search_key(Ev *e) {
+  if (e->type == EV_KEY && e->key == K_ESC) { A.searching = 0; A.search[0] = 0; A.searchLen = 0; return; }
+  if (e->type == EV_KEY && e->key == K_ENTER) {
+    A.searching = 0;
+    if (A.searchLen) code_search_jump(1);
+    return;
+  }
+  if (e->type == EV_KEY && e->key == K_BS) {
+    if (A.searchLen > 0) {
+      A.searchLen--;
+      while (A.searchLen > 0 && ((unsigned char)A.search[A.searchLen] & 0xC0) == 0x80) A.searchLen--;
+      A.search[A.searchLen] = 0;
+    }
+    return;
+  }
+  if (e->type == EV_CHAR) {
+    size_t il = strlen(e->u8);
+    if ((size_t)A.searchLen + il < sizeof A.search - 1) {
+      memcpy(A.search + A.searchLen, e->u8, il + 1);
+      A.searchLen += (int)il;
+    }
+  }
 }
 
 static void code_insert_str(const char *u8) {
@@ -1317,18 +1910,50 @@ static void code_key(Ev *e) {
     }
     if (e->type == EV_CHAR) { code_insert_str(e->u8); return; }
   }
-  /* browse: vi-flavored */
+  /* browse: vim vocabulary — counts, word motions, gg/G, /-search, code-local undo */
   if (e->type == EV_CHAR) {
+    if ((e->ch >= '1' && e->ch <= '9') || (A.codePending && e->ch == '0')) {
+      A.codePending = A.codePending * 10 + (int)(e->ch - '0');
+      if (A.codePending > 999999) A.codePending = 999999;
+      return;
+    }
+    int hadCount = A.codePending != 0;
+    int rep = hadCount ? A.codePending : 1;
+    A.codePending = 0;
+    if (e->ch != 'g') A.codeG = 0;
+    if (e->ch != 'd') A.codeD = 0;
     switch (e->ch) {
-      case 'j': A.ccy = A.ccy < A.ncode - 1 ? A.ccy + 1 : A.ccy; return;
-      case 'k': A.ccy = A.ccy > 0 ? A.ccy - 1 : 0; return;
-      case 'h': A.ccx = A.ccx > 0 ? A.ccx - 1 : 0; return;
-      case 'l': A.ccx = A.ccx < lw ? A.ccx + 1 : lw; return;
+      case 'j': while (rep-- && A.ccy < A.ncode - 1) A.ccy++; return;
+      case 'k': while (rep-- && A.ccy > 0) A.ccy--; return;
+      case 'h': A.ccx = A.ccx > rep ? A.ccx - rep : 0; return;
+      case 'l': A.ccx = A.ccx + rep < lw ? A.ccx + rep : lw; return;
       case '0': A.ccx = 0; return;
+      case '^': {
+        const char *p = ln;
+        int col = 0;
+        while (*p == ' ' || *p == '\t') { p++; col++; }
+        A.ccx = col;
+        return;
+      }
       case '$': A.ccx = lw; return;
-      case 'i': A.codeInsert = 1; return;
-      case 'a': A.codeInsert = 1; A.ccx = A.ccx < lw ? A.ccx + 1 : lw; return;
+      case 'w': while (rep--) code_word_fwd(); return;
+      case 'b': while (rep--) code_word_back(); return;
+      case 'g': /* gg — [count]gg goes to that line */
+        if (A.codeG) {
+          int tgt = A.codeG > 1 ? A.codeG : 1;
+          A.ccy = tgt <= A.ncode ? tgt - 1 : A.ncode - 1;
+          A.ccx = 0;
+          A.codeG = 0;
+        } else A.codeG = rep;
+        return;
+      case 'G': /* [count]G goes to that line, bare G to the last */
+        A.ccy = hadCount ? (rep <= A.ncode ? rep - 1 : A.ncode - 1) : A.ncode - 1;
+        A.ccx = 0;
+        return;
+      case 'i': code_undo_push(); A.codeInsert = 1; return;
+      case 'a': code_undo_push(); A.codeInsert = 1; A.ccx = A.ccx < lw ? A.ccx + 1 : lw; return;
       case 'o': {
+        code_undo_push();
         A.code = realloc(A.code, (size_t)(A.ncode + 1) * sizeof(char *));
         if (!A.code) abort();
         memmove(&A.code[A.ccy + 2], &A.code[A.ccy + 1], (size_t)(A.ncode - A.ccy - 1) * sizeof(char *));
@@ -1341,8 +1966,10 @@ static void code_key(Ev *e) {
         return;
       }
       case 'x': {
-        int at = line_byte_at(ln, A.ccx);
-        if (ln[at]) {
+        code_undo_push();
+        while (rep--) {
+          int at = line_byte_at(ln, A.ccx);
+          if (!ln[at]) break;
           int next = at + 1;
           while (ln[next] && ((unsigned char)ln[next] & 0xC0) == 0x80) next++;
           memmove(ln + at, ln + next, strlen(ln + next) + 1);
@@ -1350,20 +1977,31 @@ static void code_key(Ev *e) {
         }
         return;
       }
-      case 'd': { /* dd: delete line (single d suffices here) */
-        if (A.ncode > 1) {
-          free(A.code[A.ccy]);
-          memmove(&A.code[A.ccy], &A.code[A.ccy + 1], (size_t)(A.ncode - A.ccy - 1) * sizeof(char *));
-          A.ncode--;
-          if (A.ccy >= A.ncode) A.ccy = A.ncode - 1;
-        } else { A.code[0][0] = 0; }
-        A.codeDirty = 1;
+      case 'd': /* dd — [count]dd deletes that many lines */
+        if (A.codeD) {
+          int cnt = A.codeD;
+          A.codeD = 0;
+          code_undo_push();
+          while (cnt--) {
+            if (A.ncode > 1) {
+              free(A.code[A.ccy]);
+              memmove(&A.code[A.ccy], &A.code[A.ccy + 1], (size_t)(A.ncode - A.ccy - 1) * sizeof(char *));
+              A.ncode--;
+              if (A.ccy >= A.ncode) A.ccy = A.ncode - 1;
+            } else { A.code[0][0] = 0; break; }
+          }
+          A.codeDirty = 1;
+        } else A.codeD = rep;
         return;
-      }
+      case 'u': code_undo_pop(); return;
+      case 'n': if (A.search[0]) code_search_jump(1); return;
+      case 'N': if (A.search[0]) code_search_jump(-1); return;
+      case '/': A.searching = 1; A.search[0] = 0; A.searchLen = 0; return;
       case 's': code_save(); return;
     }
   }
   if (e->type == EV_KEY) {
+    int page = A.codeR.h > 4 ? A.codeR.h - 3 : 10;
     switch (e->key) {
       case K_UP: A.ccy = A.ccy > 0 ? A.ccy - 1 : 0; break;
       case K_DOWN: A.ccy = A.ccy < A.ncode - 1 ? A.ccy + 1 : A.ccy; break;
@@ -1371,7 +2009,9 @@ static void code_key(Ev *e) {
       case K_RIGHT: A.ccx = A.ccx < lw ? A.ccx + 1 : lw; break;
       case K_HOME: A.ccx = 0; break;
       case K_END: A.ccx = lw; break;
-      case K_ENTER: A.codeInsert = 1; break;
+      case K_PGUP: A.ccy = A.ccy > page ? A.ccy - page : 0; break;
+      case K_PGDN: A.ccy = A.ccy + page < A.ncode ? A.ccy + page : A.ncode - 1; break;
+      case K_ENTER: code_undo_push(); A.codeInsert = 1; break;
       default: break;
     }
   }
@@ -1600,9 +2240,9 @@ static void cell_edit_commit(void) {
   char err[256];
   if (world_guard()) return;
   int seq = undo_push();
-  if (seq < 0) { say("cannot stage undo copy"); return; }
-  if (cell_commit(A.editBuf, err, sizeof err)) { undo_drop(); say("edit: %s", err); }
-  else say("cell written · undo #%d staged", seq);
+  if (seq < 0) { sayerr("cannot stage undo copy"); return; }
+  if (cell_commit(A.editBuf, err, sizeof err)) { undo_drop(); sayerr("edit: %s", err); }
+  else say("cell written · step %d staged", seq);
 }
 
 /* ---------- drag selection -> predicate skeleton ---------- */
@@ -1651,15 +2291,21 @@ static void drag_skeleton(void) {
 static void layout(void) {
   int W = T.cols, H = T.rows;
   int railW = A.mode == MODE_RAIL ? (W / 4 < 34 ? (W / 4 > 20 ? W / 4 : 20) : 34) : 0;
-  int promptH = 1;
+  /* the prompt's own box grows with its lines (to a third of the screen, then it
+   * scrolls) + the key atlas line */
+  int plines = 1, statusH = 1;
+  for (const char *p = A.prompt; *p; p++) plines += *p == '\n';
+  int promptH = plines + 2;
+  int maxPH = H / 3 > 3 ? H / 3 : 3;
+  if (promptH > maxPH) promptH = maxPH;
   int outH = H / 5 > 5 ? (H / 5 < 10 ? H / 5 : 10) : 5;
-  int codeH = A.mode == MODE_REG ? 0 : (H - promptH - outH) * 2 / 5;
-  A.rail = (Rect){ 0, 0, railW, H - promptH };
+  int codeH = A.mode == MODE_REG ? 0 : (H - promptH - statusH - outH) * 2 / 5;
+  A.rail = (Rect){ 0, 0, railW, H - promptH - statusH };
   int x = railW, w = W - railW;
   A.codeR = (Rect){ x, 0, w, codeH };
-  A.worldR = (Rect){ x, codeH, w, H - promptH - outH - codeH };
-  A.outR = (Rect){ x, H - promptH - outH, w, outH };
-  A.promptR = (Rect){ 0, H - promptH, W, promptH };
+  A.worldR = (Rect){ x, codeH, w, H - promptH - statusH - outH - codeH };
+  A.outR = (Rect){ x, H - promptH - statusH - outH, w, outH };
+  A.promptR = (Rect){ 0, H - promptH - statusH, W, promptH };
 }
 
 static void draw_rail(void) {
@@ -1667,7 +2313,7 @@ static void draw_rail(void) {
   if (r.w <= 0) return;
   char t[64];
   snprintf(t, sizeof t, "demos %d", nDemos);
-  box(r.x, r.y, r.w, r.h, t, A.focus == F_RAIL);
+  box(r.x, r.y, r.w, r.h, t, A.focus == F_RAIL, C_RAILC);
   int vis = r.h - 2;
   if (A.railSel < A.railTop) A.railTop = A.railSel;
   if (A.railSel >= A.railTop + vis) A.railTop = A.railSel - vis + 1;
@@ -1677,17 +2323,28 @@ static void draw_rail(void) {
     if (!strncmp(p, "demos/", 6)) p += 6;
     int sel = di == A.railSel;
     if (sel) fill(r.x + 1, r.y + 1 + i, r.w - 2, 1, " ", A_REV, 0);
-    put(r.x + 2, r.y + 1 + i, sel ? A_REV : 0, 0, p, r.w - 3);
+    /* the directory dims, the file carries the color; -nihongo twins tint violet */
+    const char *slash = strrchr(p, '/');
+    int xx = r.x + 2, y = r.y + 1 + i;
+    if (slash) {
+      char dir[160];
+      snprintf(dir, sizeof dir, "%.*s", (int)(slash - p + 1) < 159 ? (int)(slash - p + 1) : 159, p);
+      xx += put(xx, y, (sel ? A_REV : 0) | A_DIM, 0, dir, r.w - 3);
+    }
+    const char *fn = slash ? slash + 1 : p;
+    put(xx, y, sel ? A_REV : 0, strstr(fn, "-nihongo") ? C_NIHONGO : 0, fn, r.w - 2 - (xx - r.x));
   }
+  scrollbar(r, A.railTop, vis, nDemos, C_RAILC);
 }
 
 static void draw_code(void) {
   Rect r = A.codeR;
   if (r.h <= 1) return;
   char t[PATH_MAX + 64];
-  snprintf(t, sizeof t, "code · %s%s%s", A.demoPath[0] ? A.demoPath : "—",
-           A.codeDirty ? " +" : "", A.codeInsert ? " · INSERT" : "");
-  box(r.x, r.y, r.w, r.h, t, A.focus == F_CODE);
+  snprintf(t, sizeof t, "code · %s%s%s%s · %d/%d", A.demoPath[0] ? A.demoPath : "—",
+           A.demoPath[0] && strcmp(A.demoLive, A.demoPath) ? " · play copy" : "",
+           A.codeDirty ? " +" : "", A.codeInsert ? " · INSERT" : "", A.ccy + 1, A.ncode);
+  box(r.x, r.y, r.w, r.h, t, A.focus == F_CODE, C_CODEC);
   int vis = r.h - 2;
   if (A.ccy < A.codeTop) A.codeTop = A.ccy;
   if (A.ccy >= A.codeTop + vis) A.codeTop = A.ccy - vis + 1;
@@ -1696,24 +2353,54 @@ static void draw_code(void) {
     const char *ln = A.code[li];
     const char *lt = ln;
     while (*lt == ' ' || *lt == '\t') lt++;
-    int dim = !strncmp(lt, "--", 2); /* comments and directives dim */
+    int dirline = !strncmp(lt, "--!", 3);          /* directives in their own hue */
+    int dim = !dirline && !strncmp(lt, "--", 2);   /* comments dim */
+    int defOff = -1, defEnd = -1;                  /* the def keyword's byte span */
+    if (!dim && !dirline) {
+      if (!strncmp(lt, "def ", 4)) { defOff = (int)(lt - ln); defEnd = defOff + 3; }
+      else if (!strncmp(lt, "定義 ", 7)) { defOff = (int)(lt - ln); defEnd = defOff + 6; }
+    }
     int x = r.x + 1, y = r.y + 1 + i;
     const char *p = ln;
     int col = 0, maxw = r.w - 2;
     while (*p && col < maxw) {
       const char *at = p;
       uint32_t c = u8next(&p);
-      int glow = !dim && (c == ',' || (c == '=' && *p == '>'));
-      int glow2 = !dim && c == '>' && at > ln && at[-1] == '=';
+      int attr = 0, fg = 0;
+      if (dirline) fg = C_DIRECTIVE;
+      else if (dim) attr = A_DIM;
+      else if (c == ',' || (c == '=' && *p == '>') || (c == '>' && at > ln && at[-1] == '=')) { attr = A_BOLD; fg = C_GLOW; }
+      else if ((int)(at - ln) >= defOff && (int)(at - ln) < defEnd) { attr = A_BOLD; fg = C_DEF; }
+      else if (c == '&' || c == '|' || c == '<' || c == '>' || c == '=' || c == '~' ||
+               c == '!' || c == '+' || c == '*' || c == '/' || c == '%') fg = C_OP;
+      else if (c >= '0' && c <= '9') fg = C_NUMLIT;
       char g[8] = { 0 };
       memcpy(g, at, (size_t)(p - at) < 7 ? (size_t)(p - at) : 7);
-      col += put(x + col, y, dim ? A_DIM : (glow || glow2) ? A_BOLD : 0, (glow || glow2) ? 93 : 0, g, maxw - col);
+      col += put(x + col, y, attr, fg, g, maxw - col);
+    }
+    /* every /-match on a visible line lights up (span approximated by the needle) */
+    if (A.search[0]) {
+      anostr_t hay = anostr_view(ln, strlen(ln));
+      anostr_t nd = anostr_view(A.search, (size_t)A.searchLen);
+      size_t from = 0, f;
+      int ndw = swidth(A.search);
+      while ((f = anostr_find_base(hay, nd, from)) != ANOSTR_NPOS) {
+        int c0 = line_col_of(ln, (int)f);
+        for (int cc = c0; cc < c0 + ndw && x + cc < r.x + r.w - 1; cc++) rev_cell(x + cc, y);
+        from = f + 1;
+      }
     }
     if (A.focus == F_CODE && li == A.ccy) {
       int cx = x + A.ccx;
       if (cx < r.x + r.w - 1) rev_cell(cx, y);
     }
   }
+  if (A.searching || A.search[0]) {
+    char sb[160];
+    snprintf(sb, sizeof sb, "/%s%s", A.search, A.searching ? "▏" : "");
+    put(r.x + 2, r.y + r.h - 1, A_BOLD, C_SEARCH, sb, r.w - 4);
+  }
+  scrollbar(r, A.codeTop, vis, A.ncode, C_CODEC);
 }
 
 /* the space's board: the lattice when declared, else the positioned entities' box */
@@ -1748,7 +2435,7 @@ static const char *shade(double v, double max) {
   double t = v / max;
   return t <= 0 ? "·" : t < 0.25 ? "░" : t < 0.5 ? "▒" : t < 0.75 ? "▓" : "█";
 }
-static const int fieldPal[] = { 33, 34, 31, 32, 35, 36, 93, 94, 91, 92 };
+static const int fieldPal[] = { 39, 208, 170, 114, 221, 80, 213, 147, 210, 84 };
 
 static void draw_space(Rect r) {
   World *w = &A.world;
@@ -1791,7 +2478,7 @@ static void draw_space(Rect r) {
       if (dx < 0 || dx >= gw || dy < 0 || dy >= gh) continue;   /* guard before the cast */
       int px = (int)dx, py = (int)dy;
       if (ox + px < r.x + r.w - 1 && oy + py < r.y + r.h - 1)
-        put(ox + px, oy + py, A_BOLD, 97, "@", 1);
+        put(ox + px, oy + py, A_BOLD, C_AT, "@", 1);
     }
   /* the cell cursor works on the map exactly as on the table */
   if (A.focus == F_WORLD) {
@@ -1852,10 +2539,13 @@ static void draw_world(void) {
   if (r.h <= 1) return;
   World *w = &A.world;
   char t[PATH_MAX + 96];
-  snprintf(t, sizeof t, "%s · %s%s%s · n %d", A.spaceView ? "space" : "world",
-           w->loaded ? w->path : "—", A.worldIsPost ? " (post-state)" : "", A.worldIsCopy ? " (copy)" : "", w->n);
+  snprintf(t, sizeof t, "%s · %s%s · n %d", A.spaceView ? "space" : "world",
+           w->loaded ? w->path : "—",
+           A.worldIsCopy ? " (play)" : (w->loaded && A.mode != MODE_REG ? " (pristine)" : ""), w->n);
+  if (A.worldIsCopy && A.undoSeq > 0)
+    snprintf(t + strlen(t), sizeof t - strlen(t), " · step %d", A.undoSeq);
   if (w->latW) snprintf(t + strlen(t), sizeof t - strlen(t), " · %d×%d", w->latW, w->latH);
-  box(r.x, r.y, r.w, r.h, t, A.focus == F_WORLD);
+  box(r.x, r.y, r.w, r.h, t, A.focus == F_WORLD, C_WORLDC);
   if (!w->loaded) { put(r.x + 2, r.y + 1, A_DIM, 0, "no world — pick a demo or open a .reg", r.w - 4); return; }
   if (A.spaceView) { draw_space(r); return; }
   table_cols();
@@ -1864,10 +2554,10 @@ static void draw_world(void) {
   int x = r.x + 1, y = r.y + 1;
   int rowLblW = 4;
   /* the table header pins above the scroll */
-  put(x, y, A_DIM, 0, "row", rowLblW);
+  put(x, y, A_DIM, C_ROWLBL, "row", rowLblW);
   int cx = x + rowLblW + 1;
   for (int c = 0; c < ndcols && cx < r.x + r.w - 1; c++) {
-    put(cx, y, A_BOLD | (dcols[c].e->kind == E_PRES ? A_DIM : 0), 96, dcols[c].e->name, dcols[c].width);
+    put(cx, y, A_BOLD | (dcols[c].e->kind == E_PRES ? A_DIM : 0), C_HDR, dcols[c].e->name, dcols[c].width);
     cx += dcols[c].width + 1;
   }
   int vis = r.h - 3;
@@ -1881,12 +2571,12 @@ static void draw_world(void) {
     VRow *vr = &vrows[A.wTop + d];
     int yy = y + 1 + d;
     if (vr->kind == 3) continue;
-    if (vr->kind == 1) { put(x, yy, A_BOLD, 96, seg_field(vr->seg)->name, r.w - 2); continue; }
+    if (vr->kind == 1) { put(x, yy, A_BOLD, C_HDR, seg_field(vr->seg)->name, r.w - 2); continue; }
     if (vr->kind == 0) {
       int row = vr->row;
       char lbl[16];
       snprintf(lbl, sizeof lbl, "%d", row);
-      put(x, yy, A_DIM, 0, lbl, rowLblW);
+      put(x, yy, A_DIM, C_ROWLBL, lbl, rowLblW);
       cx = x + rowLblW + 1;
       for (int c = 0; c < ndcols && cx < r.x + r.w - 1; c++) {
         Ent *e = dcols[c].e;
@@ -1907,8 +2597,14 @@ static void draw_world(void) {
           char eb[520];
           snprintf(eb, sizeof eb, "%s▏", A.editBuf);
           put(cx, yy, A_REV | A_BOLD, 93, eb, dcols[c].width);
-        } else
-          put(cx, yy, (cur || inDrag ? A_REV : 0) | (dim ? A_DIM : 0), e->type == V_SYM ? 95 : 0, cell, dcols[c].width);
+        } else {
+          /* value hue by kind: sym lilac, rel salmon, bool teal, char warm, vec pale */
+          int cfg = e->type == V_SYM ? C_SYM : e->type == V_CHAR ? C_CHAR
+                  : e->kind == E_REL ? C_REL : e->kind == E_ALIAS ? C_DIRECTIVE
+                  : e->kind == E_PRES ? 0 : e->type == V_BOOL ? C_BOOL
+                  : e->type == V_VEC ? C_NUMLIT : 0;
+          put(cx, yy, (cur || inDrag ? A_REV : 0) | (dim ? A_DIM : 0), dim ? 0 : cfg, cell, dcols[c].width);
+        }
         cx += dcols[c].width + 1;
       }
       continue;
@@ -1933,15 +2629,17 @@ static void draw_world(void) {
         snprintf(eb, sizeof eb, "%s▏", A.editBuf);
         put(px, yy, A_REV | A_BOLD, 93, eb, cellW + 1);
       } else
-        put(px, yy, cur ? A_REV : (e->type == V_BOOL && k < e->nn && e->nums[k] == 0 ? A_DIM : 0), 0, cell, cellW + 1);
+        put(px, yy, cur ? A_REV : (e->type == V_BOOL && k < e->nn && e->nums[k] == 0 ? A_DIM : 0),
+            e->type == V_CHAR ? C_CHAR : e->type == V_BOOL ? C_BOOL : 0, cell, cellW + 1);
     }
   }
+  scrollbar(r, A.wTop, vis, nvrows, C_WORLDC);
 }
 
 static void draw_out(void) {
   Rect r = A.outR;
   if (r.h <= 1) return;
-  box(r.x, r.y, r.w, r.h, "output", A.focus == F_OUT);
+  box(r.x, r.y, r.w, r.h, "output", A.focus == F_OUT, C_OUTC);
   /* last lines of the log, minus the scrollback */
   int vis = r.h - 3;
   int nls = 0;
@@ -1956,7 +2654,12 @@ static void draw_out(void) {
     if (li >= first) {
       char line[512];
       snprintf(line, sizeof line, "%.*s", (int)(ll < 500 ? ll : 500), p);
-      put(r.x + 2, yy, 0, 0, line, r.w - 4);
+      /* echoes tint by origin, failures by content */
+      int fg = 0, attr = 0;
+      if (line[0] == '>' && line[1] == ' ') fg = C_PROMPTC;
+      else if (line[0] == '$' && line[1] == ' ') { fg = C_CODEC; attr = A_DIM; }
+      else if (strstr(line, "error") || strstr(line, "FAIL") || strstr(line, "cannot")) fg = C_ERR;
+      put(r.x + 2, yy, attr, fg, line, r.w - 4);
       yy++;
     }
     li++;
@@ -1964,24 +2667,89 @@ static void draw_out(void) {
     p = nl + 1;
   }
   /* the verdict line: pins held, the failure, or the save/undo status — unambiguous */
-  put(r.x + 2, r.y + r.h - 2, A_BOLD, A.verdict[0] ? 92 : 0, A.verdict[0] ? A.verdict : "—", r.w - 4);
+  put(r.x + 2, r.y + r.h - 2, A_BOLD, A.verdict[0] ? (A.verdictBad ? C_ERR : C_OK) : 0,
+      A.verdict[0] ? A.verdict : "—", r.w - 4);
+  scrollbar(r, first, vis, nls, C_OUTC);
 }
 
+/* the prompt in its own box: a multi-line statement (\⏎, shift-enter, or alt-enter
+ * breaks lines), vertically scrolled to the cursor's line, the cursor's line
+ * horizontally scrolled so the cursor is always visible; ↑↓ walk lines then history */
 static void draw_prompt(void) {
   Rect r = A.promptR;
   int on = A.focus == F_PROMPT;
-  fill(r.x, r.y, r.w, 1, " ", 0, 0);
-  put(r.x, r.y, A_BOLD, on ? 93 : 0, ">", 1);
-  put(r.x + 2, r.y, on ? A_BOLD : A_DIM, 0, A.prompt, r.w - 12);
-  if (on) {
-    char tmp[1024];
-    snprintf(tmp, sizeof tmp, "%.*s", A.pcur, A.prompt); /* pcur is a byte offset */
-    int cx = r.x + 2 + swidth(tmp);
-    if (cx < r.w - 1) rev_cell(cx, r.y);
+  box(r.x, r.y, r.w, r.h, A.mode == MODE_REG ? "prompt · the program" : "prompt", on, C_PROMPTC);
+  int vis = r.h - 2;
+  if (vis < 1) vis = 1;
+  /* the cursor's line, and the line count */
+  int cl = 0, nlines = 1;
+  for (int i = 0; A.prompt[i]; i++) {
+    if (A.prompt[i] != '\n') continue;
+    nlines++;
+    if (i < A.pcur) cl++;
   }
-  const char *hint = on ? "esc leave" : "tab focus · : prompt · m map · r run · u undo · q quit";
-  int hw = swidth(hint);
-  if (r.w - hw - 1 > 40) put(r.x + r.w - hw - 1, r.y, A_DIM, 0, hint, hw);
+  if (A.ptop > cl) A.ptop = cl;
+  if (cl >= A.ptop + vis) A.ptop = cl - vis + 1;
+  if (A.ptop > nlines - vis) A.ptop = nlines - vis;
+  if (A.ptop < 0) A.ptop = 0;
+  int avail = r.w - 7;
+  if (avail < 8) avail = 8;
+  int lstart = 0;
+  for (int li = 0;; li++) {
+    const char *lp = A.prompt + lstart;
+    const char *nl = strchr(lp, '\n');
+    int llen = nl ? (int)(nl - lp) : (int)strlen(lp);
+    if (li >= A.ptop && li < A.ptop + vis) {
+      int y = r.y + 1 + li - A.ptop;
+      put(r.x + 2, y, A_BOLD, on ? C_PROMPTC : C_FRAME, li == 0 ? ">" : "·", 1);
+      int off = 0;
+      if (li == cl) {
+        /* horizontal window on the cursor's line only */
+        if (A.pscroll < lstart || A.pscroll > A.pcur) A.pscroll = lstart;
+        for (;;) {
+          char seg[1024];
+          snprintf(seg, sizeof seg, "%.*s", A.pcur - A.pscroll, A.prompt + A.pscroll);
+          if (swidth(seg) < avail) break;
+          const char *p = A.prompt + A.pscroll;
+          u8next(&p);
+          A.pscroll = (int)(p - A.prompt);
+        }
+        off = A.pscroll - lstart;
+      }
+      char seg[1024];
+      snprintf(seg, sizeof seg, "%.*s", llen - off, lp + off);
+      put(r.x + 4, y, on ? 0 : A_DIM, 0, seg, avail);
+      if (li == cl && off > 0) put(r.x + 3, y, A_DIM, C_PROMPTC, "…", 1);
+      if (on && li == cl) {
+        char tmp[1024];
+        snprintf(tmp, sizeof tmp, "%.*s", A.pcur - A.pscroll, A.prompt + A.pscroll); /* byte offsets */
+        int cx = r.x + 4 + swidth(tmp);
+        if (cx < r.x + r.w - 1) rev_cell(cx, y);
+      }
+    }
+    if (!nl) break;
+    lstart = (int)(nl - A.prompt) + 1;
+  }
+  scrollbar(r, A.ptop, vis, nlines, C_PROMPTC);
+}
+
+/* the key atlas gets the bottom line to itself — context-sensitive, out of every box */
+static void draw_status(void) {
+  int y = T.rows - 1;
+  fill(0, y, T.cols, 1, " ", 0, 0);
+  const char *hint =
+    A.confirmReset ? "y wipes every play copy — demos/ becomes the only state · any other key cancels"
+    : A.focus == F_PROMPT ? "enter runs · \\⏎ or shift-enter breaks a line · ↑↓ lines, history · esc leaves"
+    : A.focus == F_WORLD && A.editing ? "enter commits · esc cancels"
+    : A.focus == F_CODE && A.searching ? "type the pattern · enter jumps · esc cancels"
+    : A.focus == F_CODE && A.codeInsert ? "insert — esc returns to browse"
+    : A.focus == F_CODE ? "hjkl w b gg G 0 ^ $ move · / search, n N · i a o insert · x dd delete · u undo · s save"
+    : "tab focus · > prompt · r reset · n next · m map · u undo · w snap · E editor · q quit";
+  put(1, y, A_DIM, 0, hint, T.cols - 10);
+  const char *mode = A.mode == MODE_RAIL ? "rail" : A.mode == MODE_REG ? "world" : "demo";
+  int mfg = A.mode == MODE_RAIL ? C_RAILC : A.mode == MODE_REG ? C_WORLDC : C_CODEC;
+  int mw = swidth(mode);
+  put(T.cols - mw - 2, y, A_BOLD, mfg, mode, mw);
 }
 
 static void draw(void) {
@@ -1992,16 +2760,40 @@ static void draw(void) {
   draw_world();
   draw_out();
   draw_prompt();
+  draw_status();
   flush_frame();
 }
 
 /* ---------- input dispatch ---------- */
 
+/* the prompt line containing byte `at`: [start, end) offsets into A.prompt */
+static void prompt_line_at(int at, int *start, int *end) {
+  int s = at;
+  while (s > 0 && A.prompt[s - 1] != '\n') s--;
+  int e = at;
+  while (A.prompt[e] && A.prompt[e] != '\n') e++;
+  *start = s;
+  *end = e;
+}
+
+static void prompt_newline(void) {
+  if (A.plen + 1 >= (int)sizeof A.prompt - 1) return;
+  memmove(A.prompt + A.pcur + 1, A.prompt + A.pcur, strlen(A.prompt + A.pcur) + 1);
+  A.prompt[A.pcur] = '\n';
+  A.plen++;
+  A.pcur++;
+}
+
 static void prompt_key(Ev *e) {
   if (e->type == EV_KEY) {
     switch (e->key) {
       case K_ESC: A.focus = A.world.loaded ? F_WORLD : (A.mode == MODE_RAIL ? F_RAIL : F_CODE); return;
-      case K_ENTER: repl_submit(); return;
+      case K_ENTER:
+        /* \⏎ asks for a line, not a run — the backslash becomes the newline */
+        if (A.pcur > 0 && A.prompt[A.pcur - 1] == '\\') { A.prompt[A.pcur - 1] = '\n'; return; }
+        repl_submit();
+        return;
+      case K_NEWLINE: prompt_newline(); return;  /* shift-enter (CSI-u), alt-enter */
       case K_BS:
         if (A.pcur > 0) {
           int prev = A.pcur - 1;
@@ -2017,22 +2809,47 @@ static void prompt_key(Ev *e) {
       case K_RIGHT:
         if (A.pcur < A.plen) { A.pcur++; while (A.pcur < A.plen && ((unsigned char)A.prompt[A.pcur] & 0xC0) == 0x80) A.pcur++; }
         return;
-      case K_HOME: A.pcur = 0; return;
-      case K_END: A.pcur = A.plen; return;
-      case K_UP:
+      case K_HOME: { int ls, le; prompt_line_at(A.pcur, &ls, &le); A.pcur = ls; return; }
+      case K_END: { int ls, le; prompt_line_at(A.pcur, &ls, &le); A.pcur = le; return; }
+      case K_UP: {
+        /* within a multi-line statement the arrows walk lines; history past the top */
+        int ls, le;
+        prompt_line_at(A.pcur, &ls, &le);
+        if (ls > 0) {
+          int col = line_col_of(A.prompt + ls, A.pcur - ls);
+          int pls, ple;
+          prompt_line_at(ls - 1, &pls, &ple);
+          int at = line_byte_at(A.prompt + pls, col);
+          if (at > ple - pls) at = ple - pls;
+          A.pcur = pls + at;
+          return;
+        }
         if (A.histAt > 0) {
           A.histAt--;
           snprintf(A.prompt, sizeof A.prompt, "%s", A.hist[A.histAt]);
           A.plen = A.pcur = (int)strlen(A.prompt);
         }
         return;
-      case K_DOWN:
+      }
+      case K_DOWN: {
+        int ls, le;
+        prompt_line_at(A.pcur, &ls, &le);
+        if (A.prompt[le] == '\n') {
+          int col = line_col_of(A.prompt + ls, A.pcur - ls);
+          int nls = le + 1, nle;
+          prompt_line_at(nls, &nls, &nle);
+          int at = line_byte_at(A.prompt + nls, col);
+          if (at > nle - nls) at = nle - nls;
+          A.pcur = nls + at;
+          return;
+        }
         if (A.histAt < A.nhist - 1) {
           A.histAt++;
           snprintf(A.prompt, sizeof A.prompt, "%s", A.hist[A.histAt]);
         } else { A.histAt = A.nhist; A.prompt[0] = 0; }
         A.plen = A.pcur = (int)strlen(A.prompt);
         return;
+      }
       default: return;
     }
   }
@@ -2136,7 +2953,17 @@ static void rail_key(Ev *e) {
 static void editor_hop(void) {
   const char *ed = getenv("EDITOR");
   if (!ed || !*ed) ed = "vi";
-  const char *file = A.focus == F_WORLD && A.world.loaded ? A.world.path : (A.demoPath[0] ? A.demoPath : A.world.path);
+  /* the hop is a mutating act: corpus files guard into their play copies first */
+  const char *file = NULL;
+  int worldFile = 0;
+  if (A.world.loaded && (A.focus == F_WORLD || !A.demoPath[0])) {
+    if (world_guard()) return;
+    file = A.world.path;
+    worldFile = 1;
+  } else if (A.demoPath[0]) {
+    if (code_guard()) return;
+    file = A.demoLive;
+  }
   if (!file || !*file) { say("nothing to edit"); return; }
   term_leave();
   /* the hop restores cooked mode, so ^C raises SIGINT for the whole group — the
@@ -2156,13 +2983,13 @@ static void editor_hop(void) {
   signal(SIGTERM, oldTerm);
   term_enter();
   char err[256], path[PATH_MAX];
-  if (A.focus == F_WORLD && A.world.loaded) {
+  if (worldFile && A.world.loaded) {
     snprintf(path, sizeof path, "%s", A.world.path);
-    if (world_load(&A.world, path, err, sizeof err)) say("%s", err);
+    if (world_load(&A.world, path, err, sizeof err)) sayerr("%s", err);
     else say("reloaded %s", path);
   } else if (A.demoPath[0]) {
-    code_load(A.demoPath);
-    say("reloaded %s", A.demoPath);
+    code_load(A.demoLive);
+    say("reloaded %s", A.demoLive);
   }
 }
 
@@ -2172,7 +2999,7 @@ static void snapshot(void) {
   char dst[PATH_MAX + 48];
   snprintf(dst, sizeof dst, ".kore/%s-snap%d.reg", world_tag(), ++snapSeq);
   mkdirs(".kore");
-  if (copy_file(A.world.path, dst)) say("snapshot failed");
+  if (copy_file(A.world.path, dst)) sayerr("snapshot failed");
   else say("snapshot → %s", dst);
 }
 
@@ -2182,7 +3009,8 @@ static int hit(Rect r, int x, int y) { return x >= r.x && x < r.x + r.w && y >= 
 static void mouse_ev(Ev *e) {
   int x = e->mx, y = e->my;
   if (e->mkind == M_WHEELUP || e->mkind == M_WHEELDN) {
-    int d = e->mkind == M_WHEELUP ? -3 : 3;
+    /* one item per notch — the view follows one line at a time, never a leap */
+    int d = e->mkind == M_WHEELUP ? -1 : 1;
     if (hit(A.rail, x, y)) { A.railSel += d; if (A.railSel < 0) A.railSel = 0; if (A.railSel >= nDemos) A.railSel = nDemos ? nDemos - 1 : 0; }
     else if (hit(A.codeR, x, y)) { A.ccy += d; if (A.ccy < 0) A.ccy = 0; if (A.ccy >= A.ncode) A.ccy = A.ncode ? A.ncode - 1 : 0; }
     else if (hit(A.worldR, x, y)) {
@@ -2193,6 +3021,21 @@ static void mouse_ev(Ev *e) {
       if (A.wRow < 0) A.wRow = 0;
       if (A.wRow >= rows) A.wRow = rows ? rows - 1 : 0;
     } else if (hit(A.outR, x, y)) { A.outScroll -= d; if (A.outScroll < 0) A.outScroll = 0; }
+    else if (hit(A.promptR, x, y)) {
+      /* the wheel walks the session history, exactly as ↑↓ do */
+      A.focus = F_PROMPT;
+      if (e->mkind == M_WHEELUP && A.histAt > 0) {
+        A.histAt--;
+        snprintf(A.prompt, sizeof A.prompt, "%s", A.hist[A.histAt]);
+        A.plen = A.pcur = (int)strlen(A.prompt);
+      } else if (e->mkind == M_WHEELDN) {
+        if (A.histAt < A.nhist - 1) {
+          A.histAt++;
+          snprintf(A.prompt, sizeof A.prompt, "%s", A.hist[A.histAt]);
+        } else { A.histAt = A.nhist; A.prompt[0] = 0; }
+        A.plen = A.pcur = (int)strlen(A.prompt);
+      }
+    }
     return;
   }
   if (e->mkind == M_PRESS) {
@@ -2274,23 +3117,44 @@ static void mouse_ev(Ev *e) {
 
 static void handle(Ev *e) {
   if (e->type == EV_NONE) return;
+  /* an armed >reset: y wipes, anything else cancels — the one modal in kore */
+  if (A.confirmReset) {
+    A.confirmReset = 0;
+    if (e->type == EV_CHAR && (e->ch == 'y' || e->ch == 'Y')) reset_all();
+    else say("reset cancelled");
+    return;
+  }
+  if (e->type == EV_KEY && e->key == K_RESETALL) { kore_command("reset"); return; }
   if (e->type == EV_MOUSE) { mouse_ev(e); return; }
   /* text-entry contexts swallow everything */
   if (A.focus == F_PROMPT) { prompt_key(e); return; }
   if (A.focus == F_WORLD && A.editing) { edit_key(e); return; }
+  if (A.focus == F_CODE && A.searching) { search_key(e); return; }
   if (A.focus == F_CODE && A.codeInsert) { code_key(e); return; }
-  /* global keys */
+  /* global keys — u, w, n yield to the code surface (vim undo, word motion, match) */
   if (e->type == EV_CHAR) {
     switch (e->ch) {
       case 'q': A.quit = 1; return;
-      case ':': case '>': A.focus = F_PROMPT; return;
+      case ':': A.focus = F_PROMPT; return;
+      case '>':   /* the command form: an empty prompt opens pre-filled with > */
+        A.focus = F_PROMPT;
+        if (!A.plen) { A.prompt[0] = '>'; A.prompt[1] = 0; A.plen = A.pcur = 1; }
+        return;
       case 'm': A.spaceView = !A.spaceView; A.wRow = A.wCol = 0; return;
-      case 'r': run_current(); return;
-      case 'u': undo_pop(); return;
-      case 'w': snapshot(); return;
+      case 'r': world_reset(); return;
+      case 'n': if (A.focus == F_CODE && A.search[0]) break; world_next(); return;
+      case 'u': if (A.focus == F_CODE) break; undo_pop(); return;
+      case 'w': if (A.focus == F_CODE) break; snapshot(); return;
       case 'E': editor_hop(); return;
       default: break;
     }
+  }
+  /* esc steps out: an active search clears first, then any panel returns to the
+   * mode's home surface — the rail, the code, or the prompt */
+  if (e->type == EV_KEY && e->key == K_ESC) {
+    if (A.focus == F_CODE && A.search[0]) { A.search[0] = 0; A.searchLen = 0; say("search cleared"); return; }
+    A.focus = A.mode == MODE_RAIL ? F_RAIL : A.mode == MODE_REG ? F_PROMPT : F_CODE;
+    return;
   }
   if (e->type == EV_KEY && e->key == K_TAB) {
     enum Focus order[] = { F_RAIL, F_CODE, F_WORLD, F_OUT, F_PROMPT };
@@ -2314,6 +3178,8 @@ static void handle(Ev *e) {
       if (e->type == EV_CHAR && e->ch == 'k') A.outScroll++;
       if (e->type == EV_KEY && e->key == K_DOWN && A.outScroll > 0) A.outScroll--;
       if (e->type == EV_KEY && e->key == K_UP) A.outScroll++;
+      if (e->type == EV_KEY && e->key == K_PGUP) A.outScroll += A.outR.h > 4 ? A.outR.h - 3 : 5;
+      if (e->type == EV_KEY && e->key == K_PGDN) { A.outScroll -= A.outR.h > 4 ? A.outR.h - 3 : 5; if (A.outScroll < 0) A.outScroll = 0; }
       break;
     default: break;
   }
@@ -2354,6 +3220,8 @@ static int check_reg(const char *path) {
  * edit → save → reload round-trips become a script. */
 static int edit_reg(char **args) {
   char err[256];
+  /* the corpus is immutable under kore, headless included */
+  if (in_demos(args[0])) { fprintf(stderr, "FAIL %s: corpus file — point --edit at a copy\n", args[0]); return 1; }
   if (world_load(&A.world, args[0], err, sizeof err)) { fprintf(stderr, "FAIL %s: %s\n", args[0], err); return 1; }
   A.wSeg = atoi(args[1]);
   A.wRow = atoi(args[2]);
@@ -2386,9 +3254,9 @@ int main(int argc, char **argv) {
   if (!arg) {
     A.mode = MODE_RAIL;
     walk_demos("demos");
-    qsort(demoList, (size_t)nDemos, sizeof *demoList, cmp_str);
+    qsort(demoList, (size_t)nDemos, sizeof *demoList, cmp_demo);
     A.focus = F_RAIL;
-    say("%d demos — enter opens, r runs, : prompts", nDemos);
+    say("%d demos — enter opens, r resets the world, n steps it, : prompts", nDemos);
   } else {
     size_t l = strlen(arg);
     if (l > 4 && !strcmp(arg + l - 4, ".reg")) {
