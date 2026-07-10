@@ -61,3 +61,7 @@ result-*
 # anoc build output
 src/anoc
 src/*.o
+
+# kore build output and scratch (the undo ring, play copies, repl program)
+kore/kore
+.kore/

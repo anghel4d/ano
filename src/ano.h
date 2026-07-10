@@ -319,6 +319,10 @@ typedef struct {
   Expect *expects; int nexpects;
   int expectN;              /* --! expect-n ; -1 = unchecked */
   int ja;                   /* --! ja */
+  int save;                 /* --save (main.c flag, not a --! directive): append the
+                               post-state serializer — 0x1E-prefixed data lines main.c
+                               pipes back into the Registry. Off: emit is byte-identical
+                               to an anoc without the flag, always. */
   char sameTokens[512];     /* --! same-tokens <ascii line> : lex this line ASCII and
                                assert kind/name/num equality with the file's own stream (ex40) */
 } Directives;

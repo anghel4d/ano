@@ -1,5 +1,65 @@
 # anoc — Patch Notes
 
+## Snapshot 26w28c — 2026-07-10 — "The World at Hand"
+
+The editor update. kore (これ, "this one here") is the ano editor: ano addresses the world from over there, and kore is where you hold it in your hand — a zero-dependency TUI that spawns anoc exactly as anoc spawns cbqn and speaks nothing but the process and text boundary, so it survives the Steel port untouched. Under it, anoc finally closes the loop the dump left open: `--save` pipes the post-state back from the bqn child and commits it, so a played world is a file again. The clock is still the install runs; now you can watch it beat.
+
+> Emitted BQN Format: **unchanged** — all 235 pre-existing demos compile byte-for-byte identical to a pre-patch snapshot of every emit. The `--save` serializer is flag-gated and appends after the pins.
+> Registry Format: **unchanged** — but `--dump`'s number spelling improved: integral values now write as plain digits (`900`, never `9e+02`). Dumps still fixpoint byte-identically; anything comparing against old dump bytes should re-snapshot.
+
+### New Features
+
+- **Added `--save <path>` to anoc** (requires `--run`). The emitted program gains a serializer that prints the post-state after the pins hold — one line per datum, each prefixed with the 0x1E record separator so no user print can collide: `n`, then per data-carrying entry in declaration order, col/field values, pres bits, rel indexes (-1 the none sentinel), srel fibers. Schema never pipes — fns, binds, aliases, roles, and derived tags are load-side, and inv fibers recompute at load. main.c pipes the child, patches the sentinel lines into the loaded Registry (n may grow on spawn; arrays allocate fresh), and commits through the same staged rename as `--dump`. On a nonzero exit, or any post-state with no .reg spelling, nothing is written. Closes ISSUES.md's "dump is pre-state today".
+- **Added kore, the ano editor** (new top-level `kore/`, one file, C23, zero deps — raw CSI and termios, no ncurses; CJK, kana, and fullwidth glyphs at their true two-cell width). Six surfaces: the demos rail (the corpus walked at startup, scrollable, runnable — the author learns the language by walking his own witnesses), the code editor (vi-flavored, hinge and `=>` aglow), the world table (every value reachable and editable in place — presence gaps dim to `·`, a rel's none draws as the drawing's `/`, edits splice one word of .reg text and never regenerate), the space (the world as a glyph grid looked down at: char fields draw their exact glyphs, bools block-paint per-field colors, nums shade ░▒▓█, positioned entities stand on their cells), the output log with one unambiguous verdict line, and the prompt.
+- **The REPL line is the commit loop.** Each submission is one program against the current world — `anoc --run --save` advances the file, the panels redraw from it, and on failure the compiler's error lands in the output and the world stands. Defs persist across submissions by prepending the session's defs to each program, exactly as the session log replays them; the log (`session.ano`, over a `session-base.reg` pre-state snapshot) is a valid .ano program that genuinely replays, and reopening a world rehydrates its defs from it. Submit c2's `def kin` once, resubmit the one Life statement, and the glider walks the space view — verified to land generation four byte-identical to the demo's own pin, across a kore restart.
+- **Mutation requires a copy, and undo is free.** The demo form copies the world to `.kore/play/` on the first mutating act and says so; every advance stages the pre-state into `.kore/undo/` first — the ring is files, so it survives kore itself. `w` snapshots, `u` steps back, `E` hops to `$EDITOR` and reloads on return.
+- **Headless verification hooks**: `kore --check <reg>…` loads and renders every view to memory (all 103 registries walk clean), `kore --edit` performs one cell splice from a script — so the editor's own claims are testable without a human at the keys.
+
+### Changes
+
+- `--dump` number spelling: integers as digits (above); `-0.0` keeps its sign; the fast path guards its range before the cast.
+- `numLit` now spells every `-` as BQN high-minus, exponents included, and drops C's `e+` — so a saved world carrying `1e-09` re-emits as `1e¯09` instead of poisoning every later run against it.
+- Documentation: `GRAMMAR.md`'s pipeline line and `compiler.md`'s main.c paragraph carry `--save`; `ISSUES.md` closes the dump entry and records the text-format seams this landing surfaced (below); `kore/kore.md` is the editor's own doc — keys, mouse, surfaces as built, the tick semantics; TODO.md crosses the editor item.
+
+### Technical Changes
+
+- `ano.h` — `Directives.save`, the flag-gate the emitter checks.
+- `emit.c` — `emitSave` (the serializer block, appended after the expectations only under the flag); `numLit` hardened as above.
+- `main.c` — `--save` flag (requires `--run` and a registry); `run_bqn` gains a pipe and a sentinel/verbatim splitter; `save_line`/`save_patch` parse the pipe-back with the loader's own conventions and refuse any post-state the loader could not read back (empty syms, unrepresentable glyph runs, non-finite values, part-pair columns — the error names the column, nothing commits); stored masks reconcile to the new n so the dump always reloads; an exit-0 child that printed no sentinel block is an error, never a silent pre-state save.
+- `registry.c` — `dnum` as above.
+- `kore/kore.c` — everything else; `kore/Makefile`; `kore/kore.md`.
+
+### Fixed bugs in this snapshot (surfaced during review)
+
+An adversarial multi-agent review ran against the working diff — 6 lenses, 94 agents, 43 findings confirmed by paired refuter/reproducer verification, zero refuted. 36 fixed before publication, the rest recorded (below). The ones that would have bitten hardest:
+
+- **ANO-301** — `--save` exited 0 while committing an unloadable world when despawn left a char run empty, boundary-spaced, or with a word-boundary `#` → refused with the column named, nothing written; kore's char edits validate against the same rule
+- **ANO-302** — a division could mint `1e-09` into a saved world that loaded fine and then failed every future run at the fixture line → `numLit` re-reads everything `dnum` writes
+- **ANO-303** — every kore splice/save cycle appended one blank line: pass-through violated, files growing forever → the post-final-newline tail is not a line
+- **ANO-304** — kore's char payload read overran the heap on an empty run and disagreed with the loader on spacing → one `char_span`, mirroring `strip_line` + raw-tail byte for byte
+- **ANO-305** — a REPL def died with its submission, so c2's rule could not step the world from the prompt → session defs, the session log as their memory
+- **ANO-306** — `r` silently wrote a dirty code buffer to a corpus demo → saving is explicit, announced, and `r` refuses instead
+- **ANO-307** — undo rings and play copies collided across worlds sharing a basename; `u` could restore another world's bytes → scratch names carry a path hash
+- **ANO-308** — an exit-0 child that never reached the serializer passed its pre-state off as a successful save → refused
+- **ANO-309** — wide-glyph halves overwritten by later draws shifted whole rows; a 0-row terminal wrote out of the grid; `abort()` left the terminal raw in the alternate screen → orphan repair in `put`/`fill`, a floor under the grid, `SIGABRT`/`SIGBUS`/`SIGFPE` in the restore set
+- **ANO-310** — input decode: F5-F8 read as Home, oversized CSI sequences leaked their tails as typed keys, Alt+q quit the editor, unknown mouse codes latched phantom drags, ^C during the `$EDITOR` hop killed kore underneath it → all five decoded or ignored correctly
+- and 26 more of the same review, from cast-before-guard UB on hostile .reg scalars to session logs whose registry header pointed at a world that had already advanced (now `session-base.reg`).
+
+### Known Issues
+
+- The text-format seams, recorded in ISSUES.md: a played world can hold values the .reg format cannot spell (empty syms, certain glyph runs, `∞`, part-pair columns) — `--save` refuses these rather than commit; stored masks reconcile by pad/truncate across structural change and a truncated mask can mark the wrong rows; a vec column despawned to n 0 re-spells as `num`.
+- Spawning rows into a world with an entity char column has never had a default glyph (the emitter appends numeric defaults to a BQN string); pre-existing, corpus-free, and under `--save` it fails the run cleanly rather than corrupt anything.
+- A registry name containing `"` breaks the serializer's BQN string literals — the save fails, nothing commits. Loader-legal, pathological, unhandled.
+- The `--! registry` directive is one word, so kore cannot address a world whose absolute path contains a space; kore says so at the prompt.
+- A mixed-surface session logs other-surface statements as comments (one `--! ja` per file) — recorded in the log as not replayable.
+
+### Behind the Scenes
+
+- Test suite: 235 demos green under `--run`, 116 conjugate pairs byte-identical under `--emit`, zero failures — and every one of the 235 emits byte-identical to the pre-patch snapshot, re-verified after every emitter touch.
+- The verification battery from EDITOR.md ran in full: s57a saves `gold 900 600 700 650 221`, `master 2 -1 -1 4 -1` (the plan's `/` is the drawing's none — kore renders it, the file spells -1), the saved world fixpoints under `--dump`, a spawn demo's saved n grows to 17, the nihongo world round-trips its kanji columns exactly, a failing program writes nothing and leaves no staged file, all 103 registries walk and render, and a cell edit round-trips on a copy with comments preserved verbatim.
+- kore was driven under a pty for every claim above — all three entry forms, the REPL advance, undo, the demo run's post-state view, the space view, and the glider's four-generation walk.
+- Nothing was committed or pushed at publication. Suggest archiving EDITOR.md to `.archive/` when this lands; PATCHES.md stays, it is the running snapshot ledger.
+
 ## Snapshot 26w28b — 2026-07-08 — "The Registry Is the API"
 
 The case-contract update. One rule, no exceptions: registry names are case-insensitive (ASCII fold, non-ASCII bytes exact); everything else — values, defs, binders, every program variable — is case-sensitive. The whole compiler now enforces it through one comparator. Registries learned the `as` directive, roles resolve through one path, and your world can finally save itself: `--dump` writes it back out, atomically. Both findings from 26w28a's verification report are closed.

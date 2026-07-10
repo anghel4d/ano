@@ -171,13 +171,22 @@ static char *gAnd(Em *em, char *a, char *b) {
 static int emitVal(Em *em, const Node *nd, Mode m, EV *ev);
 static int emitMask(Em *em, const Node *nd, char **out);
 
-/* number spelling with BQN high-minus */
+/* number spelling with BQN high-minus — every '-' (sign and exponent alike, so a
+ * saved-world 1e-09 re-emits as 1e¯09) and no C '+' exponent; the range guard runs
+ * before the cast, which is UB on out-of-range doubles */
 static char *numLit(Em *em, double x) {
   char buf[64];
-  if (x == (long long)x) snprintf(buf, sizeof buf, "%lld", (long long)x);
+  if (x >= -9e15 && x <= 9e15 && x == (long long)x) snprintf(buf, sizeof buf, "%lld", (long long)x);
   else snprintf(buf, sizeof buf, "%.17g", x);
-  if (buf[0] == '-') return efmt(em, "¯%s", buf + 1);
-  return efmt(em, "%s", buf);
+  char out[136];
+  int o = 0;
+  for (const char *p = buf; *p && o < 130; p++) {
+    if (*p == '-') { out[o++] = '\xC2'; out[o++] = '\xAF'; }
+    else if (*p == '+') continue;
+    else out[o++] = *p;
+  }
+  out[o] = 0;
+  return efmt(em, "%s", out);
 }
 
 /* gather a world-space column expr into the current mode */
@@ -1831,6 +1840,51 @@ static int emitExpects(Em *em) {
   return 0;
 }
 
+/* the --save pipe-back serializer, emitted only under the flag (dirs->save): after the
+ * pins have held, print the post-state data — one line per datum, each prefixed with the
+ * record-separator byte 0x1E so no user-visible print can collide. Lines: `n <k>`, then
+ * per data-carrying entry in declaration order — col/field values (num via •Repr with
+ * ¯ swapped to ASCII '-' so strtod round-trips, sym bare words, char the exact glyph
+ * run, pairs flattened to 2k numbers), pres bits, rel indexes (-1 the none sentinel),
+ * srel fibers as their `|` rows. Schema never pipes: fns, binds, aliases, roles, and
+ * derived tags are load-side; inv fibers recompute from their rel at load. */
+static void emitSave(Em *em) {
+  const Registry *r = em->reg;
+  sb_printf(em->out, "\n# save pipe-back (--save): 0x1E-prefixed post-state lines\n");
+  sb_printf(em->out, "anoSaveSep ← @+30\n");
+  sb_printf(em->out, "AnoSaveNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
+  sb_printf(em->out, "AnoSaveRow ← {∾{\" \"∾𝕩}¨𝕩}\n");
+  sb_printf(em->out, "•Out anoSaveSep∾\"n \"∾AnoSaveNum anoN\n");
+  for (int i = 0; i < r->nents; i++) {
+    const RegEntry *e = &r->ents[i];
+    char *v = bqnv(em, e);
+    switch (e->kind) {
+      case RK_COL: case RK_FIELD: {
+        const char *kw = e->kind == RK_FIELD ? "field" : "col";
+        if (e->type == CT_SYM)
+          sb_printf(em->out, "•Out anoSaveSep∾\"%s %s\"∾AnoSaveRow %s\n", kw, e->name, v);
+        else if (e->type == CT_CHAR)
+          sb_printf(em->out, "•Out anoSaveSep∾\"%s %s \"∾%s\n", kw, e->name, v);
+        else if (i < (int)(sizeof em->isPair) && em->isPair[i])
+          sb_printf(em->out, "•Out anoSaveSep∾\"%s %s\"∾AnoSaveRow AnoSaveNum¨∾%s\n", kw, e->name, v);
+        else
+          sb_printf(em->out, "•Out anoSaveSep∾\"%s %s\"∾AnoSaveRow AnoSaveNum¨%s\n", kw, e->name, v);
+        if (e->hasPres)
+          sb_printf(em->out, "•Out anoSaveSep∾\"pres %s\"∾AnoSaveRow AnoSaveNum¨%s\n", e->name, presv(em, e));
+        break;
+      }
+      case RK_REL:
+        sb_printf(em->out, "•Out anoSaveSep∾\"rel %s\"∾AnoSaveRow AnoSaveNum¨%s\n", e->name, v);
+        break;
+      case RK_SREL:
+        if (e->invOf[0]) break;
+        sb_printf(em->out, "•Out anoSaveSep∾\"srel %s\"∾2↓∾{\" |\"∾AnoSaveRow AnoSaveNum¨𝕩}¨%s\n", e->name, v);
+        break;
+      default: break;
+    }
+  }
+}
+
 /* ---------- entry ---------- */
 
 int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
@@ -1878,6 +1932,7 @@ int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
   }
   if (!rc && fresh) rc = emitRuleTick(&em, installed, ninst);
   if (!rc) rc = emitExpects(&em);
+  if (!rc && dirs->save) emitSave(&em);
   sb_free(&em.pre);
   arena_free(&a);
   return rc;

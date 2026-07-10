@@ -23,6 +23,7 @@
  */
 #include "ano.h"
 #include <errno.h>
+#include <math.h>
 
 /* Inputs: err buffer + size, 1-based line number (0: no line), printf format.
  * Output: -1 always; err holds "registry line N: msg". Invariant: never overflows err. */
@@ -468,10 +469,17 @@ const RegEntry *reg_role(const Registry *reg, const char *role) {
   return reg_find(reg, role);
 }
 
-/* Inputs: string buffer, double. Output: the shortest %g spelling strtod parses back
- * bit-exact — format∘parse∘format = format, so dump -> load -> dump fixpoints. */
+/* Inputs: string buffer, double. Output: a spelling strtod parses back bit-exact —
+ * format∘parse∘format = format, so dump -> load -> dump fixpoints. Integers in the
+ * exact range spell as plain digits (900, never 9e+02 — the saved world is read by
+ * people); everything else takes the shortest round-tripping %g. */
 static void dnum(StrBuf *b, double v) {
   char buf[64];
+  /* range guard before the cast (UB out of range); -0.0 keeps its sign bit */
+  if (v >= -9e15 && v <= 9e15 && v == (long long)v && !(v == 0 && signbit(v))) {
+    sb_printf(b, "%lld", (long long)v);
+    return;
+  }
   for (int p = 1; p <= 17; p++) {
     snprintf(buf, sizeof buf, "%.*g", p, v);
     if (strtod(buf, NULL) == v) break;
