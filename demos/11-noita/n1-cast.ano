@@ -1,4 +1,5 @@
 -- The cast (n1): a projectile spell is an append — keys mint, parent records the caster, the muzzle is source-column math. Twin of n1-cast.bqn.
+-- Noita, card by card: this folder rebuilds a wand game's spell system from ano's own primitives, no engine underneath. The first card is the cast, and a projectile is nothing but a fresh row.
 -- Double Spell is the one-barrier batch: two prototypes minted in one statement, keys minted once across the batch, the drain beside them (§10). The batch is legal because neither spawn reads what the other writes; the .bqn witnesses the same law as mint arithmetic — one mint of two equals two mints of one.
 -- Formation — Trifurcated: the replicate binds index per copy, the fan is polar math off the caster's own pos; each cast drains the wand in the same barrier it fires.
 --! registry ../registries/n1-cast.reg

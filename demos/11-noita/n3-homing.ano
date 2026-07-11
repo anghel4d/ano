@@ -1,4 +1,5 @@
 -- Homing (n3): the behavior card is a marker plus a standing rule plus a relationship the cast resolved. Twin of n3-homing.bqn.
+-- A bolt that chases its quarry beside one that flies straight. The card grants a marker and a target; the chase itself is an installed rule the tick runs.
 -- Noita bakes homing into the projectile update; ano splits data from law — +Homing and target are columns, the steer is an installed rule, one masked gather-subtract per tick.
 -- One tick: the rule halves the gap to the quarry (velx 6 -> 21), then one frame of flight; the plain bolt flies straight. One axis shown, the y line is the same op.
 --! registry ../registries/n3-homing.reg

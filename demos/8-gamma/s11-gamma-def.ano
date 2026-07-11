@@ -1,4 +1,5 @@
 -- Gamma, the primitive: grouped fold over the fibers of r: I -> J, aligned to selected targets. Twin of s11-gamma-def.bqn.
+-- Gamma from first principles: five sources point at four targets, the relation's fibers group the sources, and each fold writes one cell per target. Identity folds keep the empty fibers at the identity; avg drops them.
 -- One entity world: rows 0-4 the sources (Source), rows 5-8 the targets (Target). The .bqn ids 0 0 2 2 2 over J = iota 4 remap to rto = 5 5 7 7 7, so r (inverse of rto) has fibers 0 1 at row 5 and 2 3 4 at row 7; rows 6 and 8 (.bqn targets 1 and 3) are empty.
 -- Each fold writes its own -1-sentinel column: identity folds (count 0, sum 0, any false, all true) keep empty-fiber rows at the identity; avg has no identity, rows 6 and 8 drop out of the selection and keep -1 (the §5 left-join-null rule extended to the empty fiber).
 -- The .bqn grouped-counts idiom (/⁼ids) and the ordered-targets run (targets 2 0: column follows selection order) are BQN-internal witnesses; the CPick run pins the masked-subset half (writes land only at the picked targets), world order cannot express selection order.

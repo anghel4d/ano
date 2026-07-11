@@ -1,4 +1,5 @@
 -- ex37 Tier 1 space: generated ground, projection, ordered scan. Twin of 37-tier1-space.bqn.
+-- Tier 1 is space itself: the ground is generated, never stored. A checkerboard spawn, a projection fold, a lattice scan — three ways a program touches a field it minted.
 -- The header's ano lines say 64 64; the demo's own fields are scaled to 8 8 for hand-checking and the fixture reproduces those, so the scopes here say 8 8. The fold scope is a frame marker (dims unread); the scan scope's dims drive the leading-axis reshape and must match the fixture.
 -- spawn Wheat inscribes the checkerboard figure monotonically (wheat OR mask; re-spawning an occupied cell is a no-op). The fold is a catamorphism, not a projection or deletion: expect elevation pins the field surviving the fold, every value untouched (the .bqn's shape assertion at value level).
 -- Left to the .bqn twin: the annihilation fold (1008 over the off-parity cells — no header ano line, and a masked lattice fold cannot set its frame in a query) and ground ≡ ↕8‿8 (pure BQN remint witness).

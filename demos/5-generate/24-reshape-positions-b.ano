@@ -1,4 +1,6 @@
 -- Reshape with a free axis (ex24, second program point): to 4 _ infers 64/4 = 16 columns. Twin of 24-reshape-positions.bqn (statements 1-2; program prefix extends 24-reshape-positions-a).
+-- `_` is the free axis: give the pour every extent but one and it computes the missing one from the selection's count — 64 soldiers into 4 rows is 16 columns, no arithmetic in the source. The same muster re-formed wider.
+-- This file also pins prefix extension: a longer prefix of the same program lands on the .bqn's intermediate state.
 -- Same world: 70 entities, 64 soldiers, civs at keys 5 17 29 41 53 65. The second pour overwrites the first under the same full selection, so the final state equals the .bqn's pos2 computed from the sentinel pre-state.
 -- Soldiers receive the row-major cells ⟨k div 16, k mod 16⟩ of the 4x16 lattice in key order; hand spot: key 20 is soldier ordinal 18 = 16+2 -> cell ⟨1,2⟩; bystanders keep ⟨-1,-1⟩.
 --! registry ../registries/24-reshape-positions-a.reg

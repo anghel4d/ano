@@ -1,4 +1,5 @@
 -- Spatial top-k at 8x8 (ex31; the docs' 64 64 rescaled to the demo's 8 8 per the .bqn header). Twin of 31-spatial-topk.bqn.
+-- An 8x8 territory scored twice over: Safety says where to post sentries, Resource where to mine. Ordering meets the lattice — the top-k cells are entities like any others, and the winners take a tag or spawn a guard.
 -- World layout: ONE entity world whose 64 initial rows are the lattice cells, row id = flat index k (x = k mod 8, y = k div 8).
 -- The .bqn's per-cell sentries COUNT column becomes spawn-appended Sentry rows: cell k's count = number of sentry rows whose parent is k;
 -- exactly one Sentry per top-8 safety cell means parent's appended tail is exactly those 8 cell ids (ascending) and expect-n grows 64 -> 72.

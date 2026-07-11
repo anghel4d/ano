@@ -1,4 +1,5 @@
 -- Native world kinds, lattice half (s53d), ASCII twin: kanji fields over a 4 4 frame — a sequenced field write, a scan over the vec-binding id list, and a lattice fold, all through mangled names.
+-- The space habitat in kanji: fields, a path scan, a lattice fold. The mangler covers Tier 1 too.
 --! registry ../registries/s53-native-kinds-d.reg
 --! out 0 5 15 30
 --! out 120

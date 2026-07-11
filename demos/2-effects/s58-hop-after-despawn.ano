@@ -1,4 +1,5 @@
 -- Hop after despawn, the wrong-entity shape (PROBLEM 1). Twin of s58-hop-after-despawn.bqn.
+-- Six Nords, mentor links, no id column anywhere — the world where positional reading goes wrong quietly. One Cursed row despawns, the rows shift, and a naive gather would ask the wrong entity without faulting.
 -- The world has no id column, so mentor is keyed to the fixture row index. The despawn shifts rows; a stored id below the new row count (mentor 3, twice) silently gathers the wrong entity under a positional read — shifted slot 3 holds old row 4, alive. The emitter materializes the fixture row iota once as a hidden column, filters it through the despawn, and resolves the hop by index-of against it, so mentor 3 finds old row 3 at its new slot and the dead-master predicate holds.
 -- Expect over survivors (old rows 0 2 3 4 5): old rows 2, 4 (mentor 3, dead) and 5 (mentor 0, dead) lose Trained; the dangling rows keep it.
 --! registry ../registries/s58-hop-after-despawn.reg

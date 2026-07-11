@@ -1,4 +1,5 @@
 -- Outer product as value (ex21): materialize the pairwise distance table. Twin of 21-outer-product-value.bqn.
+-- The same towers and creeps, but this time the pairing is kept rather than filtered: cross yields the whole |Tower| x |Creep| table as a value.
 -- Same world layout as ex20 (rows 0-2 towers, rows 3-6 creeps, rows 7-10 bodies); dist is registered as the .bqn's squared euclidean so the printed table pins its exact integer values.
 -- The query prints the |Tower| x |Creep| table flattened row-major, one row per tower; the 2501 corner cell (t2,c3) pins ex20's < strictness.
 --! registry ../registries/21-outer-product-value.reg

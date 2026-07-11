@@ -1,4 +1,5 @@
 -- Japanese fold noun phrase (ex45): a pure noun phrase names a scoped-global fold. Twin of 45-fold-noun-phrase.bqn.
+-- 北全員の金の総和 — "the sum of all the Nords' gold." No verb, no effect; the phrase is the fold.
 -- Japanese surface: 北全員の金の総和。(full-sentence register, not the spaced skin). The .bqn's scalar-shape assertion (rank-0 per the gamma decision) stays in the .bqn twin: --! out deshapes both sides and cannot see rank.
 --! registry ../registries/45-fold-noun-phrase.reg
 --! out 600

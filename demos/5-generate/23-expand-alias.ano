@@ -1,4 +1,5 @@
 -- Expand alias (ex23): replicate exposed as a flat-map pipeline stage. Twin of 23-expand-alias.bqn.
+-- 'Identical keys' is the strong claim: run ex22's `spawn Minion * Count` or this file's `Spawner |> expand Count , spawn Minion` over the same world and the minted keys agree row for row — 103..107, same order, same parents. The two spellings denote one flat-map, and minting is deterministic (by statement, selected slot, replicate index), so two spellings of one semantics may not disagree even in the keys they invent.
 -- Shares ex22's registry verbatim (rows 0-4 the spawner table, rows 5-7 nests as bystanders): expand-then-spawn-one must mint the same keys, row for row, as ex22's spawn * Count — same world, same post-state columns as ex22 after its first statement.
 -- Remap: fresh keys 103..107 (from 1+max live key 102); parents are world row ids 0 0 2 2 2 — the zero-count spawner (row 1) appears nowhere.
 --! registry ../registries/22-replicate-spawn.reg

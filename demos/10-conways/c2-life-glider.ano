@@ -1,4 +1,5 @@
 -- The glider, acted out (c2): one statement, repeated, is the flipbook — one barrier per generation. Twin of c2-life-glider.bqn.
+-- The five-cell glider on an 8x8 board, walked four generations down the diagonal. Population 5 in, population 5 out; only the where changes.
 -- 8x8 lattice, moore 8-stencil; population queries bracket the run (a glider carries 5 cells forever).
 -- Four statements, four generations: the post-state is the seed translated one cell down-right. Installed with the arrow instead (§11), the same line runs one generation per tick — the flora act it out on the world clock and the statement log stays empty.
 --! registry ../registries/c2-life-glider.reg

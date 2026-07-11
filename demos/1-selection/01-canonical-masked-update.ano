@@ -1,4 +1,5 @@
 -- Canonical masked update (ex1). Twin of 01-canonical-masked-update.bqn.
+-- The first sentence of the language. A world of six fighters: Nord marks who is one, TwoHanded is a skill, Gold is a purse. Left of the comma, who is selected; right of the comma, what happens to them.
 -- The selection mask Nord ∧ TwoHanded>60 gates a masked add down the Gold column.
 --! registry ../registries/01-canonical-masked-update.reg
 --! expect gold = 1100 200 300 1400 500 600

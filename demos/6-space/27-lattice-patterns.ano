@@ -1,4 +1,5 @@
 -- Coordinate lattice patterns (ex27). Twin of 27-lattice-patterns.bqn.
+-- An 8x8 farm plotted by arithmetic alone: checkerboard wheat and barley, a pillar diagonal, a buildable triangle, fence stripes. A lattice scope hands each cell its x and y, and a pattern is nothing but a predicate on them.
 -- The registry carries the demo's coordinate convention as lattice fields: x is the ROW coordinate (k div 8), y the COLUMN (k mod 8), flat index 8x+y row-major — fence stripes are whole rows x%3==0, and registered fields win over the emitter's synthesized (transposed) coords.
 -- Each masked spawn appends its cells to the entity world: archetype bool columns mark wheat/barley/pillar/fence rows; pos records each spawn cell as a (k mod 8, k div 8) pair — the emitter's spawn-position convention, i.e. (y, x) in demo coordinates.
 -- Pinned through the world columns: wheat 32, barley 32 (partitioning all 64 cells), pillar 8 at flat 9×↕8 (pairs (j,j)), buildable 36 (triangle), fence 24 at rows 0 3 6. The outer-product mask equalities and the ∧´wheat≠barley quantifier are BQN-internal witnesses left to the .bqn twin; the pinned pos pairs carry the same cells.

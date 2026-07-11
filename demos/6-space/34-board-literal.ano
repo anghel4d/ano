@@ -1,4 +1,5 @@
 -- Board literal (ex34). Twin of 34-board-literal.bqn.
+-- A chessboard drawn as a string: 64 glyphs poured through to 8 8, each glyph spawning its piece at its cell, '.' spawning nothing. The picture of the board IS the program that builds it.
 -- Exactly 64 glyphs, no separators — the shape consumes the literal. Each non-'.' glyph spawns its piece at its cell: proto (sym) holds the occupied glyphs in board order — the chess start "RNBQKBNRPPPPPPPPpppppppprnbqkbnr" (8 P, 8 p, 2 R, 1 q; case carries color) — and pos holds their cells as the emitter's (k mod 8, k div 8) spawn pairs: flat cells 0..15 and 48..63, back ranks and pawn ranks only. '.' maps to NO spawn (it is not a piece named '.').
 -- Left to the .bqn twin: the separatored 71-glyph literal rejection (a compile error, never a strip — not a runnable statement) and the rank-by-rank board reshape witnesses.
 --! registry ../registries/34-board-literal.reg

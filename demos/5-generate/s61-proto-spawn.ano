@@ -1,4 +1,5 @@
 -- The proto and the three-layer spawn fill. Twin of s61-proto-spawn.bqn.
+-- Two grunts and a barracks order. def Marine is the archetype — the proto — and a spawned row fills proto-first, registered-default second, type-zero last.
 -- `def Marine soldier=1 hp=100` registers the archetype; `spawn Marine` fills each column through the ruled three-layer lookup — the proto's value (soldier 1, hp 100), else the registered default (ammo 5), else the type zero (gold 0). The unique id column never takes a layer: injectivity forces a fresh mint (1+max), and the proto-role sym column records the archetype's noun.
 -- One soldier selects, one Marine lands: row 2, id 6.
 --! registry ../registries/s61-proto-spawn.reg

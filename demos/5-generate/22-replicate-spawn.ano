@@ -1,4 +1,5 @@
 -- Replicate spawn (ex22): a per-source count emits that many fresh rows. Twin of 22-replicate-spawn.bqn.
+-- Spawners with a Count and nests with a Fertility: spawn Minion * Count emits that many fresh rows per selected source, zero meaning none, each child holding its parent's row.
 -- One entity world (the .bqn's two tables concatenated): rows 0-4 the spawner table (keys 0-4, rows 3-4 bystanders), rows 5-7 the nest table (keys 100-102).
 -- Remap: fresh keys mint from 1+max live key = 103, so the .bqn's 5..9 land as 103..107 and the eggs as 108..111; parent stores world row ids, so eggparent 100 101 101 101 lands as rows 5 6 6 6; -1 is the no-parent sentinel on pre-existing rows.
 --! registry ../registries/22-replicate-spawn.reg

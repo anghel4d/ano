@@ -1,4 +1,7 @@
 -- Scoped-global folds +/ */ &/ |/ #/: one scalar per query (ex14). Twin of 14-reductions.bqn.
+-- A small census: Nords with gold, hits against resistances, a party that may be all alive, a forest that may burn. One query form and its kin.
+-- @ is not 'where', it is 'within': evaluate this inside that scope — the same one meaning whether it scopes a mask or closes a fold.
+-- An empty scope answers with the fold's identity. The sum of nothing is 0, the product of nothing is 1, an empty party is vacuously all-alive.
 -- The four trailing queries pin the empty-scope identities over None (the .bqn's none mask, 8 zeros): +/ is 0, */ is 1, &/ is 1, |/ is 0 — the identity, never an error.
 -- Omitted here, left to the .bqn twin: the gather-order equivariance checks (fold of reversed gather). The census tail (merchant, Whiterun) is ano-side only.
 --! registry ../registries/14-reductions.reg

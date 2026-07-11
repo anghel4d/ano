@@ -1,4 +1,5 @@
 -- Reshape to spatial positions (ex24, first program point): pour the selection into the 8x8 lattice. Twin of 24-reshape-positions.bqn (statement 1; -b extends this program with the free-axis repour, -c holds the rank-1 archer case in its own world).
+-- A muster: 64 soldiers among 70 entities fall into an 8x8 formation. to h w deals the lattice cells to the selection in key order; whoever is not selected keeps the sentinel.
 -- World: 70 entities, 64 soldiers, civs at keys 5 17 29 41 53 65; pos starts at the ⟨-1,-1⟩ sentinel pair everywhere.
 -- Soldiers receive the row-major cells ⟨k div 8, k mod 8⟩ in key order; bystanders keep the sentinel verbatim; hand spot: key 20 is soldier ordinal 18 (civs 5,17 precede) -> cell ⟨2,2⟩; reshape mints no keys.
 --! registry ../registries/24-reshape-positions-a.reg

@@ -1,4 +1,5 @@
 -- Native sigils and a char pin (s55), ASCII twin: a kanji ^alias narrows to the marked rows, a :Sym matches and then writes kanji symbol values, and the kanji char column is pinned directly — sym values and char columns become writable and pinnable in kanji.
+-- The sigils go native too: ^照準 is an alias, :勇者 a symbol value, and the pin reads the glyph column back exactly.
 --! registry ../registries/s55-native-sigils.reg
 --! expect 印 = .#..#.
 --! expect 打撃 = 0 0 0 0 0 9

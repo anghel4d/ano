@@ -1,4 +1,5 @@
 -- Native world kinds, generation half (s53b), ASCII twin: a kanji vec column takes a point binding as a masked set, then a replicate spawn mints rows whose columns fill from kanji-named defaults (資金 default 25, 位置 the pair sentinel).
+-- The same native world, now growing: minted rows fill from kanji-named defaults.
 --! registry ../registries/s53-native-kinds-b.reg
 --! expect-n 9
 --! expect 手先 = 0 0 0 0 1 1 1 1 1

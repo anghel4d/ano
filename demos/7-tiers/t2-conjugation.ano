@@ -1,4 +1,5 @@
 -- t2-conjugation: grade out, do free order-work, index back aligned. Twin of t2-conjugation.bqn.
+-- The order-work law: grade out, work in sorted space, index back. Rank is the one conjugated write-back this surface can run.
 -- The .bqn proves the conjugate h = grade-inverse ∘ f ∘ grade lawful; the ano statement it cites is the rank scatter, the conjugated form with f = indexing into sorted distincts. expect rank = 3 0 2 1 4 is DERIVED, not asserted in the .bqn: it is dense rank on the tie-free fixture 40 10 30 20 50, the one conjugated write-back this surface can run.
 -- Left to the .bqn twin: the Hscan anchor 100 10 60 30 150 (a conjugated scan write-back has no ano surface: scan(+) ... along (grade ...) yields the value-order column without the inverse-grade scatter), Hrev, the taus equivariance quantifications, the grade identity, and the bare-sort counterexample.
 --! registry ../registries/t2-conjugation.reg

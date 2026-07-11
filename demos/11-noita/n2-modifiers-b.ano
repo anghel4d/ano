@@ -1,4 +1,5 @@
 -- Modifier cards, wand order B (n2): Heavy Shot then Damage Plus. Twin of n2-modifiers.bqn (order sections).
+-- The same two cards reversed: 16 where -a got 26. Order is meaning.
 -- Same two cards as the -a twin, opposite order: 3*2+10 = 16 against 26. The barrier makes each card read the previous card's commit, so the wand slot order is the program.
 -- Two Damage Plus in ONE barrier is the commuting case, the -c twin: the §10 additive-merge law gives 23; += beside *= admits no merge law and the compiler rejects the batch.
 --! registry ../registries/n2-modifiers.reg

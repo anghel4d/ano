@@ -1,4 +1,5 @@
 -- The modifier chain (w3): modifiers stack forward through a multicast onto its first bolt. Twin of w3-modifier-chain.bqn.
+-- Modifiers ride forward: with every modifier ahead of every bolt, both Damage Plus land on the block's first projectile, and the binding collapses to one scoped fold.
 -- Wand [DP, DP, Triple, SB, SB, SB]: one cast block (the Triple's +3 keeps the balance alive to the end); both Damage Plus ride to the first member projectile — the correlated "next projectile after each modifier" join is the .bqn's reverse min-scan; here every modifier precedes every bolt, so the target collapses to the block's first projectile, one scoped fold.
 -- The damage write is one barrier: the target selection is a fold-in-predicate (min/ over the member projectiles), the stack size a counted mask.
 --! registry ../registries/w3-modifier-chain.reg

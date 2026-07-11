@@ -1,4 +1,5 @@
 -- Outer product comprehension (ex20): the comprehension is a theta-join, sigma_p(A x B). Twin of 20-outer-product-comprehension.bqn.
+-- Towers, creeps, and falling bodies in one world. The comprehension pairs two selections and keeps the pairs the guards admit; the effect lands on the survivors with set semantics — a tower in range of two creeps is tagged once.
 -- One entity world (the .bqn's three tables concatenated): rows 0-2 towers, rows 3-6 creeps, rows 7-10 bodies; ids below are remapped to this layout.
 -- dist is registered euclidean (root of the .bqn's squared table) so the verbatim threshold 50 keeps the strictness pin: (t2,c3) sits at squared distance 2501, one over 2500.
 --! registry ../registries/20-outer-product-comprehension.reg
