@@ -1,8 +1,0 @@
-# ex38 Tier 2 records fixture (mirrors demos/7-tiers/38-tier2-records.bqn)
-# six entities, all Units; rank zero-initialized per the .bqn's rank ← 6⥊0.
-n 6
-col unit bool 1 1 1 1 1 1
-col nord bool 1 1 0 1 0 1
-col twoHanded num 70 50 80 90 61 65
-col gold num 100 250 40 10 520 305
-col rank num 0 0 0 0 0 0

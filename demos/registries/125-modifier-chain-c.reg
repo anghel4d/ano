@@ -1,0 +1,31 @@
+# w3-c — the interleaved wand (mirrors demos/11-noita/123-modifier-chain.bqn, the interleaved section)
+# Same wand as w3-b; no srel — the bind column is computed in-program (reverse min-scan along revDeck)
+# and stands in relation position itself: the value-level rel.
+n 7
+col keys num 0 1 2 3 4 5 6
+col wand bool 1 0 0 0 0 0 0
+col spell bool 0 1 1 1 1 1 1
+col slot num -1 0 1 2 3 4 5
+col proj bool 0 0 0 1 0 1 1
+col mod bool 0 1 0 0 1 0 0
+col multi bool 0 0 1 0 0 0 0
+col drawAdd num 0 1 3 0 1 0 0
+col damage num 0 0 0 3 0 3 3
+col bal num 0 0 0 0 0 0 0
+col minBal num 0 0 0 0 0 0 0
+col member bool 0 0 0 0 0 0 0
+col bind num 0 0 0 0 0 0 0
+bind deck mask 1 1 1 1 1 1 1
+bind revDeck vec 6 5 4 3 2 1
+ja 杖 wand
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 改 mod
+ja 抜追加 drawAdd
+ja 損傷 damage
+ja 残高 bal
+ja 最低残高 minBal
+ja 成員 member
+ja 山札 deck
+ja 逆山札 revDeck

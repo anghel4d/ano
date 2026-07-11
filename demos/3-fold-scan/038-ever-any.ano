@@ -1,0 +1,7 @@
+-- Ever-any |\ (ruled 2026-07-11): one latch along a route — has the fire reached each point yet. Trips on at the first true and stays on. Twin of 038-ever-any.bqn. (was s62-ever-any)
+-- A fire creeping down a path of six waypoints. |\ is the boolean scan of |: each cell answers "any true so far?", which is a latch.
+-- Decoy 1s sit behind !Path (rows 4, 7): any early 1 in the out is a selection leak; length 6 = popcount of the route pins the same-length invariant. The route's declared order is index order (the 030-scans convention).
+--! registry ../registries/038-ever-any.reg
+
+--! out 0 0 1 1 1 1
+|\ Burning @ Path

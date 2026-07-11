@@ -1,0 +1,26 @@
+# ex08 — relationship hops fixture (mirrors demos/1-selection/008-relationship-hops.bqn)
+# mentor is nullable (-1 dangling: rows 1, 4); leader is total — rows 0..1 double as
+# leaders in the same id space. hasMentor is derived by the emitter from the sentinel.
+n 6
+rel mentor 2 -1 4 2 -1 1
+rel leader 0 0 0 1 0 1
+col nord bool 1 1 1 1 0 1
+col twoHanded num 90 20 85 70 81 30
+col student bool 1 1 1 1 0 1
+col dead bool 0 0 1 0 1 0
+col mentored bool 1 0 1 1 0 1
+col soldier bool 0 0 1 1 1 1
+col atWar bool 1 0 0 0 0 0
+col gold num 0 0 0 0 0 0
+col morale num 100 100 100 100 100 100
+ja 師匠 mentor
+ja 頭領 leader
+ja 北 nord
+ja 両手 twoHanded
+ja 弟子 student
+ja 死 dead
+ja 師事 mentored
+ja 兵士 soldier
+ja 交戦 atWar
+ja 金 gold
+ja 士気 morale

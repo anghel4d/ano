@@ -1,4 +1,0 @@
-# ex02 — core sentence form fixture (mirrors demos/1-selection/02-core-sentence-form.bqn)
-n 5
-col source num 10 20 30 40 50
-col predicate bool 1 0 1 0 1

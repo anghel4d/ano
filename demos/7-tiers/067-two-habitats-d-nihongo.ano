@@ -1,0 +1,7 @@
+-- Japanese-surface twin of 067-two-habitats-d.ano: reshape a vector of soldiers into 4 rows, trailing axis computed (to 4 _).
+--! registry ../registries/067-two-habitats-d.reg
+--! ja
+--! expect-n 8
+--! expect pos = 0 0 0 1 1 0 1 1 2 0 2 1 3 0 3 1
+
+兵士 、 位置 に 至 4 _ にする

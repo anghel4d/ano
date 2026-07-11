@@ -1,0 +1,11 @@
+-- The soul gate (ruled 2026-07-11): the barrier-granularity spawn made loop-safe — the fuel is consumed in the same barrier that burns it. Twin of 025-soul-gate.bqn; the interactive variant beside 022-barrier-granularity-a/-b, whose exponential growth under repeated ticks is pinned deliberately. (was s10-soul-gate)
+-- The same world of six, plus Soul: the two dead Nords still carry theirs. The statement burns the soul and mints the ghost in one breath; a minted ghost takes the type-zero soul (no default), so the next tick's gather finds nothing. One ghost per soul, ever — linear, terminating, safe to run forever.
+--! registry ../registries/025-soul-gate.reg
+--! expect-n 8
+--! expect keys = 0 1 2 3 4 5 6 7
+--! expect nord = 1 1 0 1 0 0 1 1
+--! expect dead = 1 0 0 1 0 1 1 1
+--! expect ghost = 0 0 0 0 0 0 1 1
+--! expect soul = 0 1 0 0 0 0 0 0
+
+Nord & Dead & Soul , Soul = 0 ; spawn Ghost

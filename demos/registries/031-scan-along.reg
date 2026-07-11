@@ -1,0 +1,8 @@
+# ex17 — scan-along fixture (mirrors demos/3-fold-scan/031-scan-along.bqn)
+n 8
+col weight num 5 1 3 9 2 8 6 4
+col mask bool 0 1 1 0 1 0 0 1
+bind pathCells vec 4 2 7 1
+ja 重量 weight
+ja 面 mask
+ja 経路群 pathCells

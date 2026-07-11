@@ -1,0 +1,9 @@
+-- Modifier cards, the commuting pair (n2): two Damage Plus in one barrier. Twin of 111-modifiers.bqn (merge section). (was n2-modifiers-c)
+-- Two copies of one card in one barrier: additive writes commute, so the merge law takes both and order stops mattering.
+-- Batched effects observe the pre-state and commit through the registered merge law (§10): additive increments to one column commute, so the barrier takes both — 3+10+10 = 23, order-free.
+-- += beside *= on one column admits no merge law and the compiler rejects the batch at emit time ("no merge law: 'Damage' written twice in one barrier"); those two cards can only ever sit in separate wand slots, which is the -a/-b order witness.
+--! registry ../registries/111-modifiers.reg
+--! expect damage = 0 23 23 23 8
+--! expect speed = 0 6 6 6 2
+
+SparkBolt , Damage += 10 ; Damage += 10

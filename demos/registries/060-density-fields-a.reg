@@ -1,0 +1,16 @@
+# ex32 — density fields fixture (mirrors demos/6-space/060-density-fields.bqn)
+# The demo's 8-cell strip as an 8 1 lattice: density and fertility are per-cell count
+# fields (fertility -1 at cell 2 must be excluded by the > 0 predicate, never treated as
+# a zero count). Entity world starts empty; shared by 060-density-fields-a/-b.ano.
+n 0
+col tree bool
+col crop bool
+col pos num
+lattice 8 1
+field density num 0 2 1 0 3 0 1 2
+field fertility num 2 0 -1 3 0 1 4 0
+ja 木 tree
+ja 作物 crop
+ja 位置 pos
+ja 密度 density
+ja 肥沃 fertility

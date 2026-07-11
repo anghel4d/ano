@@ -1,0 +1,6 @@
+--! registry ../registries/128-eval.reg
+--! ja
+--! expect damage = 23 23 8
+
+火花弾 、 損傷 に 十 たす
+eval "SparkBolt , Damage += 10"

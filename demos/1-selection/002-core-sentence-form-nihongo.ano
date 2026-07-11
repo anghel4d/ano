@@ -1,0 +1,6 @@
+-- Japanese conjugate of 02 (core sentence form). Predicate masks; effect doubles Source in place.
+--! registry ../registries/002-core-sentence-form.reg
+--! ja
+--! expect source = 20 20 60 40 100
+
+述語 、 源 に 2 かける

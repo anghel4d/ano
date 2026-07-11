@@ -1,0 +1,25 @@
+# w1 — the deck (mirrors demos/11-noita/120-cast-block.bqn, main wand)
+# Wand [Double, SB, SB, SB, DP, SB]: rows 1-6 in slot order; drawAdd is the card's draw count (multicast 2/3, modifier 1, projectile 0).
+n 7
+col keys num 0 1 2 3 4 5 6
+col wand bool 1 0 0 0 0 0 0
+col spell bool 0 1 1 1 1 1 1
+col slot num -1 0 1 2 3 4 5
+col proj bool 0 0 1 1 1 0 1
+col mod bool 0 0 0 0 0 1 0
+col multi bool 0 1 0 0 0 0 0
+col drawAdd num 0 2 0 0 0 1 0
+col bal num 0 0 0 0 0 0 0
+col minBal num 0 0 0 0 0 0 0
+col member bool 0 0 0 0 0 0 0
+bind deck mask 1 1 1 1 1 1 1
+ja 杖 wand
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 改 mod
+ja 抜追加 drawAdd
+ja 残高 bal
+ja 最低残高 minBal
+ja 成員 member
+ja 山札 deck

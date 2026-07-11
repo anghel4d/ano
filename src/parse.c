@@ -318,7 +318,7 @@ static Node *parse_stage(P *p) {
   }
 }
 
-/* Input: parser inside scan/scan2/reduce parens. Output: 0 with op spelling or
+/* Input: parser inside scan/scan2 parens. Output: 0 with op spelling or
  * reducer name copied into n->name; -1 with err. */
 static int parse_opname(P *p, Node *n) {
   switch (pk(p)) {
@@ -335,7 +335,7 @@ static int parse_opname(P *p, Node *n) {
 }
 
 /* Input: parser, min level. Output: prefix construct (! at 7; fold/scan/grade/top/
- * reduce/scan-along/scan2/cross at 9; order-by head at 3) or an atom. Fold-family
+ * fold(f)/scan-along/scan2/cross at 9; order-by head at 3) or an atom. Fold-family
  * operands parse at min 10 so @ (12) and . (13) fall inside the operand. */
 static Node *parse_prefix(P *p, int min) {
   int line = tline(p);
@@ -377,10 +377,10 @@ static Node *parse_prefix(P *p, int min) {
       node_addkid(p->a, n, x);
       return n;
     }
-    case T_REDUCE: {
+    case T_FOLDKW: { /* fold(f): the long form of f/ — one node, N_FOLD */
       adv(p);
-      Node *n = node_new(p->a, N_REDUCE, line);
-      if (expect(p, T_LP, "'(' after 'reduce'")) return NULL;
+      Node *n = node_new(p->a, N_FOLD, line);
+      if (expect(p, T_LP, "'(' after 'fold'")) return NULL;
       if (pk(p) != T_NAME) return perrf(p, tline(p), "expected reducer name");
       setname(n, tname(p)); adv(p);
       if (expect(p, T_RP, "')' after reducer")) return NULL;
@@ -639,6 +639,11 @@ static Node *parse_stmt(P *p) {
   if (k == T_DEF) {
     adv(p);
     if (pk(p) != T_NAME) return perrf(p, tline(p), "expected name after 'def'");
+    /* the closed grammar outranks all names, defs included: a def named for a reserved
+     * word is a name the lexer resolves first, unreachable on the JA surface where it is
+     * the numeral/particle — bar it on both, the §2 law applied past the loader */
+    if (lex_reserved(tname(p)))
+      return perrf(p, tline(p), "'%s' is lexer-reserved and cannot name a def", tname(p));
     Node *d = node_new(p->a, N_DEFSTMT, line);
     setname(d, tname(p)); adv(p);
     if (expect(p, T_EQ, "'=' after def name")) return NULL;
@@ -680,7 +685,7 @@ static Node *parse_stmt(P *p) {
     const char *quoted = p->t->name[p->i + 1];
     adv(p); adv(p);
     Toks ts = {0};
-    if (ano_lex(quoted, 0, NULL, p->a, &ts, p->err, p->errsz)) return NULL;
+    if (ano_lex(quoted, 0, p->a, &ts, p->err, p->errsz)) return NULL;
     P q = { &ts, 0, p->a, p->err, p->errsz, 0 };
     while (pk(&q) == T_NL) adv(&q);
     if (pk(&q) == T_EOF) return perrf(p, line, "eval of an empty quotation");
@@ -805,12 +810,14 @@ Node *ano_parse(const Toks *toks, Arena *a, char *err, size_t errsz) {
 
 /* stub for standalone compilation: the eval splice needs the real lexer (link lex.c);
  * no self-test case quotes a statement */
-int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
+int ano_lex(const char *src, int ja, Arena *a,
             Toks *toks, char *err, size_t errsz) {
-  (void)src; (void)ja; (void)reg; (void)a; (void)toks;
+  (void)src; (void)ja; (void)a; (void)toks;
   snprintf(err, errsz, "ano_lex stub (PARSE_TEST)");
   return -1;
 }
+/* stub: no self-test case defs a reserved word, so nothing is lexer-owned here */
+int lex_reserved(const char *w) { (void)w; return 0; }
 
 /* case tables stay array-of-structs for literal ergonomics; adapted per run */
 typedef struct { TokKind kind; const char *name; double num; int line; } Tok;
@@ -834,7 +841,7 @@ static const char *kindname(NodeKind k) {
   static const char *names[] = {
     "NUM", "COUNTER", "SYM", "STR", "NAME", "ALIAS", "WILD",
     "NOT", "AND", "OR", "CMP", "ARITH", "SCOPE", "HOP", "SETHOP", "CALL",
-    "FOLD", "SCANEXPR", "SCANALONG", "REDUCE", "IOTAX", "SHAPE", "TUPLE", "TO",
+    "FOLD", "SCANEXPR", "SCANALONG", "IOTAX", "SHAPE", "TUPLE", "TO",
     "GRADE", "TOP", "PIPE", "ORDERBY", "TAKE", "EXPAND", "CROSSV", "BINDER",
     "EASSIGN", "EADD", "EDEL", "EDESPAWN", "ESPAWN", "EVERB", "EVIA",
     "STMT", "DEFSTMT", "QUERY", "COMPR", "PROGRAM"
@@ -1006,7 +1013,7 @@ static const Tok t26[] = { TN("Cheese"), TK(T_AT), TN("cellar"), TK(T_AMP), TN("
   TK(T_GT), TKNV(T_COUNTER, "mo", 3), TK(T_COMMA), TN("Price"), TK(T_STAREQ), TV(2), TK(T_EOF) };
 static const char *w26 = "(PROGRAM (STMT (AND (SCOPE (NAME Cheese) (NAME cellar)) (CMP > (NAME Aged) (COUNTER mo 3))) (EASSIGN * (NAME Price) (NUM 2))))";
 
-/* max\ Height @ (Eye + ↕n * north) */
+/* max\ Height @ (Eye + til n * north) */
 static const Tok t27[] = { TKN(T_SCANOP, "max"), TN("Height"), TK(T_AT), TK(T_LP), TN("Eye"),
   TK(T_PLUS), TK(T_IOTA), TN("n"), TK(T_STAR), TN("north"), TK(T_RP), TK(T_EOF) };
 static const char *w27 = "(PROGRAM (QUERY (SCANEXPR max (SCOPE (NAME Height) (ARITH + (NAME Eye) (ARITH * (IOTAX (NAME n)) (NAME north)))))))";
@@ -1025,12 +1032,12 @@ static const Tok t30[] = { TN("Spawner"), TK(T_COMMA), TK(T_SPAWN), TN("Minion")
   TK(T_STAR), TN("Count"), TK(T_EOF) };
 static const char *w30 = "(PROGRAM (STMT (NAME Spawner) (ESPAWN (NAME Minion) (NAME Count) ())))";
 
-/* reduce(threat) Damage @ Enemies */
-static const Tok t31[] = { TK(T_REDUCE), TK(T_LP), TN("threat"), TK(T_RP), TN("Damage"),
+/* fold(threat) Damage @ Enemies */
+static const Tok t31[] = { TK(T_FOLDKW), TK(T_LP), TN("threat"), TK(T_RP), TN("Damage"),
   TK(T_AT), TN("Enemies"), TK(T_EOF) };
-static const char *w31 = "(PROGRAM (QUERY (REDUCE threat (SCOPE (NAME Damage) (NAME Enemies)))))";
+static const char *w31 = "(PROGRAM (QUERY (FOLD threat (SCOPE (NAME Damage) (NAME Enemies)))))";
 
-/* +\ Weight @ (↕steps |> route A B) */
+/* +\ Weight @ (til steps |> route A B) */
 static const Tok t32[] = { TKN(T_SCANOP, "+"), TN("Weight"), TK(T_AT), TK(T_LP), TK(T_IOTA),
   TN("steps"), TK(T_PIPEGT), TN("route"), TN("A"), TN("B"), TK(T_RP), TK(T_EOF) };
 static const char *w32 = "(PROGRAM (QUERY (SCANEXPR + (SCOPE (NAME Weight) (PIPE (IOTAX (NAME steps)) (CALL route (NAME A) (NAME B)))))))";
@@ -1064,7 +1071,7 @@ int main(void) {
     CASE(22, "stencil"),        CASE(23, "scan-along"),    CASE(24, "presence-tuple"),
     CASE(25, "elided-spawn"),   CASE(26, "counter"),       CASE(27, "iota-scan"),
     CASE(28, "at-shape"),       CASE(29, "expand"),        CASE(30, "spawn-mult"),
-    CASE(31, "reduce"),         CASE(32, "iota-pipe"),     CASE(33, "sethop-gather"),
+    CASE(31, "fold-long"),      CASE(32, "iota-pipe"),     CASE(33, "sethop-gather"),
     CASE(34, "verb-line"),      CASE(35, "cross"),
   };
   int fails = 0;

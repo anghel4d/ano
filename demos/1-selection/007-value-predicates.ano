@@ -1,0 +1,11 @@
+-- Value predicates (ex7). Twin of 007-value-predicates.bqn.
+-- Five citizens described only by their numbers: gold, health, stamina, weight, speed. Nothing here is a tag; every predicate is a value comparison, column against scalar or column against column.
+-- Statements are sequential barriers: greedy row 0 holds only because statement 1's +100 committed first (500 is not > 550; 600 is) — the .bqn's barrier witness is row 0 of the greedy expect. Row 4 (90>90 false, strict) stays greedy from its initial 1: +Greedy is a mask-or. *= 0.5 down a mask is v×1-0.5×mask; speed row 2 (10<10 false, strict) stays 4.
+--! registry ../registries/007-value-predicates.reg
+--! expect gold = 600 700 600 100 90
+--! expect greedy = 1 1 0 1 1
+--! expect speed = 4 6 4 1 10
+
+Gold == 500 , Gold += 100
+Gold > Health * 10 , +Greedy
+Stamina < Weight , Speed *= 0.5

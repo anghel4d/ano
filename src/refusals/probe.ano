@@ -1,0 +1,3 @@
+-- Refusal probe: the minimal program behind every load-*.reg fixture. The registry
+-- (passed via --registry) must refuse before this file is even lexed; if it loads,
+-- the probe emits fine and check-refusals.sh flags the missed refusal (exit 0, not 2).

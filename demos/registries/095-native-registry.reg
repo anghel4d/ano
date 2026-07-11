@@ -1,0 +1,6 @@
+# s50 — native Japanese registry: the kanji nouns ARE the columns, no ja aliases anywhere.
+# Data mirrors ex01 (canonical masked update) so the pair's semantics are already proven.
+n 6
+col 北 bool 1 1 0 1 0 1
+col 両手 num 80 55 70 61 90 60
+col 金 num 100 200 300 400 500 600

@@ -1,0 +1,5 @@
+-- Refused save, the NaN face (todo/09): 0÷0 is NaN, CBQN spells it 'NaN' — a spelling
+-- strtod parses — so the pipe-back's finite check is the refusal, not the parse.
+-- expect: save: col gold: bad number 'NaN'
+--! registry save-nan-world
+Rich , Gold /= 0

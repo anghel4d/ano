@@ -1,9 +1,0 @@
-# ex25 — derived-columns fixture (mirrors demos/2-effects/25-derived-columns.bqn)
-n 6
-col damage num 10 20 30 40 50 60
-col speed num 4 6 8 10 8 3
-col range num 2 4 2 2 10 9
-col cooldown num 5 4 3 8 10 6
-col enemy bool 0 1 1 1 1 0
-col priority num 9 9 9 9 9 9
-col dangerous bool 0 0 0 0 0 1

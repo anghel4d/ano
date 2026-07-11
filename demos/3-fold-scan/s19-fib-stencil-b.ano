@@ -1,7 +1,0 @@
--- Version A pinned semantics, point 2: one stencil step from the fib seed 1 1 0... is the shift-add column 0 1 2 1 0..., not the fib prefix (spec §21, pre-renumbering §19). Twin of s19-fib-stencil.bqn (the Step seed assertion).
--- Same seed as the true recurrence; the comma is gather-effect-scatter, every read observes pre-state, so prev shifts and no carry forms. The untouched fib reference column pins that the write landed on offset alone.
---! registry ../registries/s19-fib-stencil-b.reg
---! expect offset = 0 1 2 1 0 0 0 0 0 0 0 0
---! expect fib = 1 1 2 3 5 8 13 21 34 55 89 144
-
-12 , offset = prev.offset + prev.prev.offset

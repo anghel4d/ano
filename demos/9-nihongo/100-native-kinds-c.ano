@@ -1,0 +1,6 @@
+-- Native world kinds, char half (s53c), ASCII twin: a kanji char column read per glyph by a kanji-named fn with a verbatim BQN body — the callable and column mangle together. (was s53-native-kinds-c)
+-- Glyphs judged by a native function: the column and the callable both wear kanji names, and both must mangle to the same stable identifiers.
+--! registry ../registries/100-native-kinds-c.reg
+--! expect 得点 = 0 1 0 0 1 0
+
+刻印(印) , 得点 += 1

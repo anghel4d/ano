@@ -1,0 +1,8 @@
+-- Japanese conjugate of 18 (grade and rank). Effect-set = renders 枠 に … にする; top-k grade desc; +付 grant.
+--! registry ../registries/041-grade-and-rank.reg
+--! ja
+--! expect slot = 3 1 -1 1 4 -1 0 2
+--! expect targeted = 0 1 1 1 1 1 0 1
+
+部隊 、 枠 に rank ( 先制 ) にする
+上位 5 ( 格付 降順 脅威 ) 、 標的 付

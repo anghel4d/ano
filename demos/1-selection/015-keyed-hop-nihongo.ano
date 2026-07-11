@@ -1,0 +1,15 @@
+-- Japanese conjugate of s60 (the keyed hop: rel;unique⁻¹). Twin of 015-keyed-hop.ano.
+--! registry ../registries/015-keyed-hop.reg
+--! ja
+--! expect-n 4
+--! expect id = 7 13 17 19
+--! expect gold = 0 100 0 0
+--! expect trained = 1 0 1 1
+--! expect frenzied = 0 1 1 0
+--! expect reach = 2 0 0 0
+
+北 と 師匠 の 死 、 金 に 100 たす
+呪 、 消
+北 と 師匠 の 死 、 訓練 除
+狂乱 の 標的群 ' 、 熱狂 付
+狂乱 、 射程 に ( 総数 標的群 ' ) にする

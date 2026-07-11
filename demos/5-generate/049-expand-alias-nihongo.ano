@@ -1,0 +1,8 @@
+--! registry ../registries/048-replicate-spawn.reg
+--! ja
+--! expect-n 13
+--! expect keys = 0 1 2 3 4 100 101 102 103 104 105 106 107
+--! expect parent = -1 -1 -1 -1 -1 -1 -1 -1 0 0 2 2 2
+--! expect minion = 0 0 0 0 0 0 0 0 1 1 1 1 1
+
+生成器 |> 展開 数 、 生成 手先

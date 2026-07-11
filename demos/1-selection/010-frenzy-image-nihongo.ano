@@ -1,0 +1,9 @@
+-- Japanese conjugate of s05a (the set-hop image and in-degree). Twin of 010-frenzy-image.ano.
+--! registry ../registries/010-frenzy-image.reg
+--! ja
+--! expect frenzied = 0 0 0 1 1 1 0 0
+--! expect health = 100 100 100 90 90 90 100 100
+--! expect hits = 0 0 0 1 2 1 0 0
+
+狂乱 の 標的群 ' 、 熱狂 付 て 体力 に 10 ひく
+標的物 、 命中 に ( 総数 攻撃者 ' ) たす

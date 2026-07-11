@@ -1,0 +1,10 @@
+-- Board literal (ex34). Twin of 063-board-literal.bqn.
+-- A chessboard drawn as a string: 64 glyphs poured through to 8 8, each glyph spawning its piece at its cell, '.' spawning nothing. The picture of the board IS the program that builds it.
+-- Exactly 64 glyphs, no separators — the shape consumes the literal. Each non-'.' glyph spawns its piece at its cell: proto (sym) holds the occupied glyphs in board order — the chess start "RNBQKBNRPPPPPPPPpppppppprnbqkbnr" (8 P, 8 p, 2 R, 1 q; case carries color) — and pos holds their cells as the emitter's (k mod 8, k div 8) spawn pairs: flat cells 0..15 and 48..63, back ranks and pawn ranks only. '.' maps to NO spawn (it is not a piece named '.').
+-- Left to the .bqn twin: the separatored 71-glyph literal rejection (a compile error, never a strip — not a runnable statement) and the rank-by-rank board reshape witnesses.
+--! registry ../registries/063-board-literal.reg
+--! expect proto = R N B Q K B N R P P P P P P P P p p p p p p p p r n b q k b n r
+--! expect pos = 0 0 1 0 2 0 3 0 4 0 5 0 6 0 7 0 0 1 1 1 2 1 3 1 4 1 5 1 6 1 7 1 0 6 1 6 2 6 3 6 4 6 5 6 6 6 7 6 0 7 1 7 2 7 3 7 4 7 5 7 6 7 7 7
+
+"RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
+  to 8 8 , spawn (pieceOf char)

@@ -40,6 +40,9 @@ SKILL.md
 # Scratchpad
 scratch/
 
+# Executed plan docs, archived out of the tree
+.archive/
+
 # Exceptions
 .claude/*
 !.claude/settings.json
@@ -58,3 +61,11 @@ result-*
 # anoc build output
 src/anoc
 src/*.o
+
+# common build output
+common/*.o
+common/test_common
+
+# kore build output and scratch (the undo ring, play copies, repl program)
+kore/kore
+.kore/

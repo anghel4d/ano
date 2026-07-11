@@ -15,11 +15,14 @@ source & predicate , effect
 Selection on the left, effect on the right, comma between. `source` defaults to the live world. Selection is relational algebra (σ by predicate, ⋈ by the dotted relationship hop, π by component access); column effects are the array calculus (reduce, scan, grade, outer product, replicate, reshape). A column store unifies them.
 
 ## Conventions
-- Design repo. The spec borrows surface flavor across languages: APL/BQN/J/k, Haskell, Erlang, q/kdb+, SQL, Datalog, Lisp. Keep each example idiomatic to the language it cites.
+- The Pious Hierarchy: The Mathematics > The Semantics > The Grammar > The Syntax > keywords, pipelining, implementation details.
+- The spec borrows surface flavor across languages: APL/BQN/J/k, Haskell, Erlang, q/kdb+, SQL, Datalog, Lisp. Keep each example idiomatic to the language it cites.
 - Read `ano-language.md` before editing it. Match its part/section numbering and the canonical-task addendum already in place.
 - Open design questions live under "Open Questions, Next Steps". Never resolve one silently in prose; surface the tradeoff.
-- Bootstrap is open: the bytecode VM and JIT target are fixed, the front-end language (APL, Haskell, or OCaml) is not.
+- Bootstrap is ruled (2026-07-10): the language is drafted and its spec forged in Steel — the Rust reference implementation and standalone launcher; Cano, the embedded C implementation, derives from verified Steel, never the inverse. The bytecode VM and JIT target stay fixed.
 - No heavyweight deps. No frameworks.
+- Work tracking: TODO.md is a laundry list of current tasks. Crossed off items go under `## Closed` and get a green checkmark emoji or other relevant depending on whether resolved, cancelled, etc.
+- PATCHES.md is the ledger of big patches as they get merged to main, in the style of Notch's early Minecraft Patch notes (intellectual property-safe).
 
 ## Writing Style
 - Comments should follow the existing convention and generally be constrained to the top of functions: Inputs and their types, outputs and their types, invariants.

@@ -1,9 +1,0 @@
--- Modifier cards, wand order A (n2): Damage Plus then Heavy Shot. Twin of n2-modifiers.bqn (order sections).
--- A stat card is a masked value write over the flight group; the bomb bystander is outside the mask and keeps its stats.
--- Wand order is program order: Heavy Shot doubles what Damage Plus already committed — (3+10)*2 = 26. The -b twin swaps the cards and gets 16 from the same two.
---! registry ../registries/n2-modifiers.reg
---! expect damage = 0 26 26 26 8
---! expect speed = 0 4 4 4 2
-
-SparkBolt , Damage += 10
-SparkBolt , Damage *= 2 ; Speed -= 2

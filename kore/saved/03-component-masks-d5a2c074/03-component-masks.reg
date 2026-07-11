@@ -1,0 +1,15 @@
+n 6
+col nord bool 1 0 1 0 1 0
+col dragon bool 0 1 0 0 1 0
+col bandit bool 0 0 1 1 0 1
+col dead bool 0 1 0 1 1 0
+col gold num 110 20 130 40 150 60
+col health num 90 0 70 60 0 40
+col faction sym None None Hostile Bandit Friendly Friendly
+ja 北 nord
+ja 竜 dragon
+ja 山賊 bandit
+ja 死 dead
+ja 金 gold
+ja 体力 health
+ja 派閥 faction

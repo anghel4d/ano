@@ -1,0 +1,11 @@
+# ex44 — fallen master fixture (mirrors demos/9-nihongo/087-fallen-master.bqn)
+# -1 = no mentor; entity 1 dangles.
+n 6
+rel mentor 3 -1 3 4 0 4
+col dead bool 1 0 0 1 0 0
+col nord bool 1 1 1 1 1 0
+col trained bool 1 1 1 0 1 1
+ja 師匠 mentor
+ja 死 dead
+ja 北 nord
+ja 訓練 trained

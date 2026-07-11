@@ -1,7 +1,0 @@
--- Farm gamma, pen headcount (ex36): count of the filtered inverse fiber per pen. Twin of 36-farm-gamma.bqn (headcount section).
--- One entity world: rows 0-6 the animals (Animal), rows 7-10 the pens (Pen). The .bqn pen 0 0 1 1 1 2 0 remaps to penOf = 7 7 8 8 8 9 7; livestock is its inverse read.
--- Pen row 10 (.bqn pen 3) holds no animals: #/ has identity 0, the row keeps its write — the empty fiber counts 0, it is NOT dropped.
---! registry ../registries/36-farm-gamma-a.reg
---! expect headcount = -1 -1 -1 -1 -1 -1 -1 2 3 0 0
-
-Pen , Headcount = #/ (livestock' & Cattle)

@@ -1,0 +1,4 @@
+# The world behind save-nan.ano: gold at zero, one 0÷0 from NaN. Loads clean.
+n 1
+col rich bool 1
+col gold num 0

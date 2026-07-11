@@ -1,6 +1,0 @@
--- Canonical masked update (ex1). Twin of 01-canonical-masked-update.bqn.
--- The selection mask Nord ∧ TwoHanded>60 gates a masked add down the Gold column.
---! registry ../registries/01-canonical-masked-update.reg
---! expect gold = 1100 200 300 1400 500 600
-
-Nord & TwoHanded > 60 , Gold += 1000

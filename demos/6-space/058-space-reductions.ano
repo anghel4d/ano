@@ -1,0 +1,18 @@
+-- Space reductions and scans (ex30). Twin of 058-space-reductions.bqn (the 8 8 half; the 3 3 non-uniform field lives in 059-space-reductions-b.ano).
+-- A surveyor's day on an 8x8 map: total elevation, the frontier's worst threat, marching costs accumulated one axis at a time or over whole rectangles, and a sightline of running peaks. Folds and scans, unchanged, meeting the lattice.
+-- Modeled at 8 8 per the demo; the doc's 64 64 is the same statement at scale. Five query statements, each pinned by an out line in order.
+-- The scoped fold filters BEFORE folding: frontier max is 7, not the world max 9. The one-axis scan and the summed-area table are pinned cell-by-cell as DIFFERENT fields — row i of ones scans to all i+1, the SAT cell (i,j) is (i+1)(j+1) and its corner 64 is the whole-lattice fold.
+-- The sightline: Height is the ordered ray column and Eye + til n * north resolves to its ids 0..7 (eye bound as the 8-fold zero origin vec, north 1, n 8) — a stable ordered scope, not a sorted one.
+-- Left to the .bqn twin: 9 = ⌈´threat (the unscoped world max has no canonical statement), the axis-commute witness +`+`˘ ≡ +`˘+`, and the explicit oneAxis ≢ sat inequality (carried here by the two differing out lines).
+--! registry ../registries/058-space-reductions.reg
+--! out 2016
+--! out 7
+--! out 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5 6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7 8 8 8 8 8 8 8 8
+--! out 1 2 3 4 5 6 7 8 2 4 6 8 10 12 14 16 3 6 9 12 15 18 21 24 4 8 12 16 20 24 28 32 5 10 15 20 25 30 35 40 6 12 18 24 30 36 42 48 7 14 21 28 35 42 49 56 8 16 24 32 40 48 56 64
+--! out 2 5 5 7 7 7 9 9
+
++/ Elevation @ 8 8                   -- Version A and B
+max/ Threat @ Frontier               -- Version A and B
++\ Cost @ 8 8                        -- Version A: leading-axis scan
+scan2(+) Cost @ 8 8                  -- Version B: summed-area table
+max\ Height @ (Eye + til n * north)     -- Version A and B

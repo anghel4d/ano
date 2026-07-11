@@ -1,4 +1,0 @@
-# r2 — world fixture in the shared demos/registries/ dir, loaded via ../registries/ from the twin.
-n 3
-col alive bool 1 0 1
-col hp num 100 100 100

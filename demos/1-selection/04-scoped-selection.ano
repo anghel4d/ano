@@ -1,6 +1,0 @@
--- Scoped selection (ex4). Twin of 04-scoped-selection.bqn.
--- @ Whiterun is the locative scope: AND with the region's membership mask (region = :Whiterun, shipped as a bind mask — the .reg format has no derived column). Row 2 is inside Whiterun but no merchant; rows 1, 5 are merchants but in Riften.
---! registry ../registries/04-scoped-selection.reg
---! expect gold = 5100 100 100 5100 100 100
-
-Merchant @ Whiterun , Gold += 5000

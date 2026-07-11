@@ -1,0 +1,5 @@
+--! registry ../registries/092-counters-becoming.reg
+--! ja
+--! expect price = 20 20 30 40 50 120
+
+チーズ 蔵 で と 熟成 三ヶ月 より 、 値段 に 2 かける

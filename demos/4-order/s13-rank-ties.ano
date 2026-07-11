@@ -1,9 +1,0 @@
--- Rank ties (spec §15 / ex38): the blessed dense value-only rank write-back on tied Gold. Twin of s13-rank-ties.bqn.
--- On gold 5 5 3 the tied pair shares a rank: 1 1 0 (value-only; the ¯1 sentinel init is fully overwritten — all rows are Unit).
--- The .bqn is half decision record: its ordinal-rank branch (⍋⍋gold -> 1 2 0, the retired "ties are stable" reading)
--- and the Sym(I)-equivariance permutation check (p = 1 0 2 swaps the tied pair) have NO ano surface and stay in the .bqn twin;
--- the equivariance fact is pinned at fixture level: permuting rows 0,1 leaves gold bitwise identical, so Rank must come out identical.
---! registry ../registries/s13-rank-ties.reg
---! expect rank = 1 1 0
-
-Unit , Rank = rank(Gold)

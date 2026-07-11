@@ -1,9 +1,0 @@
-# ex10 — value-effects fixture (mirrors demos/2-effects/10-value-effects.bqn)
-n 8
-col nord bool 1 1 0 0 1 0 0 1
-col bandit bool 0 0 1 1 0 0 1 0
-col merchant bool 0 1 0 0 0 1 0 0
-col wounded bool 1 0 0 1 0 0 0 0
-col gold num 100 200 300 400 500 600 700 800
-col health num 50 60 70 80 90 100 40 30
-col speed num 10 8 6 4 12 14 2 16

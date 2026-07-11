@@ -1,0 +1,10 @@
+-- Japanese conjugate of w5 (the timeless ledger: delay, recharge, mana as columns; a cast block's cost is a fold).
+--! registry ../registries/127-ledger.reg
+--! ja
+--! expect mana = 69 0 0 0 0
+--! expect delay = -7 0 0 0 0
+--! expect recharge = 0 0 0 0 0
+
+杖 、 魔力 に ( 30 * ( 総数 ( 呪文 と 加魔 ) ) ) たす て 魔力 に ( 総和 消費魔力 呪文 で ) ひく
+杖 、 遅延 に ( 総和 詠唱遅延 呪文 で ) にする
+杖 、 再充填 に ( 総和 再充填時間 呪文 で ) にする

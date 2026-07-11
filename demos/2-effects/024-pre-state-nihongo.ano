@@ -1,0 +1,7 @@
+-- Japanese conjugate of s10 (one barrier, one pre-state): both ;-batched effects read the gathered pre-state, so the pair swaps on-mask.
+--! registry ../registries/024-pre-state.reg
+--! ja
+--! expect gold = 10 2 3 40
+--! expect silver = 1 20 30 4
+
+詐欺師 、 金 に 銀 にする て 銀 に 金 にする

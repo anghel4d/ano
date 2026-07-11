@@ -1,0 +1,16 @@
+-- Computed line generation (ex28). Twin of 056-computed-line.bqn. Version B canonical per the recurrence decision.
+-- A mouse's dream: cheese at Fibonacci offsets down a corridor, cheese on a phyllotaxis spiral, pillars at even paces — all anchored to the Player. A bare count is a generator scope, and spawn ... at places each minted row by its index.
+-- The 12-line's backing store is the world (n 12): row 0 doubles as the Player anchor carrying pos 100 200, rows 1..11 hold -1 -1 pos decoys, and offset pre-state is the fresh line's twelve zeros (the Version A gloss's pre-state).
+-- fib is a registered host function carrying the recurrence (scalar dfn, called Fib¨ index); polar is the dyadic dfn r Polar¨ theta with theta in DEGREES — the pair-zip fix, never a catenated 24-list.
+-- Spawns append: 12 cheese at (100+fib_i, 200) ending at (189,200), 12 cheese on the phyllotaxis spiral (r=0 sits on the player), 8 pillars at (100+2i, 200). Spiral floats are pinned as exact doubles from the flake's CBQN (the .bqn asserts within 1e-9).
+-- Left to the .bqn twin: the Version A stencil witness (step = one shift-add barrier step over fresh zeros stays 12⥊0 and is not Fibonacci) and the zip-shape counterexamples (12 = ≠pairs, 24 = ≠(↕12)∾137.5×↕12).
+--! registry ../registries/056-computed-line.reg
+--! expect offset = 0 1 1 2 3 5 8 13 21 34 55 89 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+--! expect cheese = 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0
+--! expect pillar = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1
+--! expect pos = 100 200 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 100 200 101 200 101 200 102 200 103 200 105 200 108 200 113 200 121 200 134 200 155 200 189 200 100 200 99.26272266318988 200.67559020761567 100.17431148549531 198.00761060381652 101.82628428702617 202.3800600208737 96.06076898795116 199.3054072893323 104.21695722906443 197.31350195826587 98.44708572938488 205.79555495773442 96.76775970735477 193.79092416775245 107.51754096628727 202.73616114660535 91.68508420739842 203.4441508912858 104.22618261740698 190.9369221296335 103.307763794547 210.4908864582305 100 200 102 200 104 200 106 200 108 200 110 200 112 200 114 200
+
+12 , offset = fib(index)
+   , spawn Cheese at Player.pos + (offset, 0)
+12 , spawn Cheese at Player.pos + polar(index, index * 137.5)
+8  , spawn Pillar at Player.pos + (index * 2, 0)

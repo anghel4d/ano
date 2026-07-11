@@ -1,0 +1,19 @@
+-- Gamma, the primitive: grouped fold over the fibers of r: I -> J, aligned to selected targets. Twin of 081-gamma-def.bqn. (was s11-gamma-def)
+-- Gamma from first principles: five sources point at four targets, the relation's fibers group the sources, and each fold writes one cell per target. Identity folds keep the empty fibers at the identity; avg drops them.
+-- One entity world: rows 0-4 the sources (Source), rows 5-8 the targets (Target). The .bqn ids 0 0 2 2 2 over J = iota 4 remap to rto = 5 5 7 7 7, so r (inverse of rto) has fibers 0 1 at row 5 and 2 3 4 at row 7; rows 6 and 8 (.bqn targets 1 and 3) are empty.
+-- Each fold writes its own -1-sentinel column: identity folds (count 0, sum 0, any false, all true) keep empty-fiber rows at the identity; avg has no identity, rows 6 and 8 drop out of the selection and keep -1 (the §5 left-join-null rule extended to the empty fiber).
+-- The .bqn grouped-counts idiom (/⁼ids) and the ordered-targets run (targets 2 0: column follows selection order) are BQN-internal witnesses; the CPick run pins the masked-subset half (writes land only at the picked targets), world order cannot express selection order.
+--! registry ../registries/081-gamma-def.reg
+--! expect cCount = -1 -1 -1 -1 -1 2 0 3 0
+--! expect cSum = -1 -1 -1 -1 -1 8 0 15 0
+--! expect cAny = -1 -1 -1 -1 -1 1 0 1 0
+--! expect cAll = -1 -1 -1 -1 -1 0 1 0 1
+--! expect cAvg = -1 -1 -1 -1 -1 4 -1 5 -1
+--! expect cPick = -1 -1 -1 -1 -1 2 -1 3 -1
+
+Target , CCount = #/ r'            -- count: fiber sizes 2 0 3 0
+Target , CSum = +/ r'.V            -- sum: 3+5, 0, 2+4+9, 0
+Target , CAny = |/ r'.F            -- any: identity false on the empty fibers
+Target , CAll = &/ r'.F            -- all: identity true on the empty fibers
+Target , CAvg = avg/ r'.V          -- avg: no identity, empty-fiber rows drop, no write lands
+Target & Picked , CPick = #/ r'    -- subset selection: only the picked targets take the write

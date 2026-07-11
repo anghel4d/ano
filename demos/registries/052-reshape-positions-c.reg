@@ -1,0 +1,8 @@
+# ex24 — reshape fixture, archer world (mirrors demos/5-generate/050-reshape-positions.bqn, rank-1 case)
+# Kept apart from the soldier world exactly as the .bqn keeps it: the surface writes `pos`, pair-typed for soldiers but scalar here (flat cell index), so the two worlds cannot share one column.
+# 25 entities, 20 archers, non-archers at keys 5 11 17 23 24; pos starts at the scalar -1 sentinel everywhere.
+n 25
+col archer bool 1 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 1 0 1 1 1 1 1 0 0
+col pos num -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+ja 射手 archer
+ja 位置 pos

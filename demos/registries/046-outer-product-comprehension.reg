@@ -1,0 +1,22 @@
+# ex20 — outer product comprehension fixture (mirrors demos/5-generate/046-outer-product-comprehension.bqn)
+# One entity world: rows 0-2 towers (tp), rows 3-6 creeps (cp), rows 7-10 bodies (bp).
+# pos holds tower/creep positions, span holds body lo/hi intervals; -1 -1 junk behind absent presence.
+# dist is euclidean (root of the .bqn's squared table) so the surface threshold 50 keeps ex20's strictness: (t2,c3) is at squared distance 2501, one over 2500.
+n 11
+col tower bool 1 1 1 0 0 0 0 0 0 0 0
+col creep bool 0 0 0 1 1 1 1 0 0 0 0
+col body bool 0 0 0 0 0 0 0 1 1 1 1
+col pos vec 0 0 | 200 0 | 50 50 | 10 10 | 90 10 | 50 80 | 0 49 | -1 -1 | -1 -1 | -1 -1 | -1 -1
+pres pos 1 1 1 1 1 1 1 0 0 0 0
+col span vec -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | -1 -1 | 0 10 | 5 15 | 20 30 | 28 40
+pres span 0 0 0 0 0 0 0 1 1 1 1
+col inRange bool 0 0 0 0 0 0 0 0 0 0 0
+col collide bool 0 0 0 0 0 0 0 0 0 0 0
+fn dist {√+´×˜(𝕨⊑pos)-𝕩⊑pos}
+fn overlap {((⊑𝕨⊑span)<1⊑𝕩⊑span)∧(⊑𝕩⊑span)<1⊑𝕨⊑span}
+ja 塔 tower
+ja クリープ creep
+ja 物体 body
+ja 射程内 inRange
+ja 衝突 collide
+ja 位置 pos

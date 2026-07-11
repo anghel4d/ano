@@ -1,0 +1,7 @@
+-- Derived tag (s57a): 北 は ja alias、金 に 五百 たす — the stored-bool registry under Japanese grammar, pins identical to the ASCII twin and to the s57b pair.
+--! registry ../registries/131-derived-tag-a.reg
+--! ja
+--! expect gold = 900 600 700 650 221
+--! expect master = 2 -1 -1 4 -1
+
+北 と 金 五十 より 、 金 に 五百 たす

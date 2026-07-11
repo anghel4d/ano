@@ -1,7 +1,0 @@
--- Core sentence form (ex2), instantiated. Twin of 02-core-sentence-form.bqn.
--- The .bqn's ano line is the schematic meta-form `source & predicate , effect`; this twin instantiates it concretely: the live world is the source, the predicate column is the mask, the effect doubles the source column. Rows 0, 2, 4 double; rows 1, 3 are preserved.
--- The .bqn's second assertion (⌾-compress agrees with the masked-arithmetic form v×1+mask) is an equivalence-of-forms witness; the expect pins the same concrete numbers either form must produce.
---! registry ../registries/02-core-sentence-form.reg
---! expect source = 20 20 60 40 100
-
-Predicate , Source *= 2

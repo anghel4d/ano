@@ -1,0 +1,3 @@
+# expect: registry line 3: bad number '-inf'
+n 2
+col gold num -inf 5

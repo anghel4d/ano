@@ -1,0 +1,11 @@
+-- Relationship hops (ex8). Twin of 008-relationship-hops.bqn.
+-- A company of Nords: mentor points at one's teacher and may dangle (-1); leader points at one's commander and is total. The hop rel.Comp asks a question about the entity at the far end of the link.
+-- rel.Comp is one guarded indexed gather; -1 marks the absent link and the clamped read of row 0's data is dead weight the guard must mask out. Rows 1 and 4 have no mentor: gold rows 1, 4 staying 0 is the .bqn's left-join-null witness (row 1's clamped gather sees twoHanded 90 > 80). leader is total, gathered unguarded; rows 0..1 double as leaders. Row 5's mentor (1) is alive, so it keeps Mentored.
+--! registry ../registries/008-relationship-hops.reg
+--! expect gold = 1000 0 1000 1000 0 0
+--! expect mentored = 0 0 0 0 0 1
+--! expect morale = 100 100 80 100 80 100
+
+Nord & mentor.TwoHanded > 80 , Gold += 1000
+Student & mentor.Dead , -Mentored
+Soldier & leader.AtWar , Morale -= 20

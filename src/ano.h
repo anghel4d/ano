@@ -125,6 +125,7 @@ AnoPath fs_join(const char *dir, const char *rel); /* absolute rel passes verbat
 void fs_norm(AnoPath *p);                          /* lexical ./.. collapse, in place */
 void fs_canon(AnoPath *p);                         /* realpath when it exists, fs_norm when not */
 char *fs_read(const char *path, Arena *a, size_t *lenOut); /* NUL-terminated or NULL, errno set */
+int fs_write_commit(const char *path, const char *data, size_t len); /* staged write + rename(2); 0 / -1, errno set */
 
 /* ---------- tokens ---------- */
 
@@ -143,7 +144,7 @@ typedef enum {
   /* keywords (closed set; GRAMMAR.md) */
   T_DEF, T_SPAWN, T_ATKW /* at */, T_TO, T_VIA, T_ALONG,
   T_ORDER, T_BY, T_TAKE, T_DESC, T_TOP, T_GRADE,
-  T_REDUCE, T_SCANKW /* scan */, T_SCAN2, T_CROSS, T_EXPAND,
+  T_FOLDKW /* fold */, T_SCANKW /* scan */, T_SCAN2, T_CROSS, T_EXPAND,
   T_KINDCOUNT
 } TokKind;
 
@@ -154,35 +155,53 @@ typedef enum {
 typedef struct {
   int n;
   TokKind *kind;
-  const char **name;  /* NAME/ALIAS/SYM/STR text; FOLD/SCANOP op spelling ("+","*","&","|","#","max","min","avg"); COUNTER unit */
+  const char **name;  /* NAME/ALIAS/SYM/STR text; FOLD/SCANOP op spelling ("+","*","&","|","#","max","min","avg", or a reducer name); COUNTER unit */
   double *num;        /* NUM/COUNTER value */
   int *line;
 } Toks;
 
 /* ---------- registry ---------- */
 
-typedef enum { RK_COL, RK_REL, RK_SREL, RK_ALIAS, RK_BIND, RK_FN, RK_FIELD } RegKind;
+typedef enum { RK_COL, RK_REL, RK_SREL, RK_ALIAS, RK_BIND, RK_FN, RK_FIELD, RK_TAG, RK_PROTO } RegKind;
 typedef enum { CT_NUM, CT_BOOL, CT_SYM, CT_CHAR } ColType;
 
 typedef struct {
   RegKind kind;
   char name[ANO_NAMESZ];
-  ColType type;             /* RK_COL / RK_FIELD */
-  double *nums; int nnums;  /* numeric/bool/rel data; rel: -1 = dangling */
-  char (*syms)[ANO_NAMESZ]; int nsyms;   /* CT_SYM data */
+  ColType type;             /* RK_COL / RK_FIELD; RK_TAG: the carrier's type */
+  double *nums; int nnums;  /* numeric/bool/rel data; rel: -1 = dangling; RK_TAG: num value;
+                               RK_PROTO: parsed numeric field values (0 where the field is sym) */
+  char (*syms)[ANO_NAMESZ]; int nsyms;   /* CT_SYM data; RK_TAG: sym value, exact bytes;
+                               RK_PROTO: field pairs — syms[2i] name, syms[2i+1] value spelling */
   /* RK_SREL: fibers flattened; fiber i = fibVals[fibOff[i] .. fibOff[i]+fibLen[i]) */
   int *fibOff, *fibLen; double *fibVals; int nfib;
   char invOf[ANO_NAMESZ];   /* RK_SREL as the inverse read of a functional rel */
+  char tagCol[ANO_NAMESZ];  /* RK_TAG: the carrier column — the tag denotes the equality
+                               mask over the live column, recomputed at each use */
+  char keyOf[ANO_NAMESZ];   /* RK_REL/RK_SREL: the declared key column (a `unique` column);
+                               "" = keyed to the row index. The keyed hop is rel;unique⁻¹. */
+  int uniq;                 /* RK_COL: declared injectivity (`unique` line) — pairwise-distinct
+                               checked at load, spawn mints fresh, effects never assign it */
   char bindKind[16];        /* RK_BIND: "entity" | "mask" | "point" | "num" | "vec" */
   double defval;            /* spawn default for columns (0 unless `default` line) */
   double *pres; int hasPres;/* optional presence mask (RK_COL) */
 } RegEntry;
 
+/* system-column roles the emitter routes (spawn key mint, parent, proto, position, and
+ * the stable-id column): a `role <name> <col>` line points one at a natively-named column,
+ * so a kanji `col 位置` can receive `at` positions the way the literal `pos` does. */
+#define ANO_NROLES 8
+
 typedef struct {
   int n;                    /* entity-table row count (0 if pure-space world) */
   int latW, latH;           /* lattice shape; 0 0 when absent */
   RegEntry *ents; int nents;
-  char (*jaFrom)[ANO_NAMESZ]; char (*jaTo)[ANO_NAMESZ]; int nja; /* JA alias -> registry name */
+  /* the one name-alias table (surface word -> entry name), filled by `as` and `ja`
+   * alike; asJa keeps the declared spelling so a dump round-trips the surface */
+  char (*asFrom)[ANO_NAMESZ]; char (*asTo)[ANO_NAMESZ]; unsigned char *asJa; int nas;
+  char roleName[ANO_NROLES][ANO_NAMESZ]; char roleCol[ANO_NROLES][ANO_NAMESZ]; int nroles;
+  char reap[8];             /* `~` reclamation policy: "" (= seal, the default) | "host";
+                               storage policy only — the mask meaning of ~ never changes */
 } Registry;
 
 /* registry.c
@@ -193,10 +212,15 @@ typedef struct {
  *   col name bool 1 0 1 ...            # bool columns are masks
  *   pres twoHanded 1 1 0 1 1 1         # presence; absent rows carry junk values
  *   default gold 0                     # spawn default
- *   rel mentor -1 0 3 -1 2 2           # functional rel, -1 dangling
+ *   unique id 7 11 13 17 19 23         # a num column with declared injectivity; checked at load
+ *   rel mentor -1 0 3 -1 2 2           # functional rel, -1 dangling, keyed to the row index
+ *   rel id mentor -1 7 7 13 17 19      # keyed rel: values are `id` keys; hop = rel;unique⁻¹
  *   srel targets 3 4 | 4 5 | | | | | | # set-valued; n fibers, `|`-separated
- *   inv livestock pen                  # set-valued as inverse read of `pen`
- *   alias cursor 0 0 1 0 0 0
+ *   srel id targets 13 17 | | | | | |  # keyed srel: fiber values are `id` keys
+ *   inv livestock pen                  # set-valued as inverse read of `pen` (keyed if pen is)
+ *   def Marine soldier=1 hp=100        # proto (registered archetype): spawn fill layer one
+ *   reap seal                          # ~ reclamation policy: seal (default) | host
+ *   alias cursor 0 0 1 0 0 0           # a stored mask VALUE, not a name alias
  *   bind Player entity 2
  *   bind Whiterun mask 1 1 0 0 1 1
  *   bind rally point 10 20
@@ -204,11 +228,42 @@ typedef struct {
  *   fn fib
  *   lattice 8 8
  *   field elevation num 0 1 2 ...      # w*h values, row-major
- *   ja 北 nord
+ *   role pos 位置                       # a system role (keys id parent proto pos) -> a native col
+ *   as nord race Nord                  # derived tag: the equality mask over the live column
+ *   as gold coins                      # pure name alias, one hop, outranked by entries
+ *   ja 北 nord                          # same table as `as`; the spelling documents the JA surface
+ * The value domain: numbers are the finite doubles, exactly. Any spelling strtod parses
+ * non-finite (inf, nan, hex-float overflow) is refused at load with a line diagnostic,
+ * mirroring the --save pipe-back's refusal to write one — load ∘ save = identity,
+ * up to the sign of zero (CBQN's save spelling drops ¯0's sign; --dump keeps it).
+ * The case contract: names are case-insensitive (ASCII fold, non-ASCII bytes exact),
+ * values — sym words, char glyphs, fn bodies — are case-sensitive, always. Entry names
+ * and alias source words must not be lexer-reserved under the fold (lex_reserved_fold): the
+ * closed grammar outranks all nouns, so a reserved word is unaddressable — rejected at
+ * load, as are two entries or two alias sources whose names fold together.
  * Inputs: path, out registry, err buffer. Output: 0 ok / -1 with err set. */
 int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz);
-const RegEntry *reg_find(const Registry *reg, const char *name);      /* case-insensitive on first letter */
-const char *reg_ja(const Registry *reg, const char *jaWord);          /* NULL when unmapped */
+/* the one name comparator: ASCII letters fold, every other byte exact — kanji and all
+ * UTF-8 names untouched by construction. Every registry name resolution goes through
+ * it; program-level names (defs, binders) are variables and stay exact-byte. */
+int names_eq(const char *a, const char *b);
+/* entry names first, then the alias table (one hop, no transitivity), both under
+ * names_eq — the alias is a pure name alias, outranked by real entries, surface-agnostic */
+const RegEntry *reg_find(const Registry *reg, const char *name);
+/* the column playing a system role (keys, id, parent, proto, pos): the `role`-declared
+ * column when one is set; for id/keys next the first declared unique column (declared
+ * beats guess — a declared unique outranks a merely magic-named id); else reg_find on the
+ * literal role name (one resolver: entries, then aliases) — an English world needs no
+ * `role` line, a native one routes by declaration, and the declared line stays the
+ * explicit override whenever plumbing must be pinned. */
+const RegEntry *reg_role(const Registry *reg, const char *role);
+/* serialize the in-memory world back to .reg text — everything reg_load reads, entries in
+ * declaration order, pres/default beside their column, inv by its rel (fibers recompute at
+ * load), roles then the alias table last; comments are authoring-time only, a dump erases
+ * them. Writes <path>.staged then rename(2)s over the target: the atomic commit, crash-safe
+ * saves for free. load -> dump -> load -> dump fixpoints byte-identically.
+ * Inputs: loaded registry, target path, err buffer. Output: 0 ok / -1 with err set. */
+int reg_dump(const Registry *reg, const char *path, char *err, size_t errsz);
 
 /* ---------- AST ---------- */
 
@@ -223,10 +278,9 @@ typedef enum {
   N_HOP,    /* l . r  (r: N_NAME field/comp, or nested N_HOP chain) */
   N_SETHOP, /* name' ; kids[0] = N_NAME rel; kids[1] = optional gathered comp (rel'.Comp) */
   N_CALL,   /* name(args...) ; callee in name, kids = args */
-  N_FOLD,   /* op in name ("+","*","&","|","#","max","min","avg", or reducer name); kids[0]=operand; kids[1]=optional @scope */
+  N_FOLD,   /* op in name ("+","*","&","|","#","max","min","avg", or reducer name); kids[0]=operand; kids[1]=optional @scope. fold(f) is the long form, same node */
   N_SCANEXPR, /* scan: same layout as N_FOLD; flag F_SCAN2 for scan2 */
   N_SCANALONG,/* scan(f) col along order ; kids: col, order; op in name */
-  N_REDUCE, /* reduce(f) col @ scope ; kids: col, scope */
   N_IOTAX,  /* ↕ expr */
   N_SHAPE,  /* numeric shape source: kids = dims (N_NUM or N_WILD) */
   N_TUPLE,  /* (a, b, ...) presence tuple or point literal; context decides */
@@ -283,6 +337,23 @@ typedef struct {
   Expect *expects; int nexpects;
   int expectN;              /* --! expect-n ; -1 = unchecked */
   int ja;                   /* --! ja */
+  int save;                 /* --save (main.c flag, not a --! directive): append the
+                               post-state serializer — 0x1E-prefixed data lines main.c
+                               pipes back into the Registry. Off: emit is byte-identical
+                               to an anoc without the flag, always. */
+  int label;                /* --label (main.c flag): every query, pinned or not, stages
+                               a 0x1D-prefixed q<stmt>@<line> tag line and its •Show
+                               before any pin assertion — the labeled display channel,
+                               one byte below the 0x1E world channel, forwarded verbatim
+                               by run_bqn. Off: emit is byte-identical, always. */
+  int trace;                /* --trace (main.c flag): the debug observability channel —
+                               0x1F-prefixed diagnostic lines (one below 0x1D), forwarded
+                               verbatim by run_bqn: one RELATION … IS DEAD ! line per
+                               dead link a hop's found-guard drops, one FIBER … IS EMPTY !
+                               line per empty-fiber row failure, and one rows-before ->
+                               rows-after line per structural statement. Observability,
+                               never semantics: post-state is byte-identical with the
+                               flag on and off. Off: emit is byte-identical, always. */
   char sameTokens[512];     /* --! same-tokens <ascii line> : lex this line ASCII and
                                assert kind/name/num equality with the file's own stream (ex40) */
 } Directives;
@@ -290,13 +361,22 @@ typedef struct {
 /* ---------- module APIs ---------- */
 
 /* lex.c — Inputs: full source (directives already stripped to blank by main), ja flag,
- * registry (JA aliases), arena. Output: token columns ending in T_EOF, T_NL between
- * lines; the source is validated as strict UTF-8 once at this boundary. JA mode:
- * space-separated words mapped (registry ja, particle table, kanji numerals), then
- * normalized: TGT dropped, each postfix operator swapped before its operand (ex40).
+ * arena. Output: token columns ending in T_EOF, T_NL between lines; the source is
+ * validated as strict UTF-8 once at this boundary. Both skins are registry-blind:
+ * identifiers (any codepoint >= U+0080 outside a small blacklist, plus the ASCII class)
+ * become T_NAME carrying the surface spelling, resolved at emit. JA mode: space-separated
+ * words mapped grammar-first (particle table, kanji numerals), then normalized: TGT
+ * dropped, each postfix operator swapped before its operand (ex40).
  * Returns 0 / -1 with err set. */
-int ano_lex(const char *src, int ja, const Registry *reg, Arena *a,
+int ano_lex(const char *src, int ja, Arena *a,
             Toks *toks, char *err, size_t errsz);
+/* 1 when the closed grammar owns the word on either surface (keywords, jatab, numerals,
+ * fused reducers), exact-byte — parse.c consults this at a def head */
+int lex_reserved(const char *w);
+/* the same check under the ASCII case fold — registry names fold, so a name any spelling
+ * of which the lexer resolves first (Til as til) is unaddressable and can name no entry
+ * and source no alias; the loader consults this, program-level names stay exact */
+int lex_reserved_fold(const char *w);
 
 /* parse.c — Inputs: token stream. Output: N_PROGRAM whose kids are statements in order.
  * Implements GRAMMAR.md: the hinge split, precedence 1-14, selection/effect forms,

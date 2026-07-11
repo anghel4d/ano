@@ -1,0 +1,7 @@
+n 6
+col nord bool 1 1 0 1 0 1
+col twoHanded num 80 55 70 61 90 60
+col gold num 100 200 610 400 810 600
+ja 北 nord
+ja 両手 twoHanded
+ja 金 gold
