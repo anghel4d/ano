@@ -1,5 +1,30 @@
 # anoc — Patch Notes
 
+## Snapshot 26w28f — 2026-07-11 — "The Corpus Learns to Count"
+
+The corpus normalization: todo/03, the tenth and pending task of the demo-pass review, lands. Four rulings executed as one pass over every demo file: the 1/08 rel rename, the s05 split, the teaching re-annotation, and the global renumbering — every demo now carries one absolute ascending number, 001 through 132, and the old prefix zoo is retired to provenance markers.
+
+> Emitted BQN Format: **unchanged in form** — a comment-and-rename pass; comments never reach the emitter. Demo 008's fixture nouns renamed (faction → leader), so its emit follows; the five new quads emit fresh; everything else byte-identical, ja conjugates still emit byte-identical to their ASCII twins.
+> Registry Format: **unchanged**. Fixture files renamed to match their demos; one rel renamed inside 008-relationship-hops.reg.
+
+### New Features
+
+- **The set-hop family, taught in parts (010-013).** The old s05 packed four sub-worlds behind archetype masks; each independent idea now runs alone in its own small world with re-derived pins — 010 the fiber image as a mask plus in-degree in the gamma fold, 011 the any/count neighbor quantifiers with the one-ring spread, 012 the all-quantifier and the vacuously certified empty pen — and 013 keeps the original 23-row world as the wrap-up.
+- **The soul gate (025).** The barrier-granularity spawn made loop-safe, as ruled: `Nord & Dead & Soul , Soul = 0 ; spawn Ghost` — the fuel is consumed in the same barrier that burns it, minted ghosts take the type-zero soul, so the step is linear and terminating; the .bqn pins the fixed point, Step ∘ Step ≡ Step. The barrier-granularity original keeps its exponential growth deliberately: that is the pinned point, not a bug.
+- **Teaching headers across every demo.** Every .ano now opens with a paragraph saying what world is being set up and introducing its operands, K&R the register. The ruled specifics all landed: `@` is not "where", it is "within", with the empty-scope identities beside it (028); the dyadic-max carry illustrated over two columns (029); the associativity refusal stated formally, ending at "/ and - are not possible to fold-reduce because they are not associative" (030); what "identical keys" pins across the two replicate spellings (049); the `_` free axis (051); the barrier `;` as "and at the same time" with BQN/APL/Haskell renderings (019); "; is not 'then', it's 'and', in the same breath" at the swap (024). The author's own comments stand verbatim.
+
+### Changes
+
+- **The global renumbering.** One counter across demos/ in folder order, 001-132, three digits so lexicographic order stays numeric past 099; the sNN/cN/nN/wN/tN/rN prefixes fold into the sequence and survive as `(was …)` markers on 68 title lines; shared .bqn witnesses take their family's first number; the two BQN-only witnesses number at their folder positions (053-keygen, 072-reverse); every registry renamed to match its demo, references rewritten in 386 files. `.kore/play` tags key off realpath, so pre-rename play dirs are orphaned — acceptable, scratch by design; the seven archived hand-edit copies sit in kore/saved, `>reset`-proof.
+- **faction → leader in 008** (`rel leader`, ja 頭領). The demo's "faction" was a pointer to an individual Nord — nonsense under that name. The spec's ex8 faction stays as written: it names a faction archetype, a genuinely different kind of entity.
+- demos.md and the series READMEs navigate by the new numbers; the manual's suite counts and citations follow; todo/ closed out — 01-10 archived out of the tree per the .archive convention, the execute-todo item crossed off, 00-open-rulings and 11-next-steps remain.
+
+### Verified
+
+- Both suites green at every one of the four substep commits; final state 93 .bqn witnesses ok and the full check-ano battery ok — every twin, every emit pair, every refusal.
+- Every `--! registry` line and every "Twin of" reference resolves post-rename, checked mechanically.
+- The five new quads passed all four gates on first run: .bqn witness, `anoc --run`, the ja conjugate, and emit byte-identity.
+
 ## Snapshot 26w28e — 2026-07-11 — "The Type Is the License"
 
 The todo/ execution pass: nine task files from the demo-pass review (01–10, 03 pending), landed in one day. The centerpiece is 02, the first genuine advancement of the core design since the initial spec: registry types as declared constraint evidence, and the functional hop made sound against despawn. Around it: every query result finally visible in kore, the universal reducer spelling, the fold/scan permutation table, honest editors, glyph maps and a bitmap, an airtight numeric seal, and the debugger's voice.
