@@ -1,0 +1,10 @@
+# s05b — neighbor quantifiers, split from s05d-set-hop (mirrors demos/1-selection/s05b-neighbor-quantifiers.bqn)
+n 6
+col plot bool 1 1 1 1 1 1
+col planted bool 1 0 1 0 1 0
+srel neighbors 1 | 0 2 | 1 3 | 2 4 | 3 5 | 4
+col sprouting bool 0 0 0 0 0 0
+ja 区画 plot
+ja 植栽 planted
+ja 隣人 neighbors
+ja 発芽 sprouting

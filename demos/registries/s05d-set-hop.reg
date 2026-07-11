@@ -1,4 +1,4 @@
-# s05 — set hop fixture (mirrors demos/1-selection/s05-set-hop.bqn)
+# s05d — set hop fixture, the wrap-up of the s05 family (mirrors demos/1-selection/s05d-set-hop.bqn)
 # The .bqn's four sub-worlds concatenated into one 23-row entity world:
 #   rows 0-7   frenzy world (.bqn n=8; target ids 3 4 5 unchanged)
 #   rows 8-13  plots (.bqn plot rows 0-5 shifted +8; neighbors remapped)

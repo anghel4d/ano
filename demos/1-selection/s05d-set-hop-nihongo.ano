@@ -1,5 +1,5 @@
--- Japanese conjugate of s05 (set hop: image selection, quantifiers, duplicate rule). Twin of s05-set-hop.ano.
---! registry ../registries/s05-set-hop.reg
+-- Japanese conjugate of s05d (set hop: image selection, quantifiers, duplicate rule). Twin of s05d-set-hop.ano.
+--! registry ../registries/s05d-set-hop.reg
 --! ja
 --! expect frenzied = 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 --! expect health = 100 100 100 90 90 90 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100
