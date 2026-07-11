@@ -13,3 +13,4 @@ BQN models of the selection layer: examples 1-9, the spec §8 scatter fix, and t
 - 09-named-selections.bqn — ex9: defs as predicates re-gathered per statement, not saved masks; `;`-batched effects on one mask.
 - s05-set-hop.bqn — setHop record: fiber image as a mask (idempotent scatter), |/ &/ #/ quantifiers, empty-fiber identities, in-degree via the inverse-fiber gamma fold.
 - s08-masked-scatter.bqn — spec §8 fix: assignment scatter is index-from-mask (/mask), modeled as value-under-mask-compress; the mask-as-index misread demonstrated.
+- s60-keyed-hop.bqn — the keyed hop, rel;unique⁻¹: `unique id` declares injectivity (prime ids, so positional readings miss everywhere), `rel id mentor` keys the rel to it, and the hop is one ⊐ with one found-guard, sound before and after a despawn; the keyed srel's image takes membership through the key column and the gamma count drops dead fiber members.

@@ -1,3 +1,5 @@
+# DONE
+
 # 02 — registry types and hop integrity (the s10 bundle)
 
 Author's framing (2026-07-11, binding): "of maximal, critical importance… the first genuine advancement / change made to the core design of the language since the completion of the initial spec." The ano surface stays largely unchanged. This formalizes and corrects the registry side, hitherto improvisational. Lineage stance, recorded: this is q/kdb+ for realtime world simulations. Ideas come from databases, HPC, big data, fintech, not consumer ECS implementations. Forget FLECS.
@@ -36,8 +38,8 @@ Plus the unregistered magic: id/keys/parent/proto/pos resolved by name. Option C
 - SOLUTION 2b, generational tombstoning (ano-ecs.md §2: the ID carries a generation; §12: kills bump gen, slot reuse only at tick seal), is CONFIRMED as the semantics. Review verdict, for the record: it is also the computationally elegant choice. The staleness compare is O(1), no information is destroyed (2a's backtrace loses data and costs a reverse scan per kill), and it composes with §5 left-join-null so the surface algebra never grows a fault path. Pick the generation width with wraparound in mind. The author's diagnostic, `RELATION <col> <origin> -> <sink> IS DEAD !`, is observability, never semantics: a kore/debug surface hooked on the hop's found-guard, alongside a per-tick structural trace (rows before/after, spawned/killed counts). The algebra stays a silent mask-clear.
 - SOLUTION 1 is not open, it is SUBSUMED. 2b already is mark-and-defer: the gen bump plus presence clear IS the mark, and free-list reuse at tick seal IS the deferred reap. The remaining knob is reap ownership and timing, exposed as a registry option (reap at seal vs host-owned). The mask-level meaning of `~` never changes. Only storage reclamation is policy. Open sub-question to surface at implementation: the option's granularity, world vs archetype vs column (the author wrote "per-column registerable type or override").
 - SOLUTION 3 goes from half-real to full-real, via option C below. Declaring is always optional, defaults are sane, and overloads constrain or expand the admitted operations on type-theoretic principles (TAPL framing).
-- Fallback type defaults, ruled yes: spawn fill is a three-layer lookup, proto value → registry `default` → the type's zero (num 0, bool 0, sym "", rel ¯1). Record in the spec. The rel case already behaves as None under left-join-null. The SURFACE spelling of None stays open (`/` collides with fold-marker and replicate; candidates: `none`, no surface literal at all). An Open Questions entry, resolved by the author.
-- A proto (registered archetype) is wanted. Name open: the author floated `def`. Collision warning to surface: `def` is the program-side keyword for derived columns and standing rules, and the pun would cross the registry/program boundary. Alternatives: `proto`, `arch`, `kind`. Syntax note: protos need named fields (`proto Marine soldier=1 hp=100`), the registry's first row-oriented named-value construct. All registry data today is positional column vectors.
+- Fallback type defaults, ruled yes: spawn fill is a three-layer lookup, proto value → registry `default` → the type's zero (num 0, bool 0, sym "", rel ¯1). Record in the spec. The rel case already behaves as None under left-join-null. The surface spelling is ruled closed (author, 2026-07-11): not an open question — kore already renders a ¯1 rel as `/`, but that is a kore rendering choice, never a language feature; if a surface literal ever lands it is `none` or `null`. No Open Questions entry.
+- A proto (registered archetype) is wanted. Name ruled (author, 2026-07-11): vocabulary re-used across the registry/program boundary with different meanings is fine, so the `def`-vs-program-`def` collision warning is dismissed; the name is `def` if it collides with nothing inside the registry itself (check the kind inventory — `default` is the near neighbor), otherwise `kind`. Syntax note: protos need named fields (`proto Marine soldier=1 hp=100`), the registry's first row-oriented named-value construct. All registry data today is positional column vectors.
 
 ## Option C (ruled preferred): unique + keyed rels
 
@@ -54,7 +56,7 @@ Design notes from review, to carry into implementation:
 - Parse is LL(1)-clean: rel/srel data is always numeric-or-`|`, so two names before the data means the first is the key column and the second the declared name. Reads type-annotation-first (`rel id mentor` ≈ mentor : rel over id), beside inv's existing name-then-source shape.
 - Composition: `srel <keycol> <name> …` the same way. The inv of a keyed rel is keyed automatically.
 - Migration is zero-churn: every existing `rel name …` stays keyed-to-idx.
-- Open sub-question: when several unique columns exist, which one mints on spawn (first declared, or an explicit marker). Surface, don't decide.
+- The several-uniques mint question is ruled void (author, 2026-07-11): `unique` means exactly one thing, a comptime (and runtime) enforcement that every element of the column is distinct. That is all — minting is not a `unique` semantic, so nothing competes. Consequence for the bullet above: the pairwise-distinct check is the ruled content; the spawn-mint, default-refusal, and write-refusal behaviors remain design proposals to surface at execution, not part of the ruling.
 - Steel note: `keyed` becomes a column tag in the C-struct ABI. Generations stay orthogonal: gen protects slots within a run, keys protect identity across slots, saves, hosts.
 
 ## Types on algebra, not contents (direction, confirmed)
@@ -66,9 +68,9 @@ A column keeps ONE carrier (num/bool/sym/vec) and accumulates constraint evidenc
 1. Fix the functional hop: resolve through the stable-id column (`idCol ⊐ rel` with a found-guard folded into the left-join-null path, or equivalent), and make the no-id fallback sound. Either materialize the row iota ONCE at fixture time as a hidden column filtered through despawns, or refuse structural effects in worlds with no unique column. Surface the choice.
 2. New differential twins pinning despawn-then-functional-hop (the fallen-master-after-despawn case): .bqn witness + .ano twin, both suites, both the PROBLEM 1 (wrong-entity) and PROBLEM 2 (out-of-range) shapes.
 3. `unique` kind and keyed rel/srel: registry.c loader (checks above), emit.c resolution, dumper round-trip, docs.
-4. The proto construct (name TBD by author at execution) and the three-layer spawn fill. Record the fallback ruling in the spec.
+4. The proto construct (name per the 2026-07-11 ruling: `def` unless it collides inside the registry, else `kind` — run the collision check at execution) and the three-layer spawn fill. Record the fallback ruling in the spec.
 5. The `~` reap-policy registry option (granularity question surfaced first).
-6. Spec work: record every ruling above where it executes, add the keyed-hop section, align ano-ecs.md, move the resolved parts out of Open Questions, and add the new opens (None spelling, proto name, mint-column choice, option granularity).
+6. Spec work: record every ruling above where it executes, add the keyed-hop section, align ano-ecs.md, move the resolved parts out of Open Questions, and add the one remaining open (reap-option granularity). None spelling, proto name, and the mint-column question are ruled (2026-07-11) and recorded above — the spec states those as rulings, not opens.
 
 ## Invariants
 

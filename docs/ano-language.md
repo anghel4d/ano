@@ -164,6 +164,10 @@ Pen & &/ livestock'.Healthy , +Certified  -- all: every animal in the pen health
 
 The image is a selection and a selection is a mask. A target reachable from two sources appears once, and the effect applies once: set semantics, idempotent scatter. This is consistent with the predicate-is-the-reference stance, since masks have no multiplicity. In-degree is never silently summed into a value effect. To accumulate per in-edge, fold at the target over the inverse fiber: `Target , Hits += #/ attackers'`.
 
+The keyed hop (ruled 2026-07-11). A `unique` column is declared injectivity — pairwise-distinct, checked at load — and injectivity is precisely the license a hop needs, since an injective column is invertible on its image: the keyed hop is `rel ; unique⁻¹`, one index-of against the key column with one found-guard. A relationship declares its key column by writing it before the name (`rel id mentor -1 0 0 3 …`, reading type-annotation-first: mentor is a rel over id), and an undeclared rel stays keyed to the row index — zero churn for every existing world. Not-found is dangling is dead: a stored ID whose target despawned fails the found-guard and clears the mask bit, the same left-join-null, so staleness never grows a fault path (the storage mechanism is ano-ecs §2's generational compare; the diagnostic surface, never the semantics, is the debug layer's dead-link report). The inverse of a keyed rel is keyed automatically, and `unique` subsumes the id/keys name magic: it declares what the emitter used to guess. `unique` means exactly one thing (ruled 2026-07-11): every element distinct, enforced at load and held across the run. Minting is spawn machinery, never a `unique` semantic, so several unique columns never compete for a mint; spawn fills each one fresh because the declared injectivity admits nothing else.
+
+The undeclared world keeps its meaning after rows shift (the surfaced no-id choice, taken 2026-07-11). The fixture row identity is itself a key space: materialized once at fixture time as a hidden column, thinned by despawns and carried forward by spawns, so an idx-keyed read after a `~` resolves through it — the same algebra, not a second semantics. The alternative, refusing structural effects in worlds with no unique column, was considered and set aside: left-join-null already gives those programs meaning. The anoc perimeter around `unique` — spawn mints 1+max, `default` and proto fields on a key column refuse at load, effect assignment to one is a compile error — is surfaced implementation decision, not ruling; the ruled content of `unique` is distinctness alone.
+
 ### 6. Named selections
 
 ```apl
@@ -229,6 +233,8 @@ Dead , ~                     -- despawn
 Frenzy.targets' , +Frenzied  -- add component across the set hop's image
 Burdened , -Encumbered       -- remove component
 ```
+
+Spawn fill is a three-layer lookup (ruled 2026-07-11): the proto's declared value, else the column's registered `default`, else the type's zero — num 0, bool 0, sym "", rel -1. A -1 rel is None under §5's left-join-null; kore renders it `/`, a rendering choice, never a language feature — if a surface literal ever lands it is `none` or `null`. The proto is the registered archetype, the missing noun: `def Marine soldier=1 hp=100` declares one in the registry, its first row-oriented named-value construct, and `spawn Marine` fills through it. A ghost is one bit plus the defaults; the proto is what knows Ghost.
 
 ### 10. Sequenced effects (one barrier)
 
@@ -315,10 +321,11 @@ Collapse a column to a scalar. The contract for a raw `fold/` is strict: an asso
 
 Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms. `avg/` folds sum and count in one pass and divides at the end. `#/` is `+/` over the constant 1. The surface keeps the spellings, and the registry records them as fold-and-finish. That is what makes the empty case honest. A fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true). A reducer with no identity over finite component values (`avg/`, `max/`, `min/`) fails the empty scope and the row drops, the left-join-null rule again.
 
-or, spelled for named reducers:
+or, spelled for named reducers — the slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form. Scans come free: `threat\`.
 
 ```haskell
-reduce(threat) Damage @ Enemies
+threat/ Damage @ Enemies
+fold(threat) Damage @ Enemies
 ```
 
 ### 13. Grouped fold (γ)
@@ -773,6 +780,8 @@ Hostile , shortestPath via Adj      -- graph view: Tier 3, host runs Dijkstra, w
 
 The one axis under all three. The ladder is monotone. Tier 1 demands **geometry of the index**: unit and frame coherence at the de/at boundary. Tier 2 demands **full symmetry of the index**: `Sym(I)`-equivariance under the diagonal action. Tier 3 demands **full abstraction of the value**: naturality in `V`. The monotonicity principle is the spine: for groups `H ⊆ G`, `Equiv_G ⊆ Equiv_H`. Demand more symmetry, admit fewer maps. Naturality in `V` extends the principle past groups, to invariance under *all* value substitutions, the limit of the demand, leaving the thinnest algebra. The data sits *nowhere* until an operation places it on the axis. Promotion and demotion are sliding along it, by opening the codomain or asserting a meaning.
 
+Types live on the algebra, not the contents (direction confirmed, 2026-07-11). A column keeps one carrier — num, bool, sym, vec — and accumulates constraint evidence: `unique` (injective), `ordered` (grade and max admitted), `monoid(op, id)` (fold with identity), `keyed(col)`, quantized (ano-time's ingress boundary). The num carrier is IEEE 754 float64 with the non-finites refused at the world boundary — the value domain is the finite doubles, load ∘ save the identity on it, an overflowing tick a refused tick (the manual's edges chapter walks the cliffs). Tags gate which operators the compiler admits, and several coexist because they are stateless lawful predicates with set-intersection semantics, never inheritance. The lineage: qualified types (Wadler–Blott 1989, "How to make ad-hoc polymorphism less ad hoc" — one type, many instances: Num, Ord, Monoid), Rust traits, the Agda/Lean algebraic hierarchies (one carrier, many lawful structures, laws proved), TAPL's bounded quantification for the subtype flavor, with `unique` at the refinement-types end (Liquid Haskell: a predicate on values enforced at boundaries). §12's fold contract already IS this — `+/` demands a monoid, `max/` a semigroup whose empty scope fails the row — and §5's keyed hop is its relational face: injectivity is the license for inversion. The type IS the license for the operation.
+
 The problem I was struggling with was how to have the scripting language remain consistent when faced with different kinds of information. Then this was revealed to me.
 
 Tier 1 and 2 are native to the language, can happen entirely within ano's interpreter itself. Both encode columnar, homogenous, and contiguous information. The difference is in what the data actually represents, whether it's a space or records. Space is innately, ontologically, immutable[sic]. Records can take most of the same operations, operations cast over it irreversibly overwrite the information by those indices.
@@ -801,7 +810,7 @@ Fourteen levels, loosest to tightest. Everything else in the document is a conse
 - 6 — `&`: mask and.
 - 7 — `!`: mask not, prefix on one mask term.
 - 8 — comparison: `== != < <= > >=`, and `=` in selection position (the equals glyph, below).
-- 9 — fold and scan prefixes: `f/ f\`, `reduce(f)`, `scan(f) … along`, `grade`, `top k`.
+- 9 — fold and scan prefixes: `f/ f\` with f an operator or a registered reducer name, `fold(f)`, `scan(f) … along`, `grade`, `top k`.
 - 10 — additive arithmetic: `+ -`.
 - 11 — multiplicative arithmetic: `* / %`.
 - 12 — `@` scope: locative on a mask (`Cheese @ cellar`) and fold scope (`Gold @ Nord`), one meaning: evaluate within this scope. The scope may take an anchor tail `mask @ frame(args) at origin`, the level-4 locative `at` reappearing to fill the frame's origin o (Part IV).
@@ -809,6 +818,29 @@ Fourteen levels, loosest to tightest. Everything else in the document is a conse
 - 14 (tightest) — atoms: names, the `^alias` sigil (lexical, part of the identifier), colon symbols (`:Sym`), counter-typed numerals (`3mo`), parens and comprehension brackets.
 
 Resolution, worked: `Cheese @ cellar & Aged > 3mo` parses as `(Cheese @ cellar) & (Aged > 3mo)`, since `@` (12) binds its scope before `&` (6), and `>` (8) binds before `&`. `Cow & Weight < avg/ Weight @ Cow` parses as `Cow & (Weight < (avg/ (Weight @ Cow)))`, since the fold prefix (9) outbinds the comparison (8).
+
+### Fold and scan permutations
+
+One table for the whole level-9 family, folds and scans together. Lineage: in k, `&` IS min and `|` IS max over numerics; ano's boolean reading is the k reading restricted to masks.
+
+| f | `f/` fold | `f\` scan | empty-scope identity |
+|---|---|---|---|
+| `+` | sum | running sum | 0 |
+| `*` | product | running product | 1 |
+| `&` | ALL | still-all: a latch that trips off at the first false and stays off | 1 (vacuous truth) |
+| `\|` | ANY | ever-any: a latch that trips on at the first true and stays on | 0 |
+| `#` | count | running count | 0 |
+| `max` | maximum | running peak (occlusion, high-water) | none → row drops |
+| `min` | minimum | running floor | none → row drops |
+| `avg` | fold-and-finish mean | running mean | none → row drops |
+| `-` | rejected: not associative | — | — |
+| `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
+
+The identity column restates the §12/§13 law: a fold with a registered identity yields it on the empty scope, and a reducer without one fails the row. That is left-join-null extended to the empty fiber. The γ column-form (`f/ rel'.Comp`) inherits the same identities per fiber. A named reducer (`threat/`) enters the same scheme — registered identity or fail the empty scope — and its scan (`threat\`) is length-preserving, so the empty scope yields the empty column with no identity consulted.
+
+The max ruling, recorded (2026-07-11): `max/` and `max\` stay named forms. `>/` was examined and rejected — `>` is a comparison returning bool, folding it is non-associative nonsense, and making `>/` mean max requires reinterpreting `>` as "the greater-of" in fold position, the same pun refused for `-/` (APL's alternating sum). k earns `|/` as max-fold because k's `|` IS max natively, not a fold-position reinterpretation. Under the named-reducer unification, max/min/avg are registered reducers like any other name, so no glyph is needed. Adopting k's `|` as native max — which would earn `|/` honestly, with boolean OR renamed to `||` — stays deliberately unruled.
+
+Scan cells anoc does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses (`unknown scan op`); `+\ *\ &\ |\ max\` and named-reducer scans are live. The γ column-form takes operator folds today — a named reducer over fibers (`threat/ livestock'.Weight`) is refused with its own diagnostic, not yet in anoc.
 
 ### Desugarings
 
@@ -858,6 +890,15 @@ Dot, five roles, all gathers: (1) the functional relationship hop `rel.Comp`: on
 
 The alias sigil `^` is not an operator: `^` glued to a name is one identifier (`^cursor`, `^observer`, `^world`), the こそあど deixis, re-resolved per evaluation. `^` appears nowhere else in the grammar, so `^name` never needs disambiguating.
 
+### `!` and `^`
+
+| sigil | is | precedence | binds to | resolved |
+|---|---|---|---|---|
+| `!` | mask NOT, a prefix operator | level 7 | one mask term | at evaluation, pointwise |
+| `^` | not an operator: lexically part of the identifier; the alias/deixis sigil (`^cursor`, `^observer`, `^world`), こそあど | atom, level 14 | the name it is glued to | re-resolved per evaluation via the host |
+
+They never compete: `!` negates a mask, `^` names a thing. `!^cursor` is "not the thing under the cursor" — the sigils compose, they do not overlap. One seam is deferred (2026-07-11): demo 14 pins both `!Whiterun` and `!^Whiterun` for one registered `bind … mask`, and whether `^` stays reserved to host-resolved deictics or reads as optional constant-reference sugar on any registered constant awaits its ruling. Both spellings stay legal meanwhile.
+
 ## Open Questions, Next Steps
 
 ```markdown
@@ -868,7 +909,7 @@ The alias sigil `^` is not an operator: `^` glued to a name is one identifier (`
 
 - Recurrences. `offset = prev.offset + prev.prev.offset` is not a recurrence under the one evaluation rule. The comma is gather-effect-scatter and every read observes pre-state, so `prev` is a parallel shift and the statement is one stencil step. No statement can carry a value along the line it is writing, and iterating it gives k stencil steps, never the order-carried sequence. A true recurrence is a scan whose step need not be associative, and §14's scan is a read-side column expression over a declared order. A scan that feeds its own column's scatter breaks the barrier by construction, so scans cannot live behind the barrier. Options, each with a cost. Keep recurrences host-side as registered functions (`fib(index)`, the current canonical form): the host runs the recursion and hands back a column, which a statement may key positions off in the same breath. Or admit a sequential `scan(f) along order` with non-associative f, legal only where its write footprint does not intersect its read footprint. Or admit a generator subclause: corecursion consumed under bounded demand, the lazy-list/Python-generator shape, total because the take is finite even when the definition is not, and read-side by construction so it never touches the barrier. A fixpoint/iterate form stays rejected, since totality comes from bounded demand, not a general fixpoint. One boundary note. Under a fixed-tickrate host the game loop is itself the scan, state[t+1] = F(state[t]), one barrier per tick. So recurrences across ticks are already expressible, and a stage counter advanced by standing rules is one running. Only the within-statement form is open. A neighboring form that is NOT a recurrence landed with the wand demos. The correlated order join ("next projectile at or after each modifier") is per-row over an ordered line, and it runs read-side twice: as data, an order-derived srel consumed by γ, and as value, a key column computed by scan-along standing in relation position with its inverse fibers feeding the same γ (demos 11-noita w3-b/w3-c). Neither carries a value along the line it writes, so the barrier is untouched. Unresolved. The Fibonacci examples are glossed as one stencil step, `fib(index)` canonical.
 
-- Identity. The intensional/extensional boundary: how does a script say "the same bandit as last tick"? A predicate re-resolves per evaluation, so the surface is intensional at the statement level. Yet relationship components already store entity IDs, extensional handles, so the data level is extensional, and the surface cannot reach what the data already holds. The saved-mask continuation rule gives one statement of extension inside a script. Nothing spans ticks. The options pull against each other. A surface form that holds a resolved selection across ticks is a handle, which breaks the predicate-is-the-reference stance. A component that freezes the match (`+Marked`) keeps the stance but makes identity state the script must manage and retract. A third option rides the clock. A host with tick-stamped history (Anoptic plans a monotonic tick counter at a fixed rate) makes "the same bandit as last tick" an as-of join against the t−1 partition, q's `aj`, an extensional read recovered through the time axis, with no handle on the surface. Identity becomes an indexing question. Where the boundary between intensional statements and extensional data sits is the design. Unresolved.
+- Identity. The intensional/extensional boundary: how does a script say "the same bandit as last tick"? A predicate re-resolves per evaluation, so the surface is intensional at the statement level. Yet relationship components already store entity IDs, extensional handles, so the data level is extensional, and the surface cannot reach what the data already holds. The saved-mask continuation rule gives one statement of extension inside a script. Nothing spans ticks. The options pull against each other. A surface form that holds a resolved selection across ticks is a handle, which breaks the predicate-is-the-reference stance. A component that freezes the match (`+Marked`) keeps the stance but makes identity state the script must manage and retract. A third option rides the clock. A host with tick-stamped history (Anoptic plans a monotonic tick counter at a fixed rate) makes "the same bandit as last tick" an as-of join against the t−1 partition, q's `aj`, an extensional read recovered through the time axis, with no handle on the surface. Identity becomes an indexing question. Where the boundary between intensional statements and extensional data sits is the design. Ruled (2026-07-11) at the data level: IDs carry generations, kills bump them, the hop's staleness compare is O(1), slot reuse waits for tick seal (ano-ecs §2, §5, §12) — so the data's identity story is settled and the surface question is what remains. Unresolved.
 
 - Rule retraction. A standing rule is named (`def spread = … => …`) so it can be withdrawn, but the retraction form is unspecified: an `undef spread`, a scope that expires (`=> … @ scene`), or a component guard the rule itself reads. A handle-shaped verb sits awkwardly beside predicate-is-the-reference. A guard makes rule state the script must manage and retract. Campaign logic makes this entry load-bearing: a mission stage is a standing rule that must withdraw itself on advance (§11). Unresolved.
 
@@ -883,6 +924,8 @@ The alias sigil `^` is not an operator: `^` glued to a name is one identifier (`
 - The machine as a world. The hypothesis closing `ano-sky.md`: an x64 machine is columnar data plus a step function, a code column, a register column, memory, which is the standard formalization (Sail, the K framework, ACL2). An out-of-order core already runs the evaluation model: rename is the pre-state gather, the store buffer is the effect buffer, retirement is the barrier. Registering the machine itself as a world would make compilation an ano query, gather λ-terms and scatter instructions, the first Futamura projection with the evaluator written in ano. What is provable is dependence and layout, since barrier semantics makes intra-statement aliasing statically absent. What is not is latency, data-dependent and the Itanium lesson. Literal self-modifying code stays dead in the pipeline, so JIT synthesis into fresh columns is the usable form. First falsifiable step: the Haskell embedding (`ano-sky.md`, the prototype path). A hypothesis, not a roadmap. Unresolved.
 
 - Bootstrap host. The first compiler may be written in APL, Haskell, or OCaml before the self-hosted toolchain. The bytecode VM and JIT target are fixed. The front-end implementation language is not. The Sky Registry reframes the choice without resolving it (`ano-sky.md`): the front-end is not the language ano is written in but the second host ano embeds in, which weights the pick toward the host whose type system can hold the registry schema. Ruled (2026-07-10): Rust. The language is drafted and its spec forged in Steel — the Rust reference implementation, standalone launcher included — and Cano, the embedded C implementation, is derived from verified Steel, never the inverse. The reframe's weighting held: Rust is the second host, and its type system holds the registry schema — `repr(C)` structs for the C ABI, affine ownership over columnar data. The bytecode VM and JIT target stay fixed; CBQN stays the differential oracle through the port.
+
+- Reap ownership and granularity. Generational tombstoning is ruled (2026-07-11, ano-ecs §2/§5/§12): the gen bump plus presence clear is the mark, free-list reuse at tick seal is the deferred reap, and the mask-level meaning of `~` never changes — only storage reclamation is policy, exposed as the registry option `reap seal|host`. The remaining knob is the option's grain: world-wide as declared today, per archetype, or per column. Unresolved.
 
 
 

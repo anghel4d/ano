@@ -1,3 +1,5 @@
+# DONE
+
 # 07 — the editors: kill vim.tiny, fix the internal editor
 
 All the editor complaints, one action item (author, 2026-07-11).
@@ -20,6 +22,24 @@ Author verdict: "The internal editor was actually a lot better." What's wrong wi
 - The mode is shown only as a status-bar whisper (kore.c:2745 "insert — esc returns to browse"). Wanted: a loud mode indicator in the code pane's own title, not the far corner.
 - The cursor is a reverse-video cell, easy to lose, and it doesn't distinguish browse from insert. Wanted: a real cursor treatment (bar/underline in insert via DECSCUSR when the terminal honors it, block reverse in browse).
 - Standing wish, recorded from the review: if vim behaviors can't be got right, clone micro instead. Modeless, always-insert, ctrl chords, standard selections. For a debug pane you hop into for one-line tweaks, modeless is the honest shape. The current half-vim is the uncanny valley. Direction: micro-style internal editor, E-hop to real nvim for real editing. Surface the final modeless-vs-fixed-vim call to the author with a keymap sketch before rewriting.
+
+## The modeless sketch (surfaced, not implemented — the call is the author's)
+
+The micro-style keymap the rewrite would take, for the modeless-vs-fixed-vim decision. Done 2026-07-11: Tab-as-text in insert, the INSERT/BROWSE chip in the pane title, DECSCUSR bar in insert / block reverse in browse, and the hop chain — the half-vim is now honest enough to live with while this call waits.
+
+| key | action |
+| --- | --- |
+| any printable, Enter, Tab | text, always — no modes; Tab is two spaces |
+| arrows, Home, End, PgUp, PgDn | motion; Shift+arrows extend a selection |
+| Ctrl+S | save (the explicit save stays; n still refuses on dirty) |
+| Ctrl+Z | undo (the existing snapshot stack) |
+| Ctrl+K | delete line (today's dd) |
+| Ctrl+X / Ctrl+C / Ctrl+V | cut / copy / paste, internal register over the selection |
+| Ctrl+F | find (base-letter matching stays); Enter next, Shift+Enter previous |
+| Ctrl+G | go to line (today's [count]G) |
+| ESC | clear selection or search, then out to the home surface |
+
+The cost to surface with it: modeless steals the letter verbs inside code focus — r, n, u, m, w, E, q all type. The world verbs then live only outside code focus (one Tab away) or grow Ctrl chords of their own (Ctrl+R reset, Ctrl+N tick); either way the "one key steps the world" feel changes whenever the code pane holds focus. Counts (5j, 3dd, 12G) and word motions go entirely. What's bought: zero uncanny valley, every key does what a stranger expects, and real editing hops to nvim anyway.
 
 ## Adjacent, not this task
 

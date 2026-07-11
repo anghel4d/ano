@@ -72,11 +72,14 @@ static int split_words(char *line, char **words, int maxw) {
   return nw;
 }
 
-/* Inputs: word. Output: 0 with *out set via strtod, -1 on empty/trailing junk. */
+/* Inputs: word. Output: 0 with *out set via strtod, -1 on empty/trailing junk or a
+ * non-finite parse (inf, nan, any spelling strtod accepts, hex-float overflow included).
+ * The registry's value domain is exactly the finite doubles — the save already refuses
+ * to write a non-finite world, so the load refuses to read one, and load ∘ save = id. */
 static int wnum(const char *w, double *out) {
   char *end;
   *out = strtod(w, &end);
-  return (end != w && *end == 0) ? 0 : -1;
+  return (end != w && *end == 0 && isfinite(*out)) ? 0 : -1;
 }
 
 /* Inputs: word, destination + size. Output: 0 / -1 via rerr when the word overflows. */
@@ -110,8 +113,19 @@ static int wfree(const char *w, char *err, size_t errsz, int ln) {
 }
 
 /* Inputs: registry, the just-named entry (already counted). Output: 0 / -1 via rerr
- * when another entry's name folds equal — two spellings of one name are one name. */
+ * when another entry's name folds equal — two spellings of one name are one name — or
+ * when the name folds onto an identifier the emitted BQN reserves (the fixture's
+ * anoN/anoSel/anoIdx, the --save serializer's three, the rt.bqn prelude helpers): BQN
+ * identifiers are case-insensitive, so the fold IS the collision. Exactly these names,
+ * never a blanket ano prefix — `anointed` stays legal. */
 static int wuniq(Registry *reg, const RegEntry *e, char *err, size_t errsz, int ln) {
+  static const char *resv[] = { "anoN", "anoSel", "anoIdx",
+    "anoSaveSep", "AnoSaveNum", "AnoSaveRow",
+    "AnoRank", "AnoScat", "AnoAvg", "AnoNbrClamp", "AnoImage", "AnoInvFib" };
+  for (size_t i = 0; i < sizeof resv / sizeof *resv; i++)
+    if (names_eq(e->name, resv[i]))
+      return rerr(err, errsz, ln, "'%s' collides with the emitter's reserved '%s' under the case fold",
+                  e->name, resv[i]);
   for (int i = 0; i < reg->nents; i++)
     if (&reg->ents[i] != e && names_eq(reg->ents[i].name, e->name))
       return rerr(err, errsz, ln, "'%s' collides with entry '%s' under the case fold",
@@ -185,7 +199,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
 
   /* pass 1: capacity; an `as` line is an alias or a derived-tag entry by arity, so it
    * counts toward both (arena, over-allocation is free) */
-  static const char *entkinds[] = { "col", "rel", "srel", "inv", "alias", "bind", "fn", "field", "as" };
+  static const char *entkinds[] = { "col", "rel", "srel", "inv", "alias", "bind", "fn", "field", "as", "unique", "def" };
   int entcap = 0, ascap = 0;
   for (int i = 0; i < nlines; i++) {
     for (size_t k = 0; k < sizeof entkinds / sizeof *entkinds; k++)
@@ -280,45 +294,92 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
         return rerr(err, errsz, ln, "unknown col type '%s'", ty);
       }
 
+    } else if (strcmp(k, "unique") == 0) {
+      /* declared injectivity: one num column, every element pairwise-distinct. The check
+       * IS the ruled content (2026-07-11); mint-on-spawn and write-refusal ride on it. */
+      if (nw < 3) return rerr(err, errsz, ln, "usage: unique <name> <values>");
+      RegEntry *e = &reg->ents[reg->nents++];
+      e->kind = RK_COL;
+      e->type = CT_NUM;
+      e->uniq = 1;
+      if (wfree(words[1], err, errsz, ln)) return -1;
+      if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
+      if (wuniq(reg, e, err, errsz, ln)) return -1;
+      if (wnums(words, 2, nw, reg->n, a, &e->nums, &e->nnums, err, errsz, ln)) return -1;
+      for (int x = 0; x < e->nnums; x++)
+        for (int y = x + 1; y < e->nnums; y++)
+          if (e->nums[x] == e->nums[y])
+            return rerr(err, errsz, ln, "unique %s: value %g repeats (rows %d, %d)",
+                        e->name, e->nums[x], x, y);
+
     } else if (strcmp(k, "pres") == 0) {
       if (nw < 2) return rerr(err, errsz, ln, "usage: pres <col> <mask>");
       RegEntry *e = find_ent(reg, words[1]);
       if (!e || e->kind != RK_COL) return rerr(err, errsz, ln, "pres: no column '%s'", words[1]);
+      if (e->uniq) return rerr(err, errsz, ln, "pres on unique column '%s': a key column is total", e->name);
       int cnt;
       if (wnums(words, 2, nw, reg->n, a, &e->pres, &cnt, err, errsz, ln)) return -1;
       e->hasPres = 1;
 
     } else if (strcmp(k, "default") == 0) {
       double v;
-      if (nw != 3 || wnum(words[2], &v)) return rerr(err, errsz, ln, "usage: default <name> <v>");
+      if (nw != 3) return rerr(err, errsz, ln, "usage: default <name> <v>");
+      if (wnum(words[2], &v)) return rerr(err, errsz, ln, "bad number '%s'", words[2]);
       RegEntry *e = find_ent(reg, words[1]);
       if (!e) return rerr(err, errsz, ln, "default: no entry '%s'", words[1]);
+      /* a unique column's values are minted, never defaulted: a shared default is a
+       * standing violation of the declared injectivity */
+      if (e->uniq) return rerr(err, errsz, ln, "default on unique column '%s'", e->name);
       e->defval = v;
 
     } else if (strcmp(k, "rel") == 0 || strcmp(k, "alias") == 0) {
       if (nw < 2) return rerr(err, errsz, ln, "usage: %s <name> <values>", k);
+      /* keyed form (rel only): data is always numeric, so two names before it mean the
+       * first is the key column and the second the declared name — LL(1), no lookahead */
+      double kd;
+      int keyed = k[0] == 'r' && nw >= 3 && wnum(words[2], &kd) && strcmp(words[2], "|");
+      int ni = keyed ? 2 : 1;
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = k[0] == 'r' ? RK_REL : RK_ALIAS;
-      if (wfree(words[1], err, errsz, ln)) return -1;
-      if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
+      if (wfree(words[ni], err, errsz, ln)) return -1;
+      if (wname(words[ni], e->name, sizeof e->name, err, errsz, ln)) return -1;
       if (wuniq(reg, e, err, errsz, ln)) return -1;
-      if (wnums(words, 2, nw, reg->n, a, &e->nums, &e->nnums, err, errsz, ln)) return -1;
+      if (keyed) {
+        RegEntry *kc = find_ent(reg, words[1]);
+        if (!kc || !kc->uniq)
+          return rerr(err, errsz, ln, "rel %s: key '%s' is not a unique column", e->name, words[1]);
+        for (int j = 0; j < kc->nnums; j++)
+          if (kc->nums[j] < 0)
+            return rerr(err, errsz, ln, "rel %s: key column '%s' holds a negative value — "
+                        "-1 is the dangling sentinel", e->name, kc->name);
+        if (wname(kc->name, e->keyOf, sizeof e->keyOf, err, errsz, ln)) return -1;
+      }
+      if (wnums(words, ni + 1, nw, reg->n, a, &e->nums, &e->nnums, err, errsz, ln)) return -1;
 
     } else if (strcmp(k, "srel") == 0) {
       if (nw < 2) return rerr(err, errsz, ln, "usage: srel <name> <fibers>");
+      double kd;
+      int keyed = nw >= 3 && wnum(words[2], &kd) && strcmp(words[2], "|");
+      int ni = keyed ? 2 : 1;
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = RK_SREL;
-      if (wfree(words[1], err, errsz, ln)) return -1;
-      if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
+      if (wfree(words[ni], err, errsz, ln)) return -1;
+      if (wname(words[ni], e->name, sizeof e->name, err, errsz, ln)) return -1;
       if (wuniq(reg, e, err, errsz, ln)) return -1;
+      if (keyed) {
+        RegEntry *kc = find_ent(reg, words[1]);
+        if (!kc || !kc->uniq)
+          return rerr(err, errsz, ln, "srel %s: key '%s' is not a unique column", e->name, words[1]);
+        if (wname(kc->name, e->keyOf, sizeof e->keyOf, err, errsz, ln)) return -1;
+      }
       int nfib = 1, nvals = 0;
-      for (int j = 2; j < nw; j++) strcmp(words[j], "|") == 0 ? nfib++ : nvals++;
+      for (int j = ni + 1; j < nw; j++) strcmp(words[j], "|") == 0 ? nfib++ : nvals++;
       e->fibOff = (int *)arena_alloc(a, (size_t)nfib * sizeof *e->fibOff);
       e->fibLen = (int *)arena_alloc(a, (size_t)nfib * sizeof *e->fibLen);
       e->fibVals = (double *)arena_alloc(a, (size_t)(nvals ? nvals : 1) * sizeof *e->fibVals);
       int fib = 0, vi = 0;
       e->fibOff[0] = 0;
-      for (int j = 2; j < nw; j++) {
+      for (int j = ni + 1; j < nw; j++) {
         if (strcmp(words[j], "|") == 0) {
           e->fibLen[fib] = vi - e->fibOff[fib];
           fib++;
@@ -341,7 +402,15 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
       if (wuniq(reg, e, err, errsz, ln)) return -1;
       if (wname(words[2], e->invOf, sizeof e->invOf, err, errsz, ln)) return -1;
-      /* fiber for target t: ascending source ids with rel==t; nfib = world n */
+      /* fiber for target t: ascending source ids with rel==key(t); nfib = world n.
+       * The inverse of a keyed rel is keyed automatically: targets match through the key
+       * column and fiber values are the sources' keys, so the whole fiber stays in key space. */
+      const RegEntry *kc = NULL;
+      if (rel->keyOf[0]) {
+        kc = find_ent(reg, rel->keyOf);
+        if (!kc) return rerr(err, errsz, ln, "inv %s: key column '%s' missing", e->name, rel->keyOf);
+        if (wname(rel->keyOf, e->keyOf, sizeof e->keyOf, err, errsz, ln)) return -1;
+      }
       int n = reg->n;
       e->fibOff = (int *)arena_alloc(a, (size_t)(n ? n : 1) * sizeof *e->fibOff);
       e->fibLen = (int *)arena_alloc(a, (size_t)(n ? n : 1) * sizeof *e->fibLen);
@@ -349,8 +418,9 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       int vi = 0;
       for (int t = 0; t < n; t++) {
         e->fibOff[t] = vi;
+        double tk = kc ? kc->nums[t] : (double)t;
         for (int s = 0; s < rel->nnums; s++)
-          if (rel->nums[s] == (double)t) e->fibVals[vi++] = s;
+          if (rel->nums[s] == tk) e->fibVals[vi++] = kc ? kc->nums[s] : (double)s;
         e->fibLen[t] = vi - e->fibOff[t];
       }
       e->nfib = n;
@@ -435,6 +505,58 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       if (wname(words[2], reg->roleCol[reg->nroles], ANO_NAMESZ, err, errsz, ln)) return -1;
       reg->nroles++;
 
+    } else if (strcmp(k, "def") == 0) {
+      /* the proto, a registered archetype: named field=value pairs, the registry's first
+       * row-oriented construct. Spawn fill layer one; layers two and three are `default`
+       * and the type zero. Vocabulary reuse across the registry/program boundary is ruled
+       * fine (2026-07-11): this `def` never meets the program's. */
+      if (nw < 2) return rerr(err, errsz, ln, "usage: def <name> [<col>=<v> ...]");
+      RegEntry *e = &reg->ents[reg->nents++];
+      e->kind = RK_PROTO;
+      if (wfree(words[1], err, errsz, ln)) return -1;
+      if (wname(words[1], e->name, sizeof e->name, err, errsz, ln)) return -1;
+      if (wuniq(reg, e, err, errsz, ln)) return -1;
+      int nf = nw - 2;
+      e->syms = (char (*)[ANO_NAMESZ])arena_alloc(a, (size_t)(nf ? 2 * nf : 1) * ANO_NAMESZ);
+      e->nums = (double *)arena_alloc(a, (size_t)(nf ? nf : 1) * sizeof *e->nums);
+      for (int j = 0; j < nf; j++) {
+        char *eq = strchr(words[2 + j], '=');
+        if (!eq || eq == words[2 + j] || !eq[1])
+          return rerr(err, errsz, ln, "def %s: field '%s' is not <col>=<v>", e->name, words[2 + j]);
+        *eq = 0;
+        RegEntry *c = find_ent(reg, words[2 + j]);
+        if (!c || (c->kind != RK_COL && c->kind != RK_REL))
+          return rerr(err, errsz, ln, "def %s: no column '%s'", e->name, words[2 + j]);
+        if (c->uniq)
+          return rerr(err, errsz, ln, "def %s: unique column '%s' is minted, not defaulted", e->name, c->name);
+        /* the id/keys role column mints at spawn even when merely magic-named — a proto
+         * field on it would be silently outranked by the mint */
+        if (c == reg_role(reg, "keys") || c == reg_role(reg, "id"))
+          return rerr(err, errsz, ln, "def %s: key column '%s' is minted, not defaulted", e->name, c->name);
+        int crows = reg->n;
+        if (c->kind == RK_COL && c->type == CT_NUM && crows > 0 && c->nnums == 2 * crows)
+          return rerr(err, errsz, ln, "def %s: proto field over vec column '%s' unsupported", e->name, c->name);
+        if (c->kind == RK_COL && c->type == CT_CHAR)
+          return rerr(err, errsz, ln, "def %s: proto field over char column '%s' unsupported", e->name, c->name);
+        e->nums[j] = 0;
+        if (c->kind == RK_REL || c->type != CT_SYM) {
+          if (wnum(eq + 1, &e->nums[j]))
+            return rerr(err, errsz, ln, "def %s: bad number '%s' for '%s'", e->name, eq + 1, c->name);
+        }
+        if (wname(c->name, e->syms[2 * j], ANO_NAMESZ, err, errsz, ln)) return -1;
+        if (wname(eq + 1, e->syms[2 * j + 1], ANO_NAMESZ, err, errsz, ln)) return -1;
+        e->nsyms = 2 * (j + 1);
+      }
+
+    } else if (strcmp(k, "reap") == 0) {
+      /* ~ reclamation policy, storage only (ruled 2026-07-11): the gen bump plus presence
+       * clear is the mark, reuse at tick seal is the reap; `host` hands reclamation to the
+       * host. anoc compacts at the barrier either way — the emitted algebra never changes. */
+      if (nw != 2 || (strcmp(words[1], "seal") && strcmp(words[1], "host")))
+        return rerr(err, errsz, ln, "usage: reap <seal|host>");
+      if (reg->reap[0]) return rerr(err, errsz, ln, "reap redeclared");
+      if (wname(words[1], reg->reap, sizeof reg->reap, err, errsz, ln)) return -1;
+
     } else {
       return rerr(err, errsz, ln, "unknown kind '%s'", k);
     }
@@ -458,14 +580,27 @@ const RegEntry *reg_find(const Registry *reg, const char *name) {
   return NULL;
 }
 
+/* Inputs: registry. Output: the first declared unique column, else NULL. */
+static const RegEntry *uniq_col(const Registry *reg) {
+  for (int i = 0; i < reg->nents; i++)
+    if (reg->ents[i].kind == RK_COL && reg->ents[i].uniq) return &reg->ents[i];
+  return NULL;
+}
+
 /* Inputs: registry, a system role (keys id parent proto pos). Output: the declared
- * role column when one is set, else reg_find on the literal role name — one resolver,
- * entries then aliases, so every world routes through one path — else NULL. */
+ * role column when one is set; for id/keys next the first declared unique column
+ * (declared beats guess — a declared unique outranks a merely magic-named id); else
+ * reg_find on the literal role name — one resolver, entries then aliases, so every
+ * world routes through one path — else NULL. */
 const RegEntry *reg_role(const Registry *reg, const char *role) {
   for (int i = 0; i < reg->nroles; i++)
     if (names_eq(reg->roleName[i], role))
       for (int j = 0; j < reg->nents; j++)
         if (names_eq(reg->ents[j].name, reg->roleCol[i])) return &reg->ents[j];
+  if (names_eq(role, "id") || names_eq(role, "keys")) {
+    const RegEntry *u = uniq_col(reg);
+    if (u) return u;
+  }
   return reg_find(reg, role);
 }
 
@@ -498,12 +633,19 @@ int reg_dump(const Registry *reg, const char *path, char *err, size_t errsz) {
   StrBuf b = {0};
   sb_printf(&b, "n %d\n", reg->n);
   if (reg->latW || reg->latH) sb_printf(&b, "lattice %d %d\n", reg->latW, reg->latH);
+  if (reg->reap[0]) sb_printf(&b, "reap %s\n", reg->reap);
   for (int i = 0; i < reg->nents; i++) {
     const RegEntry *e = &reg->ents[i];
     switch (e->kind) {
       case RK_COL: case RK_FIELD: {
         int rows = e->kind == RK_FIELD ? reg->latW * reg->latH : reg->n;
         const char *kw = e->kind == RK_FIELD ? "field" : "col";
+        if (e->uniq) {
+          sb_printf(&b, "unique %s", e->name);
+          for (int j = 0; j < e->nnums; j++) { sb_printf(&b, " "); dnum(&b, e->nums[j]); }
+          sb_printf(&b, "\n");
+          break;
+        }
         if (e->type == CT_SYM) {
           sb_printf(&b, "%s %s sym", kw, e->name);
           for (int j = 0; j < e->nsyms; j++) sb_printf(&b, " %s", e->syms[j]);
@@ -529,14 +671,16 @@ int reg_dump(const Registry *reg, const char *path, char *err, size_t errsz) {
         break;
       }
       case RK_REL: case RK_ALIAS: {
-        sb_printf(&b, "%s %s", e->kind == RK_REL ? "rel" : "alias", e->name);
+        if (e->kind == RK_REL && e->keyOf[0]) sb_printf(&b, "rel %s %s", e->keyOf, e->name);
+        else sb_printf(&b, "%s %s", e->kind == RK_REL ? "rel" : "alias", e->name);
         for (int j = 0; j < e->nnums; j++) { sb_printf(&b, " "); dnum(&b, e->nums[j]); }
         sb_printf(&b, "\n");
         break;
       }
       case RK_SREL: {
         if (e->invOf[0]) { sb_printf(&b, "inv %s %s\n", e->name, e->invOf); break; }
-        sb_printf(&b, "srel %s", e->name);
+        if (e->keyOf[0]) sb_printf(&b, "srel %s %s", e->keyOf, e->name);
+        else sb_printf(&b, "srel %s", e->name);
         for (int f = 0; f < e->nfib; f++) {
           if (f) sb_printf(&b, " |");
           for (int j = 0; j < e->fibLen[f]; j++) {
@@ -561,6 +705,13 @@ int reg_dump(const Registry *reg, const char *path, char *err, size_t errsz) {
         sb_printf(&b, "as %s %s ", e->name, e->tagCol);
         if (e->type == CT_SYM) sb_printf(&b, "%s", e->syms[0]);
         else dnum(&b, e->nums[0]);
+        sb_printf(&b, "\n");
+        break;
+      }
+      case RK_PROTO: {
+        sb_printf(&b, "def %s", e->name);
+        for (int j = 0; j < e->nsyms / 2; j++)
+          sb_printf(&b, " %s=%s", e->syms[2 * j], e->syms[2 * j + 1]);
         sb_printf(&b, "\n");
         break;
       }

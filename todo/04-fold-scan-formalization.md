@@ -1,3 +1,5 @@
+# DONE
+
 # 04 — fold/scan formalization: the permutation table, `&\` and `|\` demos, the max ruling
 
 Ruled (author, 2026-07-11): the permutation table goes into the documentation or the grammar, verbatim. `&\` and `|\` "most definitely do deserve demos". One full table shows all of `+/ */ …` AND `+\ *\ …` together.
@@ -29,7 +31,7 @@ The identity column restates the §12/§13 law: a fold with a registered identit
 
 ## The max ruling (recorded verdict)
 
-`max/` and `max\` stay named forms. The `>/` idea was examined and rejected: `>` is a comparison returning bool, folding it is non-associative nonsense, and making `>/` mean max requires reinterpreting `>` as "the greater-of" in fold position, the same pun refused for `-/` (APL's alternating sum). k earns `|/` as max-fold because k's `|` IS max natively, not a fold-position reinterpretation. Under task 05's unification, max/min/avg become registered reducers like any other name, so no glyph is needed. Author may overrule. Record the verdict in the table's notes either way.
+`max/` and `max\` stay named forms. The `>/` idea was examined and rejected: `>` is a comparison returning bool, folding it is non-associative nonsense, and making `>/` mean max requires reinterpreting `>` as "the greater-of" in fold position, the same pun refused for `-/` (APL's alternating sum). k earns `|/` as max-fold because k's `|` IS max natively, not a fold-position reinterpretation. Under task 05's unification, max/min/avg become registered reducers like any other name, so no glyph is needed. Accepted by the author (2026-07-11); record the verdict in the table's notes. Deferred alongside, deliberately unruled (lives in 00-open-rulings): adopting k's `|` as native max — which would earn `|/` honestly — and renaming boolean OR to `||` to free the glyph; the author notes he is not aware of any language where OR is bare `|`.
 
 ## Fibonacci, for the record
 

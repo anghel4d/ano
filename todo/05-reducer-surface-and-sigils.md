@@ -1,3 +1,5 @@
+# DONE
+
 # 05 — the reducer surface and the sigils: `f/` universalized, `fold()`, `!` vs `^`
 
 Two rulings and one seam, bundled by the author (2026-07-11).
@@ -8,7 +10,7 @@ Two rulings and one seam, bundled by the author (2026-07-11).
 
 ## Ruling: `fold(f)` is the long form
 
-`reduce(f)` becomes `fold(f)`. Fold is the word Haskell, APL culture, and C# LINQ all share, and the parentheses leave room for more inside. Documentation states plainly that this is a fold-reduction. Implementer's call to surface at execution: keep `reduce(` as a deprecated alias for one cycle or cut it clean. Demo 15 and the manual update either way.
+`reduce(f)` becomes `fold(f)`. Fold is the word Haskell, APL culture, and C# LINQ all share, and the parentheses leave room for more inside. Documentation states plainly that this is a fold-reduction. Ruled (author, 2026-07-11): clean cut, `fold()` only, no deprecation cycle for `reduce(`. Demo 15 and the manual update accordingly.
 
 ## Implementation notes
 
@@ -21,7 +23,7 @@ Lexer/parser: `name/` and `name\` at fold-prefix level, name resolved against re
 | `!` | mask NOT, a prefix operator | level 7 | one mask term | at evaluation, pointwise |
 | `^` | not an operator: lexically part of the identifier; the alias/deixis sigil (`^cursor`, `^observer`, `^world`), こそあど | atom, level 14 | the name it is glued to | re-resolved per evaluation via the host |
 
-They never compete: `!` negates a mask, `^` names a thing. `!^cursor` is "not the thing under the cursor": the sigils compose, they do not overlap. The confusion traces to a real seam. Demo 14 pins BOTH `!Whiterun` and `!^Whiterun` for one registered `bind … mask`, and the emitter accepts RK_BIND and RK_ALIAS through either spelling. The grammar text says `^` is deixis; the demo uses it on a static constant. Ruling needed from the author. Surface, do not resolve: (a) `^` reserved to host-resolved deictics, binds always bare (tighter, matches the grammar appendix, demo 14 loses one spelling); or (b) `^` as optional constant-reference sugar on any registered constant (looser, both spellings legal forever, the appendix paragraph rewritten). Whichever lands: one spelling per demo unless the demo exists to pin the equivalence.
+They never compete: `!` negates a mask, `^` names a thing. `!^cursor` is "not the thing under the cursor": the sigils compose, they do not overlap. The confusion traces to a real seam. Demo 14 pins BOTH `!Whiterun` and `!^Whiterun` for one registered `bind … mask`, and the emitter accepts RK_BIND and RK_ALIAS through either spelling. The grammar text says `^` is deixis; the demo uses it on a static constant. The ruling is deferred by the author (2026-07-11; it stays live in 00-open-rulings) — execute this task without resolving it, both spellings stay legal meanwhile. The options, for when it lands: (a) `^` reserved to host-resolved deictics, binds always bare (tighter, matches the grammar appendix, demo 14 loses one spelling); or (b) `^` as optional constant-reference sugar on any registered constant (looser, both spellings legal forever, the appendix paragraph rewritten). Whichever lands: one spelling per demo unless the demo exists to pin the equivalence.
 
 ## Invariants
 

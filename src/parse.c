@@ -318,7 +318,7 @@ static Node *parse_stage(P *p) {
   }
 }
 
-/* Input: parser inside scan/scan2/reduce parens. Output: 0 with op spelling or
+/* Input: parser inside scan/scan2 parens. Output: 0 with op spelling or
  * reducer name copied into n->name; -1 with err. */
 static int parse_opname(P *p, Node *n) {
   switch (pk(p)) {
@@ -335,7 +335,7 @@ static int parse_opname(P *p, Node *n) {
 }
 
 /* Input: parser, min level. Output: prefix construct (! at 7; fold/scan/grade/top/
- * reduce/scan-along/scan2/cross at 9; order-by head at 3) or an atom. Fold-family
+ * fold(f)/scan-along/scan2/cross at 9; order-by head at 3) or an atom. Fold-family
  * operands parse at min 10 so @ (12) and . (13) fall inside the operand. */
 static Node *parse_prefix(P *p, int min) {
   int line = tline(p);
@@ -377,10 +377,10 @@ static Node *parse_prefix(P *p, int min) {
       node_addkid(p->a, n, x);
       return n;
     }
-    case T_REDUCE: {
+    case T_FOLDKW: { /* fold(f): the long form of f/ — one node, N_FOLD */
       adv(p);
-      Node *n = node_new(p->a, N_REDUCE, line);
-      if (expect(p, T_LP, "'(' after 'reduce'")) return NULL;
+      Node *n = node_new(p->a, N_FOLD, line);
+      if (expect(p, T_LP, "'(' after 'fold'")) return NULL;
       if (pk(p) != T_NAME) return perrf(p, tline(p), "expected reducer name");
       setname(n, tname(p)); adv(p);
       if (expect(p, T_RP, "')' after reducer")) return NULL;
@@ -841,7 +841,7 @@ static const char *kindname(NodeKind k) {
   static const char *names[] = {
     "NUM", "COUNTER", "SYM", "STR", "NAME", "ALIAS", "WILD",
     "NOT", "AND", "OR", "CMP", "ARITH", "SCOPE", "HOP", "SETHOP", "CALL",
-    "FOLD", "SCANEXPR", "SCANALONG", "REDUCE", "IOTAX", "SHAPE", "TUPLE", "TO",
+    "FOLD", "SCANEXPR", "SCANALONG", "IOTAX", "SHAPE", "TUPLE", "TO",
     "GRADE", "TOP", "PIPE", "ORDERBY", "TAKE", "EXPAND", "CROSSV", "BINDER",
     "EASSIGN", "EADD", "EDEL", "EDESPAWN", "ESPAWN", "EVERB", "EVIA",
     "STMT", "DEFSTMT", "QUERY", "COMPR", "PROGRAM"
@@ -1032,10 +1032,10 @@ static const Tok t30[] = { TN("Spawner"), TK(T_COMMA), TK(T_SPAWN), TN("Minion")
   TK(T_STAR), TN("Count"), TK(T_EOF) };
 static const char *w30 = "(PROGRAM (STMT (NAME Spawner) (ESPAWN (NAME Minion) (NAME Count) ())))";
 
-/* reduce(threat) Damage @ Enemies */
-static const Tok t31[] = { TK(T_REDUCE), TK(T_LP), TN("threat"), TK(T_RP), TN("Damage"),
+/* fold(threat) Damage @ Enemies */
+static const Tok t31[] = { TK(T_FOLDKW), TK(T_LP), TN("threat"), TK(T_RP), TN("Damage"),
   TK(T_AT), TN("Enemies"), TK(T_EOF) };
-static const char *w31 = "(PROGRAM (QUERY (REDUCE threat (SCOPE (NAME Damage) (NAME Enemies)))))";
+static const char *w31 = "(PROGRAM (QUERY (FOLD threat (SCOPE (NAME Damage) (NAME Enemies)))))";
 
 /* +\ Weight @ (til steps |> route A B) */
 static const Tok t32[] = { TKN(T_SCANOP, "+"), TN("Weight"), TK(T_AT), TK(T_LP), TK(T_IOTA),
@@ -1071,7 +1071,7 @@ int main(void) {
     CASE(22, "stencil"),        CASE(23, "scan-along"),    CASE(24, "presence-tuple"),
     CASE(25, "elided-spawn"),   CASE(26, "counter"),       CASE(27, "iota-scan"),
     CASE(28, "at-shape"),       CASE(29, "expand"),        CASE(30, "spawn-mult"),
-    CASE(31, "reduce"),         CASE(32, "iota-pipe"),     CASE(33, "sethop-gather"),
+    CASE(31, "fold-long"),      CASE(32, "iota-pipe"),     CASE(33, "sethop-gather"),
     CASE(34, "verb-line"),      CASE(35, "cross"),
   };
   int fails = 0;

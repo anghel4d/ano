@@ -1,3 +1,5 @@
+# DONE
+
 # 10 — debug observability: the dead-link diagnostic and the tick trace
 
 Mission-critical by ruling (author, 2026-07-11). The semantics stay silent. The debugger gets loud. Three observability features, bundled. Depends on 01 (the history/OUTPUTS split must exist to have somewhere to speak) and coordinates with 02 (the hop's found-guard is the hook).

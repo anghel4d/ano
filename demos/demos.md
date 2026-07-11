@@ -12,11 +12,11 @@ That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every 
 
 ## Layout
 
-- `1-selection/` — masks, scopes, aliases, presence, value predicates, hops, named selections (ex1-9, the set hop).
-- `2-effects/` — value, assignment, structural, and sequenced effects; the barrier and pre-state (ex10-13, 25).
-- `3-fold-scan/` — reductions, named reducers, scans, along; the fold contract and the Fibonacci stencil pair (ex14-17).
+- `1-selection/` — masks, scopes, aliases, presence, value predicates, hops, named selections (ex1-9, the set hop, the s60 keyed hop through a `unique` column).
+- `2-effects/` — value, assignment, structural, and sequenced effects; the barrier and pre-state (ex10-13, 25); the despawn-then-hop integrity pair s58/s59 (wrong-entity and out-of-range shapes, resolved through the hidden fixture-row column).
+- `3-fold-scan/` — reductions, named reducers, scans, along; the fold contract and the Fibonacci stencil pair (ex14-17); the boolean-scan latches s62 (`|\` ever-any) and s63 (`&\` still-all); s64 the reducer-spelling triple (`threat/`, `fold(threat)`, `threat\`).
 - `4-order/` — grade, rank, ordered top-k; the rank-tie write-back (ex18, 19, 26, 31).
-- `5-generate/` — outer product, replicate, expand, reshape; keys come only from generation (ex20-24).
+- `5-generate/` — outer product, replicate, expand, reshape; keys come only from generation (ex20-24); s61 the proto spawn — `def Marine …` and the three-layer fill, the unique mint.
 - `6-space/` — Part IV: lattice patterns, computed lines, spatial folds and scans, density fields, derived fields, the board literal (ex27-34).
 - `7-tiers/` — the two-habitats table and the tier witnesses (ex35, 37-39, the foundations counterexamples).
 - `8-gamma/` — the grouped fold over relationship fibers (the ex36 farm lines).

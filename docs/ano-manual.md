@@ -71,20 +71,25 @@ Six entities, three components, and that is a world. Components are dense column
 ```text
 n 6                                # entity row count
 col gold num 100 200 ...           # numeric column; bool columns are masks; sym columns hold :Enum values
-col pos vec 5 5 | 40 5 ...         # pair column (positions)
+col pos vec 5 5 | 40 5 ...         # pair column (positions); fixed arity — ragged data lives behind an srel
 pres twoHanded 1 1 0 1 1 1         # presence: absent rows carry junk, the (Nord, TwoHanded _) machinery
-rel mentor -1 0 3 -1 2 2           # functional relationship, one target id per row, -1 dangling
-srel targets 3 4 | 4 5 | | ...     # set-valued relationship, one fiber per row
-inv livestock pen                  # set-valued as the inverse read of a functional rel
+unique id 0 1 2 3 4 5              # a column under an algebraic constraint: pairwise-distinct, checked at load
+rel mentor -1 0 3 -1 2 2           # functional relationship, one target id per row, -1 dangling, keyed to the row index
+rel id mentor -1 0 3 -1 2 2        # the keyed form: key column first, then the name — mentor is a rel over id
+srel targets 3 4 | 4 5 | | ...     # set-valued relationship, one fiber per row; keys the same way
+inv livestock pen                  # set-valued as the inverse read of a functional rel (keyed rels invert keyed)
 alias cursor 0 0 1 0 0 0           # deictic resolver, re-resolved per evaluation
 bind Player entity 2               # proper-noun constants: entity, mask, point, num, vec
+default gold 50                    # spawn fill for one column; the full lookup is proto → default → type zero
+def Marine soldier=1 hp=100        # a proto: the registered archetype, spawn Marine fills through it
 fn fib {𝕩...}                      # a callable, carrying its own BQN the way a host carries C
 lattice 12 12                      # a rank-2 world (space chapter)
 field oil bool 0 0 1 ...           # per-cell lattice column, row-major
+reap seal                          # despawn reclamation policy: seal (default) or host-owned
 ja 北 nord                         # Japanese alias for the ja skin
 ```
 
-That list is also a census of the five ways a name reaches the host: a mutable column, a readonly column (write footprint declared empty: physics positions you may predicate on but never move), a callable, an alias, and a binding. The namespace is flat, and sentence position alone decides what a name is doing. Applied to arguments it is a callable, in a value position a column, bare in a predicate a mask, a proper noun in source position a binding. No sigil marks provenance: `polar` from the prelude and `phyllotaxis` from the host read identically, the way C holds `sin` from libm and your own function in one identifier space. The one sigil, `^`, marks deixis. `^cursor` moves with the context, bare `Player` was fixed at registration.
+That list is also a census of the ways a name reaches the host: a mutable column, a readonly column (write footprint declared empty: physics positions you may predicate on but never move), a callable, an alias, a binding, and a proto — the archetype noun `spawn` fills through. The namespace is flat, and sentence position alone decides what a name is doing. Applied to arguments it is a callable, in a value position a column, bare in a predicate a mask, a proper noun in source position a binding. No sigil marks provenance: `polar` from the prelude and `phyllotaxis` from the host read identically, the way C holds `sin` from libm and your own function in one identifier space. The one sigil, `^`, marks deixis. `^cursor` moves with the context, bare `Player` was fixed at registration.
 
 ## Selection
 
@@ -122,7 +127,7 @@ Presence is three-valued, and the tuple form tells the cases apart: present-and-
 (Nord, !TwoHanded)     , +Untrained
 ```
 
-A relationship is a component whose value is another entity's id, and the dot is the hop: `rel.Comp` reads the target id and gathers `Comp` there, one indexed read, chainable (`mentor.mentor.Dead`). The left-join-null law rides along: an absent or dangling link fails the predicate and the row drops out, no null ever surfaces. The same dot rooted at a binding is the mirror-read (`Player.pos`), and into a compound component it is field projection (`pos.x`). Dot always gathers. It never groups, scopes, or folds.
+A relationship is a component whose value is another entity's id, and the dot is the hop: `rel.Comp` reads the target id and gathers `Comp` there, one indexed read, chainable (`mentor.mentor.Dead`). The left-join-null law rides along: an absent or dangling link fails the predicate and the row drops out, no null ever surfaces. What "id" means is the rel's key column: declare `unique id …` and write the key first (`rel id mentor …`) and the hop resolves stored ids against it — a target that despawned simply fails the found-guard and drops, staleness included in the same law. An undeclared rel is keyed to the row index, which is exactly what its values say. The same dot rooted at a binding is the mirror-read (`Player.pos`), and into a compound component it is field projection (`pos.x`). Dot always gathers. It never groups, scopes, or folds.
 
 ```haskell
 Nord & mentor.TwoHanded > 80 , Gold += 1000
@@ -183,7 +188,8 @@ APL's `/` and `\`, aimed at selections (`demos/3-fold-scan`). A fold collapses a
 +/ Gold @ Nord               -- total Nord gold
 &/ Alive @ Party             -- all alive?
 #/ (Nord & TwoHanded > 60)   -- count; takes a parenthesized mask
-reduce(threat) Damage @ Enemies   -- named registered reducer, same shape
+threat/ Damage @ Enemies     -- named registered reducer: the slash attaches to the name
+fold(threat) Damage @ Enemies    -- the long form, same fold
 ```
 
 Two honesty rules. The raw fold contract is an associative operator with a registered identity, and the derived forms keep their spellings while the registry records the truth: `avg/` folds sum-and-count then divides, `#/` is `+/` over ones. And the empty scope: a fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true), while a reducer with no identity (`avg/`, `max/`, `min/`) fails the row, which drops out of the selection exactly like a dangling hop. No NaN, no default, the left-join-null law again (`s11-avg-fold-finish.ano`).
@@ -194,6 +200,23 @@ A scan accumulates and returns a column of equal length, which means it needs an
 +\ Weight @ (↕steps |> route A B)    -- the view is ordered, scan along it
 scan(+) Weight along pathCells       -- the order named explicitly
 ```
+
+The whole family fits one table, folds and scans together. Lineage: in k, `&` IS min and `|` IS max over numerics; ano's boolean reading is the k reading restricted to masks. The two boolean scans are latches — `|\` is ever-any, "has the fire reached each point yet" (`s62-ever-any.ano`); `&\` is still-all, "the column intact up to here" (`s63-still-all.ano`) — and a named reducer's scan comes free (`threat\`, `s64-reducer-spellings.ano`).
+
+| f | `f/` fold | `f\` scan | empty-scope identity |
+|---|---|---|---|
+| `+` | sum | running sum | 0 |
+| `*` | product | running product | 1 |
+| `&` | ALL | still-all: a latch that trips off at the first false and stays off | 1 (vacuous truth) |
+| `\|` | ANY | ever-any: a latch that trips on at the first true and stays on | 0 |
+| `#` | count | running count | 0 |
+| `max` | maximum | running peak (occlusion, high-water) | none → row drops |
+| `min` | minimum | running floor | none → row drops |
+| `avg` | fold-and-finish mean | running mean | none → row drops |
+| `-` | rejected: not associative | — | — |
+| `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
+
+The identity column is the honesty rule again, extended to the empty fiber, and a scan needs no identity at all: it is length-preserving, so the empty scope yields the empty column. Why no `>/` for max? Recorded verdict: `>` is a comparison returning bool, folding it is non-associative nonsense, and k only earns `|/` because k's `|` IS max natively — under the named-reducer unification max/min/avg are names like any other, so no glyph is needed. Scan cells anoc does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses; `+\ *\ &\ |\ max\` and named-reducer scans are live.
 
 And now the trap this repository has pinned four different ways (`s19-fib-stencil-a` through `-d`): the tempting recurrence. You cannot write Fibonacci like this —
 
@@ -325,6 +348,15 @@ Plot , Moisture = avg/ neighbors'.Moisture    -- ': a column, one mean per plot
 
 After a fold, `@` yields a scalar and the tick yields a per-source column, lexically, never by registry lookup. `@` never groups. Empty fibers follow the fold-identity law you already know: a pen with no animals keeps Headcount 0 under `#/`, and an `avg/` over an empty fiber drops the row. The farm interlude in the spec (and `36-farm-gamma-*.ano`) runs a nine-line farm on exactly these pieces. Read it now and notice you can parse every line.
 
+While the glyph is fresh, the representation underneath it. A one-to-many relationship is another relation, not a ragged cell: `srel targets 2 4 | | | 4 5 | | | |` (`12-structural-effects.reg`) is one fiber per row — a list of lists in the BQN prototype, CSR in Steel, one offsets column plus one flat edge array (ano-ecs §5). Two flat arrays, array-like all the way down, the same shape as q's nested columns and Arrow's list columns. And the mask algebra never sees multiplicity: `Frenzy.targets'` in source position is the image, bits OR'd into a mask, so an entity reached twice is one bit. The idempotent-scatter law is free because the representation cannot express multiplicity (ano-ecs §4). When multiplicity matters you say so with a fold, and `s05-set-hop.ano` pins both readings over one fixture:
+
+```haskell
+Frenzy.targets' , +Frenzied ; Health -= 10   -- the image: a mask — entity 4, reachable twice, takes the batch once
+Target , Hits += #/ attackers'               -- the in-degree: a fold — the same entity 4 counts 2
+```
+
+The image is the set; the fold is the count (spec §5, §13). Vectors as cell values exist in the same disciplined form: `col pos vec` holds fixed-arity pairs (`24-reshape-positions-a.reg`), `bind pathCells vec` holds an index sequence (`17-scan-along.reg`). The discipline, stated once: fixed-shape tuples live in vec columns, while ragged, variable-arity data lives behind a relation — named, with fibers, an inverse, and the γ machinery. Both are array-native. Neither leaks raggedness into the mask algebra.
+
 ## The Japanese surface
 
 Ano's grammar keeps turning out to be Japanese grammar with the serial numbers left on, and the repository treats that as load-bearing evidence, not decoration (`ano_nihongo.md` is the research file, `demos/9-nihongo` the proofs). The Japanese surface is a token-level skin over the same parser: registry names carry ja aliases, particles map to operators, and normalization re-roots each postfix particle before its operand, after which the token streams are identical. One statement, two surfaces, one compiled program (`40-tokenizer-skin.ano`):
@@ -407,6 +439,8 @@ eval "SparkBolt , Damage += 10"
 
 ## Where the edges are
 
-You are now great and powerful, so you get the honest map. `ISSUES.md` is short and current: identity across the barrier (a trigger payload's parent can name a row the same barrier despawned; where the intensional/extensional boundary sits is open), recurrences within a statement (you met the trap; the carry stays host-side for now), quotation past the literal (templates with holes, rules writing rules: unbuilt), deriving order-srels mechanically (w3-b's fibers are hand-listed today), world-to-chunk frame conversion (the host does it), frame-homogeneous rule ticks (no mixed entity-and-lattice tick yet), and the harness clock's residue you already know. The spec's "Open Questions, Next Steps" holds the deeper unsettled design: rule retraction, explicit bindings' denotation, the recurrence options, each with its tradeoff stated, never resolved silently.
+You are now great and powerful, so you get the honest map. `ISSUES.md` is short and current: identity across the barrier (a trigger payload's parent can name a row the same barrier despawned; where the intensional/extensional boundary sits is open), recurrences within a statement (you met the trap; the carry stays host-side for now), quotation past the literal (templates with holes, rules writing rules: unbuilt), deriving order-srels mechanically (w3-b's fibers are hand-listed today), world-to-chunk frame conversion (the host does it), frame-homogeneous rule ticks (no mixed entity-and-lattice tick yet), and the harness clock's residue you already know. The spec's "Open Questions, Next Steps" holds the deeper unsettled design: rule retraction, explicit bindings' denotation, the recurrence options, the reap option's granularity, each with its tradeoff stated, never resolved silently.
+
+Numbers get their own honest paragraph, because every number in ano is one thing: an IEEE 754 float64, end to end — the literal you write, the column in the world file, the value BQN computes, the digits the save writes back. That buys exact integers up to 2^53 (9,007,199,254,740,992) and sets three edges. The cliff: past 2^53 the representable integers thin out, and an addition smaller than the local spacing is silently absorbed — `+= 1` onto 3.1e19 is a no-op, IEEE semantics keeping its own promise, not a bug. Overflow: past DBL_MAX ≈ 1.8e308 the arithmetic yields ∞, and ∞ has no spelling in a world file — the save refuses the pipe-back (`save: col gold: bad number '∞'`, exit 2) and the world on disk stands untouched, so an overflowing tick is a refused tick, never a corrupted world. And the same door locked from the outside: a hand-written `inf`, `-inf`, `nan`, or any spelling strtod reads as non-finite refuses at registry load with a line diagnostic. The seal that falls out is exact: the registry's value domain is the finite doubles, load ∘ save is the identity on it, and on the numeric domain anything anoc saves it can load and anything it loads it could have saved. `src/refusals/` pins every face of this. The adjacent doctrine is time's: float ingress from the host quantizes at the binding (`BIND_QUANTIZE`, the determinism boundary — ano-time's stance, recorded under Float ingress in `ano-ecs.md`), so a replayed world never hangs on a float the log did not capture.
 
 Where to go next: `ano-language.md` is the spec this manual has been quoting, worth reading end to end now that every section will parse. `src/GRAMMAR.md` is anoc's implementation contract when you need token-level truth. `ano_nihongo.md` if the Japanese chapter hooked you, `proofs/foundations.md` if the tiers did, and `demos/` for everything, forever, because in this repository the examples are the ground truth and the prose merely keeps up. Now go address something by description.

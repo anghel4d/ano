@@ -10,7 +10,7 @@ Mechanics to sweep: each demo's .ano, .bqn, -nihongo.ano, and registries/<stem>.
 
 ## Ruling 1/08 — faction → leader
 
-Rename faction to leader EVERYWHERE except ano-language.md. The author's reasoning, recorded: the spec's faction is a genuinely different thing, a faction archetype distinct from soldier with its own columns and traits, a separate KIND of entity, while the demo's "faction" is a trait of 1 that is literally an index to a Nord. Files: 08-relationship-hops.{ano,bqn}, -nihongo.ano, registries/08-relationship-hops.reg (`rel faction …` and `ja 派閥 faction`). The ja word needs the author: propose 頭領 (tōryō), confirm before landing. ano-language.md:154 stays as written.
+Rename faction to leader EVERYWHERE except ano-language.md. The author's reasoning, recorded: the spec's faction is a genuinely different thing, a faction archetype distinct from soldier with its own columns and traits, a separate KIND of entity, while the demo's "faction" is a trait of 1 that is literally an index to a Nord. Files: 08-relationship-hops.{ano,bqn}, -nihongo.ano, registries/08-relationship-hops.reg (`rel faction …` and `ja 派閥 faction`). The ja word is ruled (author, 2026-07-11): 頭領 (tōryō), as proposed. ano-language.md:154 stays as written.
 
 ## Ruling 1/s05 — split
 
@@ -30,7 +30,7 @@ Add teaching comments in the author's register across the corpus. The style is r
 
 Preserve the author's own comments verbatim, including s10-pre-state's "Not actually bound to anything lol.", ruled kept.
 
-Also riding this pass: the seven migrated play copies from the 2026-07-10 corpus restore (`.kore/play/` copies of 1-selection/{01,03,06,08}, 2-effects/{12,s10a,s10b}) hold the author's hand edits, some possibly deliberate fixes. Adopt into the corpus or discard, per file, with the author. `>reset` wipes them all, so rule before resetting.
+Also riding this pass: the seven migrated play copies from the 2026-07-10 corpus restore (`.kore/play/` copies of 1-selection/{01,03,06,08}, 2-effects/{12,s10a,s10b}) hold the author's hand edits, some possibly deliberate fixes. Ruled (author, 2026-07-11): archive all seven to a safe location that is neither in demos nor in the reset dir, such as kore/saved. That makes them `>reset`-proof; the per-file adopt-or-discard review then happens from the archive and no longer gates the reset.
 
 Optional at execution, author already approved the idiom: land the soul-gated barrier demo (`nord & dead & soul , soul = 0 ; spawn Ghost`, soul consumed in the same barrier, minted ghosts get the type-zero soul, linear and terminating) as a loop-safe interactive variant beside the barrier-granularity pair. The original stays: its exponential growth under repeated ticks is the pinned point, not a bug.
 

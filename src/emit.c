@@ -34,6 +34,8 @@ typedef enum { MODE_WORLD, MODE_SEL, MODE_COPY } Mode;
 typedef struct { char *v; char *g; int pair; int unit; int sym;
                  char *along;   /* scan-along order expr: values are in along order, and a
                                    write-back must conjugate — sort, act, unsort (Tier 2) */
+                 const RegEntry *relEnt; /* the rel whose values v holds (chain hops resolve
+                                   the next leg through THIS rel's key space) */
 } EV;
 
 typedef struct {
@@ -55,9 +57,19 @@ typedef struct {
   int curRule;
   unsigned ruleDisj[32];
   char selVar[32];       /* current statement's refined selection variable */
+  char traceSel[32];     /* the statement's selection BEFORE RHS-guard refinement (--trace):
+                            "row failure" means selected then dropped by the guard, and the
+                            refined selVar has already dropped them */
   char cntVar[32];       /* copy-space counts (spawn replicate) */
   char idxVar[64];       /* copy-space per-copy index */
   const char *pipeExpand;  /* selection-space counts from a pipeline expand stage (arena) */
+  /* hop integrity: needIdx is the pre-scan verdict — the program reads through the idx
+   * key space after a despawn can have committed, so the fixture materializes the row
+   * iota ONCE as the hidden column anoIdx, filtered through despawns and minted on
+   * spawns; worldShifted flips when the first despawn commits, and from then on every
+   * idx-keyed read resolves by ⊐ against anoIdx instead of the positional gather */
+  int needIdx;
+  int worldShifted;
   StrBuf pre;            /* staged lines for the current statement */
   int tmp;
   int outIdx;
@@ -152,13 +164,62 @@ static char *frN(Em *em) {
     default: return efmt(em, "%d", em->fr.w * em->fr.h);
   }
 }
-/* the world's stable-id column: a registered `id`/`keys` column, else the row iota.
- * Relationship values denote these ids; membership survives structural compaction (ex12). */
+/* the world's stable-id column, by reg_role's one ladder (role-declared id/keys, else a
+ * declared unique column — it declares what the names guess — else the magic name), else
+ * the hidden anoIdx once the world has shifted, else the row iota. Relationship values
+ * denote these ids; membership survives structural compaction (ex12). */
 static char *idCol(Em *em) {
   const RegEntry *e = reg_role(em->reg, "id");
   if (!e) e = reg_role(em->reg, "keys");
   if (e && e->kind == RK_COL) return bqnv(em, e);
+  if (em->needIdx && em->worldShifted) return "anoIdx";
   return efmt(em, "(↕%s)", frN(em));
+}
+
+/* the key expression a functional rel resolves through: its declared unique column, the
+ * hidden fixture-row column once rows have shifted, else NULL — the positional identity.
+ * NULL keeps today's `0⌈` gather byte-for-byte; a key means one ⊐ with one found-guard,
+ * the keyed hop rel;unique⁻¹ (injectivity is the inversion license). */
+static char *relKey(Em *em, const RegEntry *rel) {
+  if (rel->keyOf[0]) {
+    const RegEntry *kc = reg_find(em->reg, rel->keyOf);
+    if (kc) return bqnv(em, kc);
+  }
+  if (em->needIdx && em->worldShifted) return "anoIdx";
+  return NULL;
+}
+
+/* the has-a-live-target guard for a bare rel: positional worlds keep the 0≤ sentinel
+ * test; a keyed or shifted world tests found-ness against the key column */
+static char *relGuard(Em *em, const RegEntry *e) {
+  char *key = relKey(em, e);
+  if (!key) return efmt(em, "(0≤%s)", bqnv(em, e));
+  return efmt(em, "((%s⊐%s)<≠%s)", key, bqnv(em, e), key);
+}
+
+/* trace origin ids (--trace): the world's id column by idCol's own ladder, but the iota
+ * fallback sizes by the rel column, not the frame — a hop under a lattice frame still
+ * crosses entity-length links. World space, length ≠rel. */
+static char *traceIds(Em *em, const char *relExpr) {
+  const RegEntry *e = reg_role(em->reg, "id");
+  if (!e) e = reg_role(em->reg, "keys");
+  if (e && e->kind == RK_COL) return bqnv(em, e);
+  if (em->needIdx && em->worldShifted) return "anoIdx";
+  return efmt(em, "(↕≠%s)", relExpr);
+}
+
+/* the dead-link diagnostic (--trace): one RELATION <column> <origin> -> <sink> IS DEAD !
+ * line per link that was set (0≤rel — ¯1 was never linked) yet fails the found-guard —
+ * the target no longer exists. Staged beside the hop it observes; pure output, world
+ * space, self-contained (the guard convention), zero lines emitted without the flag.
+ * g (NULL = total) is the accumulated guard of earlier legs: a chain row already dead
+ * upstream wraps through the clamp and must not report a crossing it never made. */
+static void traceDead(Em *em, const char *name, char *key, char *rel, char *g) {
+  if (!em->dirs->trace) return;
+  char *dm = tv(em);
+  if (g) stage(em, "%s ← %s∧(0≤%s)∧(≠%s)≤%s⊐%s", dm, g, rel, key, key, rel);
+  else stage(em, "%s ← (0≤%s)∧(≠%s)≤%s⊐%s", dm, rel, key, key, rel);
+  stage(em, "AnoTraceDead ⟨\"%s\", %s/%s, %s/%s⟩", name, dm, traceIds(em, rel), dm, rel);
 }
 
 /* guard conjunction; NULL = total */
@@ -255,7 +316,7 @@ static int emitNameVal(Em *em, const Node *nd, Mode m, EV *ev) {
       ev->v = inMode(em, mk, m);
       return 0;
     }
-    case RK_REL: { ev->v = inMode(em, bqnv(em, e), m); ev->g = efmt(em, "(0≤%s)", bqnv(em, e)); return 0; }
+    case RK_REL: { ev->v = inMode(em, bqnv(em, e), m); ev->g = relGuard(em, e); ev->relEnt = e; return 0; }
     case RK_ALIAS: { ev->v = inMode(em, bqnv(em, e), m); return 0; }
     case RK_BIND:
       if (!strcmp(e->bindKind, "num")) { ev->v = numLit(em, e->nums[0]); ev->unit = 1; return 0; }
@@ -268,6 +329,7 @@ static int emitNameVal(Em *em, const Node *nd, Mode m, EV *ev) {
       if (!strcmp(e->bindKind, "vec")) { ev->v = bqnv(em, e); ev->unit = 1; return 0; }
       return fail(em, nd->line, "binding '%s' of kind %s in value position", n, e->bindKind);
     case RK_SREL: { ev->v = bqnv(em, e); ev->unit = 1; return 0; }
+    case RK_PROTO: return fail(em, nd->line, "proto '%s' in value position: a proto is spawned, never read", n);
     default: return fail(em, nd->line, "name '%s' (fn) in value position", n);
   }
 }
@@ -293,7 +355,7 @@ static int emitNameMask(Em *em, const Node *nd, char **out) {
       if (!strcmp(e->bindKind, "mask")) { *out = v; return 0; }
       if (!strcmp(e->bindKind, "entity")) { *out = efmt(em, "((↕anoN)=%s)", numLit(em, e->nums[0])); return 0; }
       return fail(em, nd->line, "binding '%s' (%s) as mask", n, e->bindKind);
-    case RK_REL: *out = efmt(em, "(0≤%s)", v); return 0;
+    case RK_REL: *out = relGuard(em, e); return 0;
     default: return fail(em, nd->line, "'%s' cannot be a mask", n);
   }
 }
@@ -393,12 +455,49 @@ static int fiberVar(Em *em, const Node *nd, char **out) {
   return fail(em, nd->line, "'%s' is not a set-valued relationship or a key column", nd->name);
 }
 
+/* gamma fibers as CURRENT row indices. Stored srel fibers hold ids in the srel's key
+ * space; a gamma gathers by row, so the fiber translates through the key (one ⊐ per
+ * member, dead members dropped — left-join-null inside the fiber) exactly when the two
+ * spaces can disagree: a declared key always, the idx key once the world has shifted.
+ * Otherwise the pre-shift fiber IS its row set and the staged var passes through
+ * untouched — today's bytes. Key-column fibers (fiberVar's second form) are computed
+ * against the live world and are already rows. */
+static void fiberRows(Em *em, const Node *nd, char **fib) {
+  const RegEntry *e = find(em, nd->name);
+  if (!e || e->kind != RK_SREL || e->nfib != em->reg->n) return;
+  char *key = NULL;
+  if (e->keyOf[0]) {
+    const RegEntry *kc = find(em, e->keyOf);
+    if (kc) key = bqnv(em, kc);
+  } else if (em->worldShifted) key = idCol(em);
+  if (!key) return;
+  /* --trace: a dead member is a dead link crossed inside the fiber — same RELATION
+   * line, origin the fiber's row, sink the member key that resolves nowhere */
+  if (em->dirs->trace)
+    stage(em, "%s {m←(≠%s)≤%s⊐𝕩 ⋄ AnoTraceDead ⟨\"%s\", (+´m)⥊𝕨, m/𝕩⟩}¨ %s",
+          traceIds(em, *fib), key, key, e->name, *fib);
+  char *t = tv(em);
+  stage(em, "%s ← {k←%s⊐𝕩 ⋄ (k<≠%s)/k}¨%s", t, key, key, *fib);
+  *fib = t;
+}
+
+/* --trace: the empty-fiber failure mask. In an effect (m ≠ world) it scopes to the
+ * statement's pre-refinement selection — a row never selected never failed, and the
+ * refined selVar has already dropped exactly the failures; a predicate fold crosses
+ * every row and stays whole-column. */
+static char *traceEmptyMask(Em *em, char *fib, Mode m) {
+  if (m != MODE_WORLD && em->traceSel[0])
+    return efmt(em, "(%s∧0=≠¨%s)", em->traceSel, fib);
+  return efmt(em, "(0=≠¨%s)", fib);
+}
+
 /* gamma fold: fold/ rel'.Comp | fold/ (rel' & pred) | fold/ rel'  -> per-source column + guard */
 static int emitGamma(Em *em, const char *op, const Node *operand, Mode m, EV *ev) {
   memset(ev, 0, sizeof *ev);
   char *fib = NULL, *body = NULL;
   if (operand->kind == N_SETHOP) {           /* #/ attackers' */
     if (fiberVar(em, operand->kids[0], &fib)) return -1;
+    fiberRows(em, operand->kids[0], &fib);
     body = efmt(em, "≠¨%s", fib);
     if (strcmp(op, "#")) { /* other folds over bare fiber make no sense */
       return fail(em, operand->line, "bare rel' under %s/", op);
@@ -408,10 +507,17 @@ static int emitGamma(Em *em, const char *op, const Node *operand, Mode m, EV *ev
   }
   if (operand->kind == N_HOP && operand->kids[0]->kind == N_SETHOP) { /* fold/ rel'.Comp */
     if (fiberVar(em, operand->kids[0]->kids[0], &fib)) return -1;
+    fiberRows(em, operand->kids[0]->kids[0], &fib);
+    /* --trace: an identityless fold over an empty fiber is the empty-fiber row failure —
+     * the guard drops the row silently, the trace names it */
+    const Node *fbn = operand->kids[0]->kids[0];
+    const char *fbName = fbn->kind == N_NAME ? fbn->name : "fiber";
     EV cv; if (emitVal(em, operand->kids[1], MODE_WORLD, &cv)) return -1;
     const char *gl = foldGl(op);
     char *t = tv(em);
     if (!strcmp(op, "avg")) {
+      if (em->dirs->trace)
+        stage(em, "AnoTraceEmpty ⟨\"%s\", %s/%s⟩", fbName, traceEmptyMask(em, fib, m), traceIds(em, fib));
       stage(em, "%s ← {0=≠𝕩 ? 0 ; AnoAvg 𝕩⊏%s}¨%s", t, cv.v, fib);
       ev->g = efmt(em, "(0<≠¨%s)", fib);
     } else if (!strcmp(op, "#")) {
@@ -419,15 +525,23 @@ static int emitGamma(Em *em, const char *op, const Node *operand, Mode m, EV *ev
     } else if (gl && foldHasId(op)) {
       stage(em, "%s ← {%s𝕩⊏%s}¨%s", t, gl, cv.v, fib);
     } else if (gl) { /* max/min: no identity, guard empties */
+      if (em->dirs->trace)
+        stage(em, "AnoTraceEmpty ⟨\"%s\", %s/%s⟩", fbName, traceEmptyMask(em, fib, m), traceIds(em, fib));
       stage(em, "%s ← {0=≠𝕩 ? 0 ; %s𝕩⊏%s}¨%s", t, gl, cv.v, fib);
       ev->g = efmt(em, "(0<≠¨%s)", fib);
-    } else return fail(em, operand->line, "unknown reducer '%s'", op);
+    } else {
+      const RegEntry *e = find(em, op);
+      if (e && e->kind == RK_FN)
+        return fail(em, operand->line, "named reducer '%s' over fibers is not yet supported", op);
+      return fail(em, operand->line, "unknown reducer '%s'", op);
+    }
     ev->v = inMode(em, t, m);
     if (ev->g) ev->g = ev->g; /* world-space guard */
     return 0;
   }
   if (operand->kind == N_AND && operand->kids[0]->kind == N_SETHOP) { /* fold/ (rel' & pred) */
     if (fiberVar(em, operand->kids[0]->kids[0], &fib)) return -1;
+    fiberRows(em, operand->kids[0]->kids[0], &fib);
     char *pm; if (emitMask(em, operand->kids[1], &pm)) return -1;
     char *tp = tv(em); stage(em, "%s ← %s", tp, pm);
     char *t = tv(em);
@@ -459,6 +573,7 @@ static int emitFold(Em *em, const Node *nd, Mode m, EV *ev) {
   if (operand->kind == N_SCOPE && operand->kids[1]->kind == N_NAME &&
       !strcmp(operand->kids[1]->name, "row") && !find(em, "row")) {
     char *fib; if (fiberVar(em, operand->kids[0], &fib)) return -1;
+    fiberRows(em, operand->kids[0], &fib);
     const char *gl = foldGl(op); if (!gl) return fail(em, nd->line, "fold %s/ @row", op);
     ev->unit = 0;
     ev->v = inMode(em, efmt(em, "(%s¨%s)", gl, fib), m);
@@ -535,8 +650,14 @@ static int emitScan(Em *em, const Node *nd, EV *ev) {
   memset(ev, 0, sizeof *ev);
   const Node *scope = NULL; const Node *x = operand;
   if (operand->kind == N_SCOPE) { x = operand->kids[0]; scope = operand->kids[1]; }
-  const char *gl = !strcmp(op, "+") ? "+`" : !strcmp(op, "*") ? "×`" : !strcmp(op, "max") ? "⌈`" : NULL;
-  if (!gl) return fail(em, nd->line, "unknown scan op '%s'", op);
+  const char *gl = !strcmp(op, "+") ? "+`" : !strcmp(op, "*") ? "×`" : !strcmp(op, "max") ? "⌈`"
+                 : !strcmp(op, "&") ? "∧`" : !strcmp(op, "|") ? "∨`" : NULL;
+  if (!gl) { /* named reducer scan: registry fn accumulates pairwise; the empty scope
+              * yields the empty column — a scan is length-preserving, no identity consulted */
+    const RegEntry *e = find(em, op);
+    if (!e || e->kind != RK_FN) return fail(em, nd->line, "unknown scan op '%s'", op);
+    gl = efmt(em, "%s`", fnv(em, e));
+  }
   EV xv; if (emitVal(em, x, MODE_WORLD, &xv)) return -1;
   if (scope && scope->kind == N_SHAPE) {
     int w = (int)scope->kids[0]->num;
@@ -672,18 +793,35 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
       ev->pair = pair; ev->unit = 1;
       return 0;
     }
-    /* functional relationship hop: rel.Comp with ¯1 dangling */
+    /* functional relationship hop: rel.Comp with ¯1 dangling. Keyed (or post-shift):
+     * one ⊐ against the key column, one found-guard — not-found is dangling is dead,
+     * so the ¯1 sentinel and a despawned target fail the same test (left-join-null);
+     * the (≠key)| clamp is the 0⌈ clamp's keyed twin, dead weight under the guard. */
     if (be && be->kind == RK_REL && fe) {
       char *rel = bqnv(em, be);
       char *comp;
       if (fe->kind == RK_TAG) {   /* the tag is its recomputed mask; the hop indexes it */
         if (tagMask(em, fe, nd->line, &comp)) return -1;
       } else comp = bqnv(em, fe);
-      char *w = efmt(em, "((0⌈%s)⊏%s)", rel, comp);
-      ev->g = efmt(em, "(0≤%s)", rel);
-      if (fe->kind != RK_TAG && fe->hasPres)
-        ev->g = gAnd(em, ev->g, efmt(em, "((0⌈%s)⊏%s)", rel, presv(em, fe)));
+      char *key = relKey(em, be);
+      char *w;
+      if (key) {
+        /* every piece stays a self-contained expression: an assignment probe reuses the
+         * guard after discarding the staging buffer, so no temp may carry it */
+        traceDead(em, be->name, key, rel, NULL);
+        char *ix = efmt(em, "((≠%s)|%s⊐%s)", key, key, rel);
+        w = efmt(em, "(%s⊏%s)", ix, comp);
+        ev->g = efmt(em, "((%s⊐%s)<≠%s)", key, rel, key);
+        if (fe->kind != RK_TAG && fe->hasPres)
+          ev->g = gAnd(em, ev->g, efmt(em, "(%s⊏%s)", ix, presv(em, fe)));
+      } else {
+        w = efmt(em, "((0⌈%s)⊏%s)", rel, comp);
+        ev->g = efmt(em, "(0≤%s)", rel);
+        if (fe->kind != RK_TAG && fe->hasPres)
+          ev->g = gAnd(em, ev->g, efmt(em, "((0⌈%s)⊏%s)", rel, presv(em, fe)));
+      }
       ev->sym = fe->kind != RK_TAG && fe->type == CT_SYM;
+      if (fe->kind == RK_REL) ev->relEnt = fe;
       ev->v = inMode(em, w, m);
       return 0;
     }
@@ -692,7 +830,8 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
       return fail(em, nd->line, "nested hop chains beyond one level: spell left-assoc");
     }
   }
-  /* left-assoc chain: (rel.rel).Comp */
+  /* left-assoc chain: (rel.rel).Comp — the next leg resolves through the key space of
+   * the rel whose VALUES the base gathered (bv.relEnt), never the base rel's own */
   if (base->kind == N_HOP) {
     EV bv; if (emitHop(em, base, MODE_WORLD, &bv)) return -1;
     const RegEntry *fe = field->kind == N_NAME ? find(em, field->name) : NULL;
@@ -701,9 +840,21 @@ static int emitHop(Em *em, const Node *nd, Mode m, EV *ev) {
     if (fe->kind == RK_TAG) {
       if (tagMask(em, fe, nd->line, &comp)) return -1;
     } else comp = bqnv(em, fe);
-    char *w = efmt(em, "((0⌈%s)⊏%s)", bv.v, comp);
-    ev->g = gAnd(em, bv.g, efmt(em, "(0≤%s)", bv.v));
+    char *key = bv.relEnt ? relKey(em, bv.relEnt)
+                          : (em->needIdx && em->worldShifted ? "anoIdx" : NULL);
+    char *w;
+    if (key) {
+      /* self-contained expressions only (the assignment-probe rule above) */
+      if (bv.relEnt) traceDead(em, bv.relEnt->name, key, bv.v, bv.g);
+      char *ix = efmt(em, "((≠%s)|%s⊐%s)", key, key, bv.v);
+      w = efmt(em, "(%s⊏%s)", ix, comp);
+      ev->g = gAnd(em, bv.g, efmt(em, "((%s⊐%s)<≠%s)", key, bv.v, key));
+    } else {
+      w = efmt(em, "((0⌈%s)⊏%s)", bv.v, comp);
+      ev->g = gAnd(em, bv.g, efmt(em, "(0≤%s)", bv.v));
+    }
     ev->sym = fe->kind != RK_TAG && fe->type == CT_SYM;
+    if (fe->kind == RK_REL) ev->relEnt = fe;
     ev->v = inMode(em, w, m);
     return 0;
   }
@@ -777,11 +928,7 @@ static int emitVal(Em *em, const Node *nd, Mode m, EV *ev) {
     }
     case N_HOP: return emitHop(em, nd, m, ev);
     case N_CALL: return emitCall(em, nd, m, ev);
-    case N_FOLD: case N_REDUCE: {
-      if (nd->kind == N_REDUCE) {
-        Node tmp = *nd; /* reduce(f) col @ scope == f/ col @ scope with named reducer */
-        return emitFold(em, &tmp, m, ev);
-      }
+    case N_FOLD: {
       EV f; if (emitFold(em, nd, m, &f)) return -1;
       *ev = f;
       if (!f.unit && m != MODE_WORLD) { /* gamma column: gather */
@@ -973,11 +1120,26 @@ static int emitMask(Em *em, const Node *nd, char **out) {
       return 0;
     }
     case N_HOP: {
-      /* image: Sel.rel' — union of the selected sources' fibers, membership by stable id */
+      /* image: Sel.rel' — union of the selected sources' fibers, membership by stable id;
+       * a keyed srel's fibers hold keys, so membership runs against its own key column */
       if (nd->kids[1]->kind == N_SETHOP) {
         char *src; if (emitMask(em, nd->kids[0], &src)) return -1;
         char *fib; if (fiberVar(em, nd->kids[1]->kids[0], &fib)) return -1;
-        *out = efmt(em, "(%s‿%s AnoImage %s)", src, fib, idCol(em));
+        const RegEntry *se = find(em, nd->kids[1]->kids[0]->name);
+        char *ids = NULL;
+        if (se && se->kind == RK_SREL && se->keyOf[0]) {
+          const RegEntry *kc = find(em, se->keyOf);
+          if (kc) ids = bqnv(em, kc);
+        }
+        char *mcol = ids ? ids : idCol(em);
+        /* --trace: a dead member is a dead link the image crosses — same RELATION line as
+         * fiberRows, origin the fiber's row, sink the member that resolves nowhere. Only
+         * the selected sources' fibers are crossed (AnoImage unions m/f), and only stored
+         * srel fibers can hold dead members (key-column fibers compute from the live world). */
+        if (em->dirs->trace && se && se->kind == RK_SREL && se->nfib == em->reg->n)
+          stage(em, "(%s/%s) {m←(≠%s)≤%s⊐𝕩 ⋄ AnoTraceDead ⟨\"%s\", (+´m)⥊𝕨, m/𝕩⟩}¨ (%s/%s)",
+                src, traceIds(em, fib), mcol, mcol, se->name, src, fib);
+        *out = efmt(em, "(%s‿%s AnoImage %s)", src, fib, mcol);
         return 0;
       }
       EV v; if (emitHop(em, nd, MODE_WORLD, &v)) return -1;
@@ -1169,6 +1331,10 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (e->kind == RK_TAG)
         return fail(em, ef->line, "derived tag '%s' is not an effect target: write the carrier column '%s'",
                     coln->name, e->tagCol);
+      /* injectivity licenses inversion, so nothing may un-license it: keys are minted at
+       * spawn, never written by effects */
+      if (e->uniq)
+        return fail(em, ef->line, "unique column '%s' is minted, never written", coln->name);
       char *col = bqnv(em, e);
       EV rhs;
       /* guards must refine the mask before gathering: pre-scan via world-mode guard probe */
@@ -1225,6 +1391,8 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
                     ef->name, e->tagCol);
       if (!e || (e->kind != RK_COL && e->kind != RK_FIELD))
         return fail(em, ef->line, "%cComp on unregistered '%s'", ef->kind == N_EADD ? '+' : '-', ef->name);
+      if (e->uniq)
+        return fail(em, ef->line, "unique column '%s' is minted, never written", ef->name);
       char *col = bqnv(em, e);
       char fam = ef->kind == N_EADD ? '|' : '&';
       char *base = mergeBase(em, fx, entIdx(em, e), col, fam, NULL, ef->line, ef->name);
@@ -1330,6 +1498,8 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       char target[ANO_NAMESZ]; sscanf(e->syms[0], "%63s", target);
       const RegEntry *tc = find(em, target);
       if (!tc) return fail(em, ef->line, "verb '%s' target column '%s' unregistered", ef->name, target);
+      if (tc->uniq)
+        return fail(em, ef->line, "unique column '%s' is minted, never written", target);
       char *args = efmt(em, "⟨%s", bqnv(em, tc));
       for (int i = 0; i < ef->nkids; i++) {
         EV av; if (emitVal(em, ef->kids[i], MODE_WORLD, &av)) return -1;
@@ -1359,6 +1529,20 @@ static char *spawnDefault(Em *em, const RegEntry *e, SpawnG *g) {
   return efmt(em, "(%s⥊%s)", tot, numLit(em, e->defval));
 }
 
+/* the proto a spawn group names, when it names one (RK_PROTO), else NULL */
+static const RegEntry *spawnProto(Em *em, SpawnG *sg) {
+  if (!sg->protoName) return NULL;
+  const RegEntry *pe = find(em, sg->protoName);
+  return pe && pe->kind == RK_PROTO ? pe : NULL;
+}
+
+/* index of a proto's field for a column name, -1 when the proto is silent on it */
+static int protoField(const RegEntry *pe, const char *col) {
+  for (int j = 0; j < pe->nsyms / 2; j++)
+    if (names_eq(pe->syms[2 * j], col)) return j;
+  return -1;
+}
+
 /* the batch total: sum of every spawn group's row count */
 static char *spawnTotAll(Em *em, Fx *fx) {
   char *tot = NULL;
@@ -1379,6 +1563,13 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     return fail(em, 0, "despawn outside the entity world");
   (void)isCont;
   char *totAll = fx->nsp ? spawnTotAll(em, fx) : NULL;
+  /* --trace: the tick trace captures the pre-state row count here — anoN is not
+   * reassigned until the end of this commit — and prints after the anoN update */
+  char *preN = NULL;
+  if (em->dirs->trace && structural) {
+    preN = tv(em);
+    stage(em, "%s ← anoN", preN);
+  }
   for (int i = 0; i < r->nents; i++) {
     const RegEntry *e = &r->ents[i];
     int isField = e->kind == RK_FIELD;
@@ -1398,14 +1589,25 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     char *app = NULL;
     int anyProto = 0;
     if (fx->nsp) { /* spawn appends one row group per spawn effect, in effect order */
-      if (e == reg_role(r, "keys"))
-        app = efmt(em, "((1+⌈´¯1∾%s)+↕%s)", cur, totAll);  /* one mint across the batch */
+      if (e == reg_role(r, "keys") || (e->kind == RK_COL && e->uniq))
+        app = efmt(em, "((1+⌈´¯1∾%s)+↕%s)", cur, totAll);  /* one mint across the batch:
+              declared injectivity forces the fresh fill — any shared value would break it */
       else for (int g = 0; g < fx->nsp; g++) {
         SpawnG *sg = &fx->sp[g];
         char *piece;
         int isProto = sg->protoName && find(em, sg->protoName) == e;
         anyProto |= isProto;
+        /* the three-layer fill (ruled 2026-07-11): proto value, else registered default,
+         * else the type zero — the last two live in spawnDefault */
+        const RegEntry *pe = spawnProto(em, sg);
+        int fi = pe ? protoField(pe, e->name) : -1;
         if (isProto) piece = efmt(em, "(%s⥊1)", sg->tot);
+        else if (fi >= 0)
+          piece = (e->kind == RK_COL && e->type == CT_SYM)
+                    ? efmt(em, "(%s⥊<\"%s\")", sg->tot, pe->syms[2 * fi + 1])
+                    : efmt(em, "(%s⥊%s)", sg->tot, numLit(em, pe->nums[fi]));
+        else if (pe && e == reg_role(r, "proto") && e->kind == RK_COL && e->type == CT_SYM)
+          piece = efmt(em, "(%s⥊<\"%s\")", sg->tot, pe->name);  /* the archetype's noun */
         else if (sg->protoExpr && e == reg_role(r, "proto")) piece = sg->protoExpr;
         else if (sg->pos && e == reg_role(r, "pos")) { piece = sg->pos; if (sg->posPair) em->isPair[i] = 1; }
         else piece = spawnDefault(em, e, sg);
@@ -1427,6 +1629,8 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
         char *papp = NULL;
         for (int g = 0; g < fx->nsp; g++) {
           int isProto = fx->sp[g].protoName && find(em, fx->sp[g].protoName) == e;
+          const RegEntry *pe = spawnProto(em, &fx->sp[g]);
+          if (pe && protoField(pe, e->name) >= 0) isProto = 1; /* a proto field is present */
           char *piece = efmt(em, "(%s⥊%d)", fx->sp[g].tot, isProto ? 1 : 0);
           papp = papp ? efmt(em, "%s∾%s", papp, piece) : piece;
         }
@@ -1436,11 +1640,39 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     }
     (void)anyProto;
   }
+  /* the hidden idx column rides every structural commit like any other column: filtered
+   * by keep, minted fresh on spawn — the fixture-row identity the idx-keyed reads invert */
+  if (em->needIdx && structural) {
+    char *mint = fx->nsp ? efmt(em, "((1+⌈´¯1∾anoIdx)+↕%s)", totAll) : NULL;
+    if (keep && mint) stage(em, "anoIdx ↩ (%s/anoIdx)∾%s", keep, mint);
+    else if (keep) stage(em, "anoIdx ↩ %s/anoIdx", keep);
+    else if (mint) stage(em, "anoIdx ↩ anoIdx∾%s", mint);
+  }
   /* spawn always appends to the entity world, whatever frame selected the sources */
   if (structural) {
     if (fx->despawn && fx->nsp) stage(em, "anoN ↩ (+´%s)+%s", keep, totAll);
     else if (fx->despawn) stage(em, "anoN ↩ +´%s", keep);
     else stage(em, "anoN ↩ anoN+%s", totAll);
+  }
+  /* --trace: one tick-trace line per structural statement — rows before -> after with
+   * per-effect spawn/kill counts, e.g. `s3: 48 rows -> 96 (spawn Ghost: +48)`. Counts
+   * come from the same staged expressions the commit itself scattered by, so the trace
+   * costs nothing the barrier did not already pay; without the flag not a byte emits. */
+  if (preN) {
+    char *ann = NULL;
+    for (int g = 0; g < fx->nsp; g++) {
+      SpawnG *sg = &fx->sp[g];
+      char *piece = sg->protoName
+        ? efmt(em, "\"spawn %s: +\"∾(AnoTraceNum %s)", sg->protoName, sg->tot)
+        : efmt(em, "\"spawn: +\"∾(AnoTraceNum %s)", sg->tot);
+      ann = ann ? efmt(em, "%s∾\", \"∾%s", ann, piece) : piece;
+    }
+    if (fx->despawn) {
+      char *piece = efmt(em, "\"kill: -\"∾(AnoTraceNum +´¬%s)", keep);
+      ann = ann ? efmt(em, "%s∾\", \"∾%s", ann, piece) : piece;
+    }
+    stage(em, "•Out anoTraceSep∾\"s%d: \"∾(AnoTraceNum %s)∾\" rows -> \"∾(AnoTraceNum anoN)∾\" (\"∾%s∾\")\"",
+          em->stmt, preN, ann);
   }
   return 0;
 }
@@ -1475,6 +1707,7 @@ static int emitStmt(Em *em, const Node *st) {
     stage(em, "%s ← %s", sv, msk);
   }
   snprintf(em->selVar, sizeof em->selVar, "%s", sv);
+  snprintf(em->traceSel, sizeof em->traceSel, "%s", sv);
 
   for (int i = 1; i < st->nkids; i++)
     if (emitEffect(em, st->kids[i], &fx)) return -1;
@@ -1484,6 +1717,7 @@ static int emitStmt(Em *em, const Node *st) {
   em->savedFr = em->fr; em->haveSaved = 1;
 
   if (commitStmt(em, &fx, isCont)) return -1;
+  if (fx.despawn) em->worldShifted = 1;   /* rows shifted: idx-keyed reads now invert anoIdx */
 
   sb_printf(em->out, "%s", em->pre.s ? em->pre.s : "");
   return 0;
@@ -1571,6 +1805,7 @@ static int emitRuleTick(Em *em, const Node **rules, int nrules) {
    * only in commitStmt), so ordering across rules is invisible */
   for (int r = 0; r < nrules; r++) {
     snprintf(em->selVar, sizeof em->selVar, "%s", masks[r]);
+    snprintf(em->traceSel, sizeof em->traceSel, "%s", masks[r]);
     em->curRule = r;
     for (int i = 1; i < rules[r]->nkids; i++)
       if (emitEffect(em, rules[r]->kids[i], &fx)) { em->curRule = -1; return -1; }
@@ -1583,6 +1818,7 @@ static int emitRuleTick(Em *em, const Node **rules, int nrules) {
   em->savedFr = em->fr; em->haveSaved = 1;
   snprintf(em->selVar, sizeof em->selVar, "%s", masks[0]);
   if (commitStmt(em, &fx, 0)) return -1;
+  if (fx.despawn) em->worldShifted = 1;
   sb_printf(em->out, "%s", em->pre.s ? em->pre.s : "");
   return 0;
 }
@@ -1596,6 +1832,14 @@ static int emitQuery(Em *em, const Node *st) {
   if (emitVal(em, st->kids[0], MODE_WORLD, &v)) return -1;
   char *qv = efmt(em, "q%d", em->stmt);
   stage(em, "%s ← %s", qv, v.v);
+  /* --label: a 0x1D tag line names the query and its source line, then the display —
+   * for every query, pinned or not, before any assertion. 0x1D sits one below the
+   * 0x1E world channel: run_bqn captures only 0x1E lines, so the tag and the •Show
+   * forward verbatim to the caller. Without the flag the emitted bytes are today's. */
+  if (em->dirs->label) {
+    stage(em, "•Out (@+29)∾\"q%d@%d\"", em->stmt, st->line);
+    stage(em, "•Show %s", qv);
+  }
   /* match against the next --! out expectation */
   int oi = -1, seen = 0;
   for (int i = 0; i < em->dirs->nexpects; i++) {
@@ -1623,7 +1867,7 @@ static int emitQuery(Em *em, const Node *st) {
       stage(em, "\"out q%d\" ! %s {(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩} ⥊%s", em->stmt, lst, qv);
     else
       stage(em, "\"out q%d\" ! %s ≡ ⥊%s", em->stmt, lst, qv);
-  } else {
+  } else if (!em->dirs->label) {
     stage(em, "•Show %s", qv);
   }
   sb_printf(em->out, "%s", em->pre.s ? em->pre.s : "");
@@ -1681,6 +1925,7 @@ static int emitCompr(Em *em, const Node *st) {
   stage(em, "%s ← ((↕anoN)∊%s/%s)∨((↕anoN)∊%s/%s)", sideMask, aAny, aI, bAny, bI);
   char sv[32]; snprintf(sv, sizeof sv, "%s", sideMask);
   snprintf(em->selVar, sizeof em->selVar, "%s", sv);
+  snprintf(em->traceSel, sizeof em->traceSel, "%s", sv);
   Fx fx; memset(&fx, 0, sizeof fx);
   const Node *effs[8]; int ne = 0;
   effs[ne++] = eff;
@@ -1701,6 +1946,7 @@ static int emitCompr(Em *em, const Node *st) {
   stage(em, "anoSel ↩ %s", sv);
   em->savedFr = em->fr; em->haveSaved = 1;
   if (commitStmt(em, &fx, 0)) return -1;
+  if (fx.despawn) em->worldShifted = 1;
   sb_printf(em->out, "%s", em->pre.s ? em->pre.s : "");
   (void)sel;
   return 0;
@@ -1713,6 +1959,10 @@ static void emitFixture(Em *em) {
   sb_printf(em->out, "\n# fixture\n");
   sb_printf(em->out, "anoN ← %d\n", r->n);
   sb_printf(em->out, "anoSel ← ⟨⟩\n");
+  /* the hidden idx key: the row iota materialized ONCE, here, then carried through every
+   * structural commit — never reminted at use. Emitted only when the pre-scan proved an
+   * idx-keyed read can follow a despawn, so every existing emit stays byte-identical. */
+  if (em->needIdx) sb_printf(em->out, "anoIdx ← ↕anoN\n");
   for (int i = 0; i < r->nents; i++) {
     const RegEntry *e = &r->ents[i];
     char *v = bqnv(em, e);
@@ -1788,6 +2038,18 @@ static void emitFixture(Em *em) {
       }
       default: break;
     }
+  }
+  /* --trace: the debug observability prelude. Diagnostic lines ride their own control
+   * byte 0x1F, one below the 0x1D label channel exactly as 0x1D sits one below the 0x1E
+   * world channel — run_bqn captures only 0x1E, so trace lines forward verbatim and can
+   * never contaminate the save pipe-back or the label stream. Observability, never
+   * semantics: every trace helper is pure output over pre-state reads. */
+  if (em->dirs->trace) {
+    sb_printf(em->out, "\n# trace (--trace): 0x1F-prefixed diagnostic lines\n");
+    sb_printf(em->out, "anoTraceSep ← @+31\n");
+    sb_printf(em->out, "AnoTraceNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
+    sb_printf(em->out, "AnoTraceDead ← {n‿o‿s: o {•Out anoTraceSep∾\"RELATION \"∾n∾\" \"∾(AnoTraceNum 𝕨)∾\" -> \"∾(AnoTraceNum 𝕩)∾\" IS DEAD !\"}¨ s}\n");
+    sb_printf(em->out, "AnoTraceEmpty ← {n‿o: {•Out anoTraceSep∾\"FIBER \"∾n∾\" \"∾(AnoTraceNum 𝕩)∾\" IS EMPTY !\"}¨ o}\n");
   }
 }
 
@@ -1885,6 +2147,72 @@ static void emitSave(Em *em) {
   }
 }
 
+/* ---------- the idx pre-scan ---------- */
+
+/* 1 when the subtree contains a despawn effect */
+static int scanDespawn(const Node *nd) {
+  if (!nd) return 0;
+  if (nd->kind == N_EDESPAWN) return 1;
+  for (int i = 0; i < nd->nkids; i++)
+    if (nd->kids[i] && scanDespawn(nd->kids[i])) return 1;
+  return 0;
+}
+
+/* 1 when the subtree reads through the idx key space: an unkeyed functional rel by name,
+ * or a set-hop/fiber form whose membership would fall to the minted-at-use row iota
+ * because the world declares no id (no role line, no unique column, no magic name).
+ * Defs expand; depth caps the expansion. */
+static int scanIdxUse(Em *em, const Node *nd, int hasId, int depth) {
+  if (!nd || depth > 16) return 0;
+  if (nd->kind == N_NAME) {
+    const Node *d = findDef(em, nd->name);
+    if (d) return scanIdxUse(em, d->kids[0], hasId, depth + 1);
+    const RegEntry *e = find(em, nd->name);
+    if (e && e->kind == RK_REL && !e->keyOf[0]) return 1;
+  }
+  if (nd->kind == N_SETHOP && !hasId && nd->kids[0]->kind == N_NAME) {
+    const RegEntry *e = find(em, nd->kids[0]->name);
+    if (e && ((e->kind == RK_SREL && !e->keyOf[0] && e->nfib == em->reg->n) ||
+              e->kind == RK_COL)) return 1;
+  }
+  for (int i = 0; i < nd->nkids; i++)
+    if (nd->kids[i] && scanIdxUse(em, nd->kids[i], hasId, depth)) return 1;
+  return 0;
+}
+
+/* Inputs: the program and a primed Em. Output: em->needIdx set when an idx-keyed read
+ * can follow a despawn — statements strictly after the first despawn-carrying barrier
+ * count (a barrier's own reads observe pre-state), and once any despawn exists every
+ * installed rule counts too (rules refire at later edges). The verdict arms the hidden
+ * anoIdx column; a program that never trips it emits today's bytes exactly. */
+static void scanNeedIdx(Em *em, const Node *prog) {
+  int anyDespawn = 0;
+  for (int i = 0; i < prog->nkids; i++) anyDespawn |= scanDespawn(prog->kids[i]);
+  if (!anyDespawn) return;
+  /* the same reg_role ladder idCol resolves through: hasId iff idCol names a real column */
+  const RegEntry *ide = reg_role(em->reg, "id");
+  if (!ide) ide = reg_role(em->reg, "keys");
+  if (ide && ide->kind != RK_COL) ide = NULL;
+  int hasId = ide != NULL;
+  /* defs visible to the whole scan; the real emission re-adds them in order */
+  for (int i = 0; i < prog->nkids; i++)
+    if (prog->kids[i]->kind == N_DEFSTMT && em->ndefs < 128) em->defs[em->ndefs++] = prog->kids[i];
+  int shifted = 0;
+  for (int i = 0; i < prog->nkids && !em->needIdx; i++) {
+    const Node *st = prog->kids[i];
+    const Node *body = st->kind == N_DEFSTMT ? st->kids[0] : st;
+    int isRule = body->kind == N_STMT && (body->flags & F_RULE);
+    if (isRule) {
+      if (scanIdxUse(em, body, hasId, 0)) em->needIdx = 1;
+      if (scanDespawn(body)) shifted = 1;  /* its first edge precedes later statements */
+    } else {
+      if (shifted && scanIdxUse(em, st, hasId, 0)) em->needIdx = 1;
+      if (scanDespawn(st)) shifted = 1;
+    }
+  }
+  em->ndefs = 0;
+}
+
 /* ---------- entry ---------- */
 
 int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
@@ -1898,6 +2226,7 @@ int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
   em.pipeExpand = "";
   em.curRule = -1;
 
+  scanNeedIdx(&em, prog);
   emitFixture(&em);
 
   /* def only installs; the clock fires. anoc has no clock, so it pretends one clock

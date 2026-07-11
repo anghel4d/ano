@@ -1,7 +1,10 @@
--- Named reducer form: reduce(threat) folds the registered peak-damage reducer over the Enemies scope (ex15). Twin of 15-named-reducer.bqn.
+-- Named reducer form: fold(threat) and its short spelling threat/ — two spellings of one meaning, forced to agree in public (ex15). Twin of 15-named-reducer.bqn; s64-reducer-spellings adds the scan.
 -- threat registers as the dyadic dfn {𝕨⌈𝕩} (the .bqn's ThreatReduce, spelled ⌈ there), folded pairwise as Threat´ by the emitter.
 -- Omitted, left to the .bqn twin: fold-direction equivariance, the ¯∞ BQN-identity divergence note, and the no-identity empty-scope row failure — a failed row has no --! spelling.
 --! registry ../registries/15-named-reducer.reg
 
 --! out 30
-reduce(threat) Damage @ Enemies
+fold(threat) Damage @ Enemies
+
+--! out 30
+threat/ Damage @ Enemies

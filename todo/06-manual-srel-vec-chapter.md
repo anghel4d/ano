@@ -1,3 +1,5 @@
+# DONE
+
 # 06 — the manual: set-valued relations and vec columns
 
 Ruling (author, 2026-07-11, on multi-entries-in-one-column): "This is fine, just make sure it is documented in the learnyouanano doc and such."

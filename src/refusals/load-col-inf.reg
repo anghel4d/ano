@@ -1,0 +1,5 @@
+# expect: registry line 5: bad number 'inf'
+# The seal, outside face (todo/09): a hand-written inf must refuse at load exactly as
+# the save refuses to write one. The registry's value domain is the finite doubles.
+n 2
+col gold num 100 inf

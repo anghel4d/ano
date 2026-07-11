@@ -37,7 +37,7 @@ Each row is a spec commitment and the storage decision it forces. The rest of th
 
 The generable-vs-nominal asymmetry (foundations §2.1) is an allocator decision, not philosophy. Three classes fall out. Each theorem deletes a mechanism from one of them.
 
-**Nominal keys (Tier 2).** An entity is a slot in one global index space shared by every record column, and by the host under the boundary contract (§11). The ID carries a generation. Relationship columns store IDs as data, so the hop detects staleness with one compare against `gen[slot]`. No lookup structure. Slot reuse happens only at tick seal, from a slot-sorted free list. Allocation order is a pure function of the statement log (§12).
+**Nominal keys (Tier 2).** An entity is a slot in one global index space shared by every record column, and by the host under the boundary contract (§11). The ID carries a generation. Relationship columns store IDs as data, so the hop detects staleness with one compare against `gen[slot]`. No lookup structure. Slot reuse happens only at tick seal, from a slot-sorted free list. Allocation order is a pure function of the statement log (§12). Ruled (2026-07-11): this — generational tombstoning — is the despawn semantics, confirmed over the backtrace alternative: the staleness compare is O(1), no information is destroyed, and it composes with §5 left-join-null so the surface algebra never grows a fault path. The gen bump plus presence clear IS the mark and free-list reuse at tick seal IS the deferred reap, so mark-and-defer is subsumed, not open; only reap ownership and grain is policy (§12, §16). The u32 generation is the width-with-wraparound-in-mind pick: a slot must see 2^32 kills before a stale link can alias.
 
 ```c
 // ano_id.h — nominal key. Invariants: NIL is all-ones; gen 0 never allocated; slot indexes every record column directly.
@@ -191,7 +191,7 @@ void fx_scatter_add_i64(ano_col *c, const ano_delta *d, uint32_t now) {
 
 **Structural effects** stage in the same buffer but commit in a canonical class order after value effects: tag OR / UNTAG ANDNOT, then relationship writes, then kills, then spawns. Kills clear presence across the slot's columns (bulk ANDNOT per column, summary-gated), bump `gen[slot]`, and queue the slot for the seal-time free list. Spawns mint from a bump cursor. That is ex22's `new ← (1+⌈´keys)+↕+´count` verbatim, ordered by (statement, selected slot, replicate index), with `ckd_add` guarding the total. Spawning last means a barrier's minted rows are untouchable by that barrier's own saved masks. That is the ex49 semantics: the ghosts survive the despawn because the saved mask predates them.
 
-`+Comp` deserves emphasis. It is presence-OR plus, for valued components, default-fill of newly present cells. No row moves. No table migration. No archetype graph. The spec's "adding a component migrates the entity to a new archetype" holds in the only sense that matters, the presence relation, at bitmap cost.
+`+Comp` deserves emphasis. It is presence-OR plus, for valued components, default-fill of newly present cells. No row moves. No table migration. No archetype graph. The spec's "adding a component migrates the entity to a new archetype" holds in the only sense that matters, the presence relation, at bitmap cost. Fill is a three-layer lookup, ruled (2026-07-11): the proto's declared value, else the column's registered `default`, else the type's zero — num 0, bool 0, sym "", rel NIL, which is None under §7's left-join-null.
 
 ## 6. Numbers: the merge laws pick the arithmetic
 
@@ -338,6 +338,8 @@ constexpr ano_reducer R_MAX = { .fold = FX_MAX, .has_id = false, .id = 0, .finis
 
 `has_id` is the empty-scope switch. Identity reducers write the identity. Identity-free reducers clear the row's mask bit (row-fail). That is the left-join-null rule extended to folds, as one branch in the γ kernels, never a semantic mode. Relationship declarations carry the span form (§7): functional, inverse-of, CSR, or stencil, plus boundary policy. Host callbacks register an envelope: argument column types, output footprint, determinism class. A callback whose output feeds Tier-2 mutable state must be seeded-pure (§6).
 
+A column keeps one carrier and accumulates constraint evidence: `unique` (injective), `ordered` (grade/max admitted), `monoid(op, id)` (fold with identity), `keyed(col)`, quantized. The tags gate which operators the compiler admits, and several coexist because they are stateless lawful predicates with set-intersection semantics, not inheritance — qualified types (Wadler–Blott 1989, one type, many instances), Rust traits, the Agda/Lean algebraic hierarchies (one carrier, many lawful structures), TAPL's bounded quantification for the subtype flavor, with `unique` at the refinement-types end (Liquid Haskell: a predicate on values enforced at boundaries). In the C-struct ABI they are descriptor bits beside `merge`; `keyed` names the key column. Generations stay orthogonal: gens protect slots within a run, keys protect identity across slots, saves, hosts. The fold contract above already IS this — `+/` demands a monoid, `max/` a semigroup whose empty scope fails the row.
+
 Standing rules register compiled plans plus footprints. Installation runs the conflict check statically, since the rule set is known (spec §11):
 
 ```c
@@ -396,6 +398,8 @@ One tick is one fold step of `state[t+1] = F(state[t])` (ano-time.md). The tick 
 // seal:   freeze directories as partition t; sort and merge the tick's freed slots into the free list; t++.
 void ano_tick(ano_world *w);
 ```
+
+Reap ownership and timing is registry policy, never semantics (ruled 2026-07-11): `reap seal` — the default above — or `reap host`, which leaves storage reclamation to the host and keeps only the gen bump and presence clear at kill time. The mask-level meaning of `~` never changes; only reclamation moves. The option's grain — world, archetype, or column — is open (§16).
 
 **COW directories are the time axis.** `col_open_page(c, p, now)` copies iff the page's `rc > 1` or `page->tick != now`, then marks it with `now`. That mark is simultaneously the COW guard, the dirty bit for rule incrementality, and the partition boundary for history. Sealing a tick snapshots the directory arrays, a few KB, never data. The consequences arrive in a bundle:
 
@@ -477,3 +481,4 @@ The dialect earns its keep at specific joints. `union` punning: entity IDs (§2)
 - The shared key space in practice. Hosts with unstable or non-dense entity indices take ID translation at ingest. The translation cost is one pass inside the copy, but the mapping table it needs is real state with its own lifetime. The ABI's weakest joint. Needs a worked integration against one real engine before freezing.
 - Sequential scan kernel. §8 implements `scan(f) along` for associative f. The spec's open recurrence question (non-associative f, write footprint disjoint from read) needs a genuinely sequential kernel. Trivial to add. Deliberately absent until the language decides. The store must not make the choice by shipping it.
 - Rule retraction. The registry supports named uninstall. Whether a rule can retract itself mid-tick (stage advance, spec §11) touches the one-barrier-per-tick claim. Uninstall-at-seal is the conservative answer and the current plan.
+- Reap-option granularity. `reap seal|host` (§12) is declared world-wide today; whether the knob goes per archetype or per column ("per-column registerable type or override") is open. The mask-level meaning of `~` is settled either way.

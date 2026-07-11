@@ -1,5 +1,46 @@
 # anoc — Patch Notes
 
+## Snapshot 26w28e — 2026-07-11 — "The Type Is the License"
+
+The todo/ execution pass: nine task files from the demo-pass review (01–10, 03 pending), landed in one day. The centerpiece is 02, the first genuine advancement of the core design since the initial spec: registry types as declared constraint evidence, and the functional hop made sound against despawn. Around it: every query result finally visible in kore, the universal reducer spelling, the fold/scan permutation table, honest editors, glyph maps and a bitmap, an airtight numeric seal, and the debugger's voice.
+
+> Emitted BQN Format: **unchanged with every flag off** — byte-identical across the corpus, demo 15 excepted (it deliberately gained the `threat/` twin statement). Three flag-gated stdout channels now ride beside each other: `--save`'s 0x1E world lines, `--label`'s 0x1D query tags, `--trace`'s 0x1F diagnostics — one control byte apart, mutually uncontaminable by construction.
+> Registry Format: **extended** — `unique`, the keyed `rel <keycol> <name>` form, `def` protos, `reap seal|host`. Every existing .reg loads unchanged: an undeclared rel stays keyed to the row index, zero churn.
+
+### New Features
+
+- **`unique` and keyed relationships** (02). A `unique` column is declared injectivity — pairwise-distinct at load, minted `1+max` on spawn, unwritable by effects — and injectivity is the license the keyed hop needs: `rel <keycol> <name> …` resolves stored ids by index-of against the key with one found-guard, so a despawned target fails the row instead of gathering the wrong entity (PROBLEM 1) or faulting out of range (PROBLEM 2). Not-found is dangling is dead: left-join-null, never a fault path. The inverse of a keyed rel is keyed automatically; keyed srel fibers translate the same way. Twins s58/s59/s60 pin despawn-then-hop in both failure shapes.
+- **`def` protos and the three-layer spawn fill** (02). `def Marine soldier=1 hp=100` is the registered archetype, and `spawn Marine` fills proto value → registered `default` → type zero (num 0, bool 0, sym "", rel -1 — None under left-join-null). s61 pins it. `reap seal|host` records the `~` reclamation policy, world-level; the mask meaning of `~` never moves.
+- **kore OUTPUTS** (01). The large surface between world and history: labeled query results per tick, newest first, `q1 · +/ threat @ Enemy → 390`, multi-line values indented under their labels. anoc's `--label` tags each query over the 0x1D channel with its statement line; kore resolves tags against the very program it wrote. The old output box is now `history`, a slim strip above the prompt with the verdict line where it always was. Ticks strip `--! out` pins exactly as they strip `--! expect` — the pins witness the pristine run, and a stale out-pin can no longer wedge the world.
+- **The universal reducer spelling** (05). `/` attached to any non-keyword name is the fold: `threat/ Damage @ Enemies` beside `+/ Gold @ Nord`, one grammar row, UTF-8 names included (`脅威/`), scans free (`threat\`). `reduce(f)` is cut clean to `fold(f)`, no deprecation cycle. Demo 15 pins both spellings of one meaning; s64 adds the scan.
+- **The fold/scan permutation table** (04). The whole level-9 family in one table — folds, scans, empty-scope identities, the boolean latches (`|\` ever-any, `&\` still-all, demos s62/s63) — in the spec appendix verbatim and mirrored in the manual, with the max ruling recorded: `>/` rejected, `max/` stays a named form, k earns `|/` only because k's `|` IS max.
+- **Editors worth the name** (07). The E hop walks `$VISUAL → $EDITOR → nvim → vim → micro → nano → vi` — the floor is never vim.tiny again — and the devshell exports `EDITOR=nvim` only-when-unset. Inside: Tab types two spaces in insert mode, the pane title flips a loud reverse-video INSERT chip, and the terminal cursor becomes a real bar via DECSCUSR (block reverse in browse), restored on every exit path. The modeless-vs-vim rewrite waits on its ruling with a keymap sketch filed.
+- **The space views** (08). Map cells render two columns wide (~square in any font), entities draw their registered glyph (the glyph role, `@` the floor) with a stable per-archetype color, and `m` now cycles table → map → bitmap — the third view painting the world as an RGB canvas through `▀` half-blocks, two pixels per cell, zero deps. `--check` renders all three.
+- **The numeric seal** (09). Numbers are float64 end to end and the registry's value domain is exactly the finite doubles: a hand-written `inf`/`nan` refuses at load with a line diagnostic, mirroring the save's refusal, so load∘save is the identity. `src/refusals/` pins every face; the manual's edges chapter documents the 2^53 cliff, quiet ULP absorption, and overflow as a refused tick.
+- **The debugger gets loud** (10). `anoc --trace` (kore: the `t` toggle) emits `RELATION <column> <origin> -> <sink> IS DEAD !` per dead crossing, `FIBER <column> <origin> IS EMPTY !` per identityless empty-fiber row, and one `s<N>: <before> rows -> <after> (spawn <Proto>: +k, kill: -j)` line per structural statement — over 0x1F, into kore's history, never OUTPUTS. Off by default, not a byte of emit changes when off, and post-state is byte-identical traced or not. The repro channel is documented: the session log plus the play registry IS the bug report.
+
+### Changes
+
+- The spec records the pass's rulings where they execute: generational tombstoning confirmed (ano-ecs §2, gen-width note included), the keyed hop in §5, the three-layer fill in §9, types-on-algebra in the addendum (Wadler–Blott lineage), the `!`/`^` tabulation in the appendix, the reap-granularity open question. Deferred decision points surfaced as Q10–Q17 in todo/00-open-rulings, never resolved silently.
+- The registry census in the manual teaches the new kinds in the same breath as the old; GRAMMAR.md's .reg section carries their normative grammar and rejections.
+- src/check-ano.sh grew the refusals battery (`ok-refuse` per fixture that must exit 2).
+
+### Fixed bugs
+
+- **ANO-401** — every pinned query computed, asserted, and printed nothing in kore; a kept out-pin over a mutated column wedged the world on tick 2+ → out-pins stripped from ticks, every query visible and labeled.
+- **ANO-402** — the functional hop gathered positionally into current row space (`(0⌈rel)⊏comp`): silent wrong-entity below the new row count, hard BQN fault at or past it, latent because no corpus demo hopped after a despawn → keyed resolution through the unique column, found-guard folded into left-join-null.
+- **ANO-403** — `idCol`'s no-id fallback reminted `(↕anoN)` at use time, unsound after rows shift → structural effects in a world using the fallback are refused with a diagnostic naming the fix (declare a unique column).
+- **ANO-404** — a hand-written `inf` in a .reg loaded and crashed BQN downstream with no diagnostic → refused at load, line named.
+- **ANO-405** — `min\`/`avg\` hit the stray-backslash lex error while `max\` fused → the open fusion admits every name; scan cells the emitter refuses stay honest refusals, tabled.
+- **ANO-406** — Tab in insert mode was silently dropped; the mode lived in a status-bar whisper; browse and insert shared one reverse cell → typed, chipped, DECSCUSR'd.
+
+### Verified
+
+- Both suites green end to end: 89 .bqn witnesses, 379 check-ano lines (every twin, every emit pair, every refusal), `kore --check` full ok over 109 registries, all three views rendered.
+- Emit byte-identity audited against a pre-pass snapshot: 233/235 identical, the two diffs demo 15's deliberate gain.
+- Post-state differential for the trace: saved worlds byte-identical trace-on vs trace-off across the corpus; `--label --trace` stacked leaves the 0x1D records and the saved world untouched.
+- kore driven under a PTY for the acceptance claims: demo 25's 390 and grade vector in OUTPUTS with the `$ n` line in history, demo 14's census with the empty-scope identities, the trace toggle announcing both ways, no raw control byte ever on screen, demos/ hashed untouched around every battery.
+
 ## Snapshot 26w28d — 2026-07-10 — "The Game Loop Under a Key"
 
 The kore session update, plus the first shared C module. `common/` arrives: the anoptic strings module ported whole from anoptic_engine — the 16-byte string value, UTF-8 totality, DUCET collation, interning — with its one adaptation, the mimalloc heap swapped for a bump arena (`ano_arena_t`) under the same region contract. kore stops trusting C strings and starts holding its worlds in arenas. And the world loop becomes what it was always meant to be: repeatedly mutable in place until you write.

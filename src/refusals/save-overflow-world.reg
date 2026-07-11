@@ -1,0 +1,4 @@
+# The world behind save-overflow.ano: gold one doubling from overflow. Loads clean.
+n 1
+col rich bool 1
+col gold num 1e308

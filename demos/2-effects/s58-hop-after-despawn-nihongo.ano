@@ -1,0 +1,8 @@
+-- Japanese conjugate of s58 (hop after despawn, the wrong-entity shape). Twin of s58-hop-after-despawn.ano.
+--! registry ../registries/s58-hop-after-despawn.reg
+--! ja
+--! expect-n 5
+--! expect trained = 1 0 1 0 0
+
+呪 、 消
+北 と 師匠 の 死 、 訓練 除

@@ -419,13 +419,14 @@ Apply a registered reducer to a column over a selected source.
 
 Ano:
 ```haskell
-reduce(threat) Damage @ Enemies
+threat/ Damage @ Enemies
+fold(threat) Damage @ Enemies
 ```
 
 Verification:
 ```bqn
 ThreatReduce´ Enemies/Damage
-Threat ← {!0<≠𝕩 ⋄ ThreatReduce´𝕩}                 # reduce(threat): fold plus the no-identity guard
+Threat ← {!0<≠𝕩 ⋄ ThreatReduce´𝕩}                 # fold(threat): fold plus the no-identity guard
 "row fails" ≡ Threat⎊("row fails"˙) none/Damage   # an empty scope fails the row, never invents a value
 ```
 ```q

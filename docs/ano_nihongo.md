@@ -93,7 +93,7 @@ Japanese negation is a postfix auxiliary, which suits a postfix language, but `�
 
 - Direction of comparison. より needs a paired adjective in natural Japanese; 超 and 未満 disambiguate but read as jargon. Pick one scheme and commit.
 - Negation glyph, per above.
-- Reduction and scan. Settled: the JA folds are the prefix words 総和 総積 総数 最大 最小 平均 皆 或 and the scans 累和 累積 累大, each carrying the ASCII `/`/`\` op as payload; the whole corpus uses them.
+- Reduction and scan. Settled: the JA folds are the prefix words 総和 総積 総数 最大 最小 平均 皆 或 and the scans 累和 累積 累大 累皆 累或, each carrying the ASCII `/`/`\` op as payload; a fused reducer word (`脅威/`, `脅威\`) carries a named reducer the same way; the whole corpus uses them.
 - Numeral policy per surface. Kanji numerals read as numbers only under `--! ja`; on the ASCII surface 六十 is an ordinary identifier, so the same glyphs mean 60 in one skin and a noun in the other. Deliberate — the ASCII surface owns no kanji-numeral grammar, and a native column may be spelled 六十 — but whether the skins should ever converge is open. Unresolved.
 - Verb-aware case frames. The spaced particle surface is a lexer table because each operator fixes one case frame (に on the column in に…たす). The full-sentence する voice lets the verb pick the frame — 与える puts に on the recipient selection and を on the column — so the same `ASSIGN_ADD` needs a per-verb case-frame table, a grammar rather than a lexer. The なる register ships as the table tier; whether the する register gets verb frames or stays out of the unspaced surface is open.
 - IME ergonomics. Writing kana code needs an input method, and the unspaced form is hard to type as well as to lex. The spaced form is the authoring surface; the unspaced form is accepted but not authored.

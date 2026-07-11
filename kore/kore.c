@@ -3,7 +3,8 @@
  * contract is the .reg format. It never includes ano.h.
  *
  * Six surfaces (EDITOR.md): the demos rail, the code editor, the world table, the
- * space (the world as a glyph grid), the output log, and the prompt. Each REPL
+ * space (the world as a glyph map, or a half-block bitmap), the output log, and the
+ * prompt. Each REPL
  * submission is one program against the current world — anoc --run --save advances
  * the world file through the staged-rename commit loop; the undo ring is the loop's
  * free gift (pre-states are files under .kore/undo/).
@@ -18,7 +19,8 @@
  *
  * Entry points: `kore <file.reg>` the bare world, REPL-only; `kore <file.ano>` the
  * demo form; bare `kore` the rail. Headless verification hooks: `kore --check
- * <file.reg>…` loads and renders both views to memory and reports; `kore --edit
+ * <file.reg>…` loads and renders every view (table, glyph map, bitmap) to memory
+ * and reports; `kore --edit
  * <file.reg> <seg> <row> <col> <value>` performs one cell splice and prints the line.
  */
 #define _GNU_SOURCE
@@ -27,6 +29,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <math.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -132,12 +135,14 @@ enum {
   C_FRAME = 245,                                /* unfocused borders */
   C_RAILC = 141, C_CODEC = 179, C_WORLDC = 110, /* per-panel accents: violet, gold, sky */
   C_OUTC = 108, C_PROMPTC = 114,                /* moss, green */
+  C_OUTPUTSC = 218,                             /* rose — the outputs panel, beside moss */
   C_GLOW = 222, C_DIRECTIVE = 66, C_NUMLIT = 151, C_OP = 117, C_DEF = 216,
   C_SYM = 183, C_REL = 210, C_BOOL = 115, C_CHAR = 223, C_HDR = 117, C_ROWLBL = 242,
   C_OK = 114, C_ERR = 203, C_NIHONGO = 176, C_AT = 213, C_SEARCH = 220,
+  C_CASEUP = 230, C_CASELO = 168,               /* cased glyphs: upper ivory, lower rose */
 };
 
-typedef struct { char g[8]; uint8_t attr, fg, cont; } Cell; /* fg: 0 default, else a palette index */
+typedef struct { char g[8]; uint8_t attr, fg, bg, cont; } Cell; /* fg/bg: 0 default, else a palette index */
 
 static struct {
   int rows, cols;
@@ -145,13 +150,14 @@ static struct {
   Buf out;
   struct termios saved;
   int rawOn, resized;
+  int curX, curY, curShape; /* terminal cursor for this frame: DECSCUSR shape, 0 hidden */
 } T;
 
-/* Every exit path restores the terminal and the mouse state. Idempotent. */
+/* Every exit path restores the terminal, the cursor shape, and the mouse state. Idempotent. */
 static void term_leave(void) {
   if (!T.rawOn) return;
   T.rawOn = 0;
-  const char *bye = "\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[?1049l\x1b[0m";
+  const char *bye = "\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[0 q\x1b[?1049l\x1b[0m";
   ssize_t r = write(1, bye, strlen(bye));
   (void)r;
   tcsetattr(0, TCSAFLUSH, &T.saved);
@@ -188,15 +194,16 @@ static int term_enter(void) {
 }
 
 static void frame_clear(void) {
+  T.curShape = 0;
   for (int i = 0; i < T.rows * T.cols; i++) {
     T.grid[i] = (Cell){ .g = " " };
   }
 }
 
-/* Inputs: cell coords, attributes, fg, UTF-8 text, max width (-1: unbounded).
- * Output: cells written, clipped to the grid; wide glyphs take two cells, the
- * second marked continuation. Returns the width consumed. */
-static int put(int x, int y, int attr, int fg, const char *s, int maxw) {
+/* Inputs: cell coords, attributes, fg, bg (0: the canvas), UTF-8 text, max width
+ * (-1: unbounded). Output: cells written, clipped to the grid; wide glyphs take two
+ * cells, the second marked continuation. Returns the width consumed. */
+static int putp(int x, int y, int attr, int fg, int bg, const char *s, int maxw) {
   if (y < 0 || y >= T.rows) return 0;
   int w = 0;
   while (*s) {
@@ -216,6 +223,7 @@ static int put(int x, int y, int attr, int fg, const char *s, int maxw) {
       cl->g[bl] = 0;
       cl->attr = (uint8_t)attr;
       cl->fg = (uint8_t)fg;
+      cl->bg = (uint8_t)bg;
       cl->cont = 0;
       if (gw == 2 && x + w + 1 < T.cols) {
         Cell *c2 = &T.grid[y * T.cols + x + w + 1];
@@ -227,6 +235,9 @@ static int put(int x, int y, int attr, int fg, const char *s, int maxw) {
     w += gw;
   }
   return w;
+}
+static int put(int x, int y, int attr, int fg, const char *s, int maxw) {
+  return putp(x, y, attr, fg, 0, s, maxw);
 }
 
 static void fill(int x, int y, int w, int h, const char *g, int attr, int fg) {
@@ -245,6 +256,7 @@ static void fill(int x, int y, int w, int h, const char *g, int attr, int fg) {
         snprintf(c->g, sizeof c->g, "%s", g);
         c->attr = (uint8_t)attr;
         c->fg = (uint8_t)fg;
+        c->bg = 0;
         c->cont = 0;
       }
   }
@@ -294,29 +306,32 @@ static void scrollbar(Rect r, int top, int vis, int total, int accent) {
   }
 }
 
-/* One write(2) per frame: home the cursor, emit rows with minimal SGR churn. */
+/* One write(2) per frame: hide the cursor, home, emit rows with minimal SGR churn,
+ * then park the terminal cursor — hidden, or shaped (DECSCUSR) at the frame's request. */
 static void flush_frame(void) {
   Buf *o = &T.out;
   o->len = 0;
-  bput(o, "\x1b[H", 3);
-  int cattr = -1, cfg = -1;
+  bput(o, "\x1b[?25l\x1b[H", 9);
+  int cattr = -1, cfg = -1, cbg = -1;
   for (int y = 0; y < T.rows; y++) {
     if (y) bput(o, "\r\n", 2);
     for (int x = 0; x < T.cols; x++) {
       Cell *c = &T.grid[y * T.cols + x];
       if (c->cont) continue;
-      if (c->attr != cattr || c->fg != cfg) {
-        bprintf(o, "\x1b[0;48;5;%d%s%s%s", C_BG, (c->attr & A_DIM) ? ";2" : "", (c->attr & A_BOLD) ? ";1" : "",
+      if (c->attr != cattr || c->fg != cfg || c->bg != cbg) {
+        bprintf(o, "\x1b[0;48;5;%d%s%s%s", c->bg ? c->bg : C_BG, (c->attr & A_DIM) ? ";2" : "", (c->attr & A_BOLD) ? ";1" : "",
                 (c->attr & A_REV) ? ";7" : "");
         bprintf(o, ";38;5;%d", c->fg ? c->fg : C_TEXT);
         bput(o, "m", 1);
         cattr = c->attr;
         cfg = c->fg;
+        cbg = c->bg;
       }
       bput(o, c->g, strlen(c->g));
     }
   }
   bput(o, "\x1b[0m", 4);
+  if (T.curShape) bprintf(o, "\x1b[%d;%dH\x1b[%d q\x1b[?25h", T.curY + 1, T.curX + 1, T.curShape);
   ssize_t r = write(1, o->s, o->len);
   (void)r;
 }
@@ -493,6 +508,8 @@ typedef struct {
   int *fibOff, *fibLen; double *fibVals; int nfib; /* srel */
   int isInv;                /* srel spelled as `inv` — fibers derived, not edited */
   char inv[KNAMESZ];        /* the rel an inv derives from */
+  int keyw;                 /* data word-index delta: +1 keyed rel/srel (`rel id mentor …`),
+                               -1 `unique` (no type word) — the splice targets shift with it */
 } Ent;
 
 typedef struct {
@@ -502,6 +519,8 @@ typedef struct {
   int n, latW, latH;
   Ent ents[KMAXENT]; int nents;
   char posCol[KNAMESZ];     /* role pos target, else "" (falls back to literal `pos`) */
+  char glyphCol[KNAMESZ];   /* role glyph target, else "" (falls back to literal `glyph`) */
+  char protoCol[KNAMESZ];   /* role proto target, else "" (falls back to literal `proto`) */
   int loaded;
 } World;
 
@@ -594,7 +613,9 @@ static int split_words(char *line, char **words, int maxw) {
 static int wnum(const char *w, double *out) {
   char *end;
   *out = strtod(w, &end);
-  return (end != w && *end == 0) ? 0 : -1;
+  /* the value domain is the finite doubles, exactly — anoc's loader refuses
+     non-finites, so kore must never bless a world anoc would reject */
+  return (end != w && *end == 0 && isfinite(*out)) ? 0 : -1;
 }
 
 static void world_free(World *w) {
@@ -602,10 +623,28 @@ static void world_free(World *w) {
   memset(w, 0, sizeof *w);
 }
 
+/* Inputs: a parsed world. Output: 0 / -1 with err naming the first repeated key —
+ * the pairwise-distinct check anoc's loader runs on `unique` lines (keyw -1 marks
+ * them here), so a duplicate-key world fails --check exactly as it fails anoc. */
+static int world_check_unique(const World *w, char *err, size_t errsz) {
+  for (int i = 0; i < w->nents; i++) {
+    const Ent *e = &w->ents[i];
+    if (e->kind != E_COL || e->keyw != -1) continue;
+    for (int x = 0; x < e->nn; x++)
+      for (int y = x + 1; y < e->nn; y++)
+        if (e->nums[x] == e->nums[y]) {
+          snprintf(err, errsz, "line %d: unique %s: value %g repeats (rows %d, %d)",
+                   e->line + 1, e->name, e->nums[x], x, y);
+          return -1;
+        }
+  }
+  return 0;
+}
+
 /* Inputs: path. Output: 0 with the world parsed for display / -1 with err set.
  * Data lines (n, lattice, col, field, pres, rel, srel, inv) fill tables; everything
  * else — bind, alias, fn, role, as, ja, default, comments, unknown — passes through
- * untouched in lines[]. role pos is noted for the space view. The whole parsed state
+ * untouched in lines[]. role pos/glyph/proto are noted for the space views. The whole parsed state
  * allocates from one arena and dies with the load that replaces it. */
 static int world_load(World *w, const char *path, char *err, size_t errsz) {
   World fresh = { 0 };
@@ -694,31 +733,49 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       if (!e->nums) abort();
       for (int j = 2; j < nw; j++) if (!wnum(words[j], &e->nums[e->nn])) e->nn++;
       fresh.nents++;
-    } else if ((!strcmp(k, "rel") || !strcmp(k, "alias")) && nw >= 2 && e) {
-      /* an alias is a stored mask VALUE — data, so it displays and edits like a rel */
-      e->kind = k[0] == 'r' ? E_REL : E_ALIAS;
+    } else if (!strcmp(k, "unique") && nw >= 2 && e) {
+      /* declared injectivity: a num column with no type word — data starts one word early */
+      e->kind = E_COL;
+      e->type = V_NUM;
+      e->keyw = -1;
       e->line = li;
       snprintf(e->name, sizeof e->name, "%.*s", KNAMESZ - 1, words[1]);
-      e->type = k[0] == 'r' ? V_NUM : V_BOOL;
       e->nums = ano_arena_zalloc(fresh.heap, (size_t)(nw - 2 + 1) * sizeof(double));
       if (!e->nums) abort();
       for (int j = 2; j < nw; j++) if (!wnum(words[j], &e->nums[e->nn])) e->nn++;
       fresh.nents++;
+    } else if ((!strcmp(k, "rel") || !strcmp(k, "alias")) && nw >= 2 && e) {
+      /* an alias is a stored mask VALUE — data, so it displays and edits like a rel;
+       * a keyed rel (`rel id mentor …`) carries its key column as one extra name */
+      double kd;
+      int keyed = k[0] == 'r' && nw >= 3 && wnum(words[2], &kd) && strcmp(words[2], "|");
+      e->kind = k[0] == 'r' ? E_REL : E_ALIAS;
+      e->keyw = keyed ? 1 : 0;
+      e->line = li;
+      snprintf(e->name, sizeof e->name, "%.*s", KNAMESZ - 1, words[1 + e->keyw]);
+      e->type = k[0] == 'r' ? V_NUM : V_BOOL;
+      e->nums = ano_arena_zalloc(fresh.heap, (size_t)(nw - 2 + 1) * sizeof(double));
+      if (!e->nums) abort();
+      for (int j = 2 + e->keyw; j < nw; j++) if (!wnum(words[j], &e->nums[e->nn])) e->nn++;
+      fresh.nents++;
     } else if ((!strcmp(k, "srel") || !strcmp(k, "inv")) && nw >= 2 && e) {
+      double kd;
+      int keyed = k[0] == 's' && nw >= 3 && wnum(words[2], &kd) && strcmp(words[2], "|");
       e->kind = E_SREL;
+      e->keyw = keyed ? 1 : 0;
       e->line = li;
       e->isInv = k[0] == 'i';
       if (e->isInv && nw >= 3) snprintf(e->inv, sizeof e->inv, "%.*s", KNAMESZ - 1, words[2]);
-      snprintf(e->name, sizeof e->name, "%.*s", KNAMESZ - 1, words[1]);
+      snprintf(e->name, sizeof e->name, "%.*s", KNAMESZ - 1, words[1 + e->keyw]);
       if (!e->isInv) {
         int nfib = 1, nvals = 0;
-        for (int j = 2; j < nw; j++) !strcmp(words[j], "|") ? nfib++ : nvals++;
+        for (int j = 2 + e->keyw; j < nw; j++) !strcmp(words[j], "|") ? nfib++ : nvals++;
         e->fibOff = ano_arena_zalloc(fresh.heap, (size_t)nfib * sizeof(int));
         e->fibLen = ano_arena_zalloc(fresh.heap, (size_t)nfib * sizeof(int));
         e->fibVals = ano_arena_zalloc(fresh.heap, (size_t)(nvals + 1) * sizeof(double));
         if (!e->fibOff || !e->fibLen || !e->fibVals) abort();
         int fib = 0, vi = 0;
-        for (int j = 2; j < nw; j++) {
+        for (int j = 2 + e->keyw; j < nw; j++) {
           if (!strcmp(words[j], "|")) { e->fibLen[fib] = vi - e->fibOff[fib]; fib++; e->fibOff[fib] = vi; }
           else if (!wnum(words[j], &e->fibVals[vi])) vi++;
         }
@@ -728,9 +785,14 @@ static int world_load(World *w, const char *path, char *err, size_t errsz) {
       fresh.nents++;
     } else if (!strcmp(k, "role") && nw == 3 && !strcmp(words[1], "pos")) {
       snprintf(fresh.posCol, sizeof fresh.posCol, "%.*s", KNAMESZ - 1, words[2]);
+    } else if (!strcmp(k, "role") && nw == 3 && !strcmp(words[1], "glyph")) {
+      snprintf(fresh.glyphCol, sizeof fresh.glyphCol, "%.*s", KNAMESZ - 1, words[2]);
+    } else if (!strcmp(k, "role") && nw == 3 && !strcmp(words[1], "proto")) {
+      snprintf(fresh.protoCol, sizeof fresh.protoCol, "%.*s", KNAMESZ - 1, words[2]);
     }
     /* everything else: schema, preserved verbatim in lines[] */
   }
+  if (world_check_unique(&fresh, err, errsz)) { world_free(&fresh); return -1; }
   world_free(w);
   *w = fresh;
   w->loaded = 1;
@@ -751,6 +813,70 @@ static Ent *world_pos(World *w) {
   }
   Ent *e = world_ent(w, "pos", E_COL);
   return (e && e->type == V_VEC) ? e : NULL;
+}
+
+/* a sym column reached by role name, else by literal name — NULL when neither holds */
+static Ent *world_sym_col(World *w, const char *role, const char *lit) {
+  if (role[0]) {
+    Ent *e = world_ent(w, role, E_COL);
+    if (e && e->type == V_SYM) return e;
+  }
+  Ent *e = world_ent(w, lit, E_COL);
+  return (e && e->type == V_SYM) ? e : NULL;
+}
+static Ent *world_glyph_col(World *w) { return world_sym_col(w, w->glyphCol, "glyph"); }
+static Ent *world_proto_col(World *w) { return world_sym_col(w, w->protoCol, "proto"); }
+
+/* entity ink: a stable palette color per archetype — the bool column's name hashes
+ * (FNV-1a, ASCII case folded to match names_eq, so a def noun and its folded column
+ * agree) into the palette; wheat stays wheat-colored on every load, in every view */
+static const int entPal[] = { 114, 183, 210, 117, 221, 80, 213, 147, 84, 173, 152, 229 };
+static int arch_color(const char *name) {
+  uint32_t h = 2166136261u;
+  for (const unsigned char *p = (const unsigned char *)name; *p; p++) {
+    unsigned c = (*p >= 'A' && *p <= 'Z') ? *p + 32u : *p;
+    h = (h ^ c) * 16777619u;
+  }
+  return entPal[h % (sizeof entPal / sizeof *entPal)];
+}
+
+/* Inputs: world, entity row, out[8]. Output: 1 with the entity's glyph — the glyph
+ * role's column, else a column literally named glyph (clamped to its first rune: one
+ * glyph, at most the 2-column cell), else the proto-role sym when the noun IS a
+ * single rune — else 0, the bold-@ fallback. */
+static int ent_glyph(World *w, int row, char out[8]) {
+  Ent *e = world_glyph_col(w);
+  const char *s = (e && row < e->ns) ? e->syms[row] : NULL;
+  if (!s || !s[0]) {
+    e = world_proto_col(w);
+    s = (e && row < e->ns) ? e->syms[row] : NULL;
+    if (!s || !s[0]) return 0;
+    const char *q = s;
+    u8next(&q);
+    if (*q) return 0;             /* a multi-rune noun is a name, not a glyph */
+  }
+  const char *p = s;
+  u8next(&p);
+  size_t n = (size_t)(p - s) < 7 ? (size_t)(p - s) : 7;
+  memcpy(out, s, n);
+  out[n] = 0;
+  return 1;
+}
+
+/* Inputs: world, entity row, its resolved glyph or NULL. Output: the entity's ink —
+ * an ASCII-cased glyph takes the case color (the chess convention: case carries
+ * side), else the first set archetype bool column's hashed color, else C_AT. */
+static int ent_color(World *w, int row, const char *glyph) {
+  if (glyph && !glyph[1]) {
+    if (glyph[0] >= 'A' && glyph[0] <= 'Z') return C_CASEUP;
+    if (glyph[0] >= 'a' && glyph[0] <= 'z') return C_CASELO;
+  }
+  for (int i = 0; i < w->nents; i++) {
+    Ent *e = &w->ents[i];
+    if (e->kind == E_COL && e->type == V_BOOL && row < e->nn && e->nums[row] != 0)
+      return arch_color(e->name);
+  }
+  return C_AT;
 }
 
 /* Inputs: value. Output: static spelling — integers plain, else shortest %g. */
@@ -912,8 +1038,12 @@ static int cmp_demo(const void *a, const void *b) {
 
 /* ---------- app state ---------- */
 
-enum Focus { F_RAIL, F_CODE, F_WORLD, F_OUT, F_PROMPT };
+enum Focus { F_RAIL, F_CODE, F_WORLD, F_OUTPUTS, F_OUT, F_PROMPT };
 enum Mode { MODE_RAIL, MODE_DEMO, MODE_REG };
+
+/* one labeled query result; a run's records group under the step it staged */
+typedef struct { char *label; char *value; } QRec;
+typedef struct { int step; QRec *recs; int nrecs; } QGroup;
 
 static struct App {
   enum Mode mode;
@@ -933,16 +1063,22 @@ static struct App {
   int spaceView;
   int wSeg, wRow, wCol, wTop;   /* world cursor: segment 0 = entity table, 1.. fields */
   int editing; char editBuf[512]; int editLen;
+  int spcRet, spcRow, spcCol;   /* a space-view entity edit parked the cell cursor here */
   Buf outLog; int outScroll;    /* lines scrolled back from the tail */
+  QGroup *qgroups; int nqgroups;/* the OUTPUTS store: tick-grouped query results */
+  int outputsScroll;            /* lines scrolled down from the newest tick */
   char verdict[512]; int verdictBad;
   char prompt[1024]; int plen, pcur, pscroll, ptop; /* byte cursor, h-scroll, line scroll */
   char *hist[KMAXHIST]; int nhist, histAt;
   int dragging, dragSeg, dragR0, dragC0, dragR1, dragC1;
   int undoSeq;
+  int trace;                    /* t: pass --trace to anoc — 0x1F diagnostic lines land in
+                                   history (never OUTPUTS); off by default, never changes
+                                   post-state */
   int sessJa;                                   /* the session log's surface; -1 unknown */
   char *sdefText[64]; int sdefJa[64]; char sdefName[64][128]; int nsdefs;
   int quit;
-  Rect rail, codeR, worldR, outR, promptR;
+  Rect rail, codeR, worldR, outputsR, outR, promptR;
 } A;
 
 static void say(const char *fmt, ...) {
@@ -961,6 +1097,201 @@ static void sayerr(const char *fmt, ...) {
   A.verdictBad = 1;
 }
 static void logOut(const char *s, size_t n) { bput(&A.outLog, s, n); A.outScroll = 0; }
+
+/* ---------- the OUTPUTS store: labeled query results, tick-grouped ---------- */
+
+#define KMAXQREC 256
+
+/* the run's composed program (next.ano / repl.ano) as lines, kept for the run's
+ * duration so a 0x1D tag q<N>@<L> resolves L (1-based) to its statement text */
+static char **runLines;
+static int nRunLines;
+
+static void run_lines_set(const char *text) {
+  for (int i = 0; i < nRunLines; i++) free(runLines[i]);
+  free(runLines);
+  nRunLines = 0;
+  int cap = 2;
+  for (const char *p = text; *p; p++) cap += *p == '\n';
+  runLines = xalloc((size_t)cap * sizeof(char *));
+  const char *p = text;
+  while (*p) {
+    const char *nl = strchr(p, '\n');
+    size_t ll = nl ? (size_t)(nl - p) : strlen(p);
+    char *l = xalloc(ll + 1);
+    memcpy(l, p, ll);
+    runLines[nRunLines++] = l;
+    if (!nl) break;
+    p = nl + 1;
+  }
+}
+
+/* the 1-based program line, leading whitespace trimmed; NULL when out of range */
+static const char *run_line(int ln) {
+  if (ln < 1 || ln > nRunLines) return NULL;
+  const char *s = runLines[ln - 1];
+  while (*s == ' ' || *s == '\t') s++;
+  return s;
+}
+
+static void qgroup_free(QGroup *g) {
+  for (int i = 0; i < g->nrecs; i++) { free(g->recs[i].label); free(g->recs[i].value); }
+  free(g->recs);
+  memset(g, 0, sizeof *g);
+}
+
+static void outputs_clear(void) {
+  for (int i = 0; i < A.nqgroups; i++) qgroup_free(&A.qgroups[i]);
+  free(A.qgroups);
+  A.qgroups = NULL;
+  A.nqgroups = 0;
+  A.outputsScroll = 0;
+}
+
+/* u's inverse of a push: every group whose step lies past the restored one goes */
+static void outputs_drop_after(int seq) {
+  while (A.nqgroups && A.qgroups[A.nqgroups - 1].step > seq)
+    qgroup_free(&A.qgroups[--A.nqgroups]);
+  A.outputsScroll = 0;
+}
+
+/* bounded: whole oldest groups drop past the record cap — no unbounded growth */
+static void outputs_bound(void) {
+  int total = 0, drop = 0;
+  for (int i = 0; i < A.nqgroups; i++) total += A.qgroups[i].nrecs;
+  while (drop < A.nqgroups - 1 && total > KMAXQREC) {
+    total -= A.qgroups[drop].nrecs;
+    qgroup_free(&A.qgroups[drop]);
+    drop++;
+  }
+  if (drop) {
+    memmove(A.qgroups, A.qgroups + drop, (size_t)(A.nqgroups - drop) * sizeof *A.qgroups);
+    A.nqgroups -= drop;
+  }
+}
+
+/* display lines the panel holds: a seam per group, a line per record, plus a
+ * multi-line value's own lines indented beneath its label */
+static int outputs_total_lines(void) {
+  int t = 0;
+  for (int i = 0; i < A.nqgroups; i++) {
+    t += 1 + A.qgroups[i].nrecs;
+    for (int j = 0; j < A.qgroups[i].nrecs; j++) {
+      const char *v = A.qgroups[i].recs[j].value;
+      if (!strchr(v, '\n')) continue;
+      int n = 1;
+      for (const char *p = v; *p; p++) n += *p == '\n';
+      t += n;
+    }
+  }
+  return t;
+}
+
+/* a byte-capped copy must not end mid-codepoint: drop a trailing partial sequence */
+static void u8_tail_fix(char *s) {
+  size_t n = strlen(s), k = n;
+  while (k && ((unsigned char)s[k - 1] & 0xC0) == 0x80) k--;
+  if (!k) return;
+  unsigned char h = (unsigned char)s[k - 1];
+  size_t need = h < 0xC0 ? 1 : h < 0xE0 ? 2 : h < 0xF0 ? 3 : 4;
+  if (need > n - k + 1) s[k - 1] = 0;
+}
+
+/* take the buffer as a fresh string, trailing whitespace stripped; resets the buffer */
+static char *buf_take_rstrip(Buf *b) {
+  while (b->len && (b->s[b->len - 1] == '\n' || b->s[b->len - 1] == '\r' ||
+                    b->s[b->len - 1] == ' ' || b->s[b->len - 1] == '\t'))
+    b->s[--b->len] = 0;
+  char *r = xstrdup(b->s ? b->s : "");
+  b->len = 0;
+  if (b->s) b->s[0] = 0;
+  return r;
+}
+
+static char *label_dup(const char *s) {
+  char *d = xstrdup(s);
+  size_t l = strlen(d);
+  while (l && (d[l - 1] == ' ' || d[l - 1] == '\t' || d[l - 1] == '\r')) d[--l] = 0;
+  return d;
+}
+
+/* Inputs: the child's merged capture, its exit code, the step this run staged.
+ * Output: on exit 0, one group pushed when it holds at least one record — a record-less
+ * run (a mutation-only statement) leaves no group. A line opening with 0x1D starts a query record
+ * (q<N>@<L>, L resolved through run_line to the statement text), following untagged
+ * lines are that record's value block, and lines before any tag flow to the history
+ * log; on nonzero exit the whole capture is history, exactly as before the split.
+ * A line opening with 0x1F is a --trace diagnostic (one below the 0x1D label channel):
+ * it goes to history verbatim, sentinel stripped, never into a value block and never
+ * into OUTPUTS — even mid-record, so a trace line between a tag and its value cannot
+ * contaminate the result. Values lose trailing whitespace; query records never enter
+ * the history feed. */
+static void cap_split(const char *s, size_t n, int code, int step) {
+  if (!s) n = 0;
+  if (code != 0) {
+    /* the failure path logs the capture whole; trace sentinels still strip so the
+     * diagnostic lines read clean beside the compiler error */
+    Buf raw = { 0 };
+    size_t at = 0;
+    while (at < n) {
+      size_t e = at;
+      while (e < n && s[e] != '\n') e++;
+      size_t st = at + ((e > at && (unsigned char)s[at] == 0x1F) ? 1 : 0);
+      bput(&raw, s + st, e - st);
+      bput(&raw, "\n", 1);
+      at = e + 1;
+    }
+    if (raw.len) logOut(raw.s, raw.len);
+    bfree(&raw);
+    return;
+  }
+  A.qgroups = realloc(A.qgroups, (size_t)(A.nqgroups + 1) * sizeof *A.qgroups);
+  if (!A.qgroups) abort();
+  QGroup *g = &A.qgroups[A.nqgroups++];
+  memset(g, 0, sizeof *g);
+  g->step = step;
+  Buf hist = { 0 }, val = { 0 };
+  int open = 0;
+  size_t i = 0;
+  while (i < n) {
+    size_t j = i;
+    while (j < n && s[j] != '\n') j++;
+    size_t ll = j - i;
+    if (ll && (unsigned char)s[i] == 0x1F) {
+      /* trace diagnostics ride to history whatever record is open */
+      bput(&hist, s + i + 1, ll - 1);
+      bput(&hist, "\n", 1);
+    } else if (ll && (unsigned char)s[i] == 0x1D) {
+      if (open) g->recs[g->nrecs - 1].value = buf_take_rstrip(&val);
+      char tag[64];
+      snprintf(tag, sizeof tag, "%.*s", (int)(ll - 1 < 63 ? ll - 1 : 63), s + i + 1);
+      int qn = 0, ln = 0;
+      const char *lbl = sscanf(tag, "q%d@%d", &qn, &ln) == 2 ? run_line(ln) : NULL;
+      g->recs = realloc(g->recs, (size_t)(g->nrecs + 1) * sizeof *g->recs);
+      if (!g->recs) abort();
+      g->recs[g->nrecs].label = label_dup(lbl ? lbl : tag);
+      g->recs[g->nrecs].value = NULL;
+      g->nrecs++;
+      open = 1;
+    } else if (open) {
+      bput(&val, s + i, ll);
+      bput(&val, "\n", 1);
+    } else {
+      bput(&hist, s + i, ll);
+      bput(&hist, "\n", 1);
+    }
+    i = j + 1;
+  }
+  if (open) g->recs[g->nrecs - 1].value = buf_take_rstrip(&val);
+  bfree(&val);
+  if (hist.len) logOut(hist.s, hist.len);
+  bfree(&hist);
+  /* a record-less run leaves no group: outputs_bound counts records alone, so empty
+   * groups (mutation-only submissions) would otherwise stack seams without bound */
+  if (g->nrecs == 0) { qgroup_free(g); A.nqgroups--; return; }
+  outputs_bound();
+  A.outputsScroll = 0;
+}
 
 /* ---------- .kore scratch: undo ring, play copies, repl program ---------- */
 
@@ -1078,6 +1409,7 @@ static void undo_pop(void) {
   if (copy_file(p, A.world.path)) { sayerr("undo: cannot restore %s", p); return; }
   unlink(p);
   A.undoSeq--;
+  outputs_drop_after(A.undoSeq);   /* the stepped-back tick's results go with it */
   char path[PATH_MAX];
   snprintf(path, sizeof path, "%s", A.world.path);
   if (world_load(&A.world, path, err, sizeof err)) sayerr("undo: %s", err);
@@ -1253,15 +1585,18 @@ static void repl_submit(void) {
     if (A.sdefJa[i] == ja && !body_redefines(body, ja, A.sdefName[i]))
       bprintf(&prog, "%s\n", A.sdefText[i]);
   bprintf(&prog, "%s\n", body);
+  run_lines_set(prog.s ? prog.s : "");
   if (write_commit(".kore/repl.ano", prog.s, prog.len)) { bfree(&prog); sayerr("cannot write .kore/repl.ano"); return; }
   bfree(&prog);
   int seq = undo_push();
   if (seq < 0) { sayerr("cannot stage undo copy"); return; }
   Buf cap = { 0 };
-  char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", absw, (char *)".kore/repl.ano", NULL };
+  /* the trace slot repeats --label when tracing is off: a fixed argv, one flag flipped */
+  char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", absw, (char *)"--label",
+                   A.trace ? (char *)"--trace" : (char *)"--label", (char *)".kore/repl.ano", NULL };
   int code = run_child(argv, &cap);
   bprintf(&A.outLog, "> %s\n", stmt);
-  if (cap.len) logOut(cap.s, cap.len);
+  cap_split(cap.s, cap.len, code, seq);
   if (code == 0) {
     char err[256], path[PATH_MAX];
     session_log(body, ja);
@@ -1397,7 +1732,7 @@ static void world_reset(void) {
     char path[PATH_MAX];
     snprintf(path, sizeof path, "%s", A.world.path);
     if (world_load(&A.world, path, err, sizeof err)) sayerr("%s", err);
-    else say("world reloaded from %s", path);
+    else { outputs_clear(); say("world reloaded from %s", path); }
     return;
   }
   if (!A.demoPath[0]) { sayerr("no demo selected"); return; }
@@ -1419,9 +1754,61 @@ static void world_reset(void) {
     }
   }
   if (play_adopt(dst, 1, err, sizeof err)) { sayerr("%s", err); return; }
+  outputs_clear();
   A.wSeg = A.wRow = A.wCol = A.wTop = 0;
   if (had) say("reset → pristine world (n steps it, u steps back)");
   else say("pristine world loaded → %s (n steps it)", dst);
+}
+
+/* a --! expect / expect-n / out pin, matched as anoc tokenizes it (src/main.c dir_line:
+ * any spaces/tabs after --!, then the key word) — so --!out and "--!  expect" count too.
+ * Input: one line, leading whitespace trimmed. Output: 1 pin / 0 not. */
+static int pin_line(const char *lt) {
+  if (strncmp(lt, "--!", 3)) return 0;
+  const char *p = lt + 3;
+  while (*p == ' ' || *p == '\t') p++;
+  size_t k = 0;
+  while (p[k] && p[k] != ' ' && p[k] != '\t' && p[k] != '\r') k++;
+  return (k == 3 && !strncmp(p, "out", 3)) ||
+         (k == 6 && !strncmp(p, "expect", 6)) ||
+         (k == 8 && !strncmp(p, "expect-n", 8));
+}
+
+/* the tick program: the demo verbatim, its --! registry retargeted at absw (the play
+ * scratch) and its --! expect / --! out pins stripped — the pins witness the pristine
+ * run, and against any later step they would fail the tick and hold the world still.
+ * absw NULL is the registry-less demo: no world ever steps, so pins can never go stale
+ * and every one is kept and enforced. Writes .kore/next.ano and keeps the composed
+ * lines so a labeled query tag resolves to its statement text. 0 / -1 with the verdict said. */
+static int tick_program(const char *absw) {
+  size_t slen = 0;
+  char *src = read_file(A.demoLive, &slen);
+  if (!src) { sayerr("cannot read %s", A.demoLive); return -1; }
+  Buf prog = { 0 };
+  int retargeted = 0;
+  char *save = NULL;
+  for (char *p = src;; p = NULL) {
+    char *ln = p ? p : save;
+    if (!ln) break;
+    char *nl = strchr(ln, '\n');
+    if (nl) { *nl = 0; save = nl + 1; } else save = NULL;
+    if (!nl && !ln[0]) break;
+    const char *lt = ln;
+    while (*lt == ' ' || *lt == '\t') lt++;
+    if (absw && !retargeted && !strncmp(lt, "--! registry ", 13)) {
+      bprintf(&prog, "--! registry %s\n", absw);
+      retargeted = 1;
+    } else if (absw && pin_line(lt)) {
+      /* dropped: the tick program is scratch, never written back to the demo */
+    } else bprintf(&prog, "%s\n", ln);
+    if (!nl) break;
+  }
+  free(src);
+  if (absw && !retargeted) { bfree(&prog); sayerr("no --! registry line in %s", A.demoLive); return -1; }
+  run_lines_set(prog.s ? prog.s : "");
+  if (write_commit(".kore/next.ano", prog.s ? prog.s : "", prog.len)) { bfree(&prog); sayerr("cannot write .kore/next.ano"); return -1; }
+  bfree(&prog);
+  return 0;
 }
 
 /* n: next — one tick: the demo's program, its --! registry retargeted at the play
@@ -1436,11 +1823,14 @@ static void world_next(void) {
   Buf cap = { 0 };
   int code;
   if (!A.pristine[0]) {
-    /* no registry: nothing to advance — run for the output alone */
-    char *argv[] = { (char *)find_anoc(), (char *)"--run", A.demoLive, NULL };
+    /* no registry: nothing to advance — the demo runs verbatim, pins kept: a world
+     * that never steps can never stale them, so they stay the witness */
+    if (tick_program(NULL)) return;
+    char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--label",
+                     A.trace ? (char *)"--trace" : (char *)"--label", (char *)".kore/next.ano", NULL };
     code = run_child(argv, &cap);
     bprintf(&A.outLog, "$ anoc --run %s\n", A.demoLive);
-    if (cap.len) logOut(cap.s, cap.len);
+    cap_split(cap.s, cap.len, code, 0);
     bfree(&cap);
     if (code == 0) say("pins held (no registry — no world to step)");
     else sayerr("run failed (exit %d) — see output", code);
@@ -1458,41 +1848,14 @@ static void world_next(void) {
     sayerr("world path contains a space — the --! registry directive is one word");
     return;
   }
-  /* the tick program: the demo verbatim, its registry directive retargeted and its
-   * --! expect pins stripped — the pins witness the pristine run, and against any
-   * later step they would fail the tick and hold the world still */
-  size_t slen = 0;
-  char *src = read_file(A.demoLive, &slen);
-  if (!src) { sayerr("cannot read %s", A.demoLive); return; }
-  Buf prog = { 0 };
-  int retargeted = 0;
-  char *save = NULL;
-  for (char *p = src;; p = NULL) {
-    char *ln = p ? p : save;
-    if (!ln) break;
-    char *nl = strchr(ln, '\n');
-    if (nl) { *nl = 0; save = nl + 1; } else save = NULL;
-    if (!nl && !ln[0]) break;
-    const char *lt = ln;
-    while (*lt == ' ' || *lt == '\t') lt++;
-    if (!retargeted && !strncmp(lt, "--! registry ", 13)) {
-      bprintf(&prog, "--! registry %s\n", absw);
-      retargeted = 1;
-    } else if (!strncmp(lt, "--! expect", 10)) {
-      /* dropped: the tick program is scratch, never written back to the demo */
-    } else bprintf(&prog, "%s\n", ln);
-    if (!nl) break;
-  }
-  free(src);
-  if (!retargeted) { bfree(&prog); sayerr("no --! registry line in %s", A.demoLive); return; }
-  if (write_commit(".kore/next.ano", prog.s, prog.len)) { bfree(&prog); sayerr("cannot write .kore/next.ano"); return; }
-  bfree(&prog);
+  if (tick_program(absw)) return;
   int seq = undo_push();
   if (seq < 0) { sayerr("cannot stage undo copy"); return; }
-  char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", absw, (char *)".kore/next.ano", NULL };
+  char *argv[] = { (char *)find_anoc(), (char *)"--run", (char *)"--save", absw, (char *)"--label",
+                   A.trace ? (char *)"--trace" : (char *)"--label", (char *)".kore/next.ano", NULL };
   code = run_child(argv, &cap);
   bprintf(&A.outLog, "$ n — %s against %s\n", A.demoPath, A.world.path);
-  if (cap.len) logOut(cap.s, cap.len);
+  cap_split(cap.s, cap.len, code, seq);
   bfree(&cap);
   if (code == 0) {
     char err[256], path[PATH_MAX];
@@ -1525,6 +1888,7 @@ static void open_demo(const char *path) {
   A.sessJa = -1;
   for (int i = 0; i < A.nsdefs; i++) free(A.sdefText[i]);
   A.nsdefs = 0;
+  outputs_clear();
   if (demo_registry(A.demoLive, A.demoPath, reg, sizeof reg) == 0) {
     snprintf(A.pristine, sizeof A.pristine, "%s", reg);
     char dst[PATH_MAX + 64];
@@ -1584,6 +1948,7 @@ static void reset_all(void) {
   }
   rmdir(".kore/play");
   unlink(".kore/next.ano");
+  outputs_clear();
   if (A.demoPath[0]) {          /* a demo is open — rail mode or demo mode alike */
     char keep[PATH_MAX];
     snprintf(keep, sizeof keep, "%s", A.demoPath);
@@ -1867,6 +2232,9 @@ static void code_key(Ev *e) {
   int lw = swidth(ln);
   if (A.codeInsert) {
     if (e->type == EV_KEY && e->key == K_ESC) { A.codeInsert = 0; return; }
+    /* tab is text here — two spaces, the corpus indents with spaces, never \t;
+     * focus-cycling keeps Tab everywhere else */
+    if (e->type == EV_KEY && e->key == K_TAB) { code_insert_str(" "); code_insert_str(" "); return; }
     if (e->type == EV_KEY && e->key == K_ENTER) {
       int at = line_byte_at(ln, A.ccx);
       char *rest = xstrdup(ln + at);
@@ -2171,7 +2539,7 @@ static int cell_commit(const char *text, char *err, size_t errsz) {
       }
       if (wnum(repl, &d)) { snprintf(err, errsz, "not a number: %.100s", repl); return -1; }
       { int off, len;
-        if (word_span(w->lines[e->line], 3 + row, &off, &len)) { snprintf(err, errsz, "row out of range"); return -1; }
+        if (word_span(w->lines[e->line], 3 + e->keyw + row, &off, &len)) { snprintf(err, errsz, "row out of range"); return -1; }
         return world_splice(w, e->line, off, len, repl, err, errsz); }
     case E_PRES: case E_ALIAS: {
       if (wnum(repl, &d)) { snprintf(err, errsz, "not a bit: %.100s", repl); return -1; }
@@ -2183,7 +2551,7 @@ static int cell_commit(const char *text, char *err, size_t errsz) {
       if (!strcmp(repl, "/")) snprintf(repl, sizeof repl, "-1"); /* the drawing's none */
       if (wnum(repl, &d)) { snprintf(err, errsz, "not a row index: %.100s", repl); return -1; }
       int off, len;
-      if (word_span(w->lines[e->line], 2 + row, &off, &len)) { snprintf(err, errsz, "row out of range"); return -1; }
+      if (word_span(w->lines[e->line], 2 + e->keyw + row, &off, &len)) { snprintf(err, errsz, "row out of range"); return -1; }
       return world_splice(w, e->line, off, len, repl, err, errsz);
     }
     case E_SREL: {
@@ -2202,7 +2570,7 @@ static int cell_commit(const char *text, char *err, size_t errsz) {
         }
       }
       const char *ln = w->lines[e->line];
-      int wi = 2, fib = 0, firstW = -1, lastW = -1;
+      int wi = 2 + e->keyw, fib = 0, firstW = -1, lastW = -1;
       for (;; wi++) {
         int off, len;
         if (word_span(ln, wi, &off, &len)) break;
@@ -2220,7 +2588,7 @@ static int cell_commit(const char *text, char *err, size_t errsz) {
       /* empty fiber: insert before its trailing '|', or at line end for the last */
       if (!repl[0]) return 0;
       int off, len;
-      int sep = 2, f2 = 0, insAt = -1;
+      int sep = 2 + e->keyw, f2 = 0, insAt = -1;
       for (;; sep++) {
         if (word_span(ln, sep, &off, &len)) break;
         snprintf(scratch, sizeof scratch, "%.*s", len < 63 ? len : 63, ln + off);
@@ -2235,14 +2603,25 @@ static int cell_commit(const char *text, char *err, size_t errsz) {
   }
 }
 
+/* a space-view entity edit borrowed the world cursor for its segment-0 target;
+ * hand the cell cursor back once the edit is over */
+static void spc_return(void) {
+  if (!A.spcRet) return;
+  A.spcRet = 0;
+  A.wSeg = 0;
+  A.wRow = A.spcRow;
+  A.wCol = A.spcCol;
+}
+
 static void cell_edit_commit(void) {
   A.editing = 0;
   char err[256];
-  if (world_guard()) return;
+  if (world_guard()) { spc_return(); return; }
   int seq = undo_push();
-  if (seq < 0) { sayerr("cannot stage undo copy"); return; }
+  if (seq < 0) { spc_return(); sayerr("cannot stage undo copy"); return; }
   if (cell_commit(A.editBuf, err, sizeof err)) { undo_drop(); sayerr("edit: %s", err); }
   else say("cell written · step %d staged", seq);
+  spc_return();
 }
 
 /* ---------- drag selection -> predicate skeleton ---------- */
@@ -2298,12 +2677,16 @@ static void layout(void) {
   int promptH = plines + 2;
   int maxPH = H / 3 > 3 ? H / 3 : 3;
   if (promptH > maxPH) promptH = maxPH;
-  int outH = H / 5 > 5 ? (H / 5 < 10 ? H / 5 : 10) : 5;
-  int codeH = A.mode == MODE_REG ? 0 : (H - promptH - statusH - outH) * 2 / 5;
+  /* history: a slim strip above the prompt — a couple of echo lines + the verdict row */
+  int outH = 5;
+  /* outputs: the large reclaimed surface between world and history */
+  int outputsH = (H - promptH - statusH - outH) * 2 / 5;
+  int codeH = A.mode == MODE_REG ? 0 : (H - promptH - statusH - outH - outputsH) * 2 / 5;
   A.rail = (Rect){ 0, 0, railW, H - promptH - statusH };
   int x = railW, w = W - railW;
   A.codeR = (Rect){ x, 0, w, codeH };
-  A.worldR = (Rect){ x, codeH, w, H - promptH - statusH - outH - codeH };
+  A.worldR = (Rect){ x, codeH, w, H - promptH - statusH - outH - outputsH - codeH };
+  A.outputsR = (Rect){ x, H - promptH - statusH - outH - outputsH, w, outputsH };
   A.outR = (Rect){ x, H - promptH - statusH - outH, w, outH };
   A.promptR = (Rect){ 0, H - promptH - statusH, W, promptH };
 }
@@ -2341,10 +2724,17 @@ static void draw_code(void) {
   Rect r = A.codeR;
   if (r.h <= 1) return;
   char t[PATH_MAX + 64];
-  snprintf(t, sizeof t, "code · %s%s%s%s · %d/%d", A.demoPath[0] ? A.demoPath : "—",
+  snprintf(t, sizeof t, "code · %s%s%s · %d/%d", A.demoPath[0] ? A.demoPath : "—",
            A.demoPath[0] && strcmp(A.demoLive, A.demoPath) ? " · play copy" : "",
-           A.codeDirty ? " +" : "", A.codeInsert ? " · INSERT" : "", A.ccy + 1, A.ncode);
+           A.codeDirty ? " +" : "", A.ccy + 1, A.ncode);
   box(r.x, r.y, r.w, r.h, t, A.focus == F_CODE, C_CODEC);
+  /* the mode chip: loud in the pane's own title rule, not the status-line corner */
+  if (A.focus == F_CODE) {
+    const char *chip = A.codeInsert ? " INSERT " : " BROWSE ";
+    int chw = swidth(chip);
+    if (r.w > chw + 4)
+      put(r.x + r.w - 2 - chw, r.y, A.codeInsert ? A_REV | A_BOLD : A_DIM, A.codeInsert ? C_GLOW : 0, chip, chw);
+  }
   int vis = r.h - 2;
   if (A.ccy < A.codeTop) A.codeTop = A.ccy;
   if (A.ccy >= A.codeTop + vis) A.codeTop = A.ccy - vis + 1;
@@ -2392,7 +2782,12 @@ static void draw_code(void) {
     }
     if (A.focus == F_CODE && li == A.ccy) {
       int cx = x + A.ccx;
-      if (cx < r.x + r.w - 1) rev_cell(cx, y);
+      if (cx < r.x + r.w - 1) {
+        /* insert gets the terminal's own bar cursor (DECSCUSR 5, or the default where
+         * unhonored); browse keeps the block reverse cell */
+        if (A.codeInsert) { T.curX = cx; T.curY = y; T.curShape = 5; }
+        else rev_cell(cx, y);
+      }
     }
   }
   if (A.searching || A.search[0]) {
@@ -2442,56 +2837,138 @@ static void draw_space(Rect r) {
   int gw, gh;
   space_dims(&gw, &gh);
   Ent *pos = world_pos(w);
-  if (!gw || !gh) { put(r.x + 2, r.y + 1, A_DIM, 0, "no lattice, no positions — table only (m toggles back)", r.w - 4); return; }
+  if (!gw || !gh) { put(r.x + 2, r.y + 1, A_DIM, 0, "no lattice, no positions — table only (m cycles views)", r.w - 4); return; }
   int ox = r.x + 2, oy = r.y + 1;
+  /* square cells: two columns per cell, ~1:1 in any font. A cell draws only when
+   * both its columns sit inside the border — no straddle across the region edge. */
   /* fields paint in declaration order: char glyphs exact, bools as colored blocks,
    * nums shaded ░▒▓█; x/y coordinate fields skip (they would drown the picture) */
   for (int cy = 0; cy < gh && oy + cy < r.y + r.h - 1; cy++)
-    for (int cx = 0; cx < gw && ox + cx < r.x + r.w - 1; cx++) {
+    for (int cx = 0; cx < gw && ox + 2 * cx + 2 <= r.x + r.w - 1; cx++) {
       int k = cy * gw + cx;
       const char *g = "·";
-      int fg = 0, attr = A_DIM, pi = 0;
+      int fg = 0, attr = A_DIM, pi = 0, dbl = 0; /* dbl: block/shade glyphs double up */
       for (int i = 0; i < w->nents; i++) {
         Ent *e = &w->ents[i];
         if (e->kind != E_FIELD) continue;
         if (names_eq(e->name, "x") || names_eq(e->name, "y")) { pi++; continue; }
         if (e->type == V_CHAR) {
           if (e->chars && k < (int)strlen(e->chars) && e->chars[k] != '.') {
-            g = glyph_at(e, k); fg = fieldPal[pi % 10]; attr = 0;
+            g = glyph_at(e, k); fg = fieldPal[pi % 10]; attr = 0; dbl = 0;
           }
         } else if (k < e->nn && e->nums[k] != 0) {
-          if (e->type == V_BOOL) { g = "█"; fg = fieldPal[pi % 10]; attr = 0; }
+          if (e->type == V_BOOL) { g = "█"; fg = fieldPal[pi % 10]; attr = 0; dbl = 1; }
           else {
             double max = 0;
             for (int j = 0; j < e->nn; j++) if (e->nums[j] > max) max = e->nums[j];
-            g = shade(e->nums[k], max); fg = fieldPal[pi % 10]; attr = 0;
+            g = shade(e->nums[k], max); fg = fieldPal[pi % 10]; attr = 0; dbl = 1;
           }
         }
         pi++;
       }
-      put(ox + cx, oy + cy, attr, fg, g, 1);
+      put(ox + 2 * cx, oy + cy, attr, fg, g, 1);
+      put(ox + 2 * cx + 1, oy + cy, attr, fg, dbl ? g : " ", 1);
     }
-  /* positioned entities stand on their cells */
+  /* positioned entities stand on their cells: their glyph when one resolves
+   * (role glyph, `glyph`, a single-rune proto noun), bold @ otherwise; ink from the
+   * case convention, else the archetype hash, else C_AT */
   if (pos)
     for (int i = 0; i + 1 < pos->nn; i += 2) {
       double dx = pos->nums[i], dy = pos->nums[i + 1];
       if (dx < 0 || dx >= gw || dy < 0 || dy >= gh) continue;   /* guard before the cast */
       int px = (int)dx, py = (int)dy;
-      if (ox + px < r.x + r.w - 1 && oy + py < r.y + r.h - 1)
-        put(ox + px, oy + py, A_BOLD, C_AT, "@", 1);
+      if (ox + 2 * px + 2 > r.x + r.w - 1 || oy + py >= r.y + r.h - 1) continue;
+      char eg[8];
+      int have = ent_glyph(w, i / 2, eg);
+      int fg = ent_color(w, i / 2, have ? eg : NULL);
+      int gwd = putp(ox + 2 * px, oy + py, have ? 0 : A_BOLD, fg, 0, have ? eg : "@", 2);
+      if (gwd < 2) put(ox + 2 * px + 1, oy + py, 0, fg, " ", 1);
     }
   /* the cell cursor works on the map exactly as on the table */
   if (A.focus == F_WORLD) {
-    int cx = ox + A.wCol, cy = oy + A.wRow;
-    if (A.wCol < gw && A.wRow < gh && cx < r.x + r.w - 1 && cy < r.y + r.h - 1)
+    int cx = ox + 2 * A.wCol, cy = oy + A.wRow;
+    if (A.wCol < gw && A.wRow < gh && cx + 2 <= r.x + r.w - 1 && cy < r.y + r.h - 1) {
       rev_cell(cx, cy);
+      rev_cell(cx + 1, cy);
+    }
   }
   if (A.dragging) {
     int rr0 = A.dragR0 < A.dragR1 ? A.dragR0 : A.dragR1, rr1 = A.dragR0 < A.dragR1 ? A.dragR1 : A.dragR0;
     int cc0 = A.dragC0 < A.dragC1 ? A.dragC0 : A.dragC1, cc1 = A.dragC0 < A.dragC1 ? A.dragC1 : A.dragC0;
     for (int yy = rr0; yy <= rr1 && yy < gh; yy++)
       for (int xx = cc0; xx <= cc1 && xx < gw; xx++)
-        if (xx >= 0 && yy >= 0 && ox + xx < r.x + r.w - 1 && oy + yy < r.y + r.h - 1) rev_cell(ox + xx, oy + yy);
+        if (xx >= 0 && yy >= 0 && ox + 2 * xx + 2 <= r.x + r.w - 1 && oy + yy < r.y + r.h - 1) {
+          rev_cell(ox + 2 * xx, oy + yy);
+          rev_cell(ox + 2 * xx + 1, oy + yy);
+        }
+  }
+}
+
+/* the bitmap: the same world at pixel scale — ▀ with fg the upper pixel and bg the
+ * lower gives two vertical pixels per terminal row at one column each (~square).
+ * Fields shade the ground in declaration order (bools and chars in their field
+ * color, nums as a gray ramp against their max), positioned entities land on top as
+ * archetype-colored pixels — the exact inks the glyph map uses, at pixel scale. */
+static void draw_bitmap(Rect r) {
+  World *w = &A.world;
+  int gw, gh;
+  space_dims(&gw, &gh);
+  Ent *pos = world_pos(w);
+  if (!gw || !gh) { put(r.x + 2, r.y + 1, A_DIM, 0, "no lattice, no positions — table only (m cycles views)", r.w - 4); return; }
+  int ox = r.x + 2, oy = r.y + 1;
+  int *pix = xalloc((size_t)gw * (size_t)gh * sizeof(int));
+  for (int k = 0; k < gw * gh; k++) pix[k] = C_BG;
+  int pi = 0;
+  for (int i = 0; i < w->nents; i++) {
+    Ent *e = &w->ents[i];
+    if (e->kind != E_FIELD) continue;
+    if (names_eq(e->name, "x") || names_eq(e->name, "y")) { pi++; continue; }
+    if (e->type == V_CHAR) {
+      int len = e->chars ? (int)strlen(e->chars) : 0;
+      for (int k = 0; k < gw * gh && k < len; k++)
+        if (e->chars[k] != '.') pix[k] = fieldPal[pi % 10];
+    } else {
+      double max = 0;
+      for (int j = 0; j < e->nn; j++) if (e->nums[j] > max) max = e->nums[j];
+      if (max <= 0) max = 1;
+      for (int k = 0; k < gw * gh && k < e->nn; k++)
+        if (e->nums[k] != 0) {
+          /* nums ramp the xterm grayscale 236..248 — visible on the 234 canvas */
+          double t = e->nums[k] / max;
+          if (t < 0) t = 0;
+          if (t > 1) t = 1;
+          pix[k] = e->type == V_BOOL ? fieldPal[pi % 10] : 236 + (int)(t * 12.0);
+        }
+    }
+    pi++;
+  }
+  if (pos)
+    for (int i = 0; i + 1 < pos->nn; i += 2) {
+      double dx = pos->nums[i], dy = pos->nums[i + 1];
+      if (dx < 0 || dx >= gw || dy < 0 || dy >= gh) continue;
+      char eg[8];
+      int have = ent_glyph(w, i / 2, eg);
+      pix[(int)dy * gw + (int)dx] = ent_color(w, i / 2, have ? eg : NULL);
+    }
+  for (int ty = 0; 2 * ty < gh && oy + ty < r.y + r.h - 1; ty++)
+    for (int cx = 0; cx < gw && ox + cx < r.x + r.w - 1; cx++) {
+      int up = pix[2 * ty * gw + cx];
+      int lo = 2 * ty + 1 < gh ? pix[(2 * ty + 1) * gw + cx] : C_BG;
+      putp(ox + cx, oy + ty, 0, up, lo, "▀", 1);
+    }
+  free(pix);
+  /* the cell cursor addresses one pixel; its terminal cell shows the ▀ pair, and the
+   * reverse marks that pair — the tracked cell is exact even where the mark is coarse */
+  if (A.focus == F_WORLD && A.wCol < gw && A.wRow < gh) {
+    int cx = ox + A.wCol, cy = oy + A.wRow / 2;
+    if (cx < r.x + r.w - 1 && cy < r.y + r.h - 1) rev_cell(cx, cy);
+  }
+  if (A.dragging) {
+    int rr0 = A.dragR0 < A.dragR1 ? A.dragR0 : A.dragR1, rr1 = A.dragR0 < A.dragR1 ? A.dragR1 : A.dragR0;
+    int cc0 = A.dragC0 < A.dragC1 ? A.dragC0 : A.dragC1, cc1 = A.dragC0 < A.dragC1 ? A.dragC1 : A.dragC0;
+    for (int yy = rr0; yy <= rr1 && yy < gh; yy++)
+      for (int xx = cc0; xx <= cc1 && xx < gw; xx++)
+        if (xx >= 0 && yy >= 0 && ox + xx < r.x + r.w - 1 && oy + yy / 2 < r.y + r.h - 1) rev_cell(ox + xx, oy + yy / 2);
   }
 }
 
@@ -2539,7 +3016,7 @@ static void draw_world(void) {
   if (r.h <= 1) return;
   World *w = &A.world;
   char t[PATH_MAX + 96];
-  snprintf(t, sizeof t, "%s · %s%s · n %d", A.spaceView ? "space" : "world",
+  snprintf(t, sizeof t, "%s · %s%s · n %d", A.spaceView == 2 ? "bitmap" : A.spaceView ? "space" : "world",
            w->loaded ? w->path : "—",
            A.worldIsCopy ? " (play)" : (w->loaded && A.mode != MODE_REG ? " (pristine)" : ""), w->n);
   if (A.worldIsCopy && A.undoSeq > 0)
@@ -2547,6 +3024,7 @@ static void draw_world(void) {
   if (w->latW) snprintf(t + strlen(t), sizeof t - strlen(t), " · %d×%d", w->latW, w->latH);
   box(r.x, r.y, r.w, r.h, t, A.focus == F_WORLD, C_WORLDC);
   if (!w->loaded) { put(r.x + 2, r.y + 1, A_DIM, 0, "no world — pick a demo or open a .reg", r.w - 4); return; }
+  if (A.spaceView == 2) { draw_bitmap(r); return; }
   if (A.spaceView) { draw_space(r); return; }
   table_cols();
   world_vrows();
@@ -2636,10 +3114,75 @@ static void draw_world(void) {
   scrollbar(r, A.wTop, vis, nvrows, C_WORLDC);
 }
 
+/* the OUTPUTS surface: labeled query results, newest tick first — a dim seam line per
+ * tick, each record as `q1 · <stmt> → <value>` with per-tick ordinals; a multi-line
+ * value renders label first, its lines indented beneath. Scroll is top-anchored: 0
+ * pins the newest tick. */
+static void draw_outputs(void) {
+  Rect r = A.outputsR;
+  if (r.h <= 1) return;
+  box(r.x, r.y, r.w, r.h, "outputs", A.focus == F_OUTPUTS, C_OUTPUTSC);
+  int vis = r.h - 2;
+  if (vis < 1) return;
+  int total = outputs_total_lines();
+  int max = total - vis;
+  if (max < 0) max = 0;
+  if (A.outputsScroll > max) A.outputsScroll = max;
+  if (A.outputsScroll < 0) A.outputsScroll = 0;
+  if (!A.nqgroups) {
+    put(r.x + 2, r.y + 1, A_DIM, 0, "query results land here — n ticks the demo, the prompt asks", r.w - 4);
+    return;
+  }
+  int li = 0, y = r.y + 1, yend = r.y + r.h - 1;
+  for (int gi = A.nqgroups - 1; gi >= 0 && y < yend; gi--) {
+    QGroup *g = &A.qgroups[gi];
+    if (li >= A.outputsScroll) {
+      char seam[48];
+      if (g->step > 0) snprintf(seam, sizeof seam, "— step %d", g->step);
+      else snprintf(seam, sizeof seam, "— run");
+      put(r.x + 2, y++, A_DIM, C_FRAME, seam, r.w - 4);
+    }
+    li++;
+    for (int ri = 0; ri < g->nrecs && y < yend; ri++) {
+      QRec *q = &g->recs[ri];
+      int multi = strchr(q->value, '\n') != NULL;
+      if (li >= A.outputsScroll) {
+        int x = r.x + 2, xe = r.x + r.w - 2;
+        char ord[16];
+        snprintf(ord, sizeof ord, "q%d", ri + 1);
+        x += put(x, y, A_BOLD, C_OUTPUTSC, ord, xe - x);
+        x += put(x, y, A_DIM, C_FRAME, " · ", xe - x);
+        x += put(x, y, 0, 0, q->label, xe - x);
+        if (!multi) {
+          x += put(x, y, A_DIM, C_FRAME, " → ", xe - x);
+          put(x, y, A_BOLD, C_OUTPUTSC, q->value, xe - x);
+        }
+        y++;
+      }
+      li++;
+      if (!multi) continue;
+      for (const char *p = q->value; *p && y < yend;) {
+        const char *nl = strchr(p, '\n');
+        size_t ll = nl ? (size_t)(nl - p) : strlen(p);
+        if (li >= A.outputsScroll) {
+          char vb[512];
+          snprintf(vb, sizeof vb, "%.*s", (int)(ll < 500 ? ll : 500), p);
+          u8_tail_fix(vb);
+          put(r.x + 6, y++, 0, C_OUTPUTSC, vb, r.w - 8);
+        }
+        li++;
+        if (!nl) break;
+        p = nl + 1;
+      }
+    }
+  }
+  scrollbar(r, A.outputsScroll, vis, total, C_OUTPUTSC);
+}
+
 static void draw_out(void) {
   Rect r = A.outR;
   if (r.h <= 1) return;
-  box(r.x, r.y, r.w, r.h, "output", A.focus == F_OUT, C_OUTC);
+  box(r.x, r.y, r.w, r.h, "history", A.focus == F_OUT, C_OUTC);
   /* last lines of the log, minus the scrollback */
   int vis = r.h - 3;
   int nls = 0;
@@ -2654,11 +3197,13 @@ static void draw_out(void) {
     if (li >= first) {
       char line[512];
       snprintf(line, sizeof line, "%.*s", (int)(ll < 500 ? ll : 500), p);
-      /* echoes tint by origin, failures by content */
+      /* echoes tint by origin, failures by content; trace diagnostics by their formats */
       int fg = 0, attr = 0;
       if (line[0] == '>' && line[1] == ' ') fg = C_PROMPTC;
       else if (line[0] == '$' && line[1] == ' ') { fg = C_CODEC; attr = A_DIM; }
       else if (strstr(line, "error") || strstr(line, "FAIL") || strstr(line, "cannot")) fg = C_ERR;
+      else if (strstr(line, " IS DEAD !") || strstr(line, " IS EMPTY !")) fg = C_ERR;
+      else if (strstr(line, " rows -> ")) { fg = C_WORLDC; attr = A_DIM; }
       put(r.x + 2, yy, attr, fg, line, r.w - 4);
       yy++;
     }
@@ -2744,7 +3289,8 @@ static void draw_status(void) {
     : A.focus == F_CODE && A.searching ? "type the pattern · enter jumps · esc cancels"
     : A.focus == F_CODE && A.codeInsert ? "insert — esc returns to browse"
     : A.focus == F_CODE ? "hjkl w b gg G 0 ^ $ move · / search, n N · i a o insert · x dd delete · u undo · s save"
-    : "tab focus · > prompt · r reset · n next · m map · u undo · w snap · E editor · q quit";
+    : A.focus == F_OUTPUTS ? "outputs — j k scroll · pgup pgdn page · newest tick first · u drops a tick"
+    : "tab focus · > prompt · r reset · n next · m view (table/map/bitmap) · u undo · w snap · t trace · E editor · q quit";
   put(1, y, A_DIM, 0, hint, T.cols - 10);
   const char *mode = A.mode == MODE_RAIL ? "rail" : A.mode == MODE_REG ? "world" : "demo";
   int mfg = A.mode == MODE_RAIL ? C_RAILC : A.mode == MODE_REG ? C_WORLDC : C_CODEC;
@@ -2758,6 +3304,7 @@ static void draw(void) {
   draw_rail();
   draw_code();
   draw_world();
+  draw_outputs();
   draw_out();
   draw_prompt();
   draw_status();
@@ -2865,7 +3412,7 @@ static void prompt_key(Ev *e) {
 }
 
 static void edit_key(Ev *e) {
-  if (e->type == EV_KEY && e->key == K_ESC) { A.editing = 0; say("edit cancelled"); return; }
+  if (e->type == EV_KEY && e->key == K_ESC) { A.editing = 0; spc_return(); say("edit cancelled"); return; }
   if (e->type == EV_KEY && e->key == K_ENTER) { cell_edit_commit(); return; }
   if (e->type == EV_KEY && e->key == K_BS) {
     if (A.editLen > 0) {
@@ -2906,23 +3453,50 @@ static void world_key(Ev *e) {
   else if (key == K_ENTER) {
     if (!w->loaded) return;
     if (A.spaceView) {
-      /* map edit: the field that painted this cell — the glyph you see is the value
-       * you edit; a blank cell takes the first paintable field */
-      int k = A.wRow * (w->latW ? w->latW : 1) + A.wCol;
-      int s = 1, pick = 0, first = 0;
-      for (int i = 0; i < w->nents; i++) {
-        Ent *fe = &w->ents[i];
-        if (fe->kind != E_FIELD) continue;
-        if (!names_eq(fe->name, "x") && !names_eq(fe->name, "y")) {
-          if (!first) first = s;
-          int lit = fe->type == V_CHAR ? (fe->chars && k < (int)strlen(fe->chars) && fe->chars[k] != '.')
-                                       : (k < fe->nn && fe->nums[k] != 0);
-          if (lit) pick = s;
+      /* map/bitmap edit: whatever painted this cell — the glyph (or pixel) you see
+       * is the value you edit. The topmost positioned entity on the cell wins: its
+       * edit targets the entity's own table row at the column that painted it (the
+       * glyph source when one resolves, else pos), the space cursor parked and
+       * restored after. No entity: the last field lit at the cell, else the first
+       * paintable field. */
+      Ent *pos = world_pos(w);
+      int entRow = -1;
+      if (pos)
+        for (int i = 0; i + 1 < pos->nn; i += 2)
+          if (pos->nums[i] == (double)A.wCol && pos->nums[i + 1] == (double)A.wRow) entRow = i / 2;
+      if (entRow >= 0) {
+        table_cols();
+        Ent *src = world_glyph_col(w);
+        if (!(src && entRow < src->ns && src->syms[entRow][0])) {
+          Ent *pr = world_proto_col(w);
+          src = (pr && entRow < pr->ns && pr->syms[entRow][0]) ? pr : pos;
         }
-        s++;
+        int c = 0;
+        for (int j = 0; j < ndcols; j++)
+          if (dcols[j].e == src) { c = j; break; }
+        A.spcRet = 1;
+        A.spcRow = A.wRow;
+        A.spcCol = A.wCol;
+        A.wSeg = 0;
+        A.wRow = entRow;
+        A.wCol = c;
+      } else {
+        int k = A.wRow * (w->latW ? w->latW : 1) + A.wCol;
+        int s = 1, pick = 0, first = 0;
+        for (int i = 0; i < w->nents; i++) {
+          Ent *fe = &w->ents[i];
+          if (fe->kind != E_FIELD) continue;
+          if (!names_eq(fe->name, "x") && !names_eq(fe->name, "y")) {
+            if (!first) first = s;
+            int lit = fe->type == V_CHAR ? (fe->chars && k < (int)strlen(fe->chars) && fe->chars[k] != '.')
+                                         : (k < fe->nn && fe->nums[k] != 0);
+            if (lit) pick = s;
+          }
+          s++;
+        }
+        A.wSeg = pick ? pick : first;
+        if (!A.wSeg) { say("no editable field on the map"); return; }
       }
-      A.wSeg = pick ? pick : first;
-      if (!A.wSeg) { say("no editable field on the map"); return; }
     }
     char cur[512];
     if (A.wSeg == 0) { table_cols(); table_cell(A.wRow, A.wCol, cur, sizeof cur); }
@@ -2950,9 +3524,40 @@ static void rail_key(Ev *e) {
   else if (key == K_ENTER && nDemos) { open_demo(demoList[A.railSel]); A.focus = F_WORLD; }
 }
 
+/* Inputs: a bare command name (a name with a slash checks directly). Output: 1 when an
+ * executable of that name sits on $PATH, 0 otherwise. */
+static int path_has(const char *cmd) {
+  if (strchr(cmd, '/')) return access(cmd, X_OK) == 0;
+  const char *p = getenv("PATH");
+  if (!p) return 0;
+  char cand[PATH_MAX];
+  while (*p) {
+    const char *sep = strchr(p, ':');
+    size_t dl = sep ? (size_t)(sep - p) : strlen(p);
+    if (dl && dl + strlen(cmd) + 2 < sizeof cand) {
+      snprintf(cand, sizeof cand, "%.*s/%s", (int)dl, p, cmd);
+      if (access(cand, X_OK) == 0) return 1;
+    }
+    p += dl + (sep ? 1 : 0);
+  }
+  return 0;
+}
+
+/* Output: the hop's editor — $VISUAL, else $EDITOR, else the first of nvim, vim,
+ * micro, nano, vi found on PATH. The floor is never vim.tiny. */
+static const char *editor_pick(void) {
+  const char *ed = getenv("VISUAL");
+  if (ed && *ed) return ed;
+  ed = getenv("EDITOR");
+  if (ed && *ed) return ed;
+  static const char *const fall[] = { "nvim", "vim", "micro", "nano", "vi" };
+  for (size_t i = 0; i < sizeof fall / sizeof *fall; i++)
+    if (path_has(fall[i])) return fall[i];
+  return "vi";
+}
+
 static void editor_hop(void) {
-  const char *ed = getenv("EDITOR");
-  if (!ed || !*ed) ed = "vi";
+  const char *ed = editor_pick();
   /* the hop is a mutating act: corpus files guard into their play copies first */
   const char *file = NULL;
   int worldFile = 0;
@@ -3020,6 +3625,14 @@ static void mouse_ev(Ev *e) {
       A.wRow += d;
       if (A.wRow < 0) A.wRow = 0;
       if (A.wRow >= rows) A.wRow = rows ? rows - 1 : 0;
+    } else if (hit(A.outputsR, x, y)) {
+      int vis = A.outputsR.h - 2;
+      if (vis < 1) vis = 1;
+      int max = outputs_total_lines() - vis;
+      if (max < 0) max = 0;
+      A.outputsScroll += d;
+      if (A.outputsScroll < 0) A.outputsScroll = 0;
+      if (A.outputsScroll > max) A.outputsScroll = max;
     } else if (hit(A.outR, x, y)) { A.outScroll -= d; if (A.outScroll < 0) A.outScroll = 0; }
     else if (hit(A.promptR, x, y)) {
       /* the wheel walks the session history, exactly as ↑↓ do */
@@ -3055,14 +3668,19 @@ static void mouse_ev(Ev *e) {
       if (li >= 0 && li < A.ncode) { A.ccy = li; A.ccx = x - A.codeR.x - 1; int lw = swidth(A.code[li]); if (A.ccx > lw) A.ccx = lw; }
       return;
     }
+    if (hit(A.outputsR, x, y)) { A.focus = F_OUTPUTS; return; }
     if (hit(A.outR, x, y)) { A.focus = F_OUT; return; }
     if (hit(A.worldR, x, y)) {
       A.focus = F_WORLD;
       if (A.spaceView) {
         int gw, gh;
         space_dims(&gw, &gh);
-        int cx = x - A.worldR.x - 2, cy = y - A.worldR.y - 1;
-        if (cx >= 0 && cy >= 0 && cx < gw && cy < gh) {
+        /* map cells are two columns wide; a bitmap column is one cell, its row the
+         * ▀ pair's upper pixel */
+        int rx = x - A.worldR.x - 2, ry = y - A.worldR.y - 1;
+        int cx = A.spaceView == 2 ? rx : rx / 2;
+        int cy = A.spaceView == 2 ? 2 * ry : ry;
+        if (rx >= 0 && ry >= 0 && cx < gw && cy < gh) {
           A.wCol = cx; A.wRow = cy;
           A.dragging = 1; A.dragSeg = 1;
           A.dragR0 = A.dragR1 = cy; A.dragC0 = A.dragC1 = cx;
@@ -3100,8 +3718,10 @@ static void mouse_ev(Ev *e) {
   }
   if (e->mkind == M_DRAG && A.dragging) {
     if (A.spaceView) {
-      int cx = x - A.worldR.x - 2, cy = y - A.worldR.y - 1;
-      if (cx >= 0 && cy >= 0) { A.dragC1 = cx; A.dragR1 = cy; }
+      int rx = x - A.worldR.x - 2, ry = y - A.worldR.y - 1;
+      int cx = A.spaceView == 2 ? rx : rx / 2;
+      int cy = A.spaceView == 2 ? 2 * ry : ry;
+      if (rx >= 0 && ry >= 0) { A.dragC1 = cx; A.dragR1 = cy; }
     } else {
       int row = A.wTop + (y - A.worldR.y - 2);
       if (row >= 0 && row < A.world.n) A.dragR1 = row;
@@ -3140,11 +3760,18 @@ static void handle(Ev *e) {
         A.focus = F_PROMPT;
         if (!A.plen) { A.prompt[0] = '>'; A.prompt[1] = 0; A.plen = A.pcur = 1; }
         return;
-      case 'm': A.spaceView = !A.spaceView; A.wRow = A.wCol = 0; return;
+      case 'm': A.spaceView = (A.spaceView + 1) % 3; A.wRow = A.wCol = 0; return;
       case 'r': world_reset(); return;
       case 'n': if (A.focus == F_CODE && A.search[0]) break; world_next(); return;
       case 'u': if (A.focus == F_CODE) break; undo_pop(); return;
       case 'w': if (A.focus == F_CODE) break; snapshot(); return;
+      case 't':   /* trace toggle: --trace rides the next n or prompt run; observability
+                     only — post-state is identical either way. Global: t is no code-pane
+                     vim key here, so it never yields the way u/w/n do */
+        A.trace = !A.trace;
+        say(A.trace ? "trace on — dead links and tick deltas land in history"
+                    : "trace off");
+        return;
       case 'E': editor_hop(); return;
       default: break;
     }
@@ -3157,8 +3784,8 @@ static void handle(Ev *e) {
     return;
   }
   if (e->type == EV_KEY && e->key == K_TAB) {
-    enum Focus order[] = { F_RAIL, F_CODE, F_WORLD, F_OUT, F_PROMPT };
-    int n = 5, at = 0;
+    enum Focus order[] = { F_RAIL, F_CODE, F_WORLD, F_OUTPUTS, F_OUT, F_PROMPT };
+    int n = 6, at = 0;
     for (int i = 0; i < n; i++) if (order[i] == A.focus) at = i;
     for (int i = 1; i <= n; i++) {
       enum Focus f = order[(at + i) % n];
@@ -3173,6 +3800,21 @@ static void handle(Ev *e) {
     case F_RAIL: rail_key(e); break;
     case F_CODE: code_key(e); break;
     case F_WORLD: world_key(e); break;
+    case F_OUTPUTS: {
+      int vis = A.outputsR.h - 2;
+      if (vis < 1) vis = 1;
+      int max = outputs_total_lines() - vis;
+      if (max < 0) max = 0;
+      int ch = e->type == EV_CHAR ? (int)e->ch : 0;
+      int key = e->type == EV_KEY ? e->key : 0;
+      if (ch == 'j' || key == K_DOWN) A.outputsScroll++;
+      else if (ch == 'k' || key == K_UP) A.outputsScroll--;
+      else if (key == K_PGDN) A.outputsScroll += vis;
+      else if (key == K_PGUP) A.outputsScroll -= vis;
+      if (A.outputsScroll < 0) A.outputsScroll = 0;
+      if (A.outputsScroll > max) A.outputsScroll = max;
+      break;
+    }
     case F_OUT:
       if (e->type == EV_CHAR && e->ch == 'j' && A.outScroll > 0) A.outScroll--;
       if (e->type == EV_CHAR && e->ch == 'k') A.outScroll++;
@@ -3188,7 +3830,8 @@ static void handle(Ev *e) {
 /* ---------- headless check: the verification hook ---------- */
 
 /* Inputs: a .reg path. Output: 0 with a one-line report after loading and rendering
- * both views into memory, nonzero on any failure — `kore --check` over the corpus is
+ * every view (table, glyph map, bitmap) into memory, nonzero on any failure — `kore
+ * --check` over the corpus is
  * how "walks all 103 registries" becomes a script. */
 static int check_reg(const char *path) {
   char err[256];
@@ -3199,18 +3842,20 @@ static int check_reg(const char *path) {
     for (int c = 0; c < ndcols; c++) table_cell(r, c, cell, sizeof cell);
   int fields = 0, space = A.world.latW > 0 || world_pos(&A.world) != NULL;
   for (int i = 0; i < A.world.nents; i++) if (A.world.ents[i].kind == E_FIELD) fields++;
-  /* render the space to memory when it exists */
+  /* render the space views to memory when they exist: the glyph map, then the bitmap */
   if (space) {
     T.rows = 200; T.cols = 400;
     T.grid = xalloc((size_t)T.rows * T.cols * sizeof(Cell));
     frame_clear();
     A.worldR = (Rect){ 0, 0, 399, 199 };
     draw_space(A.worldR);
+    frame_clear();
+    draw_bitmap(A.worldR);
     free(T.grid);
     T.grid = NULL;
   }
   printf("ok %s n=%d lattice=%dx%d cols=%d fields=%d space=%s\n", path, A.world.n,
-         A.world.latW, A.world.latH, ndcols, fields, space ? "yes" : "table-only");
+         A.world.latW, A.world.latH, ndcols, fields, space ? "map+bitmap" : "table-only");
   return 0;
 }
 

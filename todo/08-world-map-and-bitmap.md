@@ -1,3 +1,5 @@
+# DONE
+
 # 08 — the world map and the bitmap: the great space-mapping problem
 
 Ruling (author, 2026-07-11): fix the space surface's limitations and "actually start Dwarf Fortress-maxxing." Deferred behind 01-05 by the author's own sequencing. The spatial demo series gets its detailed audit only after the rest is ironed out.

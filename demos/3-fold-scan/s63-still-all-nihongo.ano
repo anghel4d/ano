@@ -1,0 +1,6 @@
+-- Japanese conjugate of s63 (still-all &\ latch). 累皆 = &\; で postfix = @ scope.
+--! registry ../registries/s63-still-all.reg
+--! ja
+
+--! out 1 1 1 0 0 0
+累皆 生存 行進 で

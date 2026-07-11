@@ -1,3 +1,5 @@
+# DONE
+
 # 09 — numeric edges: the float64 cliff and the inf asymmetry
 
 Surfaced by the 2026-07-10 overflow experiments (live, verified). No ruling was requested then. Filed now. Two halves: document the number model, and close a gap in its seal.

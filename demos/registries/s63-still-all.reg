@@ -1,0 +1,6 @@
+# s63 — still-all fixture (mirrors demos/3-fold-scan/s63-still-all.bqn); decoy 0s sit behind !marchOrder (rows 2, 6)
+n 8
+col marchOrder bool 1 1 0 1 1 1 0 1
+col alive bool 1 1 0 1 0 1 0 1
+ja 行進 marchOrder
+ja 生存 alive

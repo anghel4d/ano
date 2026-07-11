@@ -34,6 +34,12 @@
 
             pkgs.lean4 # proofs/foundations.md, pending mechanization
           ];
+
+          # kore's E hop and every editor-shaped fallback land on a real editor,
+          # never Debian's vim.tiny. Only when the user hasn't chosen one.
+          shellHook = ''
+            export EDITOR="''${EDITOR:-nvim}"
+          '';
         };
       });
 

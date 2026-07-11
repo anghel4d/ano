@@ -1,0 +1,27 @@
+# s60 — keyed-hop fixture (mirrors demos/1-selection/s60-keyed-hop.bqn)
+# The unique column declares injectivity (pairwise-distinct, checked at load); mentor and
+# targets are keyed to it, so every hop is rel;unique⁻¹ — one index-of, one found-guard.
+# The ids are primes: a positional read misses everywhere, so the routing is proven.
+n 5
+unique id 7 11 13 17 19
+rel id mentor -1 7 7 13 17
+srel id targets 13 17 | | | |
+col dead bool 1 0 0 0 0
+col cursed bool 0 1 0 0 0
+col nord bool 1 1 1 1 1
+col trained bool 1 1 1 1 1
+col gold num 0 0 0 0 0
+col frenzy bool 1 0 0 0 0
+col frenzied bool 0 0 0 0 0
+col reach num 0 0 0 0 0
+ja 識別 id
+ja 師匠 mentor
+ja 標的群 targets
+ja 死 dead
+ja 呪 cursed
+ja 北 nord
+ja 訓練 trained
+ja 金 gold
+ja 狂乱 frenzy
+ja 熱狂 frenzied
+ja 射程 reach

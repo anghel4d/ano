@@ -1,3 +1,5 @@
+# DONE
+
 # 01 — kore query outputs: computed, asserted, never shown
 
 Ruled FIRST (author, 2026-07-11): "This seems like a rather serious error." One dedicated agent. This file gives a deliberately vague pointer and strict invariants. Find the exact seam yourself.

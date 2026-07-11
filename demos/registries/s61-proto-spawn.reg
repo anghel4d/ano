@@ -1,0 +1,21 @@
+# s61 — proto-spawn fixture (mirrors demos/5-generate/s61-proto-spawn.bqn)
+# The proto is the registered archetype, the registry's first row-oriented named-value
+# construct. Spawn fill is the three-layer lookup: proto value (soldier, hp), else the
+# column's default (ammo), else the type zero (gold). The unique id mints fresh — the
+# declared injectivity forces it — and the proto-role column records the archetype noun.
+n 2
+unique id 3 5
+col soldier bool 1 0
+col hp num 40 10
+col ammo num 7 7
+default ammo 5
+col gold num 100 200
+col proto sym Grunt Grunt
+def Marine soldier=1 hp=100
+ja 識別 id
+ja 兵士 soldier
+ja 体力 hp
+ja 弾薬 ammo
+ja 金 gold
+ja 種別 proto
+ja 海兵 Marine

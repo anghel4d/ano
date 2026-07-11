@@ -1,0 +1,5 @@
+# expect: bad number '0x1p+2048' for 'gold'
+# Hex-float overflow: strtod parses 0x1p+2048 to inf, a non-finite spelling like any other.
+n 1
+col gold num 100
+def marine gold=0x1p+2048

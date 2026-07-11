@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 #include "ano.h"
 #include <errno.h>
+#include <math.h>
 #include <unistd.h>
 #include <sys/wait.h>
 
@@ -28,13 +29,13 @@ static const char *tokname[T_KINDCOUNT] = {
   [T_VIA]="T_VIA", [T_ALONG]="T_ALONG",
   [T_ORDER]="T_ORDER", [T_BY]="T_BY", [T_TAKE]="T_TAKE", [T_DESC]="T_DESC",
   [T_TOP]="T_TOP", [T_GRADE]="T_GRADE",
-  [T_REDUCE]="T_REDUCE", [T_SCANKW]="T_SCANKW", [T_SCAN2]="T_SCAN2",
+  [T_FOLDKW]="T_FOLDKW", [T_SCANKW]="T_SCANKW", [T_SCAN2]="T_SCAN2",
   [T_CROSS]="T_CROSS", [T_EXPAND]="T_EXPAND",
 };
 
 /* Inputs: none. Output: usage on stderr. Returns 2 (usage error exit code). */
 static int usage(void) {
-  fprintf(stderr, "usage: anoc [--tokens] [--emit] [--run] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano\n");
+  fprintf(stderr, "usage: anoc [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano\n");
   return 2;
 }
 
@@ -163,11 +164,14 @@ static int same_stream(const Toks *x, const Toks *y, const Registry *reg) {
 
 /* ---------- the --save pipe-back: sentinel lines patch the loaded Registry ---------- */
 
-/* Inputs: word. Output: 0 with *out set via strtod, -1 on empty/trailing junk. */
+/* Inputs: word. Output: 0 with *out set via strtod, -1 on empty/trailing junk or a
+ * non-finite parse — the pipe-back is a load, and the registry's value domain is the
+ * finite doubles. CBQN spells overflow '∞' (strtod already refuses) but NaN as 'NaN'
+ * (strtod accepts), so the finite check is what keeps a NaN tick refused, world standing. */
 static int save_num(const char *w, double *out) {
   char *end;
   *out = strtod(w, &end);
-  return (end != w && *end == 0) ? 0 : -1;
+  return (end != w && *end == 0 && isfinite(*out)) ? 0 : -1;
 }
 
 /* Inputs: registry, name. Output: the mutable entry under names_eq, else NULL — the
@@ -419,7 +423,7 @@ static int run_bqn(const char *path, const char *rt, size_t rtlen, const StrBuf 
 /* Inputs: argv per usage(). Output: exit code 0 ok / 1 test failure / 2 usage or
  * compile error. Default action with no mode flag: --emit to stdout. */
 int main(int argc, char **argv) {
-  int modeTokens = 0, modeRun = 0, modeEmit = 0;
+  int modeTokens = 0, modeRun = 0, modeEmit = 0, labelFlag = 0, traceFlag = 0;
   const char *rtFlag = NULL, *regFlag = NULL, *dumpFlag = NULL, *saveFlag = NULL, *path = NULL;
   for (int i = 1; i < argc; i++) {
     const char *s = argv[i];
@@ -427,6 +431,10 @@ int main(int argc, char **argv) {
     else if (!strcmp(s, "--emit")) modeEmit = 1;   /* the default mode; tracked so an
                                                       explicit ask survives --dump */
     else if (!strcmp(s, "--run")) modeRun = 1;
+    else if (!strcmp(s, "--label")) labelFlag = 1; /* labeled query display; independent
+                                                      of --run and --save */
+    else if (!strcmp(s, "--trace")) traceFlag = 1; /* debug observability: 0x1F diagnostic
+                                                      lines; never changes post-state */
     else if (!strcmp(s, "--dump")) { if (++i >= argc) return usage(); dumpFlag = argv[i]; }
     else if (!strcmp(s, "--save")) { if (++i >= argc) return usage(); saveFlag = argv[i]; }
     else if (!strcmp(s, "--rt")) { if (++i >= argc) return usage(); rtFlag = argv[i]; }
@@ -478,6 +486,8 @@ int main(int argc, char **argv) {
   }
   if (saveFlag && !rspec) { fprintf(stderr, "%s: --save needs a registry\n", path); return 2; }
   dirs.save = saveFlag != NULL;
+  dirs.label = labelFlag;
+  dirs.trace = traceFlag;
 
   Toks toks = {0};
   if (ano_lex(src, dirs.ja, &a, &toks, err, sizeof err)) { fprintf(stderr, "%s: %s\n", path, err); return 2; }
