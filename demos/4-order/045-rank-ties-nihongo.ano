@@ -1,0 +1,6 @@
+-- Japanese conjugate of s13 (rank ties): value-only dense rank write-back on tied Gold. rank stays ASCII (no ja alias).
+--! registry ../registries/045-rank-ties.reg
+--! ja
+--! expect rank = 1 1 0
+
+部隊 、 順位 に rank ( 金 ) にする

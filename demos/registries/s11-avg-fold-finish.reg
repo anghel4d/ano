@@ -1,6 +1,0 @@
-# spec §12 (pre-renumbering §11) — avg fold+finish fixture (mirrors demos/3-fold-scan/s11-avg-fold-finish.bqn)
-n 6
-col cow bool 1 1 0 1 1 0
-col weight num 400 500 50 600 900 70
-ja 牛 cow
-ja 重量 weight

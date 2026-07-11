@@ -1,0 +1,8 @@
+-- Japanese conjugate of s59 (hop after despawn, the out-of-range shape). Twin of 027-hop-out-of-range.ano.
+--! registry ../registries/027-hop-out-of-range.reg
+--! ja
+--! expect-n 4
+--! expect trained = 0 1 1 1
+
+呪 、 消
+北 と 師匠 の 死 、 訓練 除

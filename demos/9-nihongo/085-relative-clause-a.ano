@@ -1,0 +1,7 @@
+-- Relative-clause selection (ex43): the attributive clause before the noun is the selector. Twin of 085-relative-clause.bqn.
+-- 両手が六十を超える北 — "the Nords whose two-handed exceeds sixty" — puts the predicate before the noun, exactly where ano's mask meets its source.
+-- Japanese surface: 両手が六十を超える北に、金を千与える。(full-sentence register, not the spaced skin; the canonical ASCII line below). Row 5 has TwoHanded=60 exactly: strict > excludes it.
+--! registry ../registries/085-relative-clause-a.reg
+--! expect gold = 1005 5 5 1005 5 5
+
+Nord & TwoHanded > 60 , Gold += 1000

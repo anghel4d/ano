@@ -1,0 +1,7 @@
+-- Spatial recurrence (ex46), Version B (canonical): the recurrence runs host-side. Twin of 089-spatial-recurrence.bqn (third assertion).
+-- The canonical answer: the recurrence lives in the host fn, the cells receive its values, and Fibonacci finally appears — committed, never carried.
+-- Japanese surface: 升目の列で、各升の高さは前の二升の和となる。 fib(index) maps the registered host fn over the selection ordinal; same fixture as -a, so the differing expect also witnesses that the stencil step is not the recurrence.
+--! registry ../registries/089-spatial-recurrence-a.reg
+--! expect height = 1 1 2 3 5 8 13 21
+
+Cell @ row , Height = fib(index)

@@ -1,0 +1,25 @@
+# w2 — the wrap trick (mirrors demos/11-noita/122-wrap.bqn)
+# Wand [SB, DP], cast pointer at slot 1: the second block wraps — DP at the buffer's end binds the bolt at the front.
+# rot is the block's draw order as world rows (DP first, then the wrapped SB), the deck rotation the host's cast pointer supplies.
+n 3
+col keys num 0 1 2
+col wand bool 1 0 0
+col spell bool 0 1 1
+col slot num -1 0 1
+col proj bool 0 1 0
+col mod bool 0 0 1
+col drawAdd num 0 0 1
+col drawPos num 0 0 0
+col bal num 0 0 0
+col damage num 0 3 0
+bind rot vec 2 1
+ja 杖 wand
+ja 呪文 spell
+ja 枠 slot
+ja 投射 proj
+ja 改 mod
+ja 抜追加 drawAdd
+ja 抜札位置 drawPos
+ja 残高 bal
+ja 損傷 damage
+ja 回転 rot

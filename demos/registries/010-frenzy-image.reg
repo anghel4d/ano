@@ -1,0 +1,17 @@
+# s05a — the set-hop image + in-degree, split from 013-set-hop (mirrors demos/1-selection/010-frenzy-image.bqn)
+# attackers is the inverse read of targets, spelled as an explicit srel (inv needs a functional rel).
+n 8
+col frenzy bool 1 1 0 0 0 0 0 0
+srel targets 3 4 | 4 5 | | | | | |
+srel attackers | | | 0 | 0 1 | 1 | |
+col frenzied bool 0 0 0 0 0 0 0 0
+col health num 100 100 100 100 100 100 100 100
+col target bool 1 1 1 1 1 1 1 1
+col hits num 0 0 0 0 0 0 0 0
+ja 狂乱 frenzy
+ja 標的群 targets
+ja 攻撃者 attackers
+ja 熱狂 frenzied
+ja 体力 health
+ja 標的物 target
+ja 命中 hits

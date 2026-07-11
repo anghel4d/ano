@@ -1,9 +1,0 @@
--- Japanese conjugate of c1-life-step-b (Life one generation: freeze the kin count, then birth and death as disjoint structural writes).
---! registry ../registries/c1-life-step-b.reg
---! ja
---! expect kin = 0 0 0 0 0 1 2 3 2 1 1 1 2 1 1 1 2 3 2 1 0 0 0 0 0
---! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
-
-区画 、 同族 に ( 総数 ( 近傍 ' と 植栽 ) ) にする
-区画 と 植栽 ない と 同族 3 同 、 植栽 付
-区画 と 植栽 と 同族 2 不同 と 同族 3 不同 、 植栽 除

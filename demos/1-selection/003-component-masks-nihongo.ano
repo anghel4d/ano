@@ -1,0 +1,12 @@
+-- Japanese conjugate of 03 (component masks). Presence masks と/或/ない, :Bandit enum symbol, sequential barriers.
+--! registry ../registries/003-component-masks.reg
+--! ja
+--! expect gold = 110 20 130 40 150 60
+--! expect health = 90 0 70 60 0 40
+--! expect faction = None None Hostile Bandit Friendly Friendly
+
+北 、 金 に 100 たす
+
+竜 、 体力 に 0 にする
+
+山賊 と 死 ない と 派閥 :Bandit 同 、 派閥 に :Hostile にする

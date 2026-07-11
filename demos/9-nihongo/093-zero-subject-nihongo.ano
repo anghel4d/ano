@@ -1,0 +1,9 @@
+-- Zero subject default (ex48): the elided left side is ゼロが; the bare spawn appends one wheat row at the registered x/y defaults. JA twin of 093-zero-subject.ano.
+--! registry ../registries/093-zero-subject.reg
+--! ja
+--! expect-n 4
+--! expect wheat = 0 0 0 1
+--! expect x = 0 5 2 3
+--! expect y = 0 1 7 4
+
+生成 小麦

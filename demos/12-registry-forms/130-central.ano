@@ -1,0 +1,9 @@
+-- Registry in demos/registries/ (relative-path form). Twin of 130-central.bqn. (was r2-central)
+-- Same program and world as 129-beside, but the fixture lives in the shared demos/registries/
+-- directory instead of beside the twin. The twin reaches it by a path relative to itself.
+-- This is the layout every other demo uses; 129-beside shows the fixture may equally sit next
+-- to its program. Bare name -> beside the .ano; relative path -> from the .ano; absolute -> verbatim.
+--! registry ../registries/130-central.reg
+--! expect hp = 110 100 110
+
+Alive , Hp += 10

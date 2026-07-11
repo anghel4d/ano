@@ -1,9 +1,0 @@
-# t2-conjugation fixture (mirrors demos/7-tiers/t2-conjugation.bqn)
-# gold is the tie-free c = 40 10 30 20 50; unit and rank are scaffold for the canonical statement.
-n 5
-col unit bool 1 1 1 1 1
-col gold num 40 10 30 20 50
-col rank num 0 0 0 0 0
-ja 部隊 unit
-ja 金 gold
-ja 順位 rank

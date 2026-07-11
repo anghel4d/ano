@@ -1,0 +1,8 @@
+-- Quantifiers over the neighbor fiber (decision record setHop; spec §5, §9). Split from 013-set-hop; twin of 011-neighbor-quantifiers.bqn. (was s05b-neighbor-quantifiers)
+-- Six garden plots in a row, planted alternately: 1 0 1 0 1 0. neighbors' is each plot's fiber of adjacent plots. |/ over the fiber asks: any neighbor planted? #/ over the filtered fiber counts them. Both folds read the statement's pre-state, so crops spread exactly one ring per tick: rows 1 and 3 plant (two planted neighbors each), row 5 with one does not, and the new plants never cascade within the tick.
+--! registry ../registries/011-neighbor-quantifiers.reg
+--! expect sprouting = 0 1 0 1 0 1
+--! expect planted = 1 1 1 1 1 0
+
+Plot & |/ neighbors'.Planted , +Sprouting
+Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted

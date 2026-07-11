@@ -1,0 +1,14 @@
+-- Component masks (ex3). Twin of 003-component-masks.bqn.
+-- A mixed crowd of six: Nords, a dragon, bandits, some already dead. Faction is a symbol column; everything else is a tag.
+-- Bare names are presence masks combined by & | !; :Bandit is the enum symbol, Bandit the mask.
+-- Row 3 (bandit, faction :Bandit, but dead) keeps its faction — the .bqn's `symBandit ≡ 3⊑faction` witness is row 3 of the faction expect. Row 5 is a bandit but faction :Friendly.
+--! registry ../registries/003-component-masks.reg
+--! expect gold = 110 20 130 40 150 60
+--! expect health = 90 0 70 60 0 40
+--! expect faction = None None Hostile Bandit Friendly Friendly
+
+Nord , Gold += 100
+
+Dragon , Health = 0
+
+Bandit & !Dead & Faction == :Bandit , Faction = :Hostile

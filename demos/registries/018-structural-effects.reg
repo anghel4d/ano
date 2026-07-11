@@ -1,0 +1,16 @@
+# ex12 — structural-effects fixture (mirrors demos/2-effects/018-structural-effects.bqn)
+# targets: 0->{2,4}, 3->{4,5}; id 4 hit twice. Values are stable entity ids (= row positions pre-despawn).
+n 8
+col id num 0 1 2 3 4 5 6 7
+col dead bool 0 1 0 0 0 0 1 0
+col frenzy bool 1 0 0 1 0 0 0 0
+srel targets 2 4 | | | 4 5 | | | |
+col frenzied bool 0 0 0 0 0 0 0 1
+col burdened bool 0 0 1 0 0 1 0 0
+col encumbered bool 0 0 1 0 1 1 0 0
+ja 死 dead
+ja 狂乱 frenzy
+ja 標的群 targets
+ja 熱狂 frenzied
+ja 重荷 burdened
+ja 荷重 encumbered

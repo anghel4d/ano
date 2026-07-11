@@ -1,0 +1,9 @@
+# 074-diagonal fixture (mirrors demos/7-tiers/074-diagonal.bqn)
+# twoHanded is scaffold: all 61, so TwoHanded > 60 is total and the mask is nord alone, matching the .bqn's W.
+n 5
+col gold num 100 200 300 400 500
+col nord bool 1 0 1 1 0
+col twoHanded num 61 61 61 61 61
+ja 金 gold
+ja 北 nord
+ja 両手 twoHanded

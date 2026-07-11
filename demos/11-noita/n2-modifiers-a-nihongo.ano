@@ -1,8 +1,0 @@
--- Japanese conjugate of n2-modifiers-a (wand order A: Damage Plus then Heavy Shot).
---! registry ../registries/n2-modifiers.reg
---! ja
---! expect damage = 0 26 26 26 8
---! expect speed = 0 4 4 4 2
-
-火花弾 、 損傷 に 10 たす
-火花弾 、 損傷 に 2 かける て 速度 に 2 ひく

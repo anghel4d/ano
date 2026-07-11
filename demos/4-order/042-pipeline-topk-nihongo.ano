@@ -1,0 +1,8 @@
+-- Japanese conjugate of 19 (pipeline top-k).
+--! registry ../registries/042-pipeline-topk.reg
+--! ja
+--! out 6 3 4 0 7
+--! expect targeted = 1 1 0 1 1 0 1 1
+
+敵 |> 整列 別 脅威 降順 |> 取 5
+敵 |> 整列 別 脅威 降順 |> 取 5 、 標的 付

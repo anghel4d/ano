@@ -1,0 +1,16 @@
+-- Named reducer form: fold(threat) and its short spelling threat/ — two spellings of one meaning, forced to agree in public (ex15). Twin of 029-named-reducer.bqn; 040-reducer-spellings adds the scan.
+-- threat is a dyadic max, folded pairwise over the scope:
+--   Damage @ Enemies   carried
+--        12              12
+--         7              12    threat(12, 7)
+--        30              30    threat(12, 30)
+--         9              30    threat(30, 9) — the fold's answer is the final carry
+-- threat registers as the dyadic dfn {𝕨⌈𝕩} (the .bqn's ThreatReduce, spelled ⌈ there), folded pairwise as Threat´ by the emitter.
+-- Omitted, left to the .bqn twin: fold-direction equivariance, the ¯∞ BQN-identity divergence note, and the no-identity empty-scope row failure — a failed row has no --! spelling.
+--! registry ../registries/029-named-reducer.reg
+
+--! out 30
+fold(threat) Damage @ Enemies
+
+--! out 30
+threat/ Damage @ Enemies

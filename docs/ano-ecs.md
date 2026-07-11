@@ -232,7 +232,7 @@ size_t hop_gather_i64(const ano_col *rel, const ano_col *comp, const uint32_t *g
 
 Per selected slot: load `ano_id x`, test `id_live(gen, x)`, test `comp->present` at `x.slot`, gather `comp[x.slot]`. Failures drop the mask bit. The left-join-null rule is a bit clear. `mentor.mentor.Dead` chains by feeding `alive` back in as `sel`. On AVX-512 the whole test-and-gather is a masked `vpgatherqq`. Scalar code is the fallback, not the design.
 
-The **inverse read** of a functional relationship (`livestock'` = fibers of `pen`) never materializes fibers. γ over it is a scatter-reduce, the counting-sort fold, one pass. It is `demos/8-gamma/36-farm-gamma.bqn`'s `+´¨ (pen∾≠pens) ⊔ cattle` without the ⊔:
+The **inverse read** of a functional relationship (`livestock'` = fibers of `pen`) never materializes fibers. γ over it is a scatter-reduce, the counting-sort fold, one pass. It is `demos/8-gamma/076-farm-gamma.bqn`'s `+´¨ (pen∾≠pens) ⊔ cattle` without the ⊔:
 
 ```c
 // gamma_count: Pen , Headcount = #/ (livestock' & Cattle). acc indexed by target slot.

@@ -1,0 +1,11 @@
+# ex29 — spiral assignment fixture (mirrors demos/6-space/057-spiral-assign.bqn)
+# 8 demo entities (5 coins at rows 0 2 3 5 7) plus row 8: the Player anchor holding the
+# .bqn's external playerPos 100 200. polar is dyadic r Polar¨ theta, theta in degrees.
+n 9
+col coin bool 1 0 1 1 0 1 0 1 0
+col pos vec 0 0 | 10 10 | 0 0 | 0 0 | 20 20 | 0 0 | 30 30 | 0 0 | 100 200
+bind player entity 8
+fn polar {𝕨×(•math.Cos 𝕩×π÷180)⋈•math.Sin 𝕩×π÷180}
+ja 硬貨 coin
+ja 位置 pos
+ja 勇者 player

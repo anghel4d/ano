@@ -1,0 +1,6 @@
+-- Japanese conjugate of s62 (ever-any |\ latch). 累或 = |\; で postfix = @ scope.
+--! registry ../registries/038-ever-any.reg
+--! ja
+
+--! out 0 0 1 1 1 1
+累或 炎上 経路 で

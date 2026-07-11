@@ -1,6 +1,0 @@
--- Japanese conjugate of 36-farm-gamma-a (pen headcount: count of the filtered inverse fiber per pen).
---! registry ../registries/36-farm-gamma-a.reg
---! ja
---! expect headcount = -1 -1 -1 -1 -1 -1 -1 2 3 0 0
-
-囲い 、 頭数 に ( 総数 ( 家畜 ' と 肉牛 ) ) にする

@@ -1,0 +1,13 @@
+-- Value effects (ex10): masked +=, -=, *=, /= down dense columns. Twin of 016-value-effects.bqn.
+-- A town of eight: Nords, bandits, merchants, the wounded. Gold, Health, Speed are their numbers, and the four arithmetic effects each run under their own mask.
+-- Gold is written by two statements: += 1000 where Nord, then *= 2 where Merchant; row 1 = (200+1000)*2 = 2400.
+-- Off-mask identity (0 for + -, factor 1 for * /) is witnessed by the untouched rows in the full-column expects.
+--! registry ../registries/016-value-effects.reg
+--! expect gold = 1100 2400 300 400 1500 1200 700 1800
+--! expect health = 50 60 45 55 90 100 15 30
+--! expect speed = 5 8 6 2 12 14 2 16
+
+Nord , Gold += 1000
+Bandit , Health -= 25
+Merchant , Gold *= 2
+Wounded , Speed /= 2

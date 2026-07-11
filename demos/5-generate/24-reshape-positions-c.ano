@@ -1,9 +1,0 @@
--- Reshape to a line (ex24, rank-1 program point): to 20 pours flat indices. Twin of 24-reshape-positions.bqn (archer statement).
--- The rank-1 pour: 20 archers take flat slots 0..19 along a line. Same verb, one axis.
--- Own registry: the .bqn keeps the archer world apart with a scalar position column; the verbatim surface writes `pos`, pair-typed in the soldier world but scalar here, so the worlds cannot share one column.
--- World: 25 entities, 20 archers, non-archers at keys 5 11 17 23 24; pos starts at the scalar -1 sentinel. Archers receive flat indices 0..19 in key order; hand spot: key 6 is archer ordinal 5 (non-archer 5 precedes).
---! registry ../registries/24-reshape-positions-c.reg
---! expect-n 25
---! expect pos = 0 1 2 3 4 -1 5 6 7 8 9 -1 10 11 12 13 14 -1 15 16 17 18 19 -1 -1
-
-Archer  , pos = to 20

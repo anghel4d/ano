@@ -1,8 +1,0 @@
--- t2-ties: rank under ties must be value-only. Twin of t2-ties.bqn.
--- The tie law: equal gold, equal rank. On 5 5 3 the answer is 1 1 0, dense; the ordinal 1 2 0 is the refuted form.
--- rank(Gold) on the tied fixture 5 5 3 must produce the dense rank 1 1 0 (the tied 5s share their rank); the stable ordinal ⍋⍋ answer 1 2 0 is the unlawful form this witness exists to refute.
--- The Ord anchors, the swap(0,1) counterexample, and the exhaustive Sym(3) quantification of the dense law are BQN-internal witnesses, left to the .bqn twin. rank is zero-initialized scaffold (the .bqn mints it fresh).
---! registry ../registries/t2-ties.reg
---! expect rank = 1 1 0
-
-Unit , Rank = rank(Gold)

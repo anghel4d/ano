@@ -1,7 +1,0 @@
--- Still-all &\ (ruled 2026-07-11): the column intact up to here — one latch along the march order. Trips off at the first false and stays off. Twin of s63-still-all.bqn.
--- A column of six soldiers marching. &\ is the boolean scan of &: each position answers "all alive so far?", the complement latch of s62.
--- Decoy 0s sit behind !MarchOrder (rows 2, 6): an early 0 in the out is a selection leak; length 6 = popcount of the order pins the same-length invariant. The order is index order (the 16-scans convention).
---! registry ../registries/s63-still-all.reg
-
---! out 1 1 1 0 0 0
-&\ Alive @ MarchOrder

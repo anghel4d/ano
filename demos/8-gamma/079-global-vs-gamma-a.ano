@@ -1,0 +1,9 @@
+-- The defect gamma fixes, broadcast half (ex36 under old §11 semantics): the scoped-global fold is one scalar, scattered into every pen. Twin of 079-global-vs-gamma.bqn.
+-- The defect seen from the broken side: an unticked fold is scoped-global, one scalar for the whole world, and writing it puts the same 5 in every pen.
+-- Same world as 076-farm-gamma-a: rows 0-6 the animals, rows 7-10 the pens. The .bqn old line `#/ (livestock & Cattle)` is not a statement of the fixed language (an un-ticked set-valued relationship is no mask); the broadcast it denoted is the legitimate scoped-global fold #/ (Cattle) — one scalar, 5, broadcast under the Pen mask. The split is lexical: no tick, no @, one scalar.
+--! registry ../registries/076-farm-gamma-a.reg
+--! out 5
+--! expect headcount = -1 -1 -1 -1 -1 -1 -1 5 5 5 5
+
+#/ (Cattle)                       -- the scoped-global fold: always one scalar
+Pen , Headcount = #/ (Cattle)     -- scalar RHS broadcast into every selected pen: the old defective read

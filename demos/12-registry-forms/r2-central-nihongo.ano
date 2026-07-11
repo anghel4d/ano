@@ -1,6 +1,0 @@
--- Japanese conjugate of r2-central. Central fixture in demos/registries/, reached via ../registries/.
---! registry ../registries/r2-central.reg
---! ja
---! expect hp = 110 100 110
-
-生存 、 生命 に 十 たす

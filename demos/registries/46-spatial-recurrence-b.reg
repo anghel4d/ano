@@ -1,8 +1,0 @@
-# ex46 — spatial recurrence fixture, fresh all-zero line (mirrors demos/9-nihongo/46-spatial-recurrence.bqn, second assertion)
-n 8
-col cell bool 1 1 1 1 1 1 1 1
-col height num 0 0 0 0 0 0 0 0
-bind row mask 1 1 1 1 1 1 1 1
-fn fib {⊑{⟨1⊑𝕩,+´𝕩⟩}⍟𝕩 1‿1}
-ja 升目 cell
-ja 高さ height

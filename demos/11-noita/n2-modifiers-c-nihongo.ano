@@ -1,7 +1,0 @@
--- Japanese conjugate of n2-modifiers-c (the commuting pair): two additive Damage increments merge order-free in one barrier.
---! registry ../registries/n2-modifiers.reg
---! ja
---! expect damage = 0 23 23 23 8
---! expect speed = 0 6 6 6 2
-
-火花弾 、 損傷 に 10 たす て 損傷 に 10 たす

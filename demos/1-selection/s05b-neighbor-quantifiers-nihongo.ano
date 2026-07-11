@@ -1,8 +1,0 @@
--- Japanese conjugate of s05b (quantifiers over the neighbor fiber). Twin of s05b-neighbor-quantifiers.ano.
---! registry ../registries/s05b-neighbor-quantifiers.reg
---! ja
---! expect sprouting = 0 1 0 1 0 1
---! expect planted = 1 1 1 1 1 0
-
-区画 と 或 隣人 ' の 植栽 、 発芽 付
-区画 と 植栽 ない と 総数 ( 隣人 ' と 植栽 ) 2 以上 、 植栽 付

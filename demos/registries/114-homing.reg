@@ -1,0 +1,16 @@
+# n3 — homing (mirrors demos/11-noita/114-homing.bqn)
+# Row 0 the homing bolt (marker + target rel the cast resolved), row 1 a plain bolt, row 2 the quarry at posx 40, row 3 a bystander.
+n 4
+col keys num 0 1 2 3
+col sparkBolt bool 1 1 0 0
+col homing bool 1 0 0 0
+col enemy bool 0 0 1 0
+col posx num 10 10 40 0
+col velx num 6 6 0 0
+col health num 0 0 25 0
+rel target 2 -1 -1 -1
+ja 火花弾 sparkBolt
+ja 追尾 homing
+ja 敵 enemy
+ja 体力 health
+ja 標的物 target

@@ -1,0 +1,8 @@
+# w6 — quotation (mirrors demos/11-noita/128-eval.bqn)
+# Two spark bolts and a bomb bystander; both statements (direct and quoted) hit the bolts.
+n 3
+col keys num 0 1 2
+col sparkBolt bool 1 1 0
+col damage num 3 3 8
+ja 火花弾 sparkBolt
+ja 損傷 damage

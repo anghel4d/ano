@@ -1,6 +1,0 @@
--- Japanese conjugate of s07 (masked multiply): doubling merchants' gold, off-mask bit-identical.
---! registry ../registries/s07-masked-multiply.reg
---! ja
---! expect gold = 100 400 300 400 1000 600
-
-商人 、 金 に 2 かける

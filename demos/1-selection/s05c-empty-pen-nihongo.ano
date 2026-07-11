@@ -1,8 +1,0 @@
--- Japanese conjugate of s05c (the all-quantifier and the empty fiber). Twin of s05c-empty-pen.ano.
---! registry ../registries/s05c-empty-pen.reg
---! ja
---! expect certified = 0 0 0 0 0 1 0 1 1
---! expect headcount = 0 0 0 0 0 2 2 1 0
-
-囲い と 皆 家畜 ' の 健康 、 認証 付
-囲い 、 頭数 に ( 総数 家畜 ' ) にする

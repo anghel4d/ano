@@ -1,0 +1,22 @@
+# ex27 — coordinate lattice patterns fixture (mirrors demos/6-space/055-lattice-patterns.bqn)
+# x is the ROW coordinate (k div 8), y the COLUMN (k mod 8): registered as fields so the
+# demo's row-major 8x+y convention wins over the emitter's synthesized coordinates.
+# Entity world starts empty; the five statements spawn 32+32+8+24 rows into it.
+n 0
+col wheat bool
+col barley bool
+col pillar bool
+col fence bool
+col pos num
+lattice 8 8
+field x num 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5 6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7
+field y num 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
+field buildable bool 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ja 小麦 wheat
+ja 大麦 barley
+ja 柱 pillar
+ja 柵 fence
+ja 位置 pos
+ja x x
+ja y y
+ja 建設可 buildable

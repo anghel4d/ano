@@ -1,6 +1,0 @@
--- Japanese conjugate of 46-A (spatial recurrence, one stencil step). の is the parallel shift over pre-state; 前 の 前 is the two-back gather.
---! registry ../registries/46-spatial-recurrence-a.reg
---! ja
---! expect height = 0 1 3 5 7 9 11 13
-
-升目 行 で 、 高さ に ( 前 の 高さ + 前 の 前 の 高さ ) にする

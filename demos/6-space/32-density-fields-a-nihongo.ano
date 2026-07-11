@@ -1,8 +1,0 @@
---! registry ../registries/32-density-fields-a.reg
---! ja
---! expect tree = 1 1 1 1 1 1 1 1 1
---! expect crop = 0 0 0 0 0 0 0 0 0
---! expect pos = 1 0 1 0 2 0 4 0 4 0 4 0 6 0 7 0 7 0
--- Japanese twin of 32-density-fields-a: an 8 1 lattice spawns Density copies of a Tree row per cell.
-
-8 1 、 生成 木 * 密度

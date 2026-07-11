@@ -1,0 +1,6 @@
+-- Japanese conjugate of 26 (fold over ordered top-k). で postfix; folded operand wrapped before the parenthesized scope.
+--! registry ../registries/043-fold-ordered-topk.reg
+--! ja
+--! out 226
+
+総和 ( 脅威 ) ( 敵 |> 整列 別 毎秒損傷 降順 |> 取 10 ) で

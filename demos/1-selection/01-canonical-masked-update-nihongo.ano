@@ -1,7 +1,0 @@
--- Japanese conjugate of 01 (canonical masked update). same-tokens pins exact stream equality.
---! registry ../registries/01-canonical-masked-update.reg
---! ja
---! same-tokens Nord & TwoHanded > 60 , Gold += 1000
---! expect gold = 1100 200 300 1400 500 600
-
-北 と 両手 六十 より 、 金 に 千 たす

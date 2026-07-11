@@ -1,0 +1,6 @@
+-- Japanese conjugate of s08 (masked scatter). Predicate mask scatters :Hostile into faction rows 1 3 4.
+--! registry ../registries/014-masked-scatter.reg
+--! ja
+--! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly
+
+山賊 、 派閥 に :Hostile にする

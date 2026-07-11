@@ -1,0 +1,8 @@
+-- Japanese conjugate of 078-farm-gamma-c (moisture stencil mean + fiber-size column). 平均/総数 folds over the neighbor fiber 隣人 ', の hop, に … にする effect set.
+--! registry ../registries/078-farm-gamma-c.reg
+--! expect moisture = 3 3 4 4.333333333333333 5 5.666666666666667 6 7 7
+--! expect cnt = 2 3 2 3 4 3 2 3 2
+--! ja
+
+区画 、 湿気 に ( 平均 隣人 ' の 湿気 ) にする
+区画 、 個数 に ( 総数 隣人 ' ) にする

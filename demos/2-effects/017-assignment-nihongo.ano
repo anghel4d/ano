@@ -1,0 +1,7 @@
+--! registry ../registries/017-assignment.reg
+--! ja
+--! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly
+--! expect loot = Empty Gems Coins Empty Coins Gems
+
+山賊 、 派閥 に :Hostile にする
+死 、 戦利品 に :Empty にする

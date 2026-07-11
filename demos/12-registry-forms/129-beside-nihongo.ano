@@ -1,0 +1,6 @@
+-- Japanese conjugate of 129-beside (bare-name registry sitting beside the twin).
+--! registry 129-beside
+--! ja
+--! expect hp = 110 100 110
+
+Alive 、 Hp に 十 たす

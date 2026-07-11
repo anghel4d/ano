@@ -1,9 +1,0 @@
--- Japanese tokenizer skin (ex40): two readers, one token stream, one statement. Twin of 40-tokenizer-skin.bqn.
--- The claim this folder exists to prove: Japanese grammar is ano grammar with the serial numbers left on. One sentence, two scripts, one token stream — same-tokens pins them equal.
--- The JA line lexes through the registry ja aliases and the particle table, drops the fused に TGT marker, and re-roots each postfix operator; same-tokens pins the .bqn's kind-stream equality against the ASCII line.
---! registry ../registries/40-tokenizer-skin.reg
---! ja
---! same-tokens Nord & TwoHanded > 60 , Gold += 1000
---! expect gold = 1100 100 100 1100 100 100
-
-北 と 両手 六十 より 、 金 に 千 たす

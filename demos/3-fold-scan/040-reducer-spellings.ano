@@ -1,0 +1,13 @@
+-- One registered reducer, three spellings (ruled 2026-07-11): threat/ (the slash attaches to the name exactly as to an operator), fold(threat) (the long form), threat\ (the scan comes free). Twin of 040-reducer-spellings.bqn; the ex15 world. (was s64-reducer-spellings)
+-- The same enemies as 029-named-reducer, damage 12 7 30 9. Register the reducer once and every spelling follows: the fold answers 30 twice, the scan shows the carry arriving there — 12 12 30 30.
+-- The two fold spellings are one grammar row forced to agree in public: same out, same emitted fold. The scan is the running peak under the registered reducer; no identity is consulted — a scan is length-preserving, so the empty scope would yield the empty column while the folds fail the row (the §12 law, pinned in 029-named-reducer.bqn).
+--! registry ../registries/040-reducer-spellings.reg
+
+--! out 30
+threat/ Damage @ Enemies
+
+--! out 30
+fold(threat) Damage @ Enemies
+
+--! out 12 12 30 30
+threat\ Damage @ Enemies

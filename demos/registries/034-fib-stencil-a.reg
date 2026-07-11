@@ -1,0 +1,5 @@
+# spec §21 (pre-renumbering §19) — fib stencil fixture, zero pre-state (mirrors demos/3-fold-scan/034-fib-stencil.bqn, first assertion)
+n 12
+col offset num 0 0 0 0 0 0 0 0 0 0 0 0
+col fib num 1 1 2 3 5 8 13 21 34 55 89 144   # reference column, never written — the recurrence the stencil must NOT produce
+ja 変位 offset

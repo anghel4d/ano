@@ -1,0 +1,9 @@
+# ex26 — fold over ordered top-k fixture (mirrors demos/4-order/043-fold-ordered-topk.bqn)
+# 14 rows, 12 enemies: take 10 must actually drop two (r13 dps 15, r2 dps 10)
+n 14
+col enemy bool 0 1 1 0 1 1 1 1 1 1 1 1 1 1
+col dps num 999 50 10 888 70 20 90 30 80 60 40 95 65 15
+col threat num 1000 5 7 2000 11 13 17 19 23 29 31 37 41 43
+ja 敵 enemy
+ja 毎秒損傷 dps
+ja 脅威 threat

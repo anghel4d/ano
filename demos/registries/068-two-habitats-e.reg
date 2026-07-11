@@ -1,0 +1,13 @@
+# ex35 def row (mirrors demos/7-tiers/064-two-habitats.bqn)
+# dmg/spd/rng named dmgC/spd/rng in the .bqn only to dodge its earlier scratch dmg; values verbatim.
+# ridge field is -1 junk: the derived-field write must cover every cell.
+n 3
+col dmg num 10 6 8
+col spd num 3 5 2
+col rng num 5 3 4
+lattice 4 4
+field ridge num -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+ja 損傷 dmg
+ja 速度 spd
+ja 射程 rng
+ja 尾根 ridge

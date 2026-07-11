@@ -1,0 +1,10 @@
+-- Japanese conjugate of w2 (the wrap). に…にする effect set; 走査 ( + ) … 沿 for scan-along; == → 同; += → たす.
+--! registry ../registries/122-wrap.reg
+--! ja
+--! expect drawPos = 0 1 0
+--! expect bal = 0 0 1
+--! expect damage = 0 13 0
+
+呪文 、 抜札位置 に ( ( 枠 - 1 ) % 2 ) にする
+呪文 、 残高 に ( 1 + ( 走査 ( + ) ( 抜追加 - 1 ) 沿 回転 ) ) にする
+呪文 と 投射 と 抜札位置 1 同 、 損傷 に 10 たす

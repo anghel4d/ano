@@ -1,0 +1,7 @@
+-- Version A pinned semantics, point 3: two statements are two stencil steps — the binomial spread 0 0 1 3 3 1 0..., no carry ever forms (spec §21, pre-renumbering §19). Twin of 034-fib-stencil.bqn (the two-step assertion). Program: the -b prefix plus one more statement, same seed fixture. (was s19-fib-stencil-c)
+--! registry ../registries/035-fib-stencil-b.reg
+--! expect offset = 0 0 1 3 3 1 0 0 0 0 0 0
+--! expect fib = 1 1 2 3 5 8 13 21 34 55 89 144
+
+12 , offset = prev.offset + prev.prev.offset
+12 , offset = prev.offset + prev.prev.offset

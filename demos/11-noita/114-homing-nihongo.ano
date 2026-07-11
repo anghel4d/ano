@@ -1,0 +1,8 @@
+-- Japanese conjugate of n3 (homing: +Homing marker, installed steer rule, one masked gather-subtract per tick).
+--! registry ../registries/114-homing.reg
+--! ja
+--! expect velx = 21 6 0 0
+--! expect posx = 31 16 40 0
+
+定義 Homing = 火花弾 と 追尾 なる Velx に ( ( 標的物 の Posx - Posx ) / 2 ) たす
+火花弾 、 Posx に Velx たす

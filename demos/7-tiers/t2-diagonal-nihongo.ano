@@ -1,6 +1,0 @@
--- Japanese conjugate of t2-diagonal (Tier-2 masked add as a whole-row map).
---! registry ../registries/t2-diagonal.reg
---! ja
---! expect gold = 1100 200 1300 1400 500
-
-北 と 両手 六十 より 、 金 に 千 たす

@@ -1,0 +1,14 @@
+-- Japanese conjugate of 33 (spatial derived fields, version B: boundary policy visible). def bodies over x/y coords, dotted neighbor(clamp) hop, spawn 生成, effect set 水 に … にする, +崖 grant.
+--! registry ../registries/062-derived-fields.reg
+--! ja
+--! expect peak = 1 1 1
+--! expect pos = 7 6 6 7 7 7
+--! expect water = 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 7 100 100 100 100 100 100 7 7 100 100 100 100 100 7 7 7 100 100 100 100 7 7 7 7 100 100 100 7 7 7 7 7 100 100 7 7 7 7 7 7 100 7 7 7 7 7 7 7
+--! expect cliff = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+定義 ridge = sin ( x / 8 ) + sin ( y / 8 )
+定義 basin = ridge 0 未満
+定義 slope = abs ( 高さ - neighbor ( clamp ) の 高さ )
+8 8 と ridge 0.5 より 、 生成 峰
+8 8 と basin 、 水 に 100 にする
+8 8 と slope 30 より 、 崖 付

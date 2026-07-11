@@ -1,0 +1,17 @@
+-- Japanese twin of 037-fib-stencil-d: eleven Version A stencil steps — the binomial ridge truncated to the line, only the trailing coefficient survives, offset = 0..0 1, never Fibonacci (spec §21). = effect set → に…にする; the arithmetic RHS is more than one primary, so wrap it in parens.
+--! registry ../registries/035-fib-stencil-b.reg
+--! ja
+--! expect offset = 0 0 0 0 0 0 0 0 0 0 0 1
+--! expect fib = 1 1 2 3 5 8 13 21 34 55 89 144
+
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする
+12 、 変位 に ( 前 の 変位 + 前 の 前 の 変位 ) にする

@@ -1,0 +1,7 @@
+-- Mixed surfaces over an English registry (s51), ASCII twin. Statement 1 is plain English; statement 2 mixes a kanji alias (北 via ja) and Latin nouns in one line — aliases are surface-agnostic, so the ASCII surface says 北 too. (was s51-mixed-surface)
+-- The world is English; the speaker need not be. Both statements hit the same columns.
+--! registry ../registries/001-canonical-masked-update.reg
+--! expect gold = 2100 200 300 2400 500 600
+
+Nord & TwoHanded > 60 , Gold += 1000
+北 & TwoHanded > 60 , 金 += 1000

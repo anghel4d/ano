@@ -1,6 +1,0 @@
--- Japanese conjugate of 44 (fallen master): hop then structural removal, left-join-null on the dangling mentor. 師匠が死んだ北は、訓練を失う。
---! registry ../registries/44-fallen-master.reg
---! ja
---! expect trained = 0 1 0 0 0 1
-
-北 と 師匠 の 死 、 訓練 除

@@ -1,0 +1,12 @@
+-- The defect gamma fixes, both halves (ex36): broadcast scalar vs per-pen gamma column, plus conservation. Twin of 079-global-vs-gamma.bqn.
+-- Both halves side by side: the broadcast scalar, the per-pen gamma column overwriting it, then the conservation check — the gamma column folds back to the global 5.
+-- Program extends 079-global-vs-gamma-a: the ticked form overwrites the broadcast 5 5 5 5 with the per-pen column 2 3 0 0 — the two program points across the -a/-b pair pin the .bqn broadcast ≢ perPen witness. The final query folds the gamma column back to the global scalar (identity 0 keeps empty pen row 10 in the sum).
+--! registry ../registries/076-farm-gamma-a.reg
+--! out 5
+--! out 5
+--! expect headcount = -1 -1 -1 -1 -1 -1 -1 2 3 0 0
+
+#/ (Cattle)
+Pen , Headcount = #/ (Cattle)
+Pen , Headcount = #/ (livestock' & Cattle)   -- the tick: per-source column; the result-type split is lexical, never a registry lookup
++/ Headcount @ Pen                           -- conservation: the gamma column folds back to the global scalar 5

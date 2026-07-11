@@ -31,7 +31,7 @@ You need Nix with flakes enabled, and nothing else. The dev shell carries the C 
 ```text
 nix develop            # BQN, gcc, make, and friends
 make -C src            # builds ./src/anoc, the ano-to-BQN transpiler
-./src/anoc --run demos/1-selection/01-canonical-masked-update.ano
+./src/anoc --run demos/1-selection/001-canonical-masked-update.ano
 ```
 
 If the last line printed nothing and exited 0, congratulations: you have run ano and it agreed with its own spec. `anoc` compiled the file to a BQN program, ran it under CBQN, and asserted the post-state. A nonzero exit is a divergence. To skip the shell, prefix commands with `nix develop -c`. With no Nix at all, any C23 compiler plus a `bqn` binary on PATH will do.
@@ -39,15 +39,15 @@ If the last line printed nothing and exited 0, congratulations: you have run ano
 The demo tree comes in twins. Every `.bqn` file is a witness: the semantics worked out by hand in BQN, assertions included. Beside it sits an `.ano` twin, the same statements as an actual ano program, compiled and checked against the same post-state. Differential testing, both directions, on every example in this book. The three entry points:
 
 ```text
-./demos/check.sh       # every .bqn witness (80 files)
-./src/check-ano.sh     # every .ano twin through anoc --run (105 files)
+./demos/check.sh       # every .bqn witness (93 files)
+./src/check-ano.sh     # every .ano twin through anoc --run (257 files)
 nix flake check        # both suites, hermetically
 ```
 
-An `.ano` file is statements plus harness directives. A directive line starts `--!` (a plain comment starts `--`) and there are five: `--! registry ../registries/<name>.reg` loads the world fixture (a bare `<name>` instead loads `<name>.reg` from beside the `.ano`); `--! expect <col> = v v v ...` asserts a column's post-state in world order; `--! expect-n <k>` asserts the row count after spawns and despawns; `--! out <v ...>` asserts what a query statement prints; `--! ja` says the statement lines are in the Japanese surface (a later chapter). Here is the whole first demo, `demos/1-selection/01-canonical-masked-update.ano`:
+An `.ano` file is statements plus harness directives. A directive line starts `--!` (a plain comment starts `--`) and there are five: `--! registry ../registries/<name>.reg` loads the world fixture (a bare `<name>` instead loads `<name>.reg` from beside the `.ano`); `--! expect <col> = v v v ...` asserts a column's post-state in world order; `--! expect-n <k>` asserts the row count after spawns and despawns; `--! out <v ...>` asserts what a query statement prints; `--! ja` says the statement lines are in the Japanese surface (a later chapter). Here is the whole first demo, `demos/1-selection/001-canonical-masked-update.ano`:
 
 ```haskell
---! registry 01-canonical-masked-update
+--! registry 001-canonical-masked-update
 --! expect gold = 1100 200 300 1400 500 600
 
 Nord & TwoHanded > 60 , Gold += 1000
@@ -57,7 +57,7 @@ Your first exercise is to break it. Change the 1400 to 1401, run it, and watch t
 
 ## The registry, or: worlds on six rows
 
-A script can name nothing the host did not register. The registry is ano's entire contact surface with its engine, and in this repository the `.reg` file format stands in for that engine. The world your first demo ran against, `demos/registries/01-canonical-masked-update.reg`:
+A script can name nothing the host did not register. The registry is ano's entire contact surface with its engine, and in this repository the `.reg` file format stands in for that engine. The world your first demo ran against, `demos/registries/001-canonical-masked-update.reg`:
 
 ```text
 n 6
@@ -117,9 +117,9 @@ Merchant @ Whiterun            -- a mask, evaluated in a scope → a mask
 Oil @ blast(5) at impact       -- a mask under a frame-fixing scope (the anchored form)
 ```
 
-The last three live in later chapters (space, tiers, the wand) but the sentence never changes, and result arity is never carried by `@`. One consequence worth internalizing early: misplace a parenthesis around a scope and you get a different well-typed meaning, not garbage. `+/ Gold @ (Merchant & !Whiterun)` folds over the compound mask. `+/ Gold @ Merchant & !Whiterun` binds the scope to the fold first and broadcasts the scalar total onto the leftover masks. The failure mode isn't nonsense. It's meaningful things you didn't mean. `demos/3-fold-scan/14-reductions.ano` pins both spellings side by side.
+The last three live in later chapters (space, tiers, the wand) but the sentence never changes, and result arity is never carried by `@`. One consequence worth internalizing early: misplace a parenthesis around a scope and you get a different well-typed meaning, not garbage. `+/ Gold @ (Merchant & !Whiterun)` folds over the compound mask. `+/ Gold @ Merchant & !Whiterun` binds the scope to the fold first and broadcasts the scalar total onto the leftover masks. The failure mode isn't nonsense. It's meaningful things you didn't mean. `demos/3-fold-scan/028-reductions.ano` pins both spellings side by side.
 
-Presence is three-valued, and the tuple form tells the cases apart: present-and-constrained, present-any, absent (`demos/1-selection/06-presence-patterns.ano`):
+Presence is three-valued, and the tuple form tells the cases apart: present-and-constrained, present-any, absent (`demos/1-selection/006-presence-patterns.ano`):
 
 ```haskell
 (Nord, TwoHanded > 60) , Gold += 1000
@@ -142,7 +142,7 @@ Plot & |/ neighbors'.Planted , +Watered  -- any planted neighbor
 Pen & &/ livestock'.Healthy , +Certified -- all animals healthy
 ```
 
-Finally, `def` names a selection, and the name folds into any selection slot at plan time, free (`09-named-selections.ano`):
+Finally, `def` names a selection, and the name folds into any selection slot at plan time, free (`009-named-selections.ano`):
 
 ```haskell
 def master = Human & Nord & TwoHanded > 60
@@ -169,9 +169,9 @@ Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 ^cursor , Knockback 5 ; Flash :Red ; -Shielded
 ```
 
-What if two batched effects write the same column? They must commute under a registered merge law. The additive family (`+=` `-=`) merges, the multiplicative family (`*=` `/=`) merges, presence writes of one kind merge idempotently, and anything else (`+=` beside `*=`, a double `=`) is rejected at compile time with "no merge law: written twice in one barrier". Not reordered, not last-wins, rejected. The demos `s10-pre-state.ano` and `s10-barrier-granularity-a/b.ano` pin the law from both sides.
+What if two batched effects write the same column? They must commute under a registered merge law. The additive family (`+=` `-=`) merges, the multiplicative family (`*=` `/=`) merges, presence writes of one kind merge idempotently, and anything else (`+=` beside `*=`, a double `=`) is rejected at compile time with "no merge law: written twice in one barrier". Not reordered, not last-wins, rejected. The demos `024-pre-state.ano` and `022-barrier-granularity-a/b.ano` pin the law from both sides.
 
-Statements chain through the saved mask. `~` alone, a leading comma, or a bare effect line continues the antecedent: a new statement, a new barrier, over the mask saved at the previous gather. The mask, not the pre-state. The classic (`demos/9-nihongo/49-block-anaphora.ano` pins it):
+Statements chain through the saved mask. `~` alone, a leading comma, or a bare effect line continues the antecedent: a new statement, a new barrier, over the mask saved at the previous gather. The mask, not the pre-state. The classic (`demos/9-nihongo/094-block-anaphora.ano` pins it):
 
 ```haskell
 Nord & Dead , spawn Ghost
@@ -192,16 +192,16 @@ threat/ Damage @ Enemies     -- named registered reducer: the slash attaches to 
 fold(threat) Damage @ Enemies    -- the long form, same fold
 ```
 
-Two honesty rules. The raw fold contract is an associative operator with a registered identity, and the derived forms keep their spellings while the registry records the truth: `avg/` folds sum-and-count then divides, `#/` is `+/` over ones. And the empty scope: a fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true), while a reducer with no identity (`avg/`, `max/`, `min/`) fails the row, which drops out of the selection exactly like a dangling hop. No NaN, no default, the left-join-null law again (`s11-avg-fold-finish.ano`).
+Two honesty rules. The raw fold contract is an associative operator with a registered identity, and the derived forms keep their spellings while the registry records the truth: `avg/` folds sum-and-count then divides, `#/` is `+/` over ones. And the empty scope: a fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true), while a reducer with no identity (`avg/`, `max/`, `min/`) fails the row, which drops out of the selection exactly like a dangling hop. No NaN, no default, the left-join-null law again (`032-avg-fold-finish.ano`).
 
-A scan accumulates and returns a column of equal length, which means it needs an order, and an abstract selection has none. Either the source view carries one, or you name one. The same scan, two spellings, same result (`16-scans.ano`, `17-scan-along.ano`):
+A scan accumulates and returns a column of equal length, which means it needs an order, and an abstract selection has none. Either the source view carries one, or you name one. The same scan, two spellings, same result (`030-scans.ano`, `031-scan-along.ano`):
 
 ```haskell
 +\ Weight @ (↕steps |> route A B)    -- the view is ordered, scan along it
 scan(+) Weight along pathCells       -- the order named explicitly
 ```
 
-The whole family fits one table, folds and scans together. Lineage: in k, `&` IS min and `|` IS max over numerics; ano's boolean reading is the k reading restricted to masks. The two boolean scans are latches — `|\` is ever-any, "has the fire reached each point yet" (`s62-ever-any.ano`); `&\` is still-all, "the column intact up to here" (`s63-still-all.ano`) — and a named reducer's scan comes free (`threat\`, `s64-reducer-spellings.ano`).
+The whole family fits one table, folds and scans together. Lineage: in k, `&` IS min and `|` IS max over numerics; ano's boolean reading is the k reading restricted to masks. The two boolean scans are latches — `|\` is ever-any, "has the fire reached each point yet" (`038-ever-any.ano`); `&\` is still-all, "the column intact up to here" (`039-still-all.ano`) — and a named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
 
 | f | `f/` fold | `f\` scan | empty-scope identity |
 |---|---|---|---|
@@ -218,7 +218,7 @@ The whole family fits one table, folds and scans together. Lineage: in k, `&` IS
 
 The identity column is the honesty rule again, extended to the empty fiber, and a scan needs no identity at all: it is length-preserving, so the empty scope yields the empty column. Why no `>/` for max? Recorded verdict: `>` is a comparison returning bool, folding it is non-associative nonsense, and k only earns `|/` because k's `|` IS max natively — under the named-reducer unification max/min/avg are names like any other, so no glyph is needed. Scan cells anoc does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses; `+\ *\ &\ |\ max\` and named-reducer scans are live.
 
-And now the trap this repository has pinned four different ways (`s19-fib-stencil-a` through `-d`): the tempting recurrence. You cannot write Fibonacci like this —
+And now the trap this repository has pinned four different ways (`034-fib-stencil-a` through `-d`): the tempting recurrence. You cannot write Fibonacci like this —
 
 ```haskell
 12 , offset = prev.offset + prev.prev.offset     -- NOT a recurrence: one stencil step
@@ -235,20 +235,20 @@ Same shape, opposite verdicts, and the manual's first rule of thumb: if a value 
 
 ## Order
 
-Grade returns the permutation that sorts. Rank returns positions as values (`demos/4-order`). The distinction is load-bearing: a grade written back into a component would leak which tied row came first, index information a record write must not carry (the tiers chapter says why). So write-backs are `rank(...)`, value-only, ties sharing a rank (`s13-rank-ties.ano` pins the tie case):
+Grade returns the permutation that sorts. Rank returns positions as values (`demos/4-order`). The distinction is load-bearing: a grade written back into a component would leak which tied row came first, index information a record write must not carry (the tiers chapter says why). So write-backs are `rank(...)`, value-only, ties sharing a rank (`045-rank-ties.ano` pins the tie case):
 
 ```haskell
 Unit , Slot = rank(Initiative)
 ```
 
-Top-k selection, one meaning, two spellings, same five entities marked (`18-grade-and-rank.ano`, `19-pipeline-topk.ano`):
+Top-k selection, one meaning, two spellings, same five entities marked (`041-grade-and-rank.ano`, `042-pipeline-topk.ano`):
 
 ```haskell
 top 5 (grade desc Threat) , +Targeted
 Enemy |> order by Threat desc |> take 5 , +Targeted
 ```
 
-The fold-prefix form reads like APL, the pipeline reads like a sentence. Pick per audience, the plan is the same. Ordered views compose with everything from the last chapter: `+/ threat @ (Enemy |> order by dps desc |> take 10)` folds over the truncated ordered view (`26-fold-ordered-topk.ano`).
+The fold-prefix form reads like APL, the pipeline reads like a sentence. Pick per audience, the plan is the same. Ordered views compose with everything from the last chapter: `+/ threat @ (Enemy |> order by dps desc |> take 10)` folds over the truncated ordered view (`043-fold-ordered-topk.ano`).
 
 ## Generation
 
@@ -258,20 +258,20 @@ Filters cannot invent keys. Only generation mints rows (`demos/5-generate`). `sp
 Nest , spawn Egg * Fertility at pos + polar(index, index * 137.5)
 ```
 
-Replicate has a pipeline spelling too, the flat-map exposed (`22-replicate-spawn.ano`, `23-expand-alias.ano`):
+Replicate has a pipeline spelling too, the flat-map exposed (`048-replicate-spawn.ano`, `049-expand-alias.ano`):
 
 ```haskell
 Spawner , spawn Minion * Count
 Spawner |> expand Count , spawn Minion
 ```
 
-A statement may batch several spawns in one barrier, and keys mint once across the batch: minting two rows in one barrier equals minting one then one, a commutation the wand chapter's `n1-cast.ano` pins as arithmetic. Pairwise work is the comprehension, a statement form whose two generators and filters are the source, the theta-join σ_p(A × B) with binders naming each side (`20-outer-product-comprehension.ano`):
+A statement may batch several spawns in one barrier, and keys mint once across the batch: minting two rows in one barrier equals minting one then one, a commutation the wand chapter's `110-cast.ano` pins as arithmetic. Pairwise work is the comprehension, a statement form whose two generators and filters are the source, the theta-join σ_p(A × B) with binders naming each side (`046-outer-product-comprehension.ano`):
 
 ```haskell
 [ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
 ```
 
-And reshape repositions what already exists. `to` pours an ordered selection into a shape, minting nothing (`24-reshape-positions-*.ano`):
+And reshape repositions what already exists. `to` pours an ordered selection into a shape, minting nothing (`050-reshape-positions-*.ano`):
 
 ```haskell
 Soldier , pos = to 8 8       -- an 8×8 block
@@ -282,7 +282,7 @@ Generate when the rows don't exist, reshape when they do. That boundary, not a k
 
 ## Space
 
-Space is the same calculus with the raggedness removed (`demos/6-space`). There is no spatial keyword. A numeric shape in the source slot is the generator, carrying `x` and `y` per cell, and every regular pattern is just a predicate on those columns (`27-lattice-patterns.ano`):
+Space is the same calculus with the raggedness removed (`demos/6-space`). There is no spatial keyword. A numeric shape in the source slot is the generator, carrying `x` and `y` per cell, and every regular pattern is just a predicate on those columns (`055-lattice-patterns.ano`):
 
 ```haskell
 8 8 & (x + y) % 2 == 0 , spawn Wheat     -- checkerboard
@@ -290,7 +290,7 @@ Space is the same calculus with the raggedness removed (`demos/6-space`). There 
 8 8 & x + y < 8 , +Buildable             -- triangle
 ```
 
-A bare `n` is a line, its `index` the same binding replicate taught you, so computed arrangements are index math through callables (`28-computed-line.ano`, `29-spiral-assign.ano`). Folds, scans, grades, and replicates all run at rank 2 unchanged: `+/ Elevation @ 64 64`, `top 8 (grade desc Safety @ 64 64) , spawn Sentry`, `64 64 , spawn Tree * Density`. The one new wrinkle is the two-axis `scan2(+)` for summed-area tables (`30-space-reductions-b.ano`). A `def` over the coordinate columns is a field, and `neighbor(clamp).Height` is the shift pseudo-relation with its boundary policy visible. A shift over pre-state, never a carry. You already know why (`33-derived-fields.ano`):
+A bare `n` is a line, its `index` the same binding replicate taught you, so computed arrangements are index math through callables (`056-computed-line.ano`, `057-spiral-assign.ano`). Folds, scans, grades, and replicates all run at rank 2 unchanged: `+/ Elevation @ 64 64`, `top 8 (grade desc Safety @ 64 64) , spawn Sentry`, `64 64 , spawn Tree * Density`. The one new wrinkle is the two-axis `scan2(+)` for summed-area tables (`059-space-reductions-b.ano`). A `def` over the coordinate columns is a field, and `neighbor(clamp).Height` is the shift pseudo-relation with its boundary policy visible. A shift over pre-state, never a carry. You already know why (`062-derived-fields.ano`):
 
 ```haskell
 def ridge = sin(x / 8) + sin(y / 8)
@@ -298,11 +298,11 @@ def slope = abs(Height - neighbor(clamp).Height)
 64 64 & ridge > 0.5 , spawn Peak
 ```
 
-Two flourishes. The board literal reshapes a glyph string into a lattice carrying `char` per cell, so source code looks like the result (`34-board-literal.ano`): `"RNBQ..." to 8 8 , spawn (pieceOf char)`. And cells reach world-space through an affine frame, `pos = o + S·k`, fixed by the `@` scope. Remember that sentence when the wand chapter anchors a blast radius to a moving projectile.
+Two flourishes. The board literal reshapes a glyph string into a lattice carrying `char` per cell, so source code looks like the result (`063-board-literal.ano`): `"RNBQ..." to 8 8 , spawn (pieceOf char)`. And cells reach world-space through an affine frame, `pos = o + S·k`, fixed by the `@` scope. Remember that sentence when the wand chapter anchors a blast radius to a moving projectile.
 
 ## The two habitats, and the three tiers
 
-You have now seen every operator twice. That is the point (`demos/7-tiers`, `35-two-habitats-*.ano`):
+You have now seen every operator twice. That is the point (`demos/7-tiers`, `064-two-habitats-*.ano`):
 
 ```text
                   over entities (rank 1)        over space (rank 2)
@@ -319,7 +319,7 @@ def         def threat = Dmg*Spd/Rng     def ridge = sin(x/8)+sin(y/8)
 
 One generator read at two ranks: the entity key at rank 1, the cell index at rank 2. What differs is not the operators but what a write into the index costs, and that cost ladder is the tier system, the answer to "why was rank value-only?" you were promised.
 
-Tier 1 is space: the index is a place, and the ground is regenerable (`↕` can remint any address), so the full calculus applies, reshape and annihilate included. Nothing is owed because nothing can be lost. Tier 2 is records: the index is a name that must survive, so a write-back must be identity-aligned. Relabel the entities and every column relabels together, and the write must not notice. That single symmetry demand is why entity 47's gold stays entity 47's, why stable-tied rank would be forgery, and why order-work re-enters only by conjugating with the data's own grade (sort, act, unsort), which is exactly what `scan(f) ... along` compiles to on write-back (`t2-conjugation.ano` and `t2-ties.ano` are the machine-checked counterexamples). Tier 3 is opaque: a behavior tree, a nav-mesh, values no array operator respects. What remains is selection (the carrier is still addressable) and dispatch to a registered routine. Ano guarantees the envelope and never looks inside (`39-tier3-opaque.ano`):
+Tier 1 is space: the index is a place, and the ground is regenerable (`↕` can remint any address), so the full calculus applies, reshape and annihilate included. Nothing is owed because nothing can be lost. Tier 2 is records: the index is a name that must survive, so a write-back must be identity-aligned. Relabel the entities and every column relabels together, and the write must not notice. That single symmetry demand is why entity 47's gold stays entity 47's, why stable-tied rank would be forgery, and why order-work re-enters only by conjugating with the data's own grade (sort, act, unsort), which is exactly what `scan(f) ... along` compiles to on write-back (`073-conjugation.ano` and `075-ties.ano` are the machine-checked counterexamples). Tier 3 is opaque: a behavior tree, a nav-mesh, values no array operator respects. What remains is selection (the carrier is still addressable) and dispatch to a registered routine. Ano guarantees the envelope and never looks inside (`071-tier3-opaque.ano`):
 
 ```haskell
 Node , OutDeg = +/ Adj@row          -- same bits viewed as a matrix: Tier 1, free
@@ -339,40 +339,40 @@ Plot , Moisture = avg/ neighbors'.Moisture    -- per-plot mean
 Target , Hits += #/ attackers'                -- in-degree, folded at the target
 ```
 
-Same problem, both arities, side by side. The pair `36-global-vs-gamma-a/b.ano` exists precisely to stop you from confusing them:
+Same problem, both arities, side by side. The pair `079-global-vs-gamma-a/b.ano` exists precisely to stop you from confusing them:
 
 ```haskell
 Cow & Weight < avg/ Weight @ Cow , +Marked    -- @: one scalar, the herd mean, broadcast
 Plot , Moisture = avg/ neighbors'.Moisture    -- ': a column, one mean per plot
 ```
 
-After a fold, `@` yields a scalar and the tick yields a per-source column, lexically, never by registry lookup. `@` never groups. Empty fibers follow the fold-identity law you already know: a pen with no animals keeps Headcount 0 under `#/`, and an `avg/` over an empty fiber drops the row. The farm interlude in the spec (and `36-farm-gamma-*.ano`) runs a nine-line farm on exactly these pieces. Read it now and notice you can parse every line.
+After a fold, `@` yields a scalar and the tick yields a per-source column, lexically, never by registry lookup. `@` never groups. Empty fibers follow the fold-identity law you already know: a pen with no animals keeps Headcount 0 under `#/`, and an `avg/` over an empty fiber drops the row. The farm interlude in the spec (and `076-farm-gamma-*.ano`) runs a nine-line farm on exactly these pieces. Read it now and notice you can parse every line.
 
-While the glyph is fresh, the representation underneath it. A one-to-many relationship is another relation, not a ragged cell: `srel targets 2 4 | | | 4 5 | | | |` (`12-structural-effects.reg`) is one fiber per row — a list of lists in the BQN prototype, CSR in Steel, one offsets column plus one flat edge array (ano-ecs §5). Two flat arrays, array-like all the way down, the same shape as q's nested columns and Arrow's list columns. And the mask algebra never sees multiplicity: `Frenzy.targets'` in source position is the image, bits OR'd into a mask, so an entity reached twice is one bit. The idempotent-scatter law is free because the representation cannot express multiplicity (ano-ecs §4). When multiplicity matters you say so with a fold, and `s05a-frenzy-image.ano` pins both readings over one fixture:
+While the glyph is fresh, the representation underneath it. A one-to-many relationship is another relation, not a ragged cell: `srel targets 2 4 | | | 4 5 | | | |` (`018-structural-effects.reg`) is one fiber per row — a list of lists in the BQN prototype, CSR in Steel, one offsets column plus one flat edge array (ano-ecs §5). Two flat arrays, array-like all the way down, the same shape as q's nested columns and Arrow's list columns. And the mask algebra never sees multiplicity: `Frenzy.targets'` in source position is the image, bits OR'd into a mask, so an entity reached twice is one bit. The idempotent-scatter law is free because the representation cannot express multiplicity (ano-ecs §4). When multiplicity matters you say so with a fold, and `010-frenzy-image.ano` pins both readings over one fixture:
 
 ```haskell
 Frenzy.targets' , +Frenzied ; Health -= 10   -- the image: a mask — entity 4, reachable twice, takes the batch once
 Target , Hits += #/ attackers'               -- the in-degree: a fold — the same entity 4 counts 2
 ```
 
-The image is the set; the fold is the count (spec §5, §13). Vectors as cell values exist in the same disciplined form: `col pos vec` holds fixed-arity pairs (`24-reshape-positions-a.reg`), `bind pathCells vec` holds an index sequence (`17-scan-along.reg`). The discipline, stated once: fixed-shape tuples live in vec columns, while ragged, variable-arity data lives behind a relation — named, with fibers, an inverse, and the γ machinery. Both are array-native. Neither leaks raggedness into the mask algebra.
+The image is the set; the fold is the count (spec §5, §13). Vectors as cell values exist in the same disciplined form: `col pos vec` holds fixed-arity pairs (`050-reshape-positions-a.reg`), `bind pathCells vec` holds an index sequence (`031-scan-along.reg`). The discipline, stated once: fixed-shape tuples live in vec columns, while ragged, variable-arity data lives behind a relation — named, with fibers, an inverse, and the γ machinery. Both are array-native. Neither leaks raggedness into the mask algebra.
 
 ## The Japanese surface
 
-Ano's grammar keeps turning out to be Japanese grammar with the serial numbers left on, and the repository treats that as load-bearing evidence, not decoration (`ano_nihongo.md` is the research file, `demos/9-nihongo` the proofs). The Japanese surface is a token-level skin over the same parser: registry names carry ja aliases, particles map to operators, and normalization re-roots each postfix particle before its operand, after which the token streams are identical. One statement, two surfaces, one compiled program (`40-tokenizer-skin.ano`):
+Ano's grammar keeps turning out to be Japanese grammar with the serial numbers left on, and the repository treats that as load-bearing evidence, not decoration (`ano_nihongo.md` is the research file, `demos/9-nihongo` the proofs). The Japanese surface is a token-level skin over the same parser: registry names carry ja aliases, particles map to operators, and normalization re-roots each postfix particle before its operand, after which the token streams are identical. One statement, two surfaces, one compiled program (`082-tokenizer-skin.ano`):
 
 ```text
 北 と 両手 六十 より 、 金 に 千 たす
 Nord & TwoHanded > 60 , Gold += 1000
 ```
 
-The particle map is small and shockingly clean: と is `&`, の is the dot hop (`41-dotted-hop.ano`), で is the `@` scope (`42-scoped-selection.ano`), より the comparison, 、 the hinge, たす the `+=`. Kanji numerals lex (`九千九百九十九` is 9999), and counters are typed numerals: `三ヶ月` is `3mo`, three months, and the unit rides the value into the comparison (`47-counters-becoming.ano`):
+The particle map is small and shockingly clean: と is `&`, の is the dot hop (`083-dotted-hop.ano`), で is the `@` scope (`084-scoped-selection.ano`), より the comparison, 、 the hinge, たす the `+=`. Kanji numerals lex (`九千九百九十九` is 9999), and counters are typed numerals: `三ヶ月` is `3mo`, three months, and the unit rides the value into the comparison (`092-counters-becoming.ano`):
 
 ```haskell
 Cheese @ cellar & Aged > 3mo , Price *= 2
 ```
 
-The deeper claims live in `43-relative-clause`, `48-zero-subject`, `49-block-anaphora`: the relative clause as selection (a full clause before a noun restricts it, no relativizer, which is precisely "the predicate is the entity reference"), the zero subject the effects chapter already used, and the する/なる voice split the next chapter is about to cash in. To run one: the file says `--! ja`, and `anoc --tokens` shows you the normalized stream.
+The deeper claims live in `085-relative-clause`, `093-zero-subject`, `094-block-anaphora`: the relative clause as selection (a full clause before a noun restricts it, no relativizer, which is precisely "the predicate is the entity reference"), the zero subject the effects chapter already used, and the する/なる voice split the next chapter is about to cash in. To run one: the file says `--! ja`, and `anoc --tokens` shows you the normalized stream.
 
 ## Standing rules and the clock
 
@@ -385,7 +385,7 @@ def spread = Plot & !Planted & #/ (neighbors' & Planted) >= 2 => +Planted    -- 
 
 A standing rule re-gathers against each tick's pre-state and scatters once. No cascading, no fixpoint, one step per tick, which is also the game-legible behavior: crops advance one ring per tick because that is what the rule means. The lineage is Datalog's `head :- body` and the production rules of OPS5 and CLIPS, and the paradigm shipped whole campaigns in StarCraft 2's trigger editor. Ano is that layer with a relational predicate language.
 
-All rules active in a tick share ONE barrier, the `;` law lifted to the rule set, and overlapping writes are admitted three ways, statically: disjoint registered footprints, a merge law (you know these), or complementary guard literals proving the masks row-disjoint. The third is the elegant one. Conway's Life as two rules (`c3-life-naru-b.ano`):
+All rules active in a tick share ONE barrier, the `;` law lifted to the rule set, and overlapping writes are admitted three ways, statically: disjoint registered footprints, a merge law (you know these), or complementary guard literals proving the masks row-disjoint. The third is the elegant one. Conway's Life as two rules (`109-life-naru-b.ano`):
 
 ```haskell
 def kin    = #/ (moore' & Planted)
@@ -393,24 +393,24 @@ def bloom  = Plot & !Planted & kin == 3 => +Planted
 def wither = Plot & Planted & kin != 2 & kin != 3 => -Planted
 ```
 
-Both write `Planted` with no common merge family, and a column-level check would reject them. But bloom selects under `!Planted` and wither under `Planted`, so no row of one pre-state can satisfy both, and the emitter reads that complement as the disjointness certificate. The blinker blinks synchronously. A per-rule barrier would break it in either order, and `c1-life-step-a/b.ano` and `c2-life-glider.ano` pin the one-barrier synchrony from the performed side first.
+Both write `Planted` with no common merge family, and a column-level check would reject them. But bloom selects under `!Planted` and wither under `Planted`, so no row of one pre-state can satisfy both, and the emitter reads that complement as the disjointness certificate. The blinker blinks synchronously. A per-rule barrier would break it in either order, and `105-life-step-a/b.ano` and `107-life-glider.ano` pin the one-barrier synchrony from the performed side first.
 
 One honest note about running rules here, since anoc reads a file top to bottom and the real engine has a clock: the harness pretends the clock beats once at the end of each unbroken run of `def` lines, and every rule installed so far fires at each beat. Installs persist, so a rule installed early fires again at a later beat, exactly as the engine would have it. What a file cannot do is let ticks pass without installing something new. `ISSUES.md` states the residue plainly, and the next chapter has a demo that makes the clock beat twice on purpose.
 
 ## The wand
 
-The final suite (`demos/11-noita`) takes Noita, a build-a-projectile roguelite whose wands are little programs, and translates it card by card, because a language earns its keep on somebody else's problem. The mapping: a projectile spell is a spawn, a stat modifier is a masked value write, multicast is barrier batching, a formation is replicate's per-copy index, a behavior modifier is a marker component plus a relationship plus a standing rule, the trigger card is a rule turning a hit into a cast, and the material world is the conways lattice under a fuel guard. Wand slot order is program order: the barrier makes each card read the previous card's commit. Walk `n1-cast` through `n6-wand` and you will recognize every piece from earlier chapters. What follows are the set-pieces where one meaning gets several spellings.
+The final suite (`demos/11-noita`) takes Noita, a build-a-projectile roguelite whose wands are little programs, and translates it card by card, because a language earns its keep on somebody else's problem. The mapping: a projectile spell is a spawn, a stat modifier is a masked value write, multicast is barrier batching, a formation is replicate's per-copy index, a behavior modifier is a marker component plus a relationship plus a standing rule, the trigger card is a rule turning a hit into a cast, and the material world is the conways lattice under a fuel guard. Wand slot order is program order: the barrier makes each card read the previous card's commit. Walk `110-cast` through `119-wand` and you will recognize every piece from earlier chapters. What follows are the set-pieces where one meaning gets several spellings.
 
-The detonation, spelled twice with one meaning (`n5-alchemy.ano`: both lines live in the file, hit the same cells, and since `+Fire` is idempotent the second barrier is the first's echo, the post-state pinning the equivalence):
+The detonation, spelled twice with one meaning (`116-alchemy.ano`: both lines live in the file, hit the same cells, and since `+Fire` is idempotent the second barrier is the first's echo, the post-state pinning the equivalence):
 
 ```haskell
 Oil & (x - 6) * (x - 6) + (y - 6) * (y - 6) <= 5 , +Fire     -- raw coordinate arithmetic, nothing else
 Oil @ blast(5) at Firebolt.pos , +Fire                       -- the anchored frame
 ```
 
-The first is column math you could have written after the space chapter. The second is the frame machinery cashing in: `@` fixes the frame, the locative `at` fills its origin, here a mirror-read of the payload's position and in `n6-wand.ano` a bound point (`at impact`), and the registered frame fn runs per cell against that origin. Reference by description on the left, and now on the anchor too.
+The first is column math you could have written after the space chapter. The second is the frame machinery cashing in: `@` fixes the frame, the locative `at` fills its origin, here a mirror-read of the payload's position and in `119-wand.ano` a bound point (`at impact`), and the registered frame fn runs per cell against that origin. Reference by description on the left, and now on the anchor too.
 
-The alchemy pair runs spread and consume in the SAME tick (`n5-alchemy-b.ano`): spread rings the oil that consume is removing, both reading one pre-state. That is the shared rule barrier doing visible work, since either sequential order gives a different, wrong world. And `n5-alchemy-c.ano` lets the clock beat twice: spread installed alone rings once, a query counts the burning cells, then consume's install brings the second beat, where spread, still installed, rings again while consume burns. Installs persist. The late joiner costs the first ring nothing.
+The alchemy pair runs spread and consume in the SAME tick (`117-alchemy-b.ano`): spread rings the oil that consume is removing, both reading one pre-state. That is the shared rule barrier doing visible work, since either sequential order gives a different, wrong world. And `118-alchemy-c.ano` lets the clock beat twice: spread installed alone rings once, a query counts the burning cells, then consume's install brings the second beat, where spread, still installed, rings again while consume burns. Installs persist. The late joiner costs the first ring nothing.
 
 The w-series strips the clock and stress-tests the evaluator: Noita's cast-block algorithm itself becomes column calculus, with no new grammar. The draw is a scan (`w1`: the block's running balance is `1 + +\ (DrawAdd - 1)` along slot order, and `w1-b` pins the recovery trap where `bal >= 0` is the wrong evaluator). The deck wrap is modular index arithmetic (`w2`). Reflection is free because the program is data (`w4`: the Greek-letter cards are one-line selections over the wand's own table). And then the crown jewel: modifier binding, "each modifier binds the next projectile at or after it", the same interleaved wand `[DP, Triple, SB, DP, SB, SB]`, the same damage column out, three spellings:
 
@@ -428,7 +428,7 @@ Spell & Proj & Member , Damage += 10 * (#/ (Bind' & (Mod & Member)))
 
 The `.bqn` witness pins the interleaved wand where the shortcut provably dies. `-b` and `-c` both run the general join on it and agree. In `-c`, a key-valued column has exactly a functional relationship's shape, so `Bind'` resolves to its inverse fibers, the value-level rel, and the damage line is character-for-character the grouped fold from `-b` with the data source swapped for a computed one. That is what semantic integrity buys: the relation can arrive as geometry, as registry data, or as a scanned column, and γ does not care.
 
-One last pair, quotation (`w6-eval.ano`), the same statement direct and spliced:
+One last pair, quotation (`128-eval.ano`), the same statement direct and spliced:
 
 ```haskell
 SparkBolt , Damage += 10

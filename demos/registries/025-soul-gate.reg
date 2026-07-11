@@ -1,0 +1,15 @@
+# The soul gate (ruled 2026-07-11) — the barrier-granularity fixture plus the soul fuel (mirrors demos/2-effects/025-soul-gate.bqn)
+# keys mints fresh ids; spawn defaults keep nord and dead 1 (the ghosts remain dead Nords);
+# soul has NO default, so a minted ghost takes the type zero 0 and can never pass the gate.
+n 6
+col keys num 0 1 2 3 4 5
+col nord bool 1 1 0 1 0 0
+col dead bool 1 0 0 1 0 1
+col ghost bool 0 0 0 0 0 0
+col soul bool 1 1 0 1 0 0
+default nord 1
+default dead 1
+ja 北 nord
+ja 死 dead
+ja 幽霊 ghost
+ja 魂 soul

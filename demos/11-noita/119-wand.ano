@@ -1,0 +1,26 @@
+-- The assembled wand (n6): [Twin Spell, Damage Plus, Trigger, Firebolt], cast at an enemy standing over an oil vein. Twin of 119-wand.bqn. (was n6-wand)
+-- Every card from n1-n5 in one cast: the multicast mints, the modifier writes, the bolts fly, the hit joins, the trigger detonates the chunk. One wand, one world, every prior demo load-bearing.
+-- Cast, cards, one frame of flight, the collision join, the damage spend (a scoped fold: the volley's stacked damage), detonation and one performed ring of spread in the material chunk. The trigger rule that mints payloads at both impacts is installed last: the harness clock beats at the end of an install run, so the payload tick gathers everything the earlier barriers committed.
+-- The detonation is an anchored frame: @ fixes the frame, `at` fills its origin. Here the anchor is the impact binding — the deictic form, the host having resolved the payload's world pos into chunk coordinates (the world-to-chunk (o,S) stays host business); n5 shows the inline mirror-read form (at Firebolt.pos).
+--! registry ../registries/119-wand.reg
+--! expect-n 5
+--! expect keys = 0 1 2 5 6
+--! expect parent = -1 -1 -1 3 4
+--! expect mana = 75 0 0 0 0
+--! expect sparkBolt = 0 0 0 0 0
+--! expect firebolt = 0 0 0 1 1
+--! expect trigger = 0 0 0 0 0
+--! expect hit = 0 1 0 0 0
+--! expect damage = 0 0 0 3 3
+--! expect health = 0 4 0 0 0
+--! expect pos = 5 5 40 5 0 0 41 3 41 7
+--! expect fire = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+Wand , spawn SparkBolt * 2 at pos + (12, index * 4 - 2) ; Mana -= 25
+SparkBolt , Damage += 10 ; +Trigger
+SparkBolt , pos = pos + (24, 0)
+[ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
+Enemy & Hit , Health -= +/ Damage @ SparkBolt
+Oil @ blast(5) at impact , +Fire
+Oil & !Fire & #/ (moore' & Fire) >= 1 , +Fire
+def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~

@@ -1,0 +1,6 @@
+-- Japanese conjugate of 04 (scoped selection). Scope particle で is postfix (ホワイトラン で = @ Whiterun).
+--! registry ../registries/004-scoped-selection.reg
+--! ja
+--! expect gold = 5100 100 100 5100 100 100
+
+商人 ホワイトラン で 、 金 に 五千 たす
