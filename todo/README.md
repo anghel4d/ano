@@ -2,6 +2,8 @@
 
 Task files from the 2026-07-11 demo-pass review. One work item per file, numbered in execution order, not the order they arose. Each file is self-contained for a dedicated agent: findings with code pointers, the author's rulings (binding), open sub-questions (surface at execution, never resolve silently), work items, and invariants that must hold after. 00 is the exception: a Q/A for the author holding only the unanswered decision points. When a file is executed, cross it off in TODO.md and archive it to .archive/.
 
+Executed and archived (2026-07-11): 01-10. The catalog below stands as record; what remains here is 00 (the open rulings) and 11-next-steps.md, the blocking residue that needs the author's hand.
+
 - `00-open-rulings.md` — the deferred decision points, in Q/A form; the answered rulings from the 2026-07-11 pass are folded into their consuming task files. Consuming tasks read the A-lines first.
 - `01-kore-query-outputs.md` — query results are computed, asserted, never shown. Make every query visible in kore. FIRST agent task, by ruling.
 - `02-registry-types-and-hop-integrity.md` — the s10 bundle: unique/keyed registry types, the proto, fallback defaults, the despawn policy, the functional-hop fix. The deepest item and the first core-design advancement since the initial spec.
