@@ -870,7 +870,7 @@ impl<'a> Em<'a> {
         if let Some(ei) = self.find(n) {
             match &self.ent(ei).kind {
                 RegEntryKind::SRel { .. } => return Ok(self.bqnv(ei)),
-                RegEntryKind::Col { ty: ColType::Num, .. } => {
+                RegEntryKind::Col { ty: ColType::Num | ColType::Nat | ColType::Int, .. } => {
                     let t = self.tv();
                     let idc = self.id_col();
                     let v = self.bqnv(ei);
@@ -2236,6 +2236,37 @@ impl<'a> Em<'a> {
         None
     }
 
+    // The barrier retraction: a committed write into a refined column normalizes onto the
+    // carrier set — bool by 0< (positive is true: 2→1, ¯1→0), nat/int by floor then clamp
+    // to ±2^53, a declared range by clamp, outermost. It is a property of the BARRIER, not
+    // the write: merged writes retract once, at commit. Mask ops (fam | &) are boolean by
+    // construction, so a bool column elides the wrap — the type proves the write in-domain.
+    // Appends (spawn fill) and pre-state reads are in-domain by the load seal.
+    fn retract(&self, i: usize, fam: u8, expr: String) -> String {
+        let e = self.ent(i);
+        let (ty, rng) = match &e.kind {
+            RegEntryKind::Col { ty, rng, .. } | RegEntryKind::Field { ty, rng, .. } => (*ty, *rng),
+            _ => return expr,
+        };
+        let mut v = expr;
+        match ty {
+            ColType::Bool => {
+                if fam != b'|' && fam != b'&' {
+                    v = format!("(0<{})", v);
+                }
+            }
+            ColType::Nat => v = format!("({}⌊0⌈⌊{})", num_lit(crate::ANO_NATMAX), v),
+            ColType::Int => {
+                v = format!("({}⌊{}⌈⌊{})", num_lit(crate::ANO_NATMAX), num_lit(-crate::ANO_NATMAX), v)
+            }
+            _ => {}
+        }
+        if let Some((lo, hi)) = rng {
+            v = format!("({}⌊{}⌈{})", num_lit(hi), num_lit(lo), v);
+        }
+        v
+    }
+
     // The batch total: sum of every spawn group's row count.
     fn spawn_tot_all(&self, fx: &Fx) -> Option<String> {
         let mut tot: Option<String> = None;
@@ -2294,7 +2325,7 @@ impl<'a> Em<'a> {
             let commit = fx.commits.iter().find(|c| c.col_idx == i);
             let committed = commit.is_some();
             let base = match commit {
-                Some(c) => c.new_expr.clone(),
+                Some(c) => self.retract(i, c.fam, c.new_expr.clone()),
                 None => cur.clone(),
             };
             if is_field {
@@ -2899,7 +2930,7 @@ impl<'a> Em<'a> {
                 RegEntryKind::Col { ty, nums, syms, pres, .. } => {
                     self.fixture_colfield(i, *ty, nums, syms, pres.as_deref(), r.n, &cm);
                 }
-                RegEntryKind::Field { ty, nums, syms } => {
+                RegEntryKind::Field { ty, nums, syms, .. } => {
                     self.fixture_colfield(i, *ty, nums, syms, None, r.lat_w.wrapping_mul(r.lat_h), &cm);
                 }
                 RegEntryKind::Rel { targets, .. } => {

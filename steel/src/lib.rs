@@ -13,6 +13,10 @@ pub mod registry;
 
 pub const ANO_NAMESZ: usize = 256;
 
+// 2^53, the contiguous-integer bound of the double: the nat/int ceiling. Above it integer
+// arithmetic loses exactness, so the refinements clamp here rather than admit drift.
+pub const ANO_NATMAX: f64 = 9_007_199_254_740_992.0;
+
 /* ---------- diagnostics ---------- */
 
 // One diagnostic: byte-exact message (the C snprintf output, verbatim, no trailing newline)
@@ -425,10 +429,15 @@ impl NodeKind {
 
 // Column/field element type; on Tag, the carrier's type. No CT_VEC exists: a pair column
 // is CT_NUM with nums.len() == 2*rows — the structural convention dump re-detects.
+// Bool/Nat/Int are carrier refinements (ano-ecs.md §10): the loader seals data at rest,
+// the barrier retracts every committed write — bool by 0<, nat/int by floor + clamp to
+// ±ANO_NATMAX. Num is the untyped double and admits whatever.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColType {
     Num,
     Bool,
+    Nat,
+    Int,
     Sym,
     Char,
 }
@@ -468,9 +477,11 @@ pub struct ProtoField {
 pub enum RegEntryKind {
     // Entity column. uniq: declared injectivity (unique line) — pairwise-distinct at load,
     // spawn mints, effects never assign. pres: optional presence mask, n values.
-    Col { ty: ColType, uniq: bool, nums: Vec<f64>, syms: Vec<String>, pres: Option<Vec<f64>> },
+    // rng: the declared `range <col> <lo> <hi>` bounds — a value refinement the barrier
+    // clamps writes into and the loader seals data at rest against (num-family only).
+    Col { ty: ColType, uniq: bool, nums: Vec<f64>, syms: Vec<String>, pres: Option<Vec<f64>>, rng: Option<(f64, f64)> },
     // Lattice field, lat_w*lat_h values; no pres, no uniq (load refuses both).
-    Field { ty: ColType, nums: Vec<f64>, syms: Vec<String> },
+    Field { ty: ColType, nums: Vec<f64>, syms: Vec<String>, rng: Option<(f64, f64)> },
     // Functional rel: n values, -1 dangling; key_of = declared unique key column (canonical
     // spelling) or None = keyed to the row index.
     Rel { targets: Vec<f64>, key_of: Option<String> },

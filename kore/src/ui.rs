@@ -1341,8 +1341,12 @@ pub fn cell_edit_commit(app: &mut App) {
             let msg = format!("edit: {}", err);
             app.sayerr(&msg);
         }
-        Ok(()) => {
-            let msg = format!("cell written · step {} staged", seq);
+        Ok(warn) => {
+            // Ok(Some(_)) is the typed repair: the write landed, clamped, and says so
+            let msg = match warn {
+                Some(w) => format!("{} · cell written · step {} staged", w, seq),
+                None => format!("cell written · step {} staged", seq),
+            };
             app.say(&msg);
         }
     }

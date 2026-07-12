@@ -1,0 +1,8 @@
+-- Bool domain (t1): a bool column admits {0,1}; the barrier retracts every committed write by 0< — positive is true. Twin of 133-bool-domain.bqn.
+-- The first write lands 2/1/3/0 on the wire and the retraction clamps down: 2→1, 3→1. The second subtracts 5 under a mask and clamps up from below: ¯4→0.
+-- The retraction is a property of the barrier, not the write: off-mask cells pass through it too, and on a sealed column that pass is the identity.
+--! registry ../registries/133-bool-domain.reg
+--! expect alarm = 1 1 0 0
+
+Alive , alarm = alarm + trips
+Trips > 2 , alarm = alarm - 5

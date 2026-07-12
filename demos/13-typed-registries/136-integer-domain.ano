@@ -1,0 +1,6 @@
+-- Integer domain (t4): drift is int — ℤ clamped symmetrically at ±2^53, the signed twin of nat. Negatives live; fractional writes floor toward −∞, so ¯1.5 lands on ¯2, APL's ⌊, not truncation. Twin of 136-integer-domain.bqn.
+--! registry ../registries/136-integer-domain.reg
+--! expect drift = -2 1 -1 0
+
+Alive , drift *= 2
+Alive , drift /= 4

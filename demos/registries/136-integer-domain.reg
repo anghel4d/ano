@@ -1,0 +1,6 @@
+# t4 — integer domain fixture (mirrors demos/13-typed-registries/136-integer-domain.bqn)
+# drift is int, the signed twin of nat: negatives live, writes floor toward -inf,
+# the clamp is symmetric at +-2^53.
+n 4
+col alive bool 1 1 1 1
+col drift int -3 2 -1 0

@@ -56,6 +56,11 @@
         '';
         anoc = pkgs.runCommand "ano-anoc-demos" { nativeBuildInputs = [ pkgs.gcc pkgs.gnumake pkgs.cbqn ]; } ''
           cp -r ${self}/src src && cp -r ${self}/demos demos && chmod -R +w src demos
+          # The C anoc predates typed registries (Steel is the reference, bootstrap ruling
+          # 2026-07-10; Cano derives later): scope its check to the pre-typed corpus.
+          rm -rf demos/13-typed-registries
+          rm -f src/refusals/load-col-bool-domain.reg src/refusals/load-col-nat-*.reg \
+                src/refusals/load-range-*.reg src/refusals/load-default-nat.reg src/refusals/load-def-nat.reg
           make -C src anoc
           ANOC=src/anoc bash src/check-ano.sh
           touch $out

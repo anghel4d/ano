@@ -1,0 +1,8 @@
+# t5 — range fixture (mirrors demos/13-typed-registries/137-range-clamp.bqn)
+# hp keeps the untyped double carrier; the declared range clamps writes into 0..100.
+# The default must sit inside the range (the load seal), so it is declared first.
+n 4
+col alive bool 1 1 1 1
+col hp num 50.5 80 20 95
+default hp 10
+range hp 0 100

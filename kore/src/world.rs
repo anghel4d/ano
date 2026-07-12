@@ -35,10 +35,15 @@ pub enum EKind {
 pub enum VType {
     Num,
     Bool,
+    Nat,
+    Int,
     Sym,
     Char,
     Vec,
 }
+
+// 2^53, the nat/int ceiling — steel's ANO_NATMAX, the contiguous-integer bound.
+pub const NATMAX: f64 = 9_007_199_254_740_992.0;
 
 // One parsed entry (kore.c Ent, l.500). keyw is the data word-index delta: +1 keyed
 // rel/srel (`rel <key> <name> …`), -1 `unique` (no type word) — splice targets shift by it.
@@ -56,6 +61,7 @@ pub struct Ent {
     pub is_inv: bool, // srel spelled `inv` — fibers derived, never edited
     pub inv: Vec<u8>, // the rel an inv derives from
     pub keyw: i32,
+    pub rng: Option<(f64, f64)>, // declared `range <col> <lo> <hi>` bounds — edits clamp into it
 }
 
 // The parsed world (kore.c World, l.515). lines[] verbatim is the one source of truth;
@@ -92,6 +98,7 @@ fn ent_new(kind: EKind, vtype: VType, line: usize) -> Ent {
         is_inv: false,
         inv: Vec::new(),
         keyw: 0,
+        rng: None,
     }
 }
 
@@ -362,9 +369,13 @@ pub fn world_load(path: &str) -> Result<World, String> {
         } else if (k == b"col" || k == b"field") && nw >= 3 && can {
             let kind = if k[0] == b'f' { EKind::Field } else { EKind::Col };
             let ty: &[u8] = &words[2];
-            if ty == b"num" || ty == b"bool" || ty == b"vec" {
+            if ty == b"num" || ty == b"bool" || ty == b"nat" || ty == b"int" || ty == b"vec" {
                 let vt = if ty == b"bool" {
                     VType::Bool
+                } else if ty == b"nat" {
+                    VType::Nat
+                } else if ty == b"int" {
+                    VType::Int
                 } else if ty == b"vec" {
                     VType::Vec
                 } else {
@@ -463,6 +474,20 @@ pub fn world_load(path: &str) -> Result<World, String> {
                 e.fib_len.push(e.fib_vals.len() - last);
             }
             w.ents.push(e);
+        } else if k == b"range" && nw == 4 {
+            // declared bounds rider: attach to its column (which precedes it, forward-only);
+            // kore stays lenient — anoc is the sealer, the editor only clamps toward it
+            if let (Some(lo), Some(hi)) = (wnum(&words[2]), wnum(&words[3])) {
+                if lo <= hi {
+                    let name = name_trunc(&words[1]);
+                    for e in w.ents.iter_mut().rev() {
+                        if (e.kind == EKind::Col || e.kind == EKind::Field) && names_eq(&e.name, &name) {
+                            e.rng = Some((lo, hi));
+                            break;
+                        }
+                    }
+                }
+            }
         } else if k == b"role" && nw == 3 && words[1] == b"pos" {
             w.pos_col = name_trunc(&words[2]);
         } else if k == b"role" && nw == 3 && words[1] == b"glyph" {
@@ -843,23 +868,30 @@ pub fn char_splice(app: &mut App, ent: usize, cell: i32, rows: i32, repl: &[u8])
 // segment 0 by kind per kmaps/kore-world.md: sym one word, vec both pair words re-formatted
 // via fmt_num, num word 3 + keyw + row, pres/alias word 2 + row, rel `/`->-1 word
 // 2 + keyw + row, srel whole-fiber replace (inv refuses), default `cell not editable`.
-// Every error string is --edit differential surface. kore.c cell_commit l.2500.
-pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<(), String> {
+// Every error string is --edit differential surface. Ok(Some(_)) is the clamp warning: the
+// write landed, repaired onto the column's carrier set. kore.c cell_commit l.2500.
+pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String> {
     let mut repl: Vec<u8> = text.iter().copied().take(511).collect();
+    let mut warn: Option<String> = None;
     if app.w_seg > 0 {
         let ei = seg_field(app, app.w_seg).ok_or_else(|| "no field segment".to_string())?;
         let lat_w = app.world.lat_w;
         let cell = app.w_row * (if lat_w != 0 { lat_w } else { 1 }) + app.w_col;
         let line_idx = app.world.ents[ei].line;
         if app.world.ents[ei].vtype == VType::Char {
-            return char_splice(app, ei, cell, lat_w * app.world.lat_h, &repl);
+            return char_splice(app, ei, cell, lat_w * app.world.lat_h, &repl).map(|_| None);
         }
-        if wnum(&repl).is_none() {
+        let Some(v) = wnum(&repl) else {
             return Err(format!("not a number: {}", trunc_lossy(&repl, 100)));
+        };
+        let (c, w) = clamp_typed(app.world.ents[ei].vtype, app.world.ents[ei].rng, v);
+        if w.is_some() {
+            repl = fmt_num(c).into_bytes();
+            warn = w;
         }
         let (off, len) = word_span(&app.world.lines[line_idx], 3 + cell)
             .ok_or_else(|| "value out of range".to_string())?;
-        return world_splice(app, line_idx, off, len, &repl);
+        return world_splice(app, line_idx, off, len, &repl).map(|_| warn);
     }
     if app.w_col < 0 || app.w_col as usize >= app.dcols.len() {
         return Err("no column".to_string());
@@ -872,14 +904,14 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<(), String> {
     };
     match kind {
         EKind::Col => match vtype {
-            VType::Char => char_splice(app, ei, row, app.world.n, &repl),
+            VType::Char => char_splice(app, ei, row, app.world.n, &repl).map(|_| None),
             VType::Sym => {
                 if repl.is_empty() || repl.contains(&b' ') || repl[0] == b'#' {
                     return Err("sym wants one word".to_string());
                 }
                 let (off, len) = word_span(&app.world.lines[line_idx], 3 + row)
                     .ok_or_else(|| "row out of range".to_string())?;
-                world_splice(app, line_idx, off, len, &repl)
+                world_splice(app, line_idx, off, len, &repl).map(|_| None)
             }
             VType::Vec => {
                 // sscanf "%lf %lf": trailing garbage tolerated, no isfinite guard — preserve
@@ -891,24 +923,38 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<(), String> {
                     _ => return Err("row out of range".to_string()),
                 };
                 let pair = format!("{} {}", fmt_num(x), fmt_num(y));
-                world_splice(app, line_idx, o1, o2 + l2 - o1, pair.as_bytes())
+                world_splice(app, line_idx, o1, o2 + l2 - o1, pair.as_bytes()).map(|_| None)
             }
             _ => {
-                if wnum(&repl).is_none() {
+                let Some(v) = wnum(&repl) else {
                     return Err(format!("not a number: {}", trunc_lossy(&repl, 100)));
+                };
+                // unique columns (keyw -1) carry no refinement; typed columns repair here
+                if keyw >= 0 {
+                    let (c, w) = clamp_typed(vtype, app.world.ents[ei].rng, v);
+                    if w.is_some() {
+                        repl = fmt_num(c).into_bytes();
+                        warn = w;
+                    }
                 }
                 let (off, len) = word_span(&app.world.lines[line_idx], 3 + keyw + row)
                     .ok_or_else(|| "row out of range".to_string())?;
-                world_splice(app, line_idx, off, len, &repl)
+                world_splice(app, line_idx, off, len, &repl).map(|_| warn)
             }
         },
         EKind::Pres | EKind::Alias => {
-            if wnum(&repl).is_none() {
+            let Some(v) = wnum(&repl) else {
                 return Err(format!("not a bit: {}", trunc_lossy(&repl, 100)));
+            };
+            // a mask is boolean by nature: the same repair as a bool column
+            let (c, w) = clamp_typed(VType::Bool, None, v);
+            if w.is_some() {
+                repl = fmt_num(c).into_bytes();
+                warn = w;
             }
             let (off, len) = word_span(&app.world.lines[line_idx], 2 + row)
                 .ok_or_else(|| "row out of range".to_string())?;
-            world_splice(app, line_idx, off, len, &repl)
+            world_splice(app, line_idx, off, len, &repl).map(|_| warn)
         }
         EKind::Rel => {
             if repl == b"/" {
@@ -919,7 +965,7 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<(), String> {
             }
             let (off, len) = word_span(&app.world.lines[line_idx], 2 + keyw + row)
                 .ok_or_else(|| "row out of range".to_string())?;
-            world_splice(app, line_idx, off, len, &repl)
+            world_splice(app, line_idx, off, len, &repl).map(|_| None)
         }
         EKind::Srel => {
             let (is_inv, inv) = {
@@ -964,11 +1010,11 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<(), String> {
             if first_w >= 0 {
                 let (o1, _l1) = word_span(&ln, first_w).unwrap();
                 let (o2, l2) = word_span(&ln, last_w).unwrap();
-                return world_splice(app, line_idx, o1, o2 + l2 - o1, &repl);
+                return world_splice(app, line_idx, o1, o2 + l2 - o1, &repl).map(|_| None);
             }
             // empty fiber: insert before its trailing '|', or at line end for the last
             if repl.is_empty() {
-                return Ok(());
+                return Ok(None);
             }
             let mut sep = 2 + keyw;
             let mut f2: i32 = 0;
@@ -993,10 +1039,48 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<(), String> {
                 v.push(b' ');
                 (ins_at as usize, v)
             };
-            world_splice(app, line_idx, at, 0, &ins)
+            world_splice(app, line_idx, at, 0, &ins).map(|_| None)
         }
         EKind::Field => Err("cell not editable".to_string()),
     }
+}
+
+// The TUI repair: clamp an entered value onto the column's carrier set — bool by 0<
+// (positive is true), nat/int by floor then clamp to ±2^53, a declared range by clamp,
+// outermost. The loader refuses rest data, the barrier retracts writes; the editor
+// repairs interactively and says so. Returns the admitted value and the warning
+// (`<refinement> clamps <from> → <to>`) when the value moved.
+pub fn clamp_typed(vtype: VType, rng: Option<(f64, f64)>, v: f64) -> (f64, Option<String>) {
+    let t = match vtype {
+        VType::Bool => {
+            if v > 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        VType::Nat => v.floor().clamp(0.0, NATMAX),
+        VType::Int => v.floor().clamp(-NATMAX, NATMAX),
+        _ => v,
+    };
+    let c = match rng {
+        Some((lo, hi)) => t.clamp(lo, hi),
+        None => t,
+    };
+    if c == v {
+        return (c, None);
+    }
+    let why = if t != v {
+        match vtype {
+            VType::Bool => "bool".to_string(),
+            VType::Nat => "nat".to_string(),
+            _ => "int".to_string(),
+        }
+    } else {
+        let (lo, hi) = rng.unwrap_or((0.0, 0.0));
+        format!("range {}..{}", fmt_num(lo), fmt_num(hi))
+    };
+    (c, Some(format!("{} clamps {} → {}", why, fmt_num(v), fmt_num(c))))
 }
 
 // C sscanf("%lf %lf") over bytes: skip isspace, strtod prefix, twice. None unless both parse.
@@ -1951,9 +2035,14 @@ pub fn edit_reg(app: &mut App, args: &[String]) -> i32 {
     app.w_row = atoi(args[2].as_bytes());
     app.w_col = atoi(args[3].as_bytes());
     table_cols(app);
-    if let Err(e) = cell_commit(app, args[4].as_bytes()) {
-        eprintln!("FAIL {}: {}", args[0], e);
-        return 1;
+    match cell_commit(app, args[4].as_bytes()) {
+        Err(e) => {
+            eprintln!("FAIL {}: {}", args[0], e);
+            return 1;
+        }
+        // the typed repair warns on stderr; the ok line below shows the clamped spelling
+        Ok(Some(w)) => eprintln!("warn {}: {}", args[0], w),
+        Ok(None) => {}
     }
     table_cols(app); // the reload rebuilt ents; re-point before printing
     let ei = if app.w_seg != 0 {
@@ -2046,11 +2135,25 @@ mod cdiff {
         ))
     }
 
+    // A world carrying the typed refinements (nat/int kinds, range riders) post-dates the
+    // C oracle, which reads those columns as pass-through schema: not compared.
+    fn typed_world(reg: &str) -> bool {
+        let Ok(b) = std::fs::read(reg) else { return false };
+        b.split(|&c| c == b'\n').any(|ln| {
+            let w = split_words(ln);
+            (w.len() > 2 && (w[0] == b"col" || w[0] == b"field") && (w[2] == b"nat" || w[2] == b"int"))
+                || (w.len() == 4 && w[0] == b"range")
+        })
+    }
+
     #[test]
     fn check_differential() {
         let Some(cbin) = cbin() else { return };
         let mut bad = 0;
         for reg in regs() {
+            if typed_world(&reg) {
+                continue;
+            }
             let out = Command::new(&cbin).args(["--check", &reg]).output().unwrap();
             let cok = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
             let cerr = String::from_utf8_lossy(&out.stderr).trim_end().to_string();
@@ -2137,7 +2240,10 @@ mod cdiff {
                 table_cols(&mut app);
                 match cell_commit(&mut app, val.as_bytes()) {
                     Err(e) => (1, format!("FAIL {}: {}", rpath, e)),
-                    Ok(()) => {
+                    // the typed repair (clamp + warn) post-dates the C oracle: a clamped
+                    // write is intentionally divergent, not compared
+                    Ok(Some(_)) => return None,
+                    Ok(None) => {
                         table_cols(&mut app);
                         let ei = if app.w_seg != 0 {
                             seg_field(&app, app.w_seg)

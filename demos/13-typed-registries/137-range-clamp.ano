@@ -1,0 +1,7 @@
+-- Range clamp (t5): hp keeps the untyped double carrier — 50.5 stays fractional — and the declared `range hp 0 100` clamps every committed write into its bounds. Heal past the cap parks at 100; overkill damage parks at 0. Twin of 137-range-clamp.bqn.
+-- The second statement reads the first's post-state: the two rows capped at 100 are exactly the ones the overkill then floors.
+--! registry ../registries/137-range-clamp.reg
+--! expect hp = 80.5 0 50 0
+
+Alive , hp += 30
+Hp > 99 , hp -= 200
