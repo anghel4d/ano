@@ -1,0 +1,9 @@
+-- Typed keys (t6): unique stacks with the carrier refinements — `unique id nat` is injectivity ∩ ℕ, `unique slot int` admits negative keys. Constraints are set-intersection evidence (ano-ecs §10), so the kind word rides the unique line. Twin of 138-typed-keys.bqn.
+-- One spawn mints one fresh row per selected source; both key columns mint 1+max — id stays natural (6), slot clears its negative maximum (¯3, seeded at ¯1, mints 0).
+--! registry ../registries/138-typed-keys.reg
+--! expect-n 3
+--! expect id = 3 5 6
+--! expect slot = -5 -3 0
+--! expect grunt = 1 0 1
+
+Grunt , spawn Grunt

@@ -1,0 +1,8 @@
+# t6 — typed keys fixture (mirrors demos/13-typed-registries/138-typed-keys.bqn)
+# Constraints stack, set-intersection: the unique line takes a kind word. id is unique nat
+# (injectivity ∩ ℕ), slot is unique int (negative keys live). The mint respects any
+# carrier — 1+max clears the maximum — which is why range alone refuses to stack on unique.
+n 2
+unique id nat 3 5
+unique slot int -5 -3
+col grunt bool 1 0

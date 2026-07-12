@@ -366,13 +366,30 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
             }
 
             "unique" => {
-                // declared injectivity: one num column, every element pairwise-distinct. The
-                // check IS the ruled content (2026-07-11); mint-on-spawn rides on it.
+                // declared injectivity: one numeric column, every element pairwise-distinct.
+                // The check IS the ruled content (2026-07-11); mint-on-spawn rides on it.
+                // Constraints stack (set-intersection, ano-ecs §10): an optional kind word
+                // refines the carrier — `unique id nat` is injectivity ∩ ℕ. Detected LL(1):
+                // data is always numeric, so a non-number in the kind slot is the kind.
+                // The mint respects any carrier here (1+max clears the maximum), which is
+                // why range alone refuses to stack on unique — a ceiling contradicts it.
                 if nw < 3 {
-                    return Err(rerr(ln, "usage: unique <name> <values>".into()));
+                    return Err(rerr(ln, "usage: unique <name> [num|nat|int] <values>".into()));
                 }
                 let name = gate_name(&reg, words[1].1, ln)?;
-                let nums = wnums(&words, 2, reg.n, ln)?;
+                let (ty, vi) = if num::wnum(words[2].1).is_none() {
+                    let ty = match words[2].1 {
+                        "num" => ColType::Num,
+                        "nat" => ColType::Nat,
+                        "int" => ColType::Int,
+                        w => return Err(rerr(ln, format!("unique {}: unsupported kind '{}' (num nat int)", name, w))),
+                    };
+                    (ty, 3)
+                } else {
+                    (ColType::Num, 2)
+                };
+                let nums = wnums(&words, vi, reg.n, ln)?;
+                seal_ty(k, &name, ty, &nums, ln)?;
                 for x in 0..nums.len() {
                     for y in x + 1..nums.len() {
                         if nums[x] == nums[y] {
@@ -386,7 +403,7 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 reg.ents.push(RegEntry {
                     name,
                     defval: 0.0,
-                    kind: RegEntryKind::Col { ty: ColType::Num, uniq: true, nums, syms: Vec::new(), pres: None, rng: None },
+                    kind: RegEntryKind::Col { ty, uniq: true, nums, syms: Vec::new(), pres: None, rng: None },
                 });
             }
 
@@ -914,7 +931,15 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
         match &e.kind {
             RegEntryKind::Col { ty, uniq, nums, syms, pres, rng } => {
                 if *uniq {
-                    let _ = write!(b, "unique {}", e.name);
+                    // the kind word rides the line only when refined: bare unique = num
+                    match ty {
+                        ColType::Num => {
+                            let _ = write!(b, "unique {}", e.name);
+                        }
+                        _ => {
+                            let _ = write!(b, "unique {} {}", e.name, ty_word(*ty));
+                        }
+                    }
                     for &v in nums {
                         b.push(' ');
                         b.push_str(&num::dnum(v));

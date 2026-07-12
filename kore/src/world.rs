@@ -61,6 +61,7 @@ pub struct Ent {
     pub is_inv: bool, // srel spelled `inv` — fibers derived, never edited
     pub inv: Vec<u8>, // the rel an inv derives from
     pub keyw: i32,
+    pub is_uniq: bool, // a `unique` line — pairwise-distinct at load, whatever its kind word
     pub rng: Option<(f64, f64)>, // declared `range <col> <lo> <hi>` bounds — edits clamp into it
 }
 
@@ -98,6 +99,7 @@ fn ent_new(kind: EKind, vtype: VType, line: usize) -> Ent {
         is_inv: false,
         inv: Vec::new(),
         keyw: 0,
+        is_uniq: false,
         rng: None,
     }
 }
@@ -288,7 +290,7 @@ fn name_trunc(w: &[u8]) -> Vec<u8> {
 // The pairwise-distinct check anoc's loader runs on `unique` lines (keyw -1 marks them).
 fn world_check_unique(w: &World) -> Result<(), String> {
     for e in &w.ents {
-        if e.kind != EKind::Col || e.keyw != -1 {
+        if e.kind != EKind::Col || !e.is_uniq {
             continue;
         }
         for x in 0..e.nums.len() {
@@ -419,11 +421,26 @@ pub fn world_load(path: &str) -> Result<World, String> {
             }
             w.ents.push(e);
         } else if k == b"unique" && nw >= 2 && can {
-            // declared injectivity: a num column with no type word — data starts one word early
+            // declared injectivity; bare = a num column with no type word (data starts one
+            // word early, keyw -1). Constraints stack: an optional kind word refines the
+            // carrier (`unique id nat`) and shifts the data to the col layout (keyw 0).
             let mut e = ent_new(EKind::Col, VType::Num, li);
+            e.is_uniq = true;
             e.keyw = -1;
             e.name = name_trunc(&words[1]);
-            for j in 2..nw {
+            let mut di = 2;
+            if nw >= 3 && wnum(&words[2]).is_none() {
+                e.vtype = if words[2] == b"nat" {
+                    VType::Nat
+                } else if words[2] == b"int" {
+                    VType::Int
+                } else {
+                    VType::Num
+                };
+                e.keyw = 0;
+                di = 3;
+            }
+            for j in di..nw {
                 if let Some(v) = wnum(&words[j]) {
                     e.nums.push(v);
                 }
@@ -929,13 +946,13 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String>
                 let Some(v) = wnum(&repl) else {
                     return Err(format!("not a number: {}", trunc_lossy(&repl, 100)));
                 };
-                // unique columns (keyw -1) carry no refinement; typed columns repair here
-                if keyw >= 0 {
-                    let (c, w) = clamp_typed(vtype, app.world.ents[ei].rng, v);
-                    if w.is_some() {
-                        repl = fmt_num(c).into_bytes();
-                        warn = w;
-                    }
+                // the typed repair applies to every numeric carrier, unique included (a
+                // bare unique is Num — the identity); a clamp that lands on a duplicate
+                // fails the reload's distinctness check and the splice refuses
+                let (c, w) = clamp_typed(vtype, app.world.ents[ei].rng, v);
+                if w.is_some() {
+                    repl = fmt_num(c).into_bytes();
+                    warn = w;
                 }
                 let (off, len) = word_span(&app.world.lines[line_idx], 3 + keyw + row)
                     .ok_or_else(|| "row out of range".to_string())?;
@@ -2135,14 +2152,16 @@ mod cdiff {
         ))
     }
 
-    // A world carrying the typed refinements (nat/int kinds, range riders) post-dates the
-    // C oracle, which reads those columns as pass-through schema: not compared.
+    // A world carrying the typed refinements (nat/int kinds, range riders, a kind word on
+    // a unique line) post-dates the C oracle, which reads those columns as pass-through
+    // schema or misaligned data: not compared.
     fn typed_world(reg: &str) -> bool {
         let Ok(b) = std::fs::read(reg) else { return false };
         b.split(|&c| c == b'\n').any(|ln| {
             let w = split_words(ln);
             (w.len() > 2 && (w[0] == b"col" || w[0] == b"field") && (w[2] == b"nat" || w[2] == b"int"))
                 || (w.len() == 4 && w[0] == b"range")
+                || (w.len() > 2 && w[0] == b"unique" && wnum(&w[2]).is_none())
         })
     }
 
