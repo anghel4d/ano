@@ -1,5 +1,5 @@
 # spec §21 (pre-renumbering §19) — fib stencil fixture, seed pre-state 1 1 0... (mirrors demos/3-fold-scan/034-fib-stencil.bqn; shared by 035-fib-stencil-b/036-fib-stencil-c/037-fib-stencil-d.ano and their -nihongo twins)
 n 12
 col offset num 1 1 0 0 0 0 0 0 0 0 0 0
-col fib num 1 1 2 3 5 8 13 21 34 55 89 144   # reference column, never written — producing it in offset is the bug
+col fib nat 1 1 2 3 5 8 13 21 34 55 89 144   # reference column, never written — producing it in offset is the bug
 ja 変位 offset

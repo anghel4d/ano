@@ -1,4 +1,4 @@
 # r1 — world fixture sitting beside its twin, reached by the bare-name registry form.
 n 3
 col alive bool 1 0 1
-col hp num 100 100 100
+col hp nat 100 100 100

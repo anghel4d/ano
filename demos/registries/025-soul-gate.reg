@@ -2,7 +2,7 @@
 # keys mints fresh ids; spawn defaults keep nord and dead 1 (the ghosts remain dead Nords);
 # soul has NO default, so a minted ghost takes the type zero 0 and can never pass the gate.
 n 6
-col keys num 0 1 2 3 4 5
+col keys nat 0 1 2 3 4 5
 col nord bool 1 1 0 1 0 0
 col dead bool 1 0 0 1 0 1
 col ghost bool 0 0 0 0 0 0

@@ -6,7 +6,7 @@
 # program's Nord has no referent: the demo fails at compile.
 n 5
 col race sym Nord Khajiit Nord Nord Orc
-col gold num 400 600 200 150 221
+col gold nat 400 600 200 150 221
 rel master 2 -1 -1 4 -1
 as nord race Nord
 ja 北 nord

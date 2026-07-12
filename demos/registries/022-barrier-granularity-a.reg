@@ -3,7 +3,7 @@
 # Spawn defaults 1 for nord and dead: ghosts of dead Nords keep Nord and Dead (the .bqn's copies).
 # Shared by 022-barrier-granularity-a.ano and 023-barrier-granularity-b.ano.
 n 6
-col keys num 0 1 2 3 4 5
+col keys nat 0 1 2 3 4 5
 col nord bool 1 1 0 1 0 0
 col dead bool 1 0 0 1 0 1
 col ghost bool 0 0 0 0 0 0

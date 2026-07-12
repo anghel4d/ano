@@ -54,15 +54,12 @@
           bash ${self}/demos/check.sh
           touch $out
         '';
-        anoc = pkgs.runCommand "ano-anoc-demos" { nativeBuildInputs = [ pkgs.gcc pkgs.gnumake pkgs.cbqn ]; } ''
-          cp -r ${self}/src src && cp -r ${self}/demos demos && chmod -R +w src demos
-          # The C anoc predates typed registries (Steel is the reference, bootstrap ruling
-          # 2026-07-10; Cano derives later): scope its check to the pre-typed corpus.
-          rm -rf demos/13-typed-registries
-          rm -f src/refusals/load-col-bool-domain.reg src/refusals/load-col-nat-*.reg \
-                src/refusals/load-range-*.reg src/refusals/load-default-nat.reg src/refusals/load-def-nat.reg
+        anoc = pkgs.runCommand "ano-anoc-build" { nativeBuildInputs = [ pkgs.gcc pkgs.gnumake ]; } ''
+          # The C anoc predates typed registries, which now permeate the corpus (Steel is
+          # the reference, bootstrap ruling 2026-07-10; Cano re-derives from verified
+          # Steel): it must still build, and checks.steel runs the demos.
+          cp -r ${self}/src src && chmod -R +w src
           make -C src anoc
-          ANOC=src/anoc bash src/check-ano.sh
           touch $out
         '';
         steel = pkgs.runCommand "ano-steel-demos" { nativeBuildInputs = [ pkgs.rustc pkgs.cargo pkgs.cbqn ]; } ''

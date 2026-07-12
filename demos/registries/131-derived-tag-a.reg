@@ -4,7 +4,7 @@
 # derived tag; the demo pins are identical across both — that equality is the claim.
 n 5
 col nord bool 1 0 1 1 0
-col gold num 400 600 200 150 221
+col gold nat 400 600 200 150 221
 rel master 2 -1 -1 4 -1
 ja 北 nord
 ja 金 gold

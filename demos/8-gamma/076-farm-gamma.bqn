@@ -36,3 +36,11 @@ nbrs ← {𝕊 c: Ok¨⊸/ (c⊸+)¨d}¨ ⥊↕h‿w      # neighbor coords per 
 ids  ← (≠¨nbrs) / ↕h×w                   # source cell per edge
 vals ← ({+´𝕩×w‿1}¨ ∾nbrs) ⊏ ⥊m           # neighbor Moisture per edge
 ! (⥊m1) ≡ (+´÷≠)¨ (ids∾h×w) ⊔ vals
+
+# The planted section under the same reading: the count fold over the 5×5 seed's fibers.
+h2‿w2 ← ≢p
+Ok2 ← {∧´(0≤𝕩)∧𝕩<h2‿w2}
+nbrs2 ← {𝕊 c: Ok2¨⊸/ (c⊸+)¨d}¨ ⥊↕h2‿w2
+ids2  ← (≠¨nbrs2) / ↕h2×w2
+vals2 ← ({+´𝕩×w2‿1}¨ ∾nbrs2) ⊏ ⥊p
+! (⥊S p) ≡ +´¨ (ids2∾h2×w2) ⊔ vals2
