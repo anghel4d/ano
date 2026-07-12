@@ -1,4 +1,4 @@
-# Spec §19 — One barrier step of the Fibonacci statement: a shift-add stencil over pre-state, not a recurrence.
+# Spec §21 (pre-renumbering §19) — One barrier step of the Fibonacci statement: a shift-add stencil over pre-state, not a recurrence.
 # ano:  12 , offset = prev.offset + prev.prev.offset
 # Semantics: the comma is gather-effect-scatter and every read observes pre-state, so prev is a shift, not a carry; on a freshly minted line the pre-state of offset is undefined-or-zero, the statement computes one parallel shift-and-add, and iterating it k times gives k stencil steps, never the order-carried sequence — Version B, offset = fib(index), is the honest form (decision record, recurrence gloss).
 # Invariant: one step from the zero pre-state is zero; one step from the fib seed is the shift-add column, not the fib prefix; k steps give the binomial ridge z^k(1+z)^(k+1), never fib.

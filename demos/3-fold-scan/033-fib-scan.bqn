@@ -1,4 +1,4 @@
-# Spec §19 — The true recurrence: an order-carried scan with a two-back state, the thing one barrier step cannot compute.
+# Spec §21 (pre-renumbering §19) — The true recurrence: an order-carried scan with a two-back state, the thing one barrier step cannot compute.
 # ano:  12 , offset = fib(index)
 # Semantics: Version B is canonical — the recurrence runs inside a registered host function, outside the calculus; a true recurrence is a scan whose step need not be associative, carrying state along the line's order, and a scan that feeds its own column's scatter breaks the barrier by construction (decision record, recurrence gloss).
 # Invariant: the ordered scan from seed 1 1 yields the Fibonacci column; one shift-add barrier step from the same seed does not.

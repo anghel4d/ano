@@ -1,4 +1,4 @@
-# Spec §11 — The honest fold contract: raw reduction requires an associative operator with identity; avg is a derived fold-and-finish, count likewise.
+# Spec §12 (pre-renumbering §11) — The honest fold contract: raw reduction requires an associative operator with identity; avg is a derived fold-and-finish, count likewise.
 # ano:  avg/ Weight @ Cow
 #       #/ Cow
 # Semantics: fold/ col @ scope collapses under an associative reducer; avg is not a raw fold — it is the sum-fold divided by the count-fold, one finishing step — and having no identity it fails the empty scope, the §5 left-join-null rule extended to the empty fiber.

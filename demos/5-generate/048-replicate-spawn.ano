@@ -8,6 +8,11 @@
 --! expect parent = -1 -1 -1 -1 -1 -1 -1 -1 0 0 2 2 2 5 6 6 6
 --! expect minion = 0 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0 0
 --! expect egg = 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1
+-- The fill pins: minted rows take the type zero on every untouched column — a child inheriting its parent's spawner bit or count is exactly the loop-making failure this world must exclude.
+--! expect spawner = 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+--! expect count = 2 0 3 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+--! expect nest = 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0
+--! expect fertility = 0 0 0 0 0 1 3 0 0 0 0 0 0 0 0 0 0
 
 -- Counts read under the Spawner mask: 2 0 3 -> five minions, parents 0 0 2 2 2 in source order with multiplicity Count; the zero-count spawner (row 1) emits nothing.
 Spawner , spawn Minion * Count

@@ -2,14 +2,14 @@
 # One entity world: rows 0-4 the spawner table (keys 0-4, rows 3-4 bystanders), rows 5-7 the nest table (keys 100-102).
 # Fresh keys mint from 1+max live key = 103 in this concatenated layout (the .bqn's 5..9 remapped); parent stores world row ids, -1 sentinel on pre-existing rows.
 n 8
-col keys num 0 1 2 3 4 100 101 102
+col keys nat 0 1 2 3 4 100 101 102
 col spawner bool 1 1 1 0 0 0 0 0
-col count num 2 0 3 0 0 0 0 0
+col count nat 2 0 3 0 0 0 0 0
 col nest bool 0 0 0 0 0 1 1 1
-col fertility num 0 0 0 0 0 1 3 0
+col fertility nat 0 0 0 0 0 1 3 0
 col minion bool 0 0 0 0 0 0 0 0
 col egg bool 0 0 0 0 0 0 0 0
-col parent num -1 -1 -1 -1 -1 -1 -1 -1
+col parent int -1 -1 -1 -1 -1 -1 -1 -1
 ja 生成器 spawner
 ja 数 count
 ja 手先 minion

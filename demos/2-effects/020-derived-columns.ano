@@ -13,6 +13,8 @@ Enemy , Priority = threat
 Enemy & threat > 100 , +Dangerous
 --! out 390
 +/ threat @ Enemy
+--! out 25
++/ dps @ Enemy
 -- descending grade is stable: the tie 20 at rows 0 and 5 grades in source order, 0 before 5
 --! out 3 2 4 1 0 5
 order by threat desc

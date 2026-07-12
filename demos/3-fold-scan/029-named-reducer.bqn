@@ -1,7 +1,7 @@
 # Ex15 — Named reducer form: apply a registered reducer to a column over a selected source.
 # ano:  fold(threat) Damage @ Enemies
 # ano:  threat/ Damage @ Enemies
-# Semantics: fold(name) — the long form of threat/ — resolves a registered associative reducer per §11 and folds scoped-global, one scalar over the Enemies scope; a reducer with no registered identity fails the empty scope, the §5 left-join-null rule extended to the empty fiber.
+# Semantics: fold(name) — the long form of threat/ — resolves a registered associative reducer per §12 (pre-renumbering §11) and folds scoped-global, one scalar over the Enemies scope; a reducer with no registered identity fails the empty scope, the §5 left-join-null rule extended to the empty fiber.
 # Invariant: the fold equals the hand-computed threat, fold direction cannot matter under the associative reducer, and the empty scope fails rather than inventing a value.
 
 ThreatReduce ← ⌈    # registered reducer: threat is peak damage — associative, no identity

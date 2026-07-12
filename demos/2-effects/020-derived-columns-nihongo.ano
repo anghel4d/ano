@@ -10,5 +10,7 @@
 敵 と threat 百 より 、 危険 付
 --! out 390
 総和 threat 敵 で
+--! out 25
+総和 dps 敵 で
 --! out 3 2 4 1 0 5
 整列 別 threat 降順
