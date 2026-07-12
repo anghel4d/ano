@@ -1,4 +1,4 @@
-// main.rs — PORTER 5: the crate root and CLI entry forms, the interactive event loop, anoc
+// main.rs — PORTER 5: the crate root and CLI entry forms, the interactive event loop, steel
 // discovery, the child invocation, and the 0x1D/0x1F stdout demux (0x1E never reaches kore:
 // --save advances the world as a file). Contract maps: kmaps/kore-world.md ("main dispatch",
 // "the child process layer", "the stdout demux") and kore-term.md §8; C source: kore/kore.c
@@ -127,21 +127,21 @@ pub fn walk_demos(app: &mut App, dir: &str) {
     }
 }
 
-// Cached: $ANOC when executable; else anoc beside kore's own binary via /proc/self/exe
-// (target/release under the workspace — the Steel sibling always wins over a stale C
-// build); else <exedir>/../src/anoc; else src/anoc under CWD; else "anoc" (PATH via
-// execvp). kore.c find_anoc l.929, the sibling rung added for the cargo layout.
-pub fn find_anoc(app: &mut App) -> String {
-    if let Some(p) = &app.anoc_path {
+// Cached: $STEEL when executable; else steel beside kore's own binary via /proc/self/exe
+// (the cargo sibling in target/release or target/debug); else target/release/steel under
+// CWD; else "steel" (PATH via execvp). Kore speaks only to Steel — the C anoc is kore.c's
+// oracle business, never a rung here. kore.c find_anoc l.929 is the ladder's ancestor.
+pub fn find_steel(app: &mut App) -> String {
+    if let Some(p) = &app.steel_path {
         return p.clone();
     }
-    let found = find_anoc_probe();
-    app.anoc_path = Some(found.clone());
+    let found = find_steel_probe();
+    app.steel_path = Some(found.clone());
     found
 }
 
-fn find_anoc_probe() -> String {
-    if let Some(env) = std::env::var_os("ANOC") {
+fn find_steel_probe() -> String {
+    if let Some(env) = std::env::var_os("STEEL") {
         let env = env.to_string_lossy().into_owned();
         if !env.is_empty() && sys::access_x(&env) {
             return env;
@@ -150,22 +150,20 @@ fn find_anoc_probe() -> String {
     if let Ok(exe) = std::fs::read_link("/proc/self/exe") {
         let exe = exe.to_string_lossy().into_owned();
         if let Some(sl) = exe.rfind('/') {
-            for rel in ["/anoc", "/../src/anoc"] {
-                let cand = format!("{}{}", &exe[..sl], rel);
-                if sys::access_x(&cand) {
-                    return cand;
-                }
+            let cand = format!("{}/steel", &exe[..sl]);
+            if sys::access_x(&cand) {
+                return cand;
             }
         }
     }
-    if sys::access_x("src/anoc") {
-        return "src/anoc".to_string();
+    if sys::access_x("target/release/steel") {
+        return "target/release/steel".to_string();
     }
-    "anoc".to_string()
+    "steel".to_string()
 }
 
-// One anoc run, stdout+stderr merged (sys::run_capture): (capture, exit code).
-pub fn run_anoc(argv: &[&str]) -> (Vec<u8>, i32) {
+// One steel run, stdout+stderr merged (sys::run_capture): (capture, exit code).
+pub fn run_steel(argv: &[&str]) -> (Vec<u8>, i32) {
     let mut cap = Vec::new();
     let code = sys::run_capture(argv, &mut cap);
     (cap, code)

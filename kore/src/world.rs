@@ -6,7 +6,7 @@
 // (table cols/cells + cell_commit), l.3836-3882 (check_reg/edit_reg). Every guard message
 // reaches --edit's stderr byte-for-byte: copy them verbatim from the C. Types complete;
 // bodies are the port. Child spawning and the 0x1D/0x1F demux live in main.rs
-// (crate::find_anoc, crate::cap_split); sys:: provides strtod_prefix/fmt_g for wnum/fmt_num.
+// (crate::find_steel, crate::cap_split); sys:: provides strtod_prefix/fmt_g for wnum/fmt_num.
 
 use crate::app::{App, DCol, Mode, SDef, KMAXHIST, KMAXSDEF};
 use crate::sys;
@@ -251,7 +251,7 @@ pub fn run_ok(run: &[u8], rows: i32) -> bool {
     true
 }
 
-// strtod + whole-word consume + isfinite (kore.c wnum): kore never blesses a world anoc
+// strtod + whole-word consume + isfinite (kore.c wnum): kore never blesses a world steel
 // would reject. sys::strtod_prefix carries the glibc quirks (hex floats, leading +).
 pub fn wnum(w: &[u8]) -> Option<f64> {
     let (v, used) = sys::strtod_prefix(w);
@@ -287,7 +287,7 @@ fn name_trunc(w: &[u8]) -> Vec<u8> {
     w[..w.len().min(255)].to_vec()
 }
 
-// The pairwise-distinct check anoc's loader runs on `unique` lines (keyw -1 marks them).
+// The pairwise-distinct check steel's loader runs on `unique` lines (keyw -1 marks them).
 fn world_check_unique(w: &World) -> Result<(), String> {
     for e in &w.ents {
         if e.kind != EKind::Col || !e.is_uniq {
@@ -493,7 +493,7 @@ pub fn world_load(path: &str) -> Result<World, String> {
             w.ents.push(e);
         } else if k == b"range" && nw == 4 {
             // declared bounds rider: attach to its column (which precedes it, forward-only);
-            // kore stays lenient — anoc is the sealer, the editor only clamps toward it
+            // kore stays lenient — steel is the sealer, the editor only clamps toward it
             if let (Some(lo), Some(hi)) = (wnum(&words[2]), wnum(&words[3])) {
                 if lo <= hi {
                     let name = name_trunc(&words[1]);
@@ -1468,7 +1468,7 @@ pub fn session_path(app: &App) -> String {
 }
 
 // Append one successful statement; a fresh file writes the header (`-- kore session — a
-// valid .ano program: replay with anoc --run`, `--! registry session-base.reg`, `--! ja`
+// valid .ano program: replay with steel --run`, `--! registry session-base.reg`, `--! ja`
 // when the first statement is ja). Other-surface bodies comment out line by line as
 // `-- (other surface, not replayable) %s`. kore.c session_log l.1690.
 pub fn session_log(app: &mut App, stmt: &[u8], ja: bool) {
@@ -1483,7 +1483,7 @@ pub fn session_log(app: &mut App, stmt: &[u8], ja: bool) {
     let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(&p) else { return };
     if fresh {
         app.sess_ja = ja as i32;
-        let _ = f.write_all("-- kore session — a valid .ano program: replay with anoc --run\n".as_bytes());
+        let _ = f.write_all("-- kore session — a valid .ano program: replay with steel --run\n".as_bytes());
         let _ = f.write_all(b"--! registry session-base.reg\n");
         if ja {
             let _ = f.write_all(b"--! ja\n");
@@ -1580,8 +1580,8 @@ pub fn session_rehydrate(app: &mut App) {
 // One prompt submission = one program against the current world (kore.c repl_submit
 // l.1549): history push, `>` -> kore_command, guards, `ja ` prefix, the space-in-path
 // refusal, session-base snapshot, compose .kore/repl.ano (registry line, same-surface defs
-// not redefined by the body, the body), undo_push, spawn anoc --run --save <absw> --label
-// [--trace] via crate::run_anoc, echo `> %s\n`, crate::cap_split, then session_log + def
+// not redefined by the body, the body), undo_push, spawn steel --run --save <absw> --label
+// [--trace] via crate::run_steel, echo `> %s\n`, crate::cap_split, then session_log + def
 // harvest + reload on exit 0 / undo_drop on failure. Verdicts verbatim.
 pub fn repl_submit(app: &mut App) {
     let stmt: Vec<u8> = app.prompt.iter().copied().take(1023).collect();
@@ -1645,10 +1645,10 @@ pub fn repl_submit(app: &mut App) {
         return;
     }
     // the trace slot repeats --label when tracing is off: a fixed argv, one flag flipped
-    let anoc = crate::find_anoc(app);
+    let steel = crate::find_steel(app);
     let trace = if app.trace { "--trace" } else { "--label" };
-    let argv = [anoc.as_str(), "--run", "--save", &absw, "--label", trace, ".kore/repl.ano"];
-    let (cap, code) = crate::run_anoc(&argv);
+    let argv = [steel.as_str(), "--run", "--save", &absw, "--label", trace, ".kore/repl.ano"];
+    let (cap, code) = crate::run_steel(&argv);
     let mut echo = b"> ".to_vec();
     echo.extend_from_slice(&stmt);
     echo.push(b'\n');
@@ -1723,7 +1723,7 @@ pub fn demo_registry(ano_path: &str, anchor: &str) -> Option<String> {
     None
 }
 
-// A --! expect / expect-n / out pin, matched as anoc tokenizes (any space/tab run after --!).
+// A --! expect / expect-n / out pin, matched as steel tokenizes (any space/tab run after --!).
 pub fn pin_line(lt: &[u8]) -> bool {
     if !lt.starts_with(b"--!") {
         return false;
@@ -1783,7 +1783,7 @@ pub fn tick_program(app: &mut App, absw: Option<&str>) -> Result<(), String> {
 
 // n: the demo tick (kore.c world_next l.1820) — refusals (`bare world: statements step it —
 // n steps demos`, `no demo selected`, `unsaved code — s saves it, then n steps`), the
-// registry-less run (no --save, step 0), or adopt + tick_program + undo_push + anoc --run
+// registry-less run (no --save, step 0), or adopt + tick_program + undo_push + steel --run
 // --save + cap_split; seam + reload + `tick — world advanced · step %d · u steps back` on 0,
 // undo_drop + `tick failed (exit %d) — the world stands` otherwise.
 pub fn world_next(app: &mut App) {
@@ -1807,11 +1807,11 @@ pub fn world_next(app: &mut App) {
             app.sayerr(&e);
             return;
         }
-        let anoc = crate::find_anoc(app);
+        let steel = crate::find_steel(app);
         let trace = if app.trace { "--trace" } else { "--label" };
-        let argv = [anoc.as_str(), "--run", "--label", trace, ".kore/next.ano"];
-        let (cap, code) = crate::run_anoc(&argv);
-        app.log(format!("$ anoc --run {}\n", app.demo_live).as_bytes());
+        let argv = [steel.as_str(), "--run", "--label", trace, ".kore/next.ano"];
+        let (cap, code) = crate::run_steel(&argv);
+        app.log(format!("$ steel --run {}\n", app.demo_live).as_bytes());
         crate::cap_split(app, &cap, code, 0);
         if code == 0 {
             app.say("pins held (no registry — no world to step)");
@@ -1846,10 +1846,10 @@ pub fn world_next(app: &mut App) {
         app.sayerr("cannot stage undo copy");
         return;
     }
-    let anoc = crate::find_anoc(app);
+    let steel = crate::find_steel(app);
     let trace = if app.trace { "--trace" } else { "--label" };
-    let argv = [anoc.as_str(), "--run", "--save", &absw, "--label", trace, ".kore/next.ano"];
-    let (cap, code) = crate::run_anoc(&argv);
+    let argv = [steel.as_str(), "--run", "--save", &absw, "--label", trace, ".kore/next.ano"];
+    let (cap, code) = crate::run_steel(&argv);
     app.log(format!("$ n — {} against {}\n", app.demo_path, app.world.path).as_bytes());
     crate::cap_split(app, &cap, code, seq);
     if code == 0 {

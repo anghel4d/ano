@@ -14,13 +14,13 @@ So the genre is not the tracing JIT. It is the query and array compilers: kdb+/q
 
 ## The current ceiling
 
-Today anoc transpiles ano to BQN and CBQN interprets the BQN (src/, GRAMMAR.md). CBQN is a fast array interpreter, but it is still an interpreter: it dispatches array primitives and materializes intermediates, a fresh array for the mask, one for each effect temp, one for the commit. That materialization is the ceiling. The differential-tested BQN twins are the reference semantics and stay so. The engine's job is to compute those same post-states without walking a primitive-dispatch loop and without allocating the intermediates.
+Today Steel transpiles ano to BQN and CBQN interprets the BQN (steel/, src/GRAMMAR.md). CBQN is a fast array interpreter, but it is still an interpreter: it dispatches array primitives and materializes intermediates, a fresh array for the mask, one for each effect temp, one for the commit. That materialization is the ceiling. The differential-tested BQN twins are the reference semantics and stay so. The engine's job is to compute those same post-states without walking a primitive-dispatch loop and without allocating the intermediates.
 
 ## The build
 
 The racebike is a specific stack, and none of it is a research problem. It is backend engineering the front already earns the right to.
 
-A typed IR for the gather-effect-scatter. anoc emits BQN text, which is the wrong substrate to optimize. The engine needs an SSA-shaped array/relational IR carrying column types, presence, and the barrier boundary, so fusion and scheduling are transforms over it rather than string manipulation.
+A typed IR for the gather-effect-scatter. Steel emits BQN text, which is the wrong substrate to optimize. The engine needs an SSA-shaped array/relational IR carrying column types, presence, and the barrier boundary, so fusion and scheduling are transforms over it rather than string manipulation.
 
 Fusion of the whole statement into one pass. Instead of materializing the mask, then the temps, then the commit, generate a single loop over selected rows that reads the columns it touches, computes, and scatters. This is deforestation and operator fusion, and the barrier is the soundness proof: no pipeline breaker inside a statement except the scatter. The data-centric playbook (Neumann, HyPer) is the direct model: keep values in registers across operators until a breaker, one tight loop per pipeline, and a selection-plus-effect statement is usually one pipeline.
 

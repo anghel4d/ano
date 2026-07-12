@@ -5,16 +5,16 @@
 # non-finite seal, outside face); save-*.ano runs under --run --save to a scratch path
 # that must not appear afterward (the refused tick, the world stands). save-*-world.reg
 # are the clean worlds behind the .ano fixtures, not fixtures themselves.
-# Inputs: none (env ANOC overrides the binary, default: anoc beside this script).
+# Inputs: none (env STEEL overrides the binary, default: target/release/steel at the repo root).
 # Output: one ok-refuse/FAIL-refuse line per fixture. Exit: nonzero iff any fails.
 set -u
-ANOC="${ANOC:-$(dirname "$0")/../target/release/anoc}"
+STEEL="${STEEL:-$(dirname "$0")/../target/release/steel}"
 here="$(cd "$(dirname "$0")" && pwd)"
 fail=0
 for f in "$here"/refusals/load-*.reg; do
   [ -e "$f" ] || continue
   want="$(sed -n 's/^# expect: //p' "$f" | head -1)"
-  errout="$("$ANOC" --registry "$f" --emit "$here/refusals/probe.ano" 2>&1 >/dev/null)"
+  errout="$("$STEEL" --registry "$f" --emit "$here/refusals/probe.ano" 2>&1 >/dev/null)"
   code=$?
   if [ "$code" -eq 2 ] && [ -n "$want" ] && [ "${errout#*"$want"}" != "$errout" ]; then
     echo "ok-refuse   $f"
@@ -28,7 +28,7 @@ for f in "$here"/refusals/save-*.ano; do
   want="$(sed -n 's/^-- expect: //p' "$f" | head -1)"
   out="${TMPDIR:-/tmp}/ano-refusal-$$-$(basename "$f" .ano).reg"
   rm -f "$out"
-  errout="$("$ANOC" --run --save "$out" "$f" 2>&1 >/dev/null)"
+  errout="$("$STEEL" --run --save "$out" "$f" 2>&1 >/dev/null)"
   code=$?
   if [ "$code" -eq 2 ] && [ -n "$want" ] && [ "${errout#*"$want"}" != "$errout" ] && [ ! -e "$out" ]; then
     echo "ok-refuse   $f"

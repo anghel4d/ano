@@ -1,4 +1,4 @@
-// lib.rs — the one contract for Steel's anoc, the Rust mirror of src/ano.h.
+// lib.rs — the one contract for steel, the Rust mirror of src/ano.h.
 // Pipeline: main.rs (directives, driver) -> registry.rs (world fixtures) -> lex.rs (ASCII + JA
 // skins) -> parse.rs (Pratt, 14 levels) -> emit.rs (BQN codegen); fs.rs serves main and registry;
 // num.rs is the shared strtod/%g choke point. Everything in this file is SHARED and FINAL:
@@ -547,7 +547,7 @@ pub enum Expect {
 // (main reproduces the snprintf truncation at 255/511 bytes); expect_n -1 = unchecked
 // (a directive-parsed -1 is also unchecked — emitExpects tests >= 0).
 // Master invariant: with save/label/trace off, the emitted BQN is byte-identical to a
-// flagless anoc — the flags gate whole appended blocks, never restructure shared output.
+// flagless steel — the flags gate whole appended blocks, never restructure shared output.
 #[derive(Debug, Clone)]
 pub struct Directives {
     pub registry: String,

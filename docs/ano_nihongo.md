@@ -317,7 +317,7 @@ The gap between this document and a draft is mostly literature positioning: enga
 - Jay Rubin. *Making Sense of Japanese: What the Textbooks Don't Tell You*. Kodansha International, 1998. The zero pronoun behind ゼロが.
 - Susumu Kuno. *The Structure of the Japanese Language*. MIT Press, 1973. Exhaustive-listing が against thematic は — the live literature.
 
-## Settled in anoc
+## Settled in Steel
 
 Two facts from the implementation, recorded so the sections above stay as written.
 

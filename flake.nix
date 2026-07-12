@@ -48,7 +48,7 @@
       });
 
       # `nix flake check` runs every demo under demos/ through check.sh,
-      # and every .ano twin through anoc (src/check-ano.sh).
+      # and every .ano twin through steel (src/check-ano.sh).
       checks = forAll (pkgs: {
         demos = pkgs.runCommand "ano-demos" { nativeBuildInputs = [ pkgs.cbqn ]; } ''
           bash ${self}/demos/check.sh
@@ -68,7 +68,7 @@
           chmod -R +w steel kore src demos
           export CARGO_HOME=$PWD/.cargo
           cargo build --release --offline --workspace
-          ANOC=$PWD/target/release/anoc bash src/check-ano.sh
+          STEEL=$PWD/target/release/steel bash src/check-ano.sh
           touch $out
         '';
       });

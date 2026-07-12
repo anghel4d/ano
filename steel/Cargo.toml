@@ -7,5 +7,5 @@ edition = "2024"
 name = "steel"
 
 [[bin]]
-name = "anoc"
+name = "steel"
 path = "src/main.rs"

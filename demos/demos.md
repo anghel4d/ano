@@ -6,9 +6,9 @@ Currently, this means working through the language examples in BQN, Erlang, Hask
 
 A temporary transpiler through BQN or OCaml might be considered at a later point.
 
-We use BQN to work through and verify the semantics of ano language ahead of time. An implementation in src/ is verified against the BQN post-states by differential testing.
+We use BQN to work through and verify the semantics of ano language ahead of time. An implementation is verified against the BQN post-states by differential testing.
 
-That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every .bqn demo has an .ano twin beside it — the demo's own `# ano:` statements as a runnable program, a `<name>.reg` registry in `demos/registries/` reproducing the .bqn fixture, and `--!` directives pinning the same post-state as BQN assertions. `src/anoc --run demo.ano` compiles the program, runs it under CBQN, and exits nonzero on any divergence. Split twins (-a/-b/-c) pin intermediate program points; the two .bqn files with no ano surface (053-keygen, 072-reverse) stay BQN-only witnesses.
+That implementation exists: Steel (steel/), the Rust reference, launched as `steel`; its C predecessor `anoc` (src/) stays beside it as the frozen differential oracle. Every .bqn demo has an .ano twin beside it — the demo's own `# ano:` statements as a runnable program, a `<name>.reg` registry in `demos/registries/` reproducing the .bqn fixture, and `--!` directives pinning the same post-state as BQN assertions. `target/release/steel --run demo.ano` compiles the program, runs it under CBQN, and exits nonzero on any divergence. Split twins (-a/-b/-c) pin intermediate program points; the two .bqn files with no ano surface (053-keygen, 072-reverse) stay BQN-only witnesses.
 
 ## Layout
 
@@ -27,4 +27,4 @@ That implementation exists: `anoc` (src/), an ano-to-BQN transpiler in C. Every 
 - `13-typed-registries/` — 133-138, the carrier refinements (Steel, 2026-07-12): `bool` enforced by the 0< retraction (133), `nat` — the naturals, floor at 0 with no underflow (134), floor to the integer grid and the 2^53 ceiling (135), `int` its signed twin, ⌊ toward −∞ (136), the declared `range` bounds over the untyped double (137), and constraints stacking — `unique id nat`, `unique slot int`, the mint respecting either carrier (138). Rest data seals at load (the negative battery pins the refusals), committed writes retract at the barrier, the TUI clamps and warns.
 - `registries/` — the world fixtures, one `<name>.reg` per twin; a twin loads its own with `--! registry ../registries/<name>.reg`.
 - `check.sh` — runs every .bqn under demos/, one ok/FAIL line per file, nonzero exit on any failure.
-- `../src/check-ano.sh` — the same contract over every .ano twin, through `anoc --run` (build anoc first: `make -C src`).
+- `../src/check-ano.sh` — the same contract over every .ano twin, through `steel --run` (build it first: `cargo build --release`).

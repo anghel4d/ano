@@ -130,7 +130,7 @@ pub struct App {
     pub drag_r1: i32,
     pub drag_c1: i32,
     pub undo_seq: i32,
-    pub trace: bool, // t: pass --trace to anoc; 0x1F lines land in history, never OUTPUTS
+    pub trace: bool, // t: pass --trace to steel; 0x1F lines land in history, never OUTPUTS
     pub sess_ja: i32, // the session log's surface; -1 unknown
     pub sdefs: Vec<SDef>,
     pub quit: bool,
@@ -145,7 +145,7 @@ pub struct App {
     pub vrows: Vec<VRow>,          // world_vrows' vrows/nvrows (l.2979)
     pub run_lines: Vec<Vec<u8>>,   // the composed program for 0x1D tag resolution (l.1107)
     pub snap_seq: i32,             // per-process snapshot counter, deliberately not disk-scanned
-    pub anoc_path: Option<String>, // find_anoc's cache
+    pub steel_path: Option<String>, // find_steel's cache
 }
 
 impl App {

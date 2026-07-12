@@ -1,4 +1,4 @@
-// main.rs — the anoc driver. Mirrors src/main.c: CLI scan, --! directive extraction (lines
+// main.rs — the steel driver. Mirrors src/main.c: CLI scan, --! directive extraction (lines
 // blanked to spaces, newlines kept), registry resolution beside the source file, the
 // lex -> parse -> emit pipeline, --tokens / --dump / --run / --save modes, run_bqn with the
 // per-line 0x1E capture (0x1D label and 0x1F trace lines forward verbatim), the save
@@ -29,7 +29,7 @@ fn main() -> ExitCode {
 
 // Inputs: argv. Output: the process exit code.
 // Invariants: diagnostics to stderr as "<path>: <msg>" (path exactly as given, never
-// canonicalized) except "anoc: --save requires --run"; flag scan order and post-scan check
+// canonicalized) except "steel: --save requires --run"; flag scan order and post-scan check
 // order exactly as main.c; the source buffer truncates at its first NUL byte before
 // directive parsing (C-string fidelity); --tokens returns before parse; --dump happens
 // before lexing and exits 0 when no other mode was asked.
@@ -96,7 +96,7 @@ fn run() -> i32 {
     }
     let Some(path) = path else { return usage() };
     if save_flag.is_some() && !mode_run {
-        eprintln!("anoc: --save requires --run");
+        eprintln!("steel: --save requires --run");
         return 2;
     }
 
@@ -276,10 +276,10 @@ fn run() -> i32 {
 }
 
 // Output: prints the usage line to stderr (trailing newline), returns 2. Byte-exact:
-// usage: anoc [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano
+// usage: steel [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano
 fn usage() -> i32 {
     eprintln!(
-        "usage: anoc [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano"
+        "usage: steel [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano"
     );
     2
 }
@@ -524,7 +524,7 @@ fn rand6(salt: u64) -> String {
 // Inputs: source path (messages only), rt bytes, emitted program, capture sink (None = child
 // inherits stdout). Output: bqn's exit code verbatim (127 exec failure, 1 signal death;
 // 2 on temp-file/pipe/spawn plumbing failure).
-// Invariants: temp file "${TMPDIR:-/tmp}/anoc-XXXXXX.bqn" (std has no mkstemps — create_new
+// Invariants: temp file "${TMPDIR:-/tmp}/steel-XXXXXX.bqn" (std has no mkstemps — create_new
 // loop with a randomized middle, name shape kept for the "kept %s" message); contents rt +
 // newline-guarantee + program; bqn found via PATH; the capture loop is BYTE-oriented — split
 // child stdout on '\n', a line whose FIRST byte is 0x1E goes to cap sentinel-stripped with
@@ -540,7 +540,7 @@ fn run_bqn(path: &str, rt: &[u8], prog: &str, cap: Option<&mut Vec<u8>>) -> i32 
         let mut made = None;
         let mut last: Option<io::Error> = None;
         for salt in 0..100u64 {
-            let name = format!("{}/anoc-{}.bqn", tdir, rand6(salt));
+            let name = format!("{}/steel-{}.bqn", tdir, rand6(salt));
             match std::fs::OpenOptions::new().write(true).create_new(true).open(&name) {
                 Ok(f) => {
                     made = Some((name, f));

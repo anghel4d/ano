@@ -26,21 +26,21 @@ Two facts to hold onto before we start. First, ano is embedded: it is the reside
 
 ## Starting out
 
-You need Nix with flakes enabled, and nothing else. The dev shell carries the C compiler and CBQN, the array language ano compiles to. From the repository root:
+You need Nix with flakes enabled, and nothing else. The dev shell carries the Rust toolchain and CBQN, the array language ano compiles to. From the repository root:
 
 ```text
-nix develop            # BQN, gcc, make, and friends
-make -C src            # builds ./src/anoc, the ano-to-BQN transpiler
-./src/anoc --run demos/1-selection/001-canonical-masked-update.ano
+nix develop            # BQN, cargo, and friends
+cargo build --release  # builds ./target/release/steel, the ano-to-BQN transpiler
+./target/release/steel --run demos/1-selection/001-canonical-masked-update.ano
 ```
 
-If the last line printed nothing and exited 0, congratulations: you have run ano and it agreed with its own spec. `anoc` compiled the file to a BQN program, ran it under CBQN, and asserted the post-state. A nonzero exit is a divergence. To skip the shell, prefix commands with `nix develop -c`. With no Nix at all, any C23 compiler plus a `bqn` binary on PATH will do.
+If the last line printed nothing and exited 0, congratulations: you have run ano and it agreed with its own spec. `steel` compiled the file to a BQN program, ran it under CBQN, and asserted the post-state. A nonzero exit is a divergence. To skip the shell, prefix commands with `nix develop -c`. With no Nix at all, a Rust toolchain plus a `bqn` binary on PATH will do.
 
 The demo tree comes in twins. Every `.bqn` file is a witness: the semantics worked out by hand in BQN, assertions included. Beside it sits an `.ano` twin, the same statements as an actual ano program, compiled and checked against the same post-state. Differential testing, both directions, on every example in this book. The three entry points:
 
 ```text
 ./demos/check.sh       # every .bqn witness (93 files)
-./src/check-ano.sh     # every .ano twin through anoc --run (257 files)
+./src/check-ano.sh     # every .ano twin through steel --run (257 files)
 nix flake check        # both suites, hermetically
 ```
 
@@ -216,7 +216,7 @@ The whole family fits one table, folds and scans together. Lineage: in k, `&` IS
 | `-` | rejected: not associative | — | — |
 | `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
 
-The identity column is the honesty rule again, extended to the empty fiber, and a scan needs no identity at all: it is length-preserving, so the empty scope yields the empty column. Why no `>/` for max? Recorded verdict: `>` is a comparison returning bool, folding it is non-associative nonsense, and k only earns `|/` because k's `|` IS max natively — under the named-reducer unification max/min/avg are names like any other, so no glyph is needed. Scan cells anoc does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses; `+\ *\ &\ |\ max\` and named-reducer scans are live.
+The identity column is the honesty rule again, extended to the empty fiber, and a scan needs no identity at all: it is length-preserving, so the empty scope yields the empty column. Why no `>/` for max? Recorded verdict: `>` is a comparison returning bool, folding it is non-associative nonsense, and k only earns `|/` because k's `|` IS max natively — under the named-reducer unification max/min/avg are names like any other, so no glyph is needed. Scan cells Steel does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses; `+\ *\ &\ |\ max\` and named-reducer scans are live.
 
 And now the trap this repository has pinned four different ways (`034-fib-stencil-a` through `-d`): the tempting recurrence. You cannot write Fibonacci like this —
 
@@ -372,7 +372,7 @@ The particle map is small and shockingly clean: と is `&`, の is the dot hop (
 Cheese @ cellar & Aged > 3mo , Price *= 2
 ```
 
-The deeper claims live in `085-relative-clause`, `093-zero-subject`, `094-block-anaphora`: the relative clause as selection (a full clause before a noun restricts it, no relativizer, which is precisely "the predicate is the entity reference"), the zero subject the effects chapter already used, and the する/なる voice split the next chapter is about to cash in. To run one: the file says `--! ja`, and `anoc --tokens` shows you the normalized stream.
+The deeper claims live in `085-relative-clause`, `093-zero-subject`, `094-block-anaphora`: the relative clause as selection (a full clause before a noun restricts it, no relativizer, which is precisely "the predicate is the entity reference"), the zero subject the effects chapter already used, and the する/なる voice split the next chapter is about to cash in. To run one: the file says `--! ja`, and `steel --tokens` shows you the normalized stream.
 
 ## Standing rules and the clock
 
@@ -395,7 +395,7 @@ def wither = Plot & Planted & kin != 2 & kin != 3 => -Planted
 
 Both write `Planted` with no common merge family, and a column-level check would reject them. But bloom selects under `!Planted` and wither under `Planted`, so no row of one pre-state can satisfy both, and the emitter reads that complement as the disjointness certificate. The blinker blinks synchronously. A per-rule barrier would break it in either order, and `105-life-step-a/b.ano` and `107-life-glider.ano` pin the one-barrier synchrony from the performed side first.
 
-One honest note about running rules here, since anoc reads a file top to bottom and the real engine has a clock: the harness pretends the clock beats once at the end of each unbroken run of `def` lines, and every rule installed so far fires at each beat. Installs persist, so a rule installed early fires again at a later beat, exactly as the engine would have it. What a file cannot do is let ticks pass without installing something new. `ISSUES.md` states the residue plainly, and the next chapter has a demo that makes the clock beat twice on purpose.
+One honest note about running rules here, since Steel reads a file top to bottom and the real engine has a clock: the harness pretends the clock beats once at the end of each unbroken run of `def` lines, and every rule installed so far fires at each beat. Installs persist, so a rule installed early fires again at a later beat, exactly as the engine would have it. What a file cannot do is let ticks pass without installing something new. `ISSUES.md` states the residue plainly, and the next chapter has a demo that makes the clock beat twice on purpose.
 
 ## The wand
 
@@ -441,6 +441,6 @@ eval "SparkBolt , Damage += 10"
 
 You are now great and powerful, so you get the honest map. `ISSUES.md` is short and current: identity across the barrier (a trigger payload's parent can name a row the same barrier despawned; where the intensional/extensional boundary sits is open), recurrences within a statement (you met the trap; the carry stays host-side for now), quotation past the literal (templates with holes, rules writing rules: unbuilt), deriving order-srels mechanically (w3-b's fibers are hand-listed today), world-to-chunk frame conversion (the host does it), frame-homogeneous rule ticks (no mixed entity-and-lattice tick yet), and the harness clock's residue you already know. The spec's "Open Questions, Next Steps" holds the deeper unsettled design: rule retraction, explicit bindings' denotation, the recurrence options, the reap option's granularity, each with its tradeoff stated, never resolved silently.
 
-Numbers get their own honest paragraph, because every number in ano is one thing: an IEEE 754 float64, end to end — the literal you write, the column in the world file, the value BQN computes, the digits the save writes back. That buys exact integers up to 2^53 (9,007,199,254,740,992) and sets three edges. The cliff: past 2^53 the representable integers thin out, and an addition smaller than the local spacing is silently absorbed — `+= 1` onto 3.1e19 is a no-op, IEEE semantics keeping its own promise, not a bug. Overflow: past DBL_MAX ≈ 1.8e308 the arithmetic yields ∞, and ∞ has no spelling in a world file — the save refuses the pipe-back (`save: col gold: bad number '∞'`, exit 2) and the world on disk stands untouched, so an overflowing tick is a refused tick, never a corrupted world. And the same door locked from the outside: a hand-written `inf`, `-inf`, `nan`, or any spelling strtod reads as non-finite refuses at registry load with a line diagnostic. The seal that falls out is exact: the registry's value domain is the finite doubles, load ∘ save is the identity on it, and on the numeric domain anything anoc saves it can load and anything it loads it could have saved. `src/refusals/` pins every face of this. The adjacent doctrine is time's: float ingress from the host quantizes at the binding (`BIND_QUANTIZE`, the determinism boundary — ano-time's stance, recorded under Float ingress in `ano-ecs.md`), so a replayed world never hangs on a float the log did not capture.
+Numbers get their own honest paragraph, because every number in ano is one thing: an IEEE 754 float64, end to end — the literal you write, the column in the world file, the value BQN computes, the digits the save writes back. That buys exact integers up to 2^53 (9,007,199,254,740,992) and sets three edges. The cliff: past 2^53 the representable integers thin out, and an addition smaller than the local spacing is silently absorbed — `+= 1` onto 3.1e19 is a no-op, IEEE semantics keeping its own promise, not a bug. Overflow: past DBL_MAX ≈ 1.8e308 the arithmetic yields ∞, and ∞ has no spelling in a world file — the save refuses the pipe-back (`save: col gold: bad number '∞'`, exit 2) and the world on disk stands untouched, so an overflowing tick is a refused tick, never a corrupted world. And the same door locked from the outside: a hand-written `inf`, `-inf`, `nan`, or any spelling strtod reads as non-finite refuses at registry load with a line diagnostic. The seal that falls out is exact: the registry's value domain is the finite doubles, load ∘ save is the identity on it, and on the numeric domain anything Steel saves it can load and anything it loads it could have saved. `src/refusals/` pins every face of this. The adjacent doctrine is time's: float ingress from the host quantizes at the binding (`BIND_QUANTIZE`, the determinism boundary — ano-time's stance, recorded under Float ingress in `ano-ecs.md`), so a replayed world never hangs on a float the log did not capture.
 
-Where to go next: `ano-language.md` is the spec this manual has been quoting, worth reading end to end now that every section will parse. `src/GRAMMAR.md` is anoc's implementation contract when you need token-level truth. `ano_nihongo.md` if the Japanese chapter hooked you, `proofs/foundations.md` if the tiers did, and `demos/` for everything, forever, because in this repository the examples are the ground truth and the prose merely keeps up. Now go address something by description.
+Where to go next: `ano-language.md` is the spec this manual has been quoting, worth reading end to end now that every section will parse. `src/GRAMMAR.md` is the compiler's implementation contract when you need token-level truth. `ano_nihongo.md` if the Japanese chapter hooked you, `proofs/foundations.md` if the tiers did, and `demos/` for everything, forever, because in this repository the examples are the ground truth and the prose merely keeps up. Now go address something by description.
