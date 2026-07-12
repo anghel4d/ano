@@ -31,6 +31,8 @@ w ← 4 ÷˜ +´soldier
 cells2 ← ⥊ ↕4‿16
 ! cells2 ≡ {(⌊𝕩÷16)⋈16|𝕩}¨ ↕64
 pos2 ← cells2⌾(soldier⊸/) pos0
+! (soldier/pos2) ≡ cells2          # soldiers hold the 4×16 lattice in selection order
+! ((¬soldier)/pos2) ≡ 6⥊<¯1‿¯1     # bystanders untouched
 ! (20⊑pos2) ≡ 1‿2                  # same soldier, ordinal 18 = 16+2, cell ⟨1,2⟩
 
 # to 20: one rank, the cell is the flat index.

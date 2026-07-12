@@ -2,7 +2,7 @@
 --! registry ../registries/031-scan-along.reg
 --! ja
 --! out 2 5 9 10
-走査 ( + ) 重量 沿 pathCells
+走査 ( + ) 重量 沿 経路群
 --! out 1 4 6 10
 累和 重量 面 で
 --! out 10

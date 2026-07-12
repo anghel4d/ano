@@ -6,10 +6,10 @@
 n 2
 unique id 3 5
 col soldier bool 1 0
-col hp num 40 10
-col ammo num 7 7
+col hp nat 40 10
+col ammo nat 7 7
 default ammo 5
-col gold num 100 200
+col gold nat 100 200
 col proto sym Grunt Grunt
 def Marine soldier=1 hp=100
 ja 識別 id

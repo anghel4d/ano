@@ -6,7 +6,7 @@ alias cursor 0 0 1 0 0 0
 col pos num 0 10 20 30 40 50
 col tint sym None None None None None None
 col shielded bool 1 1 1 0 1 0
-col nord bool 1 1 0 1 0 0
+col nord bool 1 1 0 1 1 0
 col twoHanded num 70 50 90 61 10 99
 col gold num 5 10 15 20 25 30
 col blessed bool 0 1 0 0 0 0

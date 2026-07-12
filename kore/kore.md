@@ -2,7 +2,7 @@
 
 kore. これ, "this one here" — ano addresses the world from over there; the editor is where you hold it in your hand. A TUI over the process and text boundary: kore spawns anoc as a child exactly as anoc spawns cbqn, and its data contract is the .reg format. It never includes ano.h, so it survives the Steel port untouched. One file, `kore.c`, C23, zero external deps — raw ANSI CSI rendering over termios raw mode, double-buffered into one write(2) per frame, SGR mouse reporting, SIGWINCH resize, no ncurses. Strings, UTF-8, collation, and the world arena come from `../common` (the anoptic strings module, compiled in directly). CJK, kana, and fullwidth codepoints occupy 2 cells. Each parsed world lives in one arena and dies with the load that replaces it.
 
-Build: `make -C kore`. anoc discovery: `$ANOC` wins, else `../src/anoc` beside kore's own binary, else `src/anoc` under CWD, else `anoc` from PATH. Runs need `bqn` on PATH (the nix dev shell provides CBQN).
+Build: `make -C kore`. anoc discovery: `$ANOC` wins, else `anoc` directly beside kore's own binary (the Steel sibling in `target/release`), else `../src/anoc` beside it, else `src/anoc` under CWD, else `anoc` from PATH. Runs need `bqn` on PATH (the nix dev shell provides CBQN).
 
 The palette is pastel ink on a forced dark canvas: every cell paints its own background (xterm-256 `234`) and default text is soft off-white (`252`), so the colors read identically on a light-themed terminal — nothing leans on the terminal's own fg/bg. Deriving the palette from the shell theme instead (OSC 10/11, the way nvim does) is TODO.md item 4.
 

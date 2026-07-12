@@ -16,7 +16,7 @@ keep ← ¬cursed
 idx‿mentor‿dead‿nord‿trained ↩ keep⊸/¨ idx‿mentor‿dead‿nord‿trained
 
 ! idx ≡ 2‿3‿4‿5
-! 5 ≥ ≠idx                          # the fault shape: a stored id at/beyond the new count
+! ∨´ mentor ≥ ≠idx                  # the fault shape, read from the column itself: a stored id at/beyond the new count
 
 # statement 2: Nord & mentor.Dead , -Trained
 f     ← idx⊐mentor

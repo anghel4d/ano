@@ -127,8 +127,10 @@ pub fn walk_demos(app: &mut App, dir: &str) {
     }
 }
 
-// Cached: $ANOC when executable; else <exedir>/../src/anoc via /proc/self/exe; else
-// src/anoc under CWD; else "anoc" (PATH via execvp). kore.c find_anoc l.929.
+// Cached: $ANOC when executable; else anoc beside kore's own binary via /proc/self/exe
+// (target/release under the workspace — the Steel sibling always wins over a stale C
+// build); else <exedir>/../src/anoc; else src/anoc under CWD; else "anoc" (PATH via
+// execvp). kore.c find_anoc l.929, the sibling rung added for the cargo layout.
 pub fn find_anoc(app: &mut App) -> String {
     if let Some(p) = &app.anoc_path {
         return p.clone();
@@ -148,9 +150,11 @@ fn find_anoc_probe() -> String {
     if let Ok(exe) = std::fs::read_link("/proc/self/exe") {
         let exe = exe.to_string_lossy().into_owned();
         if let Some(sl) = exe.rfind('/') {
-            let cand = format!("{}/../src/anoc", &exe[..sl]);
-            if sys::access_x(&cand) {
-                return cand;
+            for rel in ["/anoc", "/../src/anoc"] {
+                let cand = format!("{}{}", &exe[..sl], rel);
+                if sys::access_x(&cand) {
+                    return cand;
+                }
             }
         }
     }
