@@ -8,7 +8,7 @@
 # Inputs: none (env ANOC overrides the binary, default: anoc beside this script).
 # Output: one ok-refuse/FAIL-refuse line per fixture. Exit: nonzero iff any fails.
 set -u
-ANOC="${ANOC:-$(dirname "$0")/anoc}"
+ANOC="${ANOC:-$(dirname "$0")/../target/release/anoc}"
 here="$(cd "$(dirname "$0")" && pwd)"
 fail=0
 for f in "$here"/refusals/load-*.reg; do

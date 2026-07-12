@@ -69,3 +69,6 @@ common/test_common
 # kore build output and scratch (the undo ring, play copies, repl program)
 kore/kore
 .kore/
+
+# steel (cargo) build output
+/target

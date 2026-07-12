@@ -1,0 +1,8 @@
+[package]
+name = "kore"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "kore"
+path = "src/main.rs"

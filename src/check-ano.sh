@@ -7,7 +7,7 @@
 # Output: one line per file (ok/FAIL), per pair (ok-emit/FAIL-emit), and per refusal
 # fixture (ok-refuse/FAIL-refuse). Exit: nonzero iff anything fails.
 set -u
-ANOC="${ANOC:-$(dirname "$0")/anoc}"
+ANOC="${ANOC:-$(dirname "$0")/../target/release/anoc}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
 fail=0

@@ -1,0 +1,11 @@
+[package]
+name = "steel"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "steel"
+
+[[bin]]
+name = "anoc"
+path = "src/main.rs"

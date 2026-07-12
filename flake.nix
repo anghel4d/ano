@@ -19,6 +19,10 @@
             pkgs.gcc
             pkgs.gnumake
 
+            # Steel — the Rust reference implementation (steel/ and kore/, one workspace).
+            pkgs.rustc
+            pkgs.cargo
+
             # Demo languages beyond BQN (demos/demos.md): Erlang, Haskell, OCaml.
             pkgs.beamPackages.erlang
             (pkgs.haskellPackages.ghcWithPackages (p: [ p.megaparsec ])) # draft interpreters, reader experiments
@@ -53,7 +57,16 @@
         anoc = pkgs.runCommand "ano-anoc-demos" { nativeBuildInputs = [ pkgs.gcc pkgs.gnumake pkgs.cbqn ]; } ''
           cp -r ${self}/src src && cp -r ${self}/demos demos && chmod -R +w src demos
           make -C src anoc
-          bash src/check-ano.sh
+          ANOC=src/anoc bash src/check-ano.sh
+          touch $out
+        '';
+        steel = pkgs.runCommand "ano-steel-demos" { nativeBuildInputs = [ pkgs.rustc pkgs.cargo pkgs.cbqn ]; } ''
+          cp ${self}/Cargo.toml Cargo.toml && cp -r ${self}/steel steel && cp -r ${self}/kore kore
+          cp -r ${self}/src src && cp -r ${self}/demos demos
+          chmod -R +w steel kore src demos
+          export CARGO_HOME=$PWD/.cargo
+          cargo build --release --offline --workspace
+          ANOC=$PWD/target/release/anoc bash src/check-ano.sh
           touch $out
         '';
       });
