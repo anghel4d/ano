@@ -1,8 +1,7 @@
-// lex.rs — the tokenizer for both surfaces: lex_ascii (maximal munch) and lex_ja (spaced,
-// grammar-first word resolution, postfix re-root, K_TGT deletion). Mirrors src/lex.c.
+// Tokenizer for both surfaces: lex_ascii uses maximal munch; lex_ja resolves spaced grammar,
+// re-roots postfix operators, and deletes K_TGT.
 // Both skins are registry-blind; every diagnostic renders "line %d: %s", byte-exact.
-// K_TGT and the JA post column are internal — define private buffer types here; they never
-// reach the public Toks.
+// K_TGT and the JA post column never reach public Toks.
 
 use crate::{ANO_NAMESZ, Diag, Interner, Symbol, TokKind, Toks};
 
@@ -917,7 +916,7 @@ fn operand_start(b: &TokBuf, k: i32) -> i32 {
     j
 }
 
-// Inputs: source, token buffer, interner. Output: the normalized ASCII-equivalent
+// Inputs: source, token buffer, interner. Output: the normalized parser
 // stream, T_NL between nonempty lines, no trailing NL. Per word, in order: ^alias /
 // :sym sigils; the closed grammar — particle, keyword, and fold/scan table (with op
 // payload); kanji/Arabic numeral; a fused reducer word (name/ name\); then any legal

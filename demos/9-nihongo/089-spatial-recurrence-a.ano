@@ -1,6 +1,6 @@
 -- Spatial recurrence (ex46), Version A: one stencil step, shift not carry. Twin of 089-spatial-recurrence.bqn (first assertion).
 -- A row of cells and the statement that looks like Fibonacci but is one synchronous step: prev shifts, nothing carries.
--- prev is a parallel shift over pre-state, zero-filled at the boundary; one barrier gives exactly one two-back stencil step over Height = 1..8, and can never generate Fibonacci (Version B, the canonical form, is the -c twin over the same fixture).
+-- prev shifts the pre-state with zero fill. This barrier performs one two-back stencil step; it does not carry Fibonacci values. The -c twin uses registered fib(index).
 --! registry ../registries/089-spatial-recurrence-a.reg
 --! expect height = 0 1 3 5 7 9 11 13
 

@@ -1,11 +1,6 @@
-// world.rs — PORTER 3: the world model and mutation machinery. The .reg reader, lookups,
-// number spelling, the splice router, files-and-atomicity, the .kore scratch (tags, play
-// copies, guards, undo ring, snapshots, session log), the REPL and demo ticks, and the
-// headless surfaces (--check, --edit). Contract map: kmaps/kore-world.md; C source:
-// kore/kore.c l.497-1000 (model+reader), l.1240-1990 (scratch/session/ticks), l.2395-2530
-// (table cols/cells + cell_commit), l.3836-3882 (check_reg/edit_reg). Every guard message
-// reaches --edit's stderr byte-for-byte: copy them verbatim from the C. Types complete;
-// bodies are the port. Child spawning and the 0x1D/0x1F demux live in main.rs
+// World model and mutation: .reg loading, lookups, number spelling, splices, .kore scratch,
+// undo, snapshots, session logs, REPL/demo ticks, --check, and --edit. Guard diagnostics are
+// differential-tested against the C oracle. Child spawning and the 0x1D/0x1F demux live in main.rs
 // (crate::find_steel, crate::cap_split); sys:: provides strtod_prefix/fmt_g for wnum/fmt_num.
 
 use crate::app::{App, DCol, Mode, SDef, KMAXHIST, KMAXSDEF};
@@ -16,9 +11,9 @@ use std::io::Write;
 
 pub const KMAXENT: usize = 512; // data lines past the cap parse to no Ent but stay in lines[]
 
-// Entity archetype ink (kore.c entPal l.833): arch_color's FNV-1a (case-folded) % 12.
+// Entity archetype ink (kore.c entPal): arch_color's FNV-1a (case-folded) % 12.
 pub const ENT_PAL: [u8; 12] = [114, 183, 210, 117, 221, 80, 213, 147, 84, 173, 152, 229];
-// Field ground paint (kore.c fieldPal l.2833): declaration ordinal % 10, x/y counted.
+// Field ground paint (kore.c fieldPal): declaration ordinal % 10, x/y counted.
 pub const FIELD_PAL: [u8; 10] = [39, 208, 170, 114, 221, 80, 213, 147, 210, 84];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -45,7 +40,7 @@ pub enum VType {
 // 2^53, the nat/int ceiling — steel's ANO_NATMAX, the contiguous-integer bound.
 pub const NATMAX: f64 = 9_007_199_254_740_992.0;
 
-// One parsed entry (kore.c Ent, l.500). keyw is the data word-index delta: +1 keyed
+// One parsed entry (kore.c Ent). keyw is the data word-index delta: +1 keyed
 // rel/srel (`rel <key> <name> …`), -1 `unique` (no type word) — splice targets shift by it.
 pub struct Ent {
     pub kind: EKind,
@@ -65,7 +60,7 @@ pub struct Ent {
     pub rng: Option<(f64, f64)>, // declared `range <col> <lo> <hi>` bounds — edits clamp into it
 }
 
-// The parsed world (kore.c World, l.515). lines[] verbatim is the one source of truth;
+// The parsed world (kore.c World). lines[] verbatim is the one source of truth;
 // the tables are a view. One load replaces the last whole (Rust ownership is the arena).
 #[derive(Default)]
 pub struct World {
@@ -150,7 +145,7 @@ fn fold(c: u8) -> u8 {
 
 // ---------- helpers: tokenizing, numbers, names ----------
 
-// The loader's case contract: ASCII A-Z folds, every other byte exact (kore.c l.536).
+// The loader's case contract: ASCII A-Z folds, every other byte exact (kore.c).
 pub fn names_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(&x, &y)| fold(x) == fold(y))
 }
@@ -251,8 +246,7 @@ pub fn run_ok(run: &[u8], rows: i32) -> bool {
     true
 }
 
-// strtod + whole-word consume + isfinite (kore.c wnum): kore never blesses a world steel
-// would reject. sys::strtod_prefix carries the glibc quirks (hex floats, leading +).
+// Parse one finite, fully consumed libc strtod word; accepts hex floats and leading +.
 pub fn wnum(w: &[u8]) -> Option<f64> {
     let (v, used) = sys::strtod_prefix(w);
     if used > 0 && used == w.len() && v.is_finite() {
@@ -262,7 +256,7 @@ pub fn wnum(w: &[u8]) -> Option<f64> {
     }
 }
 
-// kore.c fmt_num (l.883): integer in [-9e15, 9e15] -> %lld; else the shortest %.{1..17}g
+// kore.c fmt_num: integer in [-9e15, 9e15] -> %lld; else the shortest %.{1..17}g
 // that round-trips through strtod (sys::fmt_g / sys::strtod_prefix). Owned String replaces
 // the C's 8-slot static ring; the OUTPUT bytes must match.
 pub fn fmt_num(v: f64) -> String {
@@ -311,13 +305,13 @@ fn world_check_unique(w: &World) -> Result<(), String> {
     Ok(())
 }
 
-// Parse path into a fresh World (kore.c world_load l.649). Err(message) on unreadable file
+// Parse path into a fresh World (kore.c world_load). Err(message) on unreadable file
 // (`cannot read <path>: <strerror>`) or a failed unique check (`line <n>: unique <name>:
 // value <g> repeats (rows <i>, <j>)`); the caller replaces its world only on Ok. Line split:
 // \n, one trailing \r stripped, post-final-newline empty tail is not a line EXCEPT an empty
-// file yields one empty line. Dispatch per kmaps/kore-world.md "The .reg reader" — n,
-// lattice, col/field, pres, unique, rel/alias (keyed detection: third word non-numeric and
-// not `|`), srel/inv, role pos/glyph/proto; everything else passes through in lines[].
+// file yields one empty line. Dispatch covers n, lattice, col/field, pres, unique, rel/alias
+// (keyed when the third word is non-numeric and not `|`),
+// srel/inv, and role pos/glyph/proto; everything else remains in lines[].
 pub fn world_load(path: &str) -> Result<World, String> {
     let raw = match std::fs::File::open(path) {
         Ok(mut f) => {
@@ -561,7 +555,7 @@ impl World {
 
     // The entity's glyph, at most 7 bytes: the glyph column's sym clamped to its FIRST rune;
     // empty/absent -> the proto sym only when the noun IS a single rune; else None (the
-    // bold-@ fallback belongs to the call sites). kore.c ent_glyph l.847.
+    // bold-@ fallback belongs to the call sites). kore.c ent_glyph.
     pub fn ent_glyph(&self, row: i32) -> Option<Vec<u8>> {
         let sym_at = |i: Option<usize>| -> Option<&[u8]> {
             let i = i?;
@@ -614,7 +608,7 @@ impl World {
 }
 
 // FNV-1a 32-bit (offset 2166136261, prime 16777619) over the ASCII-case-folded name,
-// into ENT_PAL[h % 12]. kore.c arch_color l.833.
+// into ENT_PAL[h % 12]. kore.c arch_color.
 pub fn arch_color(name: &[u8]) -> u8 {
     let mut h: u32 = 2166136261;
     for &b in name {
@@ -624,7 +618,7 @@ pub fn arch_color(name: &[u8]) -> u8 {
 }
 
 // A char cell's display: printable ASCII 0x20..0x7E verbatim, anything else "·",
-// out-of-range " ". kore.c glyph_at l.2817.
+// out-of-range " ". kore.c glyph_at.
 pub fn glyph_at(e: &Ent, k: i32) -> Vec<u8> {
     if k < 0 || k as usize >= e.chars.len() {
         return b" ".to_vec();
@@ -640,7 +634,7 @@ pub fn glyph_at(e: &Ent, k: i32) -> Vec<u8> {
 
 // Rebuild app.dcols from non-E_FIELD ents in declaration order; width = max(name width,
 // every cell width) clamped [3, 24]. Width-pass spellings: srel space-joined / `(inv)`,
-// vec `x,y` (comma — display uses space, same width). kore.c table_cols l.2399.
+// vec `x,y` (comma — display uses space, same width). kore.c table_cols.
 pub fn table_cols(app: &mut App) {
     let mut dc: Vec<DCol> = Vec::new();
     for (i, e) in app.world.ents.iter().enumerate() {
@@ -698,7 +692,7 @@ pub fn table_cols(app: &mut App) {
 
 // The display/edit spelling of segment-0 cell (row, col): srel fibers space-joined, inv
 // `(inv <name>)`, vec `x y` (space), sym verbatim, char glyph_at, rel < 0 -> `/`, else
-// fmt_num. kore.c table_cell l.2451.
+// fmt_num. kore.c table_cell.
 pub fn table_cell(app: &App, row: i32, col: i32) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     if col < 0 || col as usize >= app.dcols.len() {
@@ -787,8 +781,8 @@ pub fn read_file(path: &str) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-// The staged commit: write <path>.staged (fsync), rename(2) onto path — crash leaves old
-// or new, never torn. Any failure unlinks the staged file. Every kore write routes here.
+// Write and fsync <path>.staged, then rename it over path. Failures remove the staged file.
+// The parent directory is not fsynced.
 pub fn write_commit(path: &str, data: &[u8]) -> bool {
     let staged = format!("{}.staged", path);
     let wrote = (|| -> std::io::Result<()> {
@@ -831,7 +825,7 @@ pub fn mkdirs(path: &str) {
 // Splice repl over (off, len) of line, rebuild the WHOLE file as every line + "\n"
 // (normalizes a missing final newline; CRLF already collapsed at load), write_commit, and
 // world_load the same path back into app.world. Errors verbatim: `splice: no line %d`,
-// `splice: bad span`, `cannot write %.180s: %s`. kore.c world_splice l.902.
+// `splice: bad span`, `cannot write %.180s: %s`. kore.c world_splice.
 pub fn world_splice(app: &mut App, line: usize, off: usize, len: usize, repl: &[u8]) -> Result<(), String> {
     if line >= app.world.lines.len() {
         return Err(format!("splice: no line {}", line));
@@ -862,7 +856,7 @@ pub fn world_splice(app: &mut App, line: usize, off: usize, len: usize, repl: &[
 // Guards in order: repl exactly 1 byte in 0x20..0x7E (`char cell wants one printable ASCII
 // byte`); char_span (`bad char line`); cell in range and len == rows (`glyph out of
 // range`); the mutated run passes run_ok (`that run would have no .reg spelling (boundary
-// space or word-boundary '#')`). Then a 1-byte splice. kore.c char_splice l.2480.
+// space or word-boundary '#')`). Then a 1-byte splice. kore.c char_splice.
 pub fn char_splice(app: &mut App, ent: usize, cell: i32, rows: i32, repl: &[u8]) -> Result<(), String> {
     if repl.len() != 1 || repl[0] < 0x20 || repl[0] >= 0x7F {
         return Err("char cell wants one printable ASCII byte".to_string());
@@ -882,11 +876,11 @@ pub fn char_splice(app: &mut App, ent: usize, cell: i32, rows: i32, repl: &[u8])
 
 // The one splice router, addressed by app.w_seg/w_row/w_col (the same triple --edit takes).
 // Field segments splice word 3 + cell (char fields via char_splice with rows = latW*latH);
-// segment 0 by kind per kmaps/kore-world.md: sym one word, vec both pair words re-formatted
-// via fmt_num, num word 3 + keyw + row, pres/alias word 2 + row, rel `/`->-1 word
+// segment 0 dispatches by kind: sym one word, vec both pair words re-formatted via fmt_num,
+// num word 3 + keyw + row, pres/alias word 2 + row, rel `/`->-1 word
 // 2 + keyw + row, srel whole-fiber replace (inv refuses), default `cell not editable`.
 // Every error string is --edit differential surface. Ok(Some(_)) is the clamp warning: the
-// write landed, repaired onto the column's carrier set. kore.c cell_commit l.2500.
+// write landed, repaired onto the column's carrier set. kore.c cell_commit.
 pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String> {
     let mut repl: Vec<u8> = text.iter().copied().take(511).collect();
     let mut warn: Option<String> = None;
@@ -946,9 +940,7 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String>
                 let Some(v) = wnum(&repl) else {
                     return Err(format!("not a number: {}", trunc_lossy(&repl, 100)));
                 };
-                // the typed repair applies to every numeric carrier, unique included (a
-                // bare unique is Num — the identity); a clamp that lands on a duplicate
-                // fails the reload's distinctness check and the splice refuses
+                // Typed repair applies to every numeric carrier, including unique columns.
                 let (c, w) = clamp_typed(vtype, app.world.ents[ei].rng, v);
                 if w.is_some() {
                     repl = fmt_num(c).into_bytes();
@@ -1126,7 +1118,7 @@ fn scan_two_lf(s: &[u8]) -> Option<(f64, f64)> {
 
 // `<stem>-<8-hex>`: FNV-1a 64 (offset 0xcbf29ce484222325, prime 0x100000001b3) over
 // realpath-else-raw, low 32 bits %08x; stem = RAW basename, last extension cut. Keep the
-// stem/hash asymmetry. kore.c tag_of l.1300.
+// stem/hash asymmetry. kore.c tag_of.
 pub fn tag_of(path: &str) -> String {
     let rp = sys::real_path(path);
     let hashed: &[u8] = rp.as_deref().map(str::as_bytes).unwrap_or(path.as_bytes());
@@ -1182,7 +1174,7 @@ fn play_mkdir(scratch: &str) {
     mkdirs(dir);
 }
 
-// realpath succeeds AND contains "/demos/" as a plain substring; fails closed. l.1350.
+// realpath succeeds AND contains "/demos/" as a plain substring; fails closed.
 pub fn in_demos(path: &str) -> bool {
     sys::real_path(path).map(|rp| rp.contains("/demos/")).unwrap_or(false)
 }
@@ -1190,7 +1182,7 @@ pub fn in_demos(path: &str) -> bool {
 // Copy-on-first-mutation for the world: already a copy, or MODE_REG on a non-corpus file,
 // is a no-op. Else copy to the play scratch, log `world copied to %s — the corpus stays
 // immutable\n`, record world_orig, load the scratch, set world_is_copy, sess_ja = -1,
-// undo_scan, session_rehydrate. false only on hard failure. kore.c world_guard l.1420.
+// undo_scan, session_rehydrate. false only on hard failure. kore.c world_guard.
 pub fn world_guard(app: &mut App) -> bool {
     if app.world_is_copy || (app.mode == Mode::Reg && !in_demos(&app.world.path)) {
         return true;
@@ -1246,7 +1238,7 @@ pub fn code_guard(app: &mut App) -> bool {
 
 // Load the scratch as the world (optionally copying pristine over it first: `cannot copy
 // %.100s to %.100s`); when not yet a copy: set world_is_copy, sess_ja = -1, undo_scan,
-// session_rehydrate. kore.c play_adopt l.1455.
+// session_rehydrate. kore.c play_adopt.
 pub fn play_adopt(app: &mut App, dst: &str, copy_first: bool) -> Result<(), String> {
     play_mkdir(dst);
     if copy_first && !copy_file(&app.pristine, dst) {
@@ -1470,7 +1462,7 @@ pub fn session_path(app: &App) -> String {
 // Append one successful statement; a fresh file writes the header (`-- kore session — a
 // valid .ano program: replay with steel --run`, `--! registry session-base.reg`, `--! ja`
 // when the first statement is ja). Other-surface bodies comment out line by line as
-// `-- (other surface, not replayable) %s`. kore.c session_log l.1690.
+// `-- (other surface, not replayable) %s`. kore.c session_log.
 pub fn session_log(app: &mut App, stmt: &[u8], ja: bool) {
     let p = session_path(app);
     let fresh = !sys::access_f(&p);
@@ -1577,8 +1569,8 @@ pub fn session_rehydrate(app: &mut App) {
 
 // ---------- the ticks ----------
 
-// One prompt submission = one program against the current world (kore.c repl_submit
-// l.1549): history push, `>` -> kore_command, guards, `ja ` prefix, the space-in-path
+// One prompt submission = one program against the current world (kore.c repl_submit):
+// history push, `>` -> kore_command, guards, `ja ` prefix, the space-in-path
 // refusal, session-base snapshot, compose .kore/repl.ano (registry line, same-surface defs
 // not redefined by the body, the body), undo_push, spawn steel --run --save <absw> --label
 // [--trace] via crate::run_steel, echo `> %s\n`, crate::cap_split, then session_log + def
@@ -1741,7 +1733,7 @@ pub fn pin_line(lt: &[u8]) -> bool {
 }
 
 // Compose .kore/next.ano from demo_live: with absw, the first registry line retargets and
-// pins DROP; without (registry-less), everything verbatim and pins hold. kore.c l.1790.
+// pins DROP; without (registry-less), everything verbatim and pins hold. kore.c.
 pub fn tick_program(app: &mut App, absw: Option<&str>) -> Result<(), String> {
     let raw = read_file(&app.demo_live).ok_or_else(|| format!("cannot read {}", app.demo_live))?;
     let src = cstr(&raw).to_vec();
@@ -1781,7 +1773,7 @@ pub fn tick_program(app: &mut App, absw: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-// n: the demo tick (kore.c world_next l.1820) — refusals (`bare world: statements step it —
+// n: the demo tick (kore.c world_next) — refusals (`bare world: statements step it —
 // n steps demos`, `no demo selected`, `unsaved code — s saves it, then n steps`), the
 // registry-less run (no --save, step 0), or adopt + tick_program + undo_push + steel --run
 // --save + cap_split; seam + reload + `tick — world advanced · step %d · u steps back` on 0,
@@ -1870,7 +1862,7 @@ pub fn world_next(app: &mut App) {
 }
 
 // r: MODE_REG reloads in place; a demo copies pristine over the scratch (staging the ring
-// first when they differ, with the -- r: seam). kore.c world_reset l.1740.
+// first when they differ, with the -- r: seam). kore.c world_reset.
 pub fn world_reset(app: &mut App) {
     if app.mode == Mode::Reg {
         if !app.world.loaded {
@@ -1939,7 +1931,7 @@ pub fn world_reset(app: &mut App) {
 // Open a demo: play code copy shadows the corpus (`code: play copy %s resumed — >reset
 // restores the corpus\n`), per-demo session state resets, registry resolves and loads
 // (an existing scratch resumes: `%s — play world resumed at step %d (r resets to
-// pristine)`). kore.c open_demo l.1875.
+// pristine)`). kore.c open_demo.
 pub fn open_demo(app: &mut App, path: &str) {
     app.demo_path = path.to_string();
     // an earlier session's play code copy shadows a corpus demo — the buffer rides it
@@ -1992,7 +1984,7 @@ pub fn open_demo(app: &mut App, path: &str) {
 // into a Term::headless(200, 400) with world_r = {0,0,399,199} (crate::ui::draw_space /
 // draw_bitmap — the same code paths as the TUI). stdout exactly
 // `ok %s n=%d lattice=%dx%d cols=%d fields=%d space=%s` (map+bitmap | table-only);
-// failures `FAIL %s: %s` on stderr. Returns 0/1. kore.c check_reg l.3836.
+// failures `FAIL %s: %s` on stderr. Returns 0/1. kore.c check_reg.
 pub fn check_reg(app: &mut App, path: &str) -> i32 {
     match world_load(path) {
         Err(e) => {
@@ -2034,7 +2026,7 @@ pub fn check_reg(app: &mut App, path: &str) -> i32 {
 // kore --edit <reg> <seg> <row> <col> <value>: guard and undo bypassed; demos/ refusal
 // `FAIL %s: corpus file — point --edit at a copy`; atoi the triple; cell_commit; success
 // re-runs table_cols and prints `ok %s` with the touched post-splice line ("?" when the
-// entry cannot be re-found). Returns 0/1. kore.c edit_reg l.3866.
+// entry cannot be re-found). Returns 0/1. kore.c edit_reg.
 pub fn edit_reg(app: &mut App, args: &[String]) -> i32 {
     // the corpus is immutable under kore, headless included
     if in_demos(&args[0]) {

@@ -6,7 +6,7 @@ What counts as a keyword. Per GRAMMAR.md: the closed keyword set the lexer owns 
 
 ## Atlas: language keywords
 
-The bilingual surface is load-bearing, so each keyword carries its Japanese spelling. The `--! ja` skin lexes to the identical token stream (ano_nihongo.md).
+Each keyword carries its Japanese spelling. The `--! ja` skin converges on shared token kinds and the same parser. Conjugate programs must emit byte-identical BQN.
 
 | Keyword | 日本語 | Token | Cluster | Role |
 |---|---|---|---|---|
@@ -177,7 +177,7 @@ Hostile , shortestPath via Adj      -- the host runs Dijkstra over the Adj relat
 
 ### `along` — 沿
 
-Names the order a `scan` accumulates along, for when the selection has no intrinsic order. A `scan … along order` write-back conjugates through the order's grade (sort, act, unsort — the Tier-2 law). The two spellings below are the same result.
+Names the order a `scan` accumulates along when the selection has no intrinsic order. Steel sorts by the order key, scans, and scatters back by the inverse grade. Tied order keys retain stable-index behavior; the Tier-2 equivariance claim does not cover them.
 
 ```haskell
 scan(+) Weight along pathCells       -- order named explicitly
@@ -468,11 +468,11 @@ Two honesty rules govern the whole family. The raw fold is an associative operat
 | `max/` `max\` | maximum | running peak | none — row drops | yes |
 | `min/` `min\` | minimum | running floor | none — row drops | only via `scan(min) … along` |
 | `avg/` `avg\` | mean | running mean | none — row drops | no |
-| `f/` `f\` | named reducer | its scan, free | registered | yes |
+| `f/` `f\` | named reducer | registered scan | registered | yes |
 | `-/` | rejected — not associative | — | — | — |
 | `//` | rejected — not associative, and unlexable (`/` is fold-marker and replicate) | — | — | — |
 
-The scan family has two spellings, and they cover different operators. The glyph `f\`, taking an `@` scope, emits `+\ *\ &\ |\ max\` and named-reducer scans. The spelled-out `scan(f) X along order` emits `+ * max min`. So the running minimum is available — written `scan(min) X along order`, never as the `min\` glyph: the glyph table has no `min`, so `min\` fails with `emit: line N: unknown scan op 'min'` (exit 2) while `scan(min) … along` compiles. Genuinely absent from both spellings are the running mean and the running count. `avg\` is the same emit error; `#\` never even lexes, since `#` forms only the fold `#/` — `line N: '#' begins only the fold '#/'`. Both are ruled but unbuilt: the design settled their meaning (a scan is length-preserving, so each names a running value), only the codegen was never written, so they are compile errors today rather than silent wrong answers. All of this is inherited from the frozen C — the same five glyph scans and the same `+ * max min` along-form there; the Rust is a byte-for-byte port, so it neither added nor dropped a scan. Why no `>/` for max: `>` is a comparison returning bool, folding it is non-associative nonsense, and under the named-reducer unification `max min avg` are names like any other, so no glyph is owed.
+The scan family has two spellings, and they cover different operators. The glyph `f\`, taking an `@` scope, emits `+\ *\ &\ |\ max\` and named-reducer scans. The spelled-out `scan(f) X along order` emits `+ * max min`. So the running minimum is available — written `scan(min) X along order`, never as the `min\` glyph: the glyph table has no `min`, so `min\` fails with `emit: line N: unknown scan op 'min'` (exit 2) while `scan(min) … along` compiles. Genuinely absent from both spellings are the running mean and the running count. `avg\` is the same emit error; `#\` never even lexes, since `#` forms only the fold `#/` — `line N: '#' begins only the fold '#/'`. Both are ruled but unbuilt: the design settled their meaning (a scan is length-preserving, so each names a running value), only the codegen was never written, so they are compile errors today rather than silent wrong answers (`todo/12-unbuilt-scans.md`). All of this is inherited from the frozen C — the same five glyph scans and the same `+ * max min` along-form there; the Rust is a byte-for-byte port, so it neither added nor dropped a scan. Why no `>/` for max: `>` is a comparison returning bool, folding it is non-associative nonsense, and under the named-reducer unification `max min avg` are names like any other, so no glyph is owed.
 
 ### `+/`  `+\` — sum, running sum
 
@@ -538,7 +538,7 @@ Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 
 
 ### `avg/`  `avg\` — mean, running mean
 
-Arithmetic mean, folded as sum-and-count then divided. `avg/` yields the mean; `avg\` the running mean. No identity — an empty fiber or scope drops the row, so no NaN ever lands. The fold is live; the scan `avg\` lexes but has no emit rule, so it is a compile error today — `emit: line N: unknown scan op 'avg'`.
+Arithmetic mean folds sum and count, then divides. `avg/` is live. `avg\` is the ruled running mean but has no emit rule. An empty fold fails the row.
 
 ```haskell
 Cow & Weight < avg/ Weight @ Cow , +Marked   -- @: one scalar, the herd mean

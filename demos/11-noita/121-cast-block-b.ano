@@ -1,5 +1,4 @@
 -- The recovery trap (w1-b): the balance is not the block. Twin of 120-cast-block.bqn (trap section). (was w1-cast-block-b)
--- The counterexample that proves the law: a recovered balance does not reopen the block. Membership follows the running minimum, never the balance itself.
 -- Wand [SB, Double, SB, SB]: the first bolt ends the block at slot 0, but the Double at slot 1 pushes the balance back up to 1 — a bal >= 0 test would draw the whole wand. Membership is the running minimum's story, never the balance's.
 --! registry ../registries/121-cast-block-b.reg
 --! expect bal = 0 0 1 0 -1

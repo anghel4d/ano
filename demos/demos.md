@@ -2,9 +2,6 @@
 
 Demonstrating / experimenting with the language at various stages of development. 
 
-Currently, this means working through the language examples in BQN, Erlang, Haskell, or OCaml to hash out everything we can about the semantics before committing to a compiler. 
-
-A temporary transpiler through BQN or OCaml might be considered at a later point.
 
 We use BQN to work through and verify the semantics of ano language ahead of time. An implementation is verified against the BQN post-states by differential testing.
 

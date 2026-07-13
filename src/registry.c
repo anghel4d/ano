@@ -72,10 +72,7 @@ static int split_words(char *line, char **words, int maxw) {
   return nw;
 }
 
-/* Inputs: word. Output: 0 with *out set via strtod, -1 on empty/trailing junk or a
- * non-finite parse (inf, nan, any spelling strtod accepts, hex-float overflow included).
- * The registry's value domain is exactly the finite doubles — the save already refuses
- * to write a non-finite world, so the load refuses to read one, and load ∘ save = id. */
+/* Parse one finite double. Returns 0 on success, -1 on invalid or non-finite input. */
 static int wnum(const char *w, double *out) {
   char *end;
   *out = strtod(w, &end);
@@ -506,10 +503,8 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       reg->nroles++;
 
     } else if (strcmp(k, "def") == 0) {
-      /* the proto, a registered archetype: named field=value pairs, the registry's first
-       * row-oriented construct. Spawn fill layer one; layers two and three are `default`
-       * and the type zero. Vocabulary reuse across the registry/program boundary is ruled
-       * fine (2026-07-11): this `def` never meets the program's. */
+      /* Register a prototype as column=value pairs. Spawn fill order is prototype value,
+       * registered default, then type zero. */
       if (nw < 2) return rerr(err, errsz, ln, "usage: def <name> [<col>=<v> ...]");
       RegEntry *e = &reg->ents[reg->nents++];
       e->kind = RK_PROTO;
@@ -549,9 +544,7 @@ int reg_load(const char *path, Registry *reg, Arena *a, char *err, size_t errsz)
       }
 
     } else if (strcmp(k, "reap") == 0) {
-      /* ~ reclamation policy, storage only (ruled 2026-07-11): the gen bump plus presence
-       * clear is the mark, reuse at tick seal is the reap; `host` hands reclamation to the
-       * host. anoc compacts at the barrier either way — the emitted algebra never changes. */
+      /* Record the reclamation policy. The C oracle compacts rows for either value. */
       if (nw != 2 || (strcmp(words[1], "seal") && strcmp(words[1], "host")))
         return rerr(err, errsz, ln, "usage: reap <seal|host>");
       if (reg->reap[0]) return rerr(err, errsz, ln, "reap redeclared");
@@ -604,10 +597,8 @@ const RegEntry *reg_role(const Registry *reg, const char *role) {
   return reg_find(reg, role);
 }
 
-/* Inputs: string buffer, double. Output: a spelling strtod parses back bit-exact —
- * format∘parse∘format = format, so dump -> load -> dump fixpoints. Integers in the
- * exact range spell as plain digits (900, never 9e+02 — the saved world is read by
- * people); everything else takes the shortest round-tripping %g. */
+/* Append a finite double spelling that round-trips through strtod. Exact-range integers
+ * use decimal notation. */
 static void dnum(StrBuf *b, double v) {
   char buf[64];
   /* range guard before the cast (UB out of range); -0.0 keeps its sign bit */
@@ -622,13 +613,9 @@ static void dnum(StrBuf *b, double v) {
   sb_printf(b, "%s", buf);
 }
 
-/* Inputs: loaded registry, target path, err buffer. Output: 0 / -1 with err set.
- * The write-out half of the commit loop: read in -> binary tables in memory -> write
- * out staged -> mv commit. Serializes everything reg_load reads — n, lattice, entries
- * in declaration order with pres/default beside their column, inv by its rel (fibers
- * recompute at load), roles, then the alias table with its declared spellings. The
- * world is a column store, so a save is a registry dump; comments and layout are
- * authoring-time only and a dump erases them. */
+/* Inputs: loaded registry, target path, error buffer. Output: 0 / -1. Serializes n,
+ * lattice, entries, roles, and aliases in loadable order, then commits by rename.
+ * Comments and source layout are not preserved. */
 int reg_dump(const Registry *reg, const char *path, char *err, size_t errsz) {
   StrBuf b = {0};
   sb_printf(&b, "n %d\n", reg->n);

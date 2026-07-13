@@ -166,12 +166,9 @@ char *fs_read(const char *path, Arena *a, size_t *lenOut) {
   return buf;
 }
 
-/* Inputs: target path, bytes + length. Output: 0 / -1 with errno set. The staged
- * commit: write <path>.staged whole, fsync, then rename(2) over the target — staging
- * beside the target keeps both on one filesystem, so the rename is atomic and a crash
- * leaves either the old file or the new one, never a torn write. The one writer.
- * Invariant: the fixed .staged name means concurrent dumps to one target race —
- * acceptable for a single-process compiler. */
+/* Inputs: target path, bytes, length. Output: 0 / -1 with errno set. Writes and fsyncs
+ * <path>.staged, then atomically renames it over the target. The parent directory is not
+ * fsynced. The fixed staging name assumes one writer per target. */
 int fs_write_commit(const char *path, const char *data, size_t len) {
   char staged[ANO_PATHSZ];
   int n = snprintf(staged, sizeof staged, "%s.staged", path);

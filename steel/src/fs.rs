@@ -1,4 +1,4 @@
-// fs.rs — path values and the one file reader/writer. Mirrors src/fs.c: AnoPath is a checked
+// Path values and the shared file reader/writer. AnoPath is a checked
 // value (the C len == 0 error state becomes None at every constructor), normalization is
 // purely lexical, writes commit via staged file + rename(2). No CWD mutation anywhere.
 
@@ -170,10 +170,9 @@ pub fn fs_read(path: &str) -> std::io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-// The one writer (reg_dump's backend; --dump and --save). Staged commit: write "<path>.staged"
-// whole, sync_all (fsync), close, rename over the target — atomic, never a torn write.
-// Invariants: "<path>.staged" >= ANO_PATHSZ refuses ENAMETOOLONG; every failure after the
-// staged file exists unlinks it and preserves the original error.
+// Writes and syncs "<path>.staged", then atomically renames it over the target. The parent
+// directory is not synced. Paths at or above ANO_PATHSZ refuse ENAMETOOLONG. Failures after
+// staging remove the staged file and preserve the original error.
 pub fn fs_write_commit(path: &str, data: &[u8]) -> std::io::Result<()> {
     let staged = format!("{}.staged", path);
     if staged.len() >= ANO_PATHSZ {

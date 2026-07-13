@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: LGPL-3.0 */
 /*  == Anoptic Game Engine v0.0000001 == */
 
-// Byte-level operations over anostr_t values: find, concat, join, split. 
-// All total (bad or oversized input yields the empty string / ANOSTR_NPOS, never UB), all following the module's
+// Byte-level find, replace, concatenate, join, and split operations over anostr_t.
+// Oversized results return the empty string.
 #include "ano_strings_internal.h"
 
 size_t anostr_find(anostr_t s, anostr_t needle, size_t from)

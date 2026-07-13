@@ -11,6 +11,6 @@ scan(+) Weight along pathCells
 --! out 1 4 6 10
 +\ Weight @ Mask
 
--- the fold's total is order-independent; only the scan's prefixes see the order
+-- This +/ total ignores order. Only the scan prefixes differ.
 --! out 10
 +/ Weight @ Mask

@@ -1,6 +1,6 @@
 # Foundations
 
-**Status: TENTATIVE. 2026-07-02.** Everything below is believed true with proof sketches, not yet formally verified. Lean4 infrastructure is planned but not set up; nothing here is load-bearing until mechanized. Executable witnesses for the concrete counterexamples and identities live in `demos/7-tiers/`: `t1-reverse.bqn`, `t2-ties.bqn`, `t2-conjugation.bqn`, `t2-diagonal.bqn`. This document replaces the mathematical claims formerly in the spec's "The maths" and "Tiers and Algebras" sections; the spec keeps the English and the examples, the mathematics lives here.
+**Status: TENTATIVE. 2026-07-02.** These are claims and hand-arguments, not proofs or verified results — nothing here is a theorem and nothing here is load-bearing. Executable counterexamples live in `demos/7-tiers/`. Lean4 work has not started.
 
 ## 1. Setting
 
@@ -14,7 +14,7 @@ A datum carries no tier on its own. The tier is the **(operation, view)** pair: 
 
 ## 2. Tier 1 — space
 
-### 2.1 The real theorem: generable versus nominal keys
+### 2.1 The real distinction: generable versus nominal keys
 
 The index of space is **regenerable**: `I = ↕shape`, a definable key, recomputable from the shape alone at any time. The index of records is **nominal**: an allocated key, held only by the store, unrecoverable once dropped. This asymmetry is the whole content of "space is indestructible," and it is exactly why rank-changing index operations — `(¬m)/c`, reshape, fold to lower rank — are free over space and forbidden as record write-backs: over space the output index `J` is as definable as the input index was, so no address is lost that `↕` cannot remint; over records a dropped key is gone.
 
@@ -61,51 +61,45 @@ f(c)_i = φ(c_i, ⟦c⟧)
 
 for some `φ`, where `⟦c⟧` is the multiset of values. Sketch: the stabilizer of `i` acts as the full symmetric group on the remaining coordinates, so `f(c)_i` can depend on those only through their multiset; transitivity of `Sym(I)` forces one `φ` for every `i`. In the linear case over `ℝ^I` the commutant of the permutation representation is spanned by the identity and the all-ones matrix (Schur), so `f(c) = a·c + b·(Σc)·1` — pointwise work plus broadcast aggregates, nothing else.
 
-### 3.3 Corollary: no canonical previous
+### 3.3 Consequence: no canonical previous
 
-Any order-dependent operator fails the law immediately: `prev` over an unordered record selection means `f(c)_i` depends on which key happens to precede `i`, and a `σ` that swaps neighbours breaks equivariance. So "you cannot draw a Fibonacci through gold held by Nords" is a theorem, not a taste judgment. The same argument independently derives the scan-ordering rule the spec already has: a scan over entities is legal only along a declared order (`scan(f) … along`), because the order is exactly the extra structure that shrinks `Sym(I)` to the trivial group and dissolves the obstruction.
+Under the proposed equivariance law, `prev` over an unordered record selection depends on an unstated key order and fails under relabeling. Entity scans therefore need a declared order such as `scan(f) … along`.
 
 ### 3.4 Ties break the law; value-only rank repairs it
 
 Stable tie-breaking and equivariance are mutually inconsistent. Witness `demos/7-tiers/t2-ties.bqn`. Take `c = [5,5,3]` and `σ = swap(0,1)`. Then `c ∘ σ = c`, so stable ascending rank gives `rank(c ∘ σ) = rank(c) = [1,2,0]`; but the law demands `rank(c) ∘ σ = [2,1,0]`. Stability breaks ties by index, and index-dependence is precisely what `Sym(I)`-equivariance forbids. The repair: Tier-2 write-backs use **value-only tie-breaking** — dense or fractional rank — under which tied values receive equal ranks and the counterexample dissolves. Stable grade remains available as a read (it exits the tier) and over space (where the index carries intrinsic order).
 
-### 3.5 Conjugation, correctly
+### 3.5 Conjugation, the intended construction
 
-The spec said conjugation `σ⁻¹ ∘ f ∘ σ` reconciles free order-work with the alignment demand. For a fixed `σ` this is false: conjugating by a constant permutation is not `Sym(I)`-equivariant. The correct construction conjugates by the **data-derived grade** `σ_c` (the permutation sorting `c`):
+Conjugating by a *fixed* `σ` does not reconcile order-work with the alignment demand: a constant permutation is not `Sym(I)`-equivariant. The construction the design intends instead conjugates by the **data-derived grade** `σ_c` (the permutation sorting `c`):
 
 ```
 h(c) = f(c ∘ σ_c) ∘ σ_c⁻¹        -- sort, act, unsort
 ```
 
-`h` is equivariant precisely because of the identity
-
-```
-σ_{c ∘ τ} = τ⁻¹ ∘ σ_c
-```
-
-which holds exactly when tie-breaking is index-free (3.4): `(c∘τ) ∘ (τ⁻¹∘σ_c) = c∘σ_c` is sorted, and value-only ties make the grade a function of the values alone, so this is *the* grade of `c∘τ`. Then `h(c∘τ) = f(c∘σ_c) ∘ (σ_c⁻¹∘τ) = h(c) ∘ τ`. Witness `demos/7-tiers/t2-conjugation.bqn`. `Unit , Rank = rank(Gold)` is this construction; the equivariance of the whole line is inherited from the identity, and the identity is why the ties repair in 3.4 is not optional.
+The intent is that `h` respects relabeling on tie-free data, resting on `σ_{c∘τ} = τ⁻¹ ∘ σ_c`, which needs the grade to ignore index (value-only ties, 3.4). `demos/7-tiers/t2-conjugation.bqn` exercises it on distinct keys and `Unit , Rank = rank(Gold)` is this shape. None of this is proved — it is a hand-argument checked on cases, not a theorem. The tied case has no such grade at all: a swap of equal values fixes the input while permuting their indices, so general sort-act-unsort needs unique keys or an operation defined on tie blocks. Value-only rank stays fine regardless, returning equal values for ties. A 2026-07-13 review called the tie-free argument unsound but asserted it rather than exhibiting a counterexample; asserting is not disproving, so the construction stays as intent, unproven either way.
 
 ## 4. Tier 3 — opaque
 
 ### 4.1 The law: naturality in V
 
-The spec claimed `∄ f : (I→V) → (·)` in the algebra — immediately contradicted by the two maps the same section admits, selection and dispatch. The correct statement: no admitted map **inspects** `V`. Formally, demand that every algebra map be **natural in V** — a family `f_V : (I→V) → (J→V)` natural in `V`, i.e. parametric, a free-theorem citizen.
+The native algebra does not inspect `V`. For fixed index sets, require each internal map `f_V : (I→V) → (J→V)` to be natural in `V`.
 
-Sketch. By Yoneda, natural transformations `Hom(I,−) ⇒ Hom(J,−)` correspond exactly to functions `u : J → I`, with `f(c) = c ∘ u`. So every natural map is a reindexing: the legal maps over an opaque column are **index manipulations** (precomposition by some `u`), **select** (the special case `u = ι : I_P ↪ I`, the subobject inclusion of §1), and **dispatch** (`h : V ⇝ host`, the typed hand-off at the algebra's boundary, admitted by the envelope, never by inspection). More directly: naturality against the map `V → 1` collapses any `f` that branches on values.
+By Yoneda, a fixed natural transformation `Hom(I,−) ⇒ Hom(J,−)` is reindexing by some `u : J → I`. Fixed-mask selection is such a reindexing. Value-dependent selection needs its predicate structure stated separately. Dispatch exits the native algebra through the registry and is not a Yoneda corollary.
 
 ### 4.2 The view pun stays
 
 The adjacency example is unchanged: `Node , OutDeg = +/ Adj@row` treats the bits as `𝔹`-columns and sits in Tier 1; `Hostile , shortestPath via Adj` asserts graph meaning, and by 4.1 no algebra map may act on it — the host runs Dijkstra and writes a column back. The functor asserting or stripping the meaning is the whole distance between the tiers.
 
-## 5. The monotone chain
+## 5. Three obligations
 
-The repaired ladder is genuinely monotone along one axis:
+The current tiers use different obligations:
 
-- **Tier 1** — geometry of the index: unit and frame coherence at the de/at boundary (2.4). Weakest demand, widest algebra.
+- **Tier 1** — geometry of the index: unit and frame coherence at the de/at boundary (2.4).
 - **Tier 2** — full symmetry of the index: `Sym(I)`-equivariance under the diagonal action (3.1).
-- **Tier 3** — full abstraction of the value: naturality in `V` (4.1). Strongest demand; only reindexing, select, dispatch survive.
+- **Tier 3** — abstraction of the value: naturality in `V` for internal fixed-index maps (4.1).
 
-The monotonicity principle stays as stated in the spec: for groups `H ⊆ G`, `Equiv_G ⊆ Equiv_H` — demand more symmetry, admit fewer maps. Tier 3 extends the principle past groups: naturality in `V` is invariance under *all* value substitutions, the limit of the demand, and the algebra it leaves is correspondingly the thinnest.
+These obligations do not yet form one proved monotone chain.
 
 ## 6. The algebra
 
@@ -143,10 +137,10 @@ The spec called a reduction a projection. False in every standard sense: `+/` is
 
 ## 7. Recurrences and the barrier
 
-`12 , offset = prev.offset + prev.prev.offset` is one barrier step of a two-back **stencil**, not a recurrence. Under §1's evaluation rule every read observes pre-state, so the statement computes `new[i] = old[i−1] + old[i−2]` in parallel over the pre-state column; on a freshly minted line the pre-state of `offset` is undefined-or-zero, so the statement cannot generate Fibonacci. `prev` is a shift, not a carry; no statement may read what it is writing, and iterating the statement `k` times yields `k` stencil steps, never the order-carried sequence. Sequential order-carried evaluation is undefined and forbidden by the one-barrier model. The honest form is Version B, `offset = fib(index)`: the recurrence runs inside a registered host function, outside the calculus.
+`12 , offset = prev.offset + prev.prev.offset` is one barrier step of a two-back stencil. Every read observes pre-state, so `prev` shifts the old column rather than carrying a staged value. Iteration yields stencil steps, not Fibonacci. A read-side scan may carry an internal accumulator and scatter its completed result without observing staged writes. The current Fibonacci form is `offset = fib(index)`, with the recurrence inside a registered function.
 
-Whether the language should ever admit a true recurrence — a sequential `scan(f) along order` with non-associative `f`, legal only where the write footprint misses the read footprint — is open, recorded in the spec's Open Questions with the tradeoff surfaced. This document does not resolve it; it only establishes that the current evaluation rule makes the stencil reading the only sound one.
+Whether to admit a sequential `scan(f) along order` with non-associative `f` remains open. Its computation would stay read-side, require a terminating step, and may scatter the completed column.
 
-## 8. Totality by construction
+## 8. Totality of the native calculus
 
-The combinator core — reduce, scan, grade, outer product, replicate, reshape — is structural recursion over finite columns: every fold and scan consumes a finite carrier, every generator (`↕n`, `↕w‿h`) produces one, and the grammar admits no general fixpoint and no unbounded iteration. Totality is therefore a corollary of the grammar, by construction — a stronger claim than the borrowed eBPF framing, which is a verifier *checking* boundedness of programs a permissive syntax admits. Here the syntax never admits the unbounded program; there is nothing to verify. The rejected alternatives (general `iterate`, fixpoint rules, the recurrence of §7 as a native form) are rejected precisely to keep this a grammatical fact rather than an analysis.
+The native combinators operate over finite columns. The grammar admits no general fixpoint or unbounded iteration, so one native statement terminates over finite inputs. Registered functions and the host scheduler cross this boundary. Whole-program totality is relative to the Ground Registry.

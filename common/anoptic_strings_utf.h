@@ -126,7 +126,6 @@ uint64_t anostr_collate_prefix(anostr_t s);
 anostr_t anostr_collate_key(ano_arena_t *heap, anostr_t s);
 
 // Sort values in collation order, in place. Stable (equal strings keep their order).
-// String bytes are read once, sequentially.
 void anostr_sort(anostr_t *items, size_t count);
 
 // The sort as a permutation: fills order[0..count) so items[order[i]] is nondecreasing.

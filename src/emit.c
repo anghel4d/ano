@@ -1,9 +1,6 @@
-/* emit.c — AST -> BQN codegen for anoc.
- * One ano statement = one gather-effect-scatter barrier: emit computes the selection
- * mask against pre-state, stages every effect as a new-column temp read only from
- * pre-state, then commits all writes at the end of the statement block. Continuations
- * (~ / leading comma / elided subject) reuse the saved mask anoSel, zero-padded to the
- * current world length, never a re-gather.
+/* emit.c — AST -> BQN codegen for anoc. Ordinary statements read pre-state, stage effects,
+ * then commit at the barrier. Installed rules share one pre-state and commit set per
+ * synthetic tick. Continuations reuse anoSel, padded to the current entity count.
  * Conventions the .reg fixtures rely on:
  *   - columns emit as their registry spelling (first letter lowercased); a name that is
  *     not a BQN-legal identifier emits as jp<i> by registry index, the human spelling
@@ -32,8 +29,7 @@ typedef struct {
 typedef enum { MODE_WORLD, MODE_SEL, MODE_COPY } Mode;
 
 typedef struct { char *v; char *g; int pair; int unit; int sym;
-                 char *along;   /* scan-along order expr: values are in along order, and a
-                                   write-back must conjugate — sort, act, unsort (Tier 2) */
+                 char *along;   /* scan-along order used to restore row order before scatter */
                  const RegEntry *relEnt; /* the rel whose values v holds (chain hops resolve
                                    the next leg through THIS rel's key space) */
 } EV;
@@ -311,7 +307,7 @@ static int emitNameVal(Em *em, const Node *nd, Mode m, EV *ev) {
       return 0;
     }
     case RK_TAG: {
-      /* the derived tag is its recomputed mask — total by construction, no guard */
+      /* Recomputed mask; no separate guard. */
       char *mk; if (tagMask(em, e, nd->line, &mk)) return -1;
       ev->v = inMode(em, mk, m);
       return 0;
@@ -635,7 +631,7 @@ static int emitFold(Em *em, const Node *nd, Mode m, EV *ev) {
   return 0;
 }
 
-/* Inputs: expr subtree. Output: 1 when an ↕ generator appears anywhere in it. */
+/* Inputs: expr subtree. Output: 1 when a til generator appears anywhere in it. */
 static int containsIota(const Node *nd) {
   if (nd->kind == N_IOTAX) return 1;
   for (int i = 0; i < nd->nkids; i++)
@@ -1314,9 +1310,6 @@ static char *mergeBase(Em *em, Fx *fx, int colIdx, char *col, char fam, const ch
   return prev->newExpr;
 }
 
-/* current column read: staged value if already written this statement (barrier says NO:
- * effects read pre-state, so reads always come from the raw var; commits land at the end) */
-
 static int emitEffect(Em *em, const Node *ef, Fx *fx) {
   switch (ef->kind) {
     case N_EASSIGN: {
@@ -1326,13 +1319,11 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (tgt->kind == N_HOP) { coln = tgt->kids[0]; field = tgt->kids[1]->name; }
       const RegEntry *e = find(em, coln->name);
       if (!e) return fail(em, ef->line, "assign to unregistered '%s'", coln->name);
-      /* a derived tag is read-only: setting it true is determined, false is not —
-       * δ_v has no inverse on the complement (DATAMODEL.md) */
+      /* Derived tags are computed from their carrier and cannot be assigned. */
       if (e->kind == RK_TAG)
         return fail(em, ef->line, "derived tag '%s' is not an effect target: write the carrier column '%s'",
                     coln->name, e->tagCol);
-      /* injectivity licenses inversion, so nothing may un-license it: keys are minted at
-       * spawn, never written by effects */
+      /* Unique columns are minted at spawn and cannot be assigned. */
       if (e->uniq)
         return fail(em, ef->line, "unique column '%s' is minted, never written", coln->name);
       char *col = bqnv(em, e);
@@ -1353,8 +1344,7 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
       if (emitVal(em, ef->kids[1], MODE_SEL, &rhs)) return -1;
       char *rv = rhs.v;
       if (rhs.unit) rv = efmt(em, "((+´%s)⥊%s)", selE, rv);
-      /* scan-along: values arrive in along order; the scatter walks the mask in row order,
-       * so unsort through the order's grade — the Tier-2 conjugation h(c) = f(c∘σ)∘σ⁻¹ */
+      /* Restore row order before scattering a scan-along result. */
       if (rhs.along) rv = efmt(em, "((⍋%s)⊏%s)", rhs.along, rv);
       /* the RHS observed pre-state above; only the accumulate base rebases onto an
        * earlier same-column commit, which is the §10 merge for a commuting family */
@@ -1419,8 +1409,7 @@ static int emitEffect(Em *em, const Node *ef, Fx *fx) {
           return fail(em, ef->line, "derived tag '%s' is not an effect target: write the carrier column '%s'",
                       what->name, we->tagCol);
       }
-      /* Tier-1 inscription: on a lattice frame, a proto registered as a FIELD takes the
-       * figure as a monotone OR — the ground is conserved, no rows mint (ex37) */
+      /* On a lattice, spawning a registered field ORs the selection into it; no rows mint. */
       if ((em->fr.kind == FR_LAT || em->fr.kind == FR_BOARD) && !cnt &&
           what->kind == N_NAME) {
         const RegEntry *fe = find(em, what->name);
@@ -1654,10 +1643,7 @@ static int commitStmt(Em *em, Fx *fx, int isCont) {
     else if (fx->despawn) stage(em, "anoN ↩ +´%s", keep);
     else stage(em, "anoN ↩ anoN+%s", totAll);
   }
-  /* --trace: one tick-trace line per structural statement — rows before -> after with
-   * per-effect spawn/kill counts, e.g. `s3: 48 rows -> 96 (spawn Ghost: +48)`. Counts
-   * come from the same staged expressions the commit itself scattered by, so the trace
-   * costs nothing the barrier did not already pay; without the flag not a byte emits. */
+  /* Emit one structural trace line from the staged row and effect counts. */
   if (preN) {
     char *ann = NULL;
     for (int g = 0; g < fx->nsp; g++) {
@@ -2229,11 +2215,8 @@ int ano_emit(const Node *prog, const Registry *reg, const Directives *dirs,
   scanNeedIdx(&em, prog);
   emitFixture(&em);
 
-  /* def only installs; the clock fires. anoc has no clock, so it pretends one clock
-   * edge at the end of each unbroken run of installs (plain defs don't end a run; a
-   * performed statement or EOF does). Each edge fires EVERY rule installed so far in
-   * one shared barrier — installs persist, an earlier rule fires again at a later
-   * edge exactly as it would on the engine's next tick. */
+  /* Rules persist after installation. Each run of new installations fires all installed
+   * rules once before the next performed statement or EOF, using one shared barrier. */
   const Node *installed[32]; int ninst = 0, fresh = 0;
   int rc = 0;
   for (int i = 0; i < prog->nkids && !rc; i++) {

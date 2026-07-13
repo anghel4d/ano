@@ -1,4 +1,4 @@
--- Japanese conjugate of 01 (canonical masked update). same-tokens pins exact stream equality.
+-- Japanese conjugate of 01. same-tokens compares normalized token kinds and payloads, resolving names through the registry.
 --! registry ../registries/001-canonical-masked-update.reg
 --! ja
 --! same-tokens Nord & TwoHanded > 60 , Gold += 1000

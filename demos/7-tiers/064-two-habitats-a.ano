@@ -2,7 +2,7 @@
 -- The spec's two-habitats table run live: the same verbs — generate, reduce, scan, grade, shift — once over entities and once over space. One habitat has rows, the other has cells; the verbs do not care.
 -- Split -a..-e by fixture: the .bqn's per-row scratch worlds carry different n (5/4/8/3) and lattice shapes (2x3/4x4), so one registry cannot hold them all; this file is the n-5 world with the 2-row-by-3-column fields (elevation, cost, safety, g), registry lattice 3 2 (w h).
 -- Table spellings adapted to runnable forms where the schematic row does not parse against this fixture:
---   scan row `+\ Damage @ graded` is written scan(+) Damage along (grade Damage): the graded-view scan; the .bqn asserts the value-order result only, never a scatter-back.
+--   scan row `+\ Damage @ graded` is written scan(+) Damage along (grade Damage). Steel scans in grade order and scatters back by inverse grade. Damage is already sorted here, so this output does not test the scatter.
 --   grade rows `top 5 (grade Threat)` / `top 8 (grade Safety @ 64 64)` are pinned at the .bqn's k and grade direction: top 3 (grade desc Threat), top 2 (grade desc Safety @ 3 2).
 --   space scopes say 3 2 where the table says 64 64: the fixture's own shape.
 --   the rank-2 generator (↕ w‿h) has no query surface; its assertion stays in the .bqn twin.

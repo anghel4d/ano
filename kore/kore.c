@@ -2,26 +2,15 @@
  * text boundary. kore spawns anoc as a child exactly as anoc spawns cbqn; its data
  * contract is the .reg format. It never includes ano.h.
  *
- * Six surfaces (EDITOR.md): the demos rail, the code editor, the world table, the
- * space (the world as a glyph map, or a half-block bitmap), the output log, and the
- * prompt. Each REPL
- * submission is one program against the current world — anoc --run --save advances
- * the world file through the staged-rename commit loop; the undo ring is the loop's
- * free gift (pre-states are files under .kore/undo/).
+ * Seven surfaces: demos, code, world, space, outputs, history, and prompt. Each REPL
+ * submission runs one program against the current world. Undo restores staged world
+ * pre-states from .kore/undo/.
  *
  * Zero external deps: raw ANSI CSI rendering + termios raw mode, double-buffered into
  * one write(2) per frame; SGR mouse reporting; SIGWINCH resize; CJK/kana/fullwidth
  * codepoints occupy 2 cells. Strings, collation, and the world arena come from
- * ../common (the anoptic strings module). kore's .reg reader is line-oriented: data
- * lines parse into tables for display, schema and unknown lines are preserved
- * verbatim — pass-through, never regeneration. Cell edits splice one word of .reg
- * text. Each parsed world lives in one arena and dies with the load that replaces it.
- *
- * Entry points: `kore <file.reg>` the bare world, REPL-only; `kore <file.ano>` the
- * demo form; bare `kore` the rail. Headless verification hooks: `kore --check
- * <file.reg>…` loads and renders every view (table, glyph map, bitmap) to memory
- * and reports; `kore --edit
- * <file.reg> <seg> <row> <col> <value>` performs one cell splice and prints the line.
+ * ../common. The .reg reader stores normalized logical lines and parses display tables
+ * as a view. Cell edits splice the normalized text.
  */
 #define _GNU_SOURCE
 #include <ctype.h>
@@ -462,8 +451,8 @@ static char *read_file(const char *path, size_t *lenOut) {
   return buf;
 }
 
-/* The staged commit, kore's copy of the loop's write half: <path>.staged, then
- * rename(2) — atomic, crash leaves old or new, never a torn file. */
+/* Write and fsync <path>.staged, then rename it over path. Remove staging on failure.
+ * The parent directory is not fsynced. */
 static int write_commit(const char *path, const char *data, size_t len) {
   char staged[PATH_MAX];
   if (snprintf(staged, sizeof staged, "%s.staged", path) >= (int)sizeof staged) return -1;

@@ -1,5 +1,5 @@
--- Counters and becoming (ex47): a frame-typed numeral in the predicate, a masked doubling in the effect. Twin of 092-counters-becoming.bqn.
--- The cheese cellar: aged past three months (三ヶ月), the price doubles; at three months exactly, it does not. The counter word is a typed numeral, 3mo = 3 x mo.
+-- Counters and becoming (ex47): a counter-suffixed numeral in the predicate and a masked doubling in the effect. Twin of 092-counters-becoming.bqn.
+-- The cheese cellar: aged past three months (三ヶ月), the price doubles; at three months exactly, it does not. 3mo multiplies 3 by the registered mo scale.
 -- Japanese surface: 蔵で三ヶ月より熟成したチーズは、値が倍になる。(なる voice would install a standing rule via =>; the modeled line keeps the performed comma). 3mo is 3×mo against bind mo num 1; the line parses (Cheese @ cellar) & (Aged > 3mo); row 4 sits at 3mo exactly and strict > excludes it.
 --! registry ../registries/092-counters-becoming.reg
 --! expect price = 20 20 30 40 50 120

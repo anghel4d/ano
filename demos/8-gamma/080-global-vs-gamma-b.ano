@@ -8,5 +8,5 @@
 
 #/ (Cattle)
 Pen , Headcount = #/ (Cattle)
-Pen , Headcount = #/ (livestock' & Cattle)   -- the tick: per-source column; the result-type split is lexical, never a registry lookup
+Pen , Headcount = #/ (livestock' & Cattle)   -- one value per selected pen; result arity is lexical
 +/ Headcount @ Pen                           -- conservation: the gamma column folds back to the global scalar 5

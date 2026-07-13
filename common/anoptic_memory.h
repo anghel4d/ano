@@ -5,14 +5,10 @@
 
 // Anoptic Memory API, the ano adaptation: the engine's mimalloc heap is replaced by a
 // bump arena with the same region contract — allocate from a region, free the region
-// wholesale. Nothing else in the strings module changed shape: ano_arena_t stands where
-// mi_heap_t stood, single-owner, and every byte allocated from an arena is valid exactly
-// as long as the arena.
+// wholesale. ano_arena_t stands where mi_heap_t stood and remains single-owner.
 //
-// The arena is chunked (default 64 KiB, growing to fit oversized requests), returns
-// 16-aligned blocks, and keeps a size header per block so realloc is total. The most
-// recent allocation reallocs and frees in place — the builder's grow loop and freeze
-// shrink cost nothing — and every other free is a no-op by design (region granularity).
+// The arena uses 16-byte-aligned chunked storage with a size header per block. The newest
+// allocation may grow, shrink, or free in place. Other blocks remain until reset or destroy.
 
 #ifndef ANO_COMMON_ANOPTIC_MEMORY_H
 #define ANO_COMMON_ANOPTIC_MEMORY_H
@@ -51,27 +47,27 @@ ano_arena_t *ano_arena_new(size_t chunkHint);
 // by this arena is dead after this call.
 void ano_arena_destroy(ano_arena_t *a);
 
-// Rewinds the arena to empty, keeping its newest (largest) chunk for reuse and freeing
+// Rewinds the arena to empty, keeping its newest chunk for reuse and freeing
 // the rest. Every pointer ever returned is dead after this call.
 void ano_arena_reset(ano_arena_t *a);
 
-// n bytes, 16-aligned. NULL if a is NULL, n is 0-coerced-huge, or the chunk allocation
-// fails; the arena is untouched on failure.
+// Allocates at least one byte and returns a 16-byte-aligned pointer. NULL on invalid arena,
+// overflow, or allocation failure.
 void *ano_arena_alloc(ano_arena_t *a, size_t n);
 
 // ano_arena_alloc, zero-filled.
 void *ano_arena_zalloc(ano_arena_t *a, size_t n);
 
-// Total like realloc: p NULL allocates, growth copies min(old, n) bytes. The most
-// recent allocation grows or shrinks in place when its chunk has room; any other p
-// allocates fresh and abandons the old block to the region. NULL on failure, p intact.
+// p NULL allocates. The newest block grows or shrinks in place when its chunk has room.
+// An interior shrink returns the same block without reclaiming region space; interior
+// growth allocates a new block. NULL on failure, p intact.
 void *ano_arena_realloc(ano_arena_t *a, void *p, size_t n);
 
 // Pops p when it is the arena's most recent allocation (the bytes are reused by the
 // next alloc); any other p is a no-op — the region frees wholesale, not by block.
 void ano_arena_free(ano_arena_t *a, void *p);
 
-// Payload bytes currently handed out (headers and slack excluded).
+// Tracked requested bytes; interior-block shrink retains its previous contribution.
 size_t ano_arena_used(const ano_arena_t *a);
 
 // Destroys an arena at end of scope. Usage:

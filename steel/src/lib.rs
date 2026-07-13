@@ -1,8 +1,7 @@
-// lib.rs — the one contract for steel, the Rust mirror of src/ano.h.
+// Shared compiler types and contracts.
 // Pipeline: main.rs (directives, driver) -> registry.rs (world fixtures) -> lex.rs (ASCII + JA
 // skins) -> parse.rs (Pratt, 14 levels) -> emit.rs (BQN codegen); fs.rs serves main and registry;
-// num.rs is the shared strtod/%g choke point. Everything in this file is SHARED and FINAL:
-// porters fill module bodies and do not edit lib.rs.
+// num.rs owns numeric parsing and spelling.
 
 pub mod emit;
 pub mod fs;
@@ -13,8 +12,7 @@ pub mod registry;
 
 pub const ANO_NAMESZ: usize = 256;
 
-// 2^53, the contiguous-integer bound of the double: the nat/int ceiling. Above it integer
-// arithmetic loses exactness, so the refinements clamp here rather than admit drift.
+// 2^53, the largest bound for which every integer in [-bound, bound] is exactly representable as f64.
 pub const ANO_NATMAX: f64 = 9_007_199_254_740_992.0;
 
 /* ---------- diagnostics ---------- */

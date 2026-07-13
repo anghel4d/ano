@@ -1,10 +1,6 @@
-// text.rs — PORTER 2: UTF-8 decode (both decoders, kept distinct), display width, Unicode
-// classification, DUCET collation, natural digit-run collation, base-letter search, and the
-// tail fix — all over tables.rs, everything total over arbitrary bytes. Contract map:
-// kmaps/common.md; C sources: kore/kore.c l.88-122 (u8next/cw/swidth), l.1002-1039
-// (collate_natural/cmp_demo), l.1191 (u8_tail_fix); common/ano_strings_utf.c and
-// ano_strings_collate.c for the strict decoder, classification, collate, and find_base.
-// Do NOT unify the two decoders: u8next is lenient (no overlong/surrogate/range checks),
+// UTF-8 decoding, display width, Unicode classification, DUCET and natural collation,
+// base-letter search, and byte-tail repair over tables.rs.
+// Keep the two decoders distinct: u8next is lenient (no overlong/surrogate/range checks);
 // rune_next/rune_prev are strict (malformed = U+FFFD advance exactly 1; prev backs over
 // at most 3 continuation bytes and the sequence must end exactly at the cursor).
 
@@ -13,7 +9,7 @@ use crate::tables::*;
 pub const RUNE_REPLACEMENT: u32 = 0xFFFD;
 pub const NPOS: usize = usize::MAX; // find_base miss (ANOSTR_NPOS)
 
-// kore.c u8next (l.88), the lenient forward decoder, over a byte slice: at i >= s.len()
+// kore.c u8next, the lenient forward decoder, over a byte slice: at i >= s.len()
 // return 0 without advancing (the C-string NUL sentinel); ASCII returns itself; a
 // 0x80..0xBF lead yields U+FFFD advancing 1; a bad continuation yields U+FFFD advancing 1;
 // value assembly masks the head with c & (0x7F >> n); NO overlong/surrogate/range checks
@@ -43,7 +39,7 @@ pub fn u8next(s: &[u8], i: &mut usize) -> u32 {
     v
 }
 
-// Codepoint cell width (kore.c cw l.104): fast path c < 0x1100 -> 1; the verbatim range
+// Codepoint cell width (kore.c cw): fast path c < 0x1100 -> 1; the verbatim range
 // list (1100-115F 231A-231B 2B1B-2B1C 2E80-303E 3041-33FF 3400-4DBF 4E00-9FFF A000-A4CF
 // AC00-D7A3 F900-FAFF FE30-FE4F FF00-FF60 FFE0-FFE6 1F300-1FAFF 20000-3FFFD) -> 2; else 1.
 // Not wcwidth, not a crate — the list is contract (0x3040 is 1, 0x303F is 1).
@@ -65,7 +61,7 @@ pub fn cw(c: u32) -> i32 {
     1
 }
 
-// Sum of cw over u8next across the whole slice (kore.c swidth l.118).
+// Sum of cw over u8next across the whole slice (kore.c swidth).
 pub fn swidth(s: &[u8]) -> i32 {
     let mut w = 0;
     let mut i = 0;
@@ -75,7 +71,7 @@ pub fn swidth(s: &[u8]) -> i32 {
     w
 }
 
-// Strict decode core (common utf8_decode, utf.c l.23): Some((rune, consumed 1..4)) or None
+// Strict decode core (common utf8_decode, utf.c): Some((rune, consumed 1..4)) or None
 // on malformed — bare continuation / 0xF8+ lead, truncation, non-continuation follower,
 // overlong, > 0x10FFFF, encoded surrogate.
 fn utf8_decode(p: &[u8]) -> Option<(u32, usize)> {
@@ -129,7 +125,7 @@ pub fn rune_next(s: &[u8], i: &mut usize) -> u32 {
     }
 }
 
-// common anostr_rune_prev (utf.c l.70): clamp i to len; i == 0 returns U+FFFD, i stays;
+// common anostr_rune_prev (utf.c): clamp i to len; i == 0 returns U+FFFD, i stays;
 // else back over at most 3 continuation bytes to a candidate lead, decode forward, and the
 // candidate counts only if its sequence ends exactly at the original i; anything else means
 // the byte at i-1 is malformed on its own: i -= 1, U+FFFD. Drives word-back.
@@ -194,7 +190,7 @@ fn ce_tertiary(ce: u32) -> u32 {
     ce & 0x1F
 }
 
-// NFD lookup (common decomp_lookup, collate.c l.30): bsearch ANO_DECOMP_CP (BMP-only),
+// NFD lookup (common decomp_lookup, collate.c): bsearch ANO_DECOMP_CP (BMP-only),
 // span = offset << 3 | len into ANO_DECOMP_POOL; None when the rune decomposes to itself.
 fn decomp_lookup(cp: u32) -> Option<&'static [u16]> {
     if cp >= 0x10000 {
@@ -211,7 +207,7 @@ fn decomp_lookup(cp: u32) -> Option<&'static [u16]> {
     }
 }
 
-// One code point's CEs appended to q (common ce_push_cp, collate.c l.55): stage1/stage2 ->
+// One code point's CEs appended to q (common ce_push_cp, collate.c): stage1/stage2 ->
 // ANO_CE_SPANS (offset << 4 | len into ANO_CE_POOL), span index 0 = unlisted; unlisted
 // (Han included, >= 0x10000) take UCA implicit weights, code point order after every
 // listed primary.
@@ -238,7 +234,7 @@ fn ce_push_cp(q: &mut [u32; CE_QUEUE_CAP], mut qn: usize, cp: u32) -> usize {
     qn
 }
 
-// One rune's CEs, decomposition included (common ce_push_rune, collate.c l.78).
+// One rune's CEs, decomposition included (common ce_push_rune, collate.c).
 fn ce_push_rune(q: &mut [u32; CE_QUEUE_CAP], qn: usize, r: u32) -> usize {
     if let Some(d) = decomp_lookup(r) {
         let mut n = qn;
@@ -251,7 +247,7 @@ fn ce_push_rune(q: &mut [u32; CE_QUEUE_CAP], qn: usize, r: u32) -> usize {
 }
 
 // Streams the collation elements of s, refilled one strict-decoded source rune at a time
-// (common ce_iter_t, collate.c l.48).
+// (common ce_iter_t, collate.c).
 struct CeIter<'a> {
     s: &'a [u8],
     i: usize,
@@ -295,7 +291,7 @@ impl<'a> CeIter<'a> {
     }
 }
 
-// One level's comparison (common collate_level, collate.c l.117): streaming both sides'
+// One level's comparison (common collate_level, collate.c): streaming both sides'
 // nonzero weights; the exhausted side sorts first — the prefix rule, PER LEVEL.
 fn collate_level(a: &[u8], b: &[u8], level: i32) -> i32 {
     let mut ia = CeIter::new(a);
@@ -316,7 +312,7 @@ fn collate_level(a: &[u8], b: &[u8], level: i32) -> i32 {
     }
 }
 
-// DUCET collation (common anostr_collate, collate.c l.131): byte-equal short-circuits 0;
+// DUCET collation (common anostr_collate, collate.c): byte-equal short-circuits 0;
 // three passes (primary, secondary, tertiary) each streaming both strings' nonzero weights
 // of that level, exhausted side first PER LEVEL (the prefix rule); ties break by byte order
 // (memcmp sign, shorter-first). The CE iterator per rune: NFD via bsearch ANO_DECOMP_CP
@@ -344,7 +340,7 @@ pub fn collate(a: &[u8], b: &[u8]) -> i32 {
     }
 }
 
-// kore.c collate_natural (l.1002): maximal ASCII digit runs ('0'..'9' only) compare as
+// kore.c collate_natural: maximal ASCII digit runs ('0'..'9' only) compare as
 // numbers — leading zeros stripped keeping at least one digit, then by digit count, then
 // bytes; equal numeric value continues the walk. A digit run against a non-digit at the
 // same position falls back to straight collate on both whole remainders. Non-digit
@@ -405,7 +401,7 @@ pub fn collate_natural(x: &[u8], y: &[u8]) -> i32 {
     }
 }
 
-// Primary-weight-only prefix match (common anostr_starts_base, collate.c l.640): streams
+// Primary-weight-only prefix match (common anostr_starts_base, collate.c): streams
 // both primary sequences; prefix exhausting first is a match (empty needle matches).
 pub fn starts_base(s: &[u8], prefix: &[u8]) -> bool {
     let mut si = CeIter::new(s);
@@ -422,7 +418,7 @@ pub fn starts_base(s: &[u8], prefix: &[u8]) -> bool {
     }
 }
 
-// common anostr_find_base (collate.c l.652): clamp from to len, try starts_base at each
+// common anostr_find_base (collate.c): clamp from to len, try starts_base at each
 // rune boundary advancing one STRICT-decoded rune per failed candidate (a malformed byte
 // advances exactly 1); byte index of the match start or NPOS. Empty needle matches at
 // min(from, len). Case- and accent-insensitive; combining marks transparent.
@@ -440,7 +436,7 @@ pub fn find_base(s: &[u8], needle: &[u8], from: usize) -> usize {
     }
 }
 
-// The rail order (kore.c cmp_demo l.1032): collate_natural over both paths with a trailing
+// The rail order (kore.c cmp_demo): collate_natural over both paths with a trailing
 // ".ano" stripped (last 4 bytes when len > 4), byte-order tiebreak on the full paths.
 pub fn cmp_demo(a: &str, b: &str) -> std::cmp::Ordering {
     let (x, y) = (a.as_bytes(), b.as_bytes());
@@ -456,7 +452,7 @@ pub fn cmp_demo(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
-// kore.c u8_tail_fix (l.1191): a byte-capped copy must not end mid-codepoint — back over
+// kore.c u8_tail_fix: a byte-capped copy must not end mid-codepoint — back over
 // trailing continuation bytes to the last lead; if the lead's declared length overruns the
 // end, truncate at the lead. In-place on the owned buffer.
 pub fn u8_tail_fix(s: &mut Vec<u8>) {

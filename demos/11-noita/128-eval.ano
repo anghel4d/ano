@@ -1,6 +1,6 @@
 -- Quotation (w6): eval — APL's ⍎, constrained to what stays analyzable. Twin of 128-eval.bqn. (was w6-eval)
--- A spell written on a scroll: the quoted statement splices at parse time, its footprint fully visible, so the line in the string and the line in the file compile identically.
--- The quotation is a literal string holding one statement; anoc re-lexes it and splices the statement at parse time, so the spliced footprint is still visible to every static check (§11's conflict analysis included) — the quoted barrier below is indistinguishable from writing the line directly. Dynamic strings are a different animal (opaque footprint, interpreter territory) and are not this; templates with holes stay open in ISSUES.md.
+-- A literal statement is re-lexed and spliced before conflict analysis.
+-- Dynamic strings are unsupported; templates with holes remain open in ISSUES.md.
 --! registry ../registries/128-eval.reg
 --! expect damage = 23 23 8
 

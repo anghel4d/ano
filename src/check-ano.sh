@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# Runs every .ano demo under demos/ through steel --run (bqn from PATH), then checks
-# every X-nihongo.ano conjugate emits byte-for-byte what its twin X.ano emits — two
-# surfaces, one BQN program, enforced corpus-wide on every run — then runs the negative
-# battery (check-refusals.sh over src/refusals/, fixtures that must refuse). Inputs:
-# none (env STEEL overrides the binary, default: target/release/steel at the repo root).
-# Output: one line per file (ok/FAIL), per pair (ok-emit/FAIL-emit), and per refusal
-# fixture (ok-refuse/FAIL-refuse). Exit: nonzero iff anything fails.
+# Runs every demo, compares each Japanese twin's emitted BQN with its ASCII twin, then runs
+# the refusal battery. STEEL overrides target/release/steel. Exits nonzero on any failure.
 set -u
 STEEL="${STEEL:-$(dirname "$0")/../target/release/steel}"
 here="$(cd "$(dirname "$0")" && pwd)"

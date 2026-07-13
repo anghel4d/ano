@@ -1,6 +1,6 @@
 -- The keyed hop: rel;unique⁻¹. Twin of 015-keyed-hop.bqn. (was s60-keyed-hop)
 -- A guild with prime ids: mentor and targets name entities by id through `unique id`, never by row position. One Cursed guildmate despawns mid-program, and every hop after it must still resolve.
--- `unique id` declares injectivity and `rel id mentor` keys the rel to it, so the hop is one index-of against the id column with one found-guard; the prime ids make every positional reading miss, so the resolution is proven, not coincident. The same hop runs before and after a despawn: not-found is dangling is dead — the ¯1 sentinel and the despawned target (id 11) fail the same guard, the left-join-null rule, no fault path. The keyed srel's image takes membership through its own key column, and the gamma count translates fiber keys to live rows, dropping dead members.
+-- unique id makes id injective, and rel id mentor resolves mentor through it. Prime ids expose positional reads in this fixture. Missing ids, the -1 sentinel, and despawned id 11 all fail the found guard. The keyed image and gamma count translate keys to live rows and drop dead members.
 -- Statement order: gold lands pre-despawn on the two students of the dead master (ids 11, 13); post-despawn the same predicate strips Trained from id 13 alone (11 is gone); the image reaches ids 13 and 17; the reach count reads 2 live targets.
 --! registry ../registries/015-keyed-hop.reg
 --! expect-n 4

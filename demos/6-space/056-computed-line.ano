@@ -2,7 +2,7 @@
 -- A mouse's dream: cheese at Fibonacci offsets down a corridor, cheese on a phyllotaxis spiral, pillars at even paces — all anchored to the Player. A bare count is a generator scope, and spawn ... at places each minted row by its index.
 -- The 12-line's backing store is the world (n 12): row 0 doubles as the Player anchor carrying pos 100 200, rows 1..11 hold -1 -1 pos decoys, and offset pre-state is the fresh line's twelve zeros (the Version A gloss's pre-state).
 -- fib is a registered host function carrying the recurrence (scalar dfn, called Fib¨ index); polar is the dyadic dfn r Polar¨ theta with theta in DEGREES — the pair-zip fix, never a catenated 24-list.
--- Spawns append: 12 cheese at (100+fib_i, 200) ending at (189,200), 12 cheese on the phyllotaxis spiral (r=0 sits on the player), 8 pillars at (100+2i, 200). Spiral floats are pinned as exact doubles from the flake's CBQN (the .bqn asserts within 1e-9).
+-- Spawns append: 12 cheese at (100+fib_i, 200) ending at (189,200), 12 cheese on the phyllotaxis spiral (r=0 sits on the player), 8 pillars at (100+2i, 200). Steel pins the current CBQN values; the BQN twin checks them within 1e-9.
 -- Left to the .bqn twin: the Version A stencil witness (step = one shift-add barrier step over fresh zeros stays 12⥊0 and is not Fibonacci) and the zip-shape counterexamples (12 = ≠pairs, 24 = ≠(↕12)∾137.5×↕12).
 --! registry ../registries/056-computed-line.reg
 --! expect offset = 0 1 1 2 3 5 8 13 21 34 55 89 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

@@ -639,9 +639,7 @@ static Node *parse_stmt(P *p) {
   if (k == T_DEF) {
     adv(p);
     if (pk(p) != T_NAME) return perrf(p, tline(p), "expected name after 'def'");
-    /* the closed grammar outranks all names, defs included: a def named for a reserved
-     * word is a name the lexer resolves first, unreachable on the JA surface where it is
-     * the numeral/particle — bar it on both, the §2 law applied past the loader */
+    /* Reserved words cannot name defs because the lexer consumes them first. */
     if (lex_reserved(tname(p)))
       return perrf(p, tline(p), "'%s' is lexer-reserved and cannot name a def", tname(p));
     Node *d = node_new(p->a, N_DEFSTMT, line);
@@ -677,9 +675,7 @@ static Node *parse_stmt(P *p) {
     return st;
   }
   if (k == T_LB) return parse_compr(p);
-  /* eval "<statement>" — APL's ⍎ constrained to a literal: the quotation is re-lexed and
-   * spliced HERE, at parse time, so the spliced statement's footprint stays visible to
-   * every later static check. One statement per quotation; dynamic strings are not this. */
+  /* Re-lex a literal and splice exactly one statement into the AST. */
   if (k == T_NAME && !strcmp(tname(p), "eval") && pk2(p, 1) == T_STR &&
       (pk2(p, 2) == T_NL || pk2(p, 2) == T_EOF)) {
     const char *quoted = p->t->name[p->i + 1];
@@ -760,10 +756,8 @@ static Node *parse_stmt(P *p) {
 
 /* ---------- entry ---------- */
 
-/* Inputs: token stream (T_EOF-terminated or not), arena, err buffer.
- * Output: N_PROGRAM of statements, or NULL with err set. Splices continuation
- * lines (NL run followed by T_TO or T_PIPEGT) before classifying — a per-column
- * gather into fresh arrays, never a struct move. */
+/* Parse a token stream into N_PROGRAM. Before parsing, remove newlines that precede a
+ * continued `to` or pipeline line. */
 Node *ano_parse(const Toks *toks, Arena *a, char *err, size_t errsz) {
   if (err && errsz) err[0] = 0;
   int ntoks = toks->n;

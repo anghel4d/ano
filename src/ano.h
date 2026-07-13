@@ -140,7 +140,7 @@ typedef enum {
   T_PLUSEQ, T_MINUSEQ, T_STAREQ, T_SLASHEQ,
   T_PLUS, T_MINUS, T_STAR, T_SLASH, T_PCT,
   T_AT, T_DOT, T_TICK, T_LP, T_RP, T_LB, T_RB, T_LARROW /* <- */, T_TILDE,
-  T_FOLD /* +/ */, T_SCANOP /* +\ */, T_IOTA /* ↕ */,
+  T_FOLD /* +/ */, T_SCANOP /* +\ */, T_IOTA /* til / 連番 */,
   /* keywords (closed set; GRAMMAR.md) */
   T_DEF, T_SPAWN, T_ATKW /* at */, T_TO, T_VIA, T_ALONG,
   T_ORDER, T_BY, T_TAKE, T_DESC, T_TOP, T_GRADE,
@@ -148,10 +148,7 @@ typedef enum {
   T_KINDCOUNT
 } TokKind;
 
-/* The token stream, struct-of-arrays: four index-aligned columns, the world store's
- * discipline applied to the compiler's own data. name holds interned or static text,
- * "" when absent, never NULL — a row costs ~24 bytes against the ~280 of the old
- * inline-buffer Tok. */
+/* Struct-of-arrays token stream. Text is interned or static; absent text is "", never NULL. */
 typedef struct {
   int n;
   TokKind *kind;
@@ -257,12 +254,8 @@ const RegEntry *reg_find(const Registry *reg, const char *name);
  * `role` line, a native one routes by declaration, and the declared line stays the
  * explicit override whenever plumbing must be pinned. */
 const RegEntry *reg_role(const Registry *reg, const char *role);
-/* serialize the in-memory world back to .reg text — everything reg_load reads, entries in
- * declaration order, pres/default beside their column, inv by its rel (fibers recompute at
- * load), roles then the alias table last; comments are authoring-time only, a dump erases
- * them. Writes <path>.staged then rename(2)s over the target: the atomic commit, crash-safe
- * saves for free. load -> dump -> load -> dump fixpoints byte-identically.
- * Inputs: loaded registry, target path, err buffer. Output: 0 ok / -1 with err set. */
+/* Serialize the registry in declaration order through fs_write_commit. Comments and source
+ * layout are not preserved. Inputs: registry, target path, error buffer. Output: 0 / -1. */
 int reg_dump(const Registry *reg, const char *path, char *err, size_t errsz);
 
 /* ---------- AST ---------- */
@@ -281,7 +274,7 @@ typedef enum {
   N_FOLD,   /* op in name ("+","*","&","|","#","max","min","avg", or reducer name); kids[0]=operand; kids[1]=optional @scope. fold(f) is the long form, same node */
   N_SCANEXPR, /* scan: same layout as N_FOLD; flag F_SCAN2 for scan2 */
   N_SCANALONG,/* scan(f) col along order ; kids: col, order; op in name */
-  N_IOTAX,  /* ↕ expr */
+  N_IOTAX,  /* til expr */
   N_SHAPE,  /* numeric shape source: kids = dims (N_NUM or N_WILD) */
   N_TUPLE,  /* (a, b, ...) presence tuple or point literal; context decides */
   N_TO,     /* to shape ; kids[0]=N_SHAPE ; as source: kids[1]=poured expr (board literal) */

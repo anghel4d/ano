@@ -1445,8 +1445,7 @@ mod tests {
         );
     }
 
-    // Def statements consult lex::lex_reserved — split out so the corpus above stays green
-    // while lex.rs is mid-port.
+    // Def statements exercise the reserved-name gate separately.
     #[test]
     fn parse_corpus_defs() {
         // def threat = Damage * Speed / Range

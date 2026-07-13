@@ -1,8 +1,8 @@
 // sys.rs — the one FFI module: hand-rolled extern "C" against the system libc, x86_64 linux-gnu.
 // All unsafe lives here; every exported item is safe. Surface: termios raw mode with the byte-exact
 // hello/bye escape strings, TIOCGWINSZ, SIGWINCH -> AtomicBool, fatal-signal terminal restore
-// (kore.c on_fatal, l.165), poll+read single-byte input (rbyte, l.348), write_all stdout, the
-// merged-capture child runner (run_child, l.950), the editor spawn (editor_hop, l.3576),
+// (kore.c on_fatal), poll+read single-byte input (rbyte), write_all stdout, the
+// merged-capture child runner (run_child), the editor spawn (editor_hop),
 // access/realpath/strerror. VMIN=0/VTIME=0 in the raw termios; all waiting is poll(2), as the C.
 
 use std::cell::UnsafeCell;
@@ -115,7 +115,7 @@ unsafe extern "C" {
 
 // ---------- terminal restore state (shared with the signal handlers) ----------
 
-// The hello/bye byte strings are contract (kore.c l.180 / l.157):
+// The hello/bye byte strings are protocol constants:
 // alt screen on, cursor hide, button-event mouse (1002), SGR mouse encoding (1006);
 // bye undoes them plus DECSCUSR reset (`\x1b[0 q`, space before q) and SGR reset.
 pub const TERM_HELLO: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[?1002h\x1b[?1006h";
@@ -268,7 +268,7 @@ fn exit_code(status: i32) -> i32 {
 }
 
 // Run argv to completion, child stdout AND stderr merged onto one pipe (dup2 both —
-// kernel interleaving order, exactly as kore.c run_child l.950). Capture appended to cap.
+// kernel interleaving order, exactly as kore.c run_child). Capture appended to cap.
 // exec failure prints `kore: cannot exec <argv0>: <strerror>\n` through the pipe, exit 127.
 // Returns the exit status, or -1 on fork/pipe failure or abnormal termination.
 pub fn run_capture(argv: &[&str], cap: &mut Vec<u8>) -> i32 {

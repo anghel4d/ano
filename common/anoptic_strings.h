@@ -6,11 +6,10 @@
 // Anoptic String API
 //
 // One public string type: anostr_t, a 16-byte immutable value (Umbra "German string" layout).
-// Strings of <= 12 bytes live entirely inside the value and exist on the stack.
-// Longer strings point into an arena passed in by caller, 
-// the value caches the first 4 bytes so most compares resolve without touching the heap.
+// Strings of <= 12 bytes live inside the value. Longer strings point into an arena supplied
+// by the caller. The value caches the first four bytes.
 //
-// Storage is byte-transparent. anostr_t is a byte array and is not NUL-terminated. 
+// Storage is byte-transparent and not NUL-terminated.
 // Use anostr_to_cstr() if you need a NUL-terminated string.
 
 #ifndef ANOPTICENGINE_ANOPTIC_STRINGS_H
@@ -109,9 +108,8 @@ static inline const char *anostr_bytes(const anostr_t *s)
 
 // ---------------------------------------------------------------------------------------------
 // Comparison. Lexicographic over bytes (memcmp order); a proper prefix sorts first.
-// The fast path never dereferences: len+prefix answer most real-world compares in-register.
-// Prefix as a big-endian u32 so integer < is byte-lexicographic.
-// The prefix is stored in big-endian order to make the byte-lexicographic order truthful even with embedded 0x00 bytes.
+// The cached prefix decides many comparisons without reading backing storage.
+// anostr_prefix_key_ interprets the prefix as big-endian.
 static inline uint32_t anostr_prefix_key_(anostr_t s)
 {
     uint32_t p;
@@ -191,7 +189,6 @@ char *anostr_to_cstr(ano_arena_t *heap, anostr_t s);
 size_t anostr_find(anostr_t s, anostr_t needle, size_t from);
 
 // Every needle replaced by repl, left to right, non-overlapping ("aaa"/"aa" once).
-// Byte-level, matches land on rune boundaries.
 // Zero matches or empty needle return s unchanged.
 // Empty string if the result exceeds UINT32_MAX or allocation fails.
 anostr_t anostr_replace_all(ano_arena_t *heap, anostr_t s, anostr_t needle, anostr_t repl);
@@ -225,7 +222,7 @@ static inline anostr_split_t anostr_split(anostr_t s, anostr_t sep)
 bool anostr_split_next(anostr_split_t *it, anostr_t *piece);
 
 // ---------------------------------------------------------------------------------------------
-// Interning: dedupe + i    nteger identity.
+// Interning: deduplication and integer identity.
 // One canonical copy of each distinct string lives in the table's heap; a symbol is a dense u32 (0 .. count-1) you compare and switch on. 
 // Same threading rule as the heap underneath: one owner thread mutates (intern/dedupe); concurrent readers need external ordering.
 // No destroy function on purpose -- the table and every canonical byte die with the heap.
@@ -306,10 +303,8 @@ typedef uint32_t anostr_sid32;
                     + ANOSTR_SID_GUARD_("" strlit)))
 
 // ---------------------------------------------------------------------------------------------
-// The builder: the ONLY mutation path. 
-// Accumulate in scratch, then freeze to an immutable    value. 
-// Growth is geometric (cap <= 2 * final len). 
-// Not thread-safe; one owner.
+// Mutable builder. Accumulate bytes, then freeze to an immutable value.
+// Capacity grows geometrically; one thread owns the builder.
 typedef struct anostr_builder_t {
     char      *ptr;   // heap-owned, cap bytes; NULL until first append (or reserve = 0)
     uint32_t   len;

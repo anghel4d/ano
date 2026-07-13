@@ -1,7 +1,6 @@
-// emit.rs — BQN codegen. Mirrors src/emit.c: one gather-effect-scatter barrier per statement,
-// selection mask s<N>m against pre-state, effects staged as t<i> temps reading only pre-state,
-// commitStmt landing all writes in registry declaration order; continuations reuse anoSel.
-// The port target is BYTE-IDENTICAL --emit output against the C oracle.
+// Steel's BQN backend. Ordinary statements read pre-state, stage effects, then commit at the
+// barrier. Installed rules share one pre-state and commit set per synthetic tick.
+// Continuations reuse anoSel. --emit remains differential-tested against the C oracle.
 
 use crate::num::{fmt_g, int_fast};
 use crate::registry::{names_eq, reg_find, reg_role};
@@ -681,7 +680,7 @@ impl<'a> Em<'a> {
                 Ok(ev)
             }
             RegEntryKind::Tag { .. } => {
-                // the derived tag is its recomputed mask — total by construction, no guard
+                // Recomputed mask; no separate guard.
                 let mk = self.tag_mask(ei, line)?;
                 ev.v = self.in_mode(mk, m);
                 Ok(ev)
@@ -1940,7 +1939,7 @@ impl<'a> Em<'a> {
                     return Err(fail(ef.line, format!("assign to unregistered '{}'", col_name)));
                 };
                 let e = self.ent(ei);
-                // a derived tag is read-only: setting it true is determined, false is not
+                // Derived tags are computed from their carrier and cannot be assigned.
                 if let RegEntryKind::Tag { col: carrier, .. } = &e.kind {
                     return Err(fail(
                         ef.line,
@@ -1972,7 +1971,7 @@ impl<'a> Em<'a> {
                 if rhs_v.unit {
                     rv = format!("((+´{})⥊{})", sel_e, rv);
                 }
-                // scan-along: unsort through the order's grade — the Tier-2 conjugation
+                // Reindex for scatter. This assumes along is a permutation; duplicates and omissions are unchecked.
                 if let Some(al) = &rhs_v.along {
                     rv = format!("((⍋{})⊏{})", al, rv);
                 }
@@ -2072,8 +2071,7 @@ impl<'a> Em<'a> {
                     }
                 }
                 let lat = matches!(self.fr.kind, FrameKind::Lat | FrameKind::Board);
-                // Tier-1 inscription: on a lattice frame, a proto registered as a FIELD takes
-                // the figure as a monotone OR — the ground is conserved, no rows mint (ex37)
+                // On a lattice, spawning a registered field ORs the selection into it; no rows mint.
                 if lat && count.is_none() {
                     if let NodeKind::Name(ws) = &what.kind {
                         if let Some(fi2) = self.find(self.rs(*ws)) {
@@ -2339,7 +2337,7 @@ impl<'a> Em<'a> {
             if !fx.sp.is_empty() {
                 // spawn appends one row group per spawn effect, in effect order
                 if self.role("keys") == Some(i) || is_uniq(e) {
-                    // one mint across the batch: declared injectivity forces the fresh fill
+                    // Batch mint uses 1 + max(existing, -1) plus iota. No ceiling or collision check is emitted.
                     app = Some(format!("((1+⌈´¯1∾{})+↕{})", cur, tot_all.as_deref().unwrap_or("")));
                 } else {
                     for sg in &fx.sp {
@@ -3259,9 +3257,8 @@ pub fn emit(prog: &Node, reg: &Registry, dirs: &Directives, it: &Interner) -> Re
     let kids: &[Node] = if let NodeKind::Program(v) = &prog.kind { v } else { &empty };
     em.scan_need_idx(kids);
     em.emit_fixture();
-    // def only installs; the clock fires: one pretended edge at the end of each unbroken run
-    // of installs — plain defs don't end a run; a performed statement or EOF does. Each edge
-    // fires EVERY rule installed so far in one shared barrier.
+    // Each run of new installations fires all installed rules once before the next performed
+    // statement or EOF, using one shared barrier.
     let mut installed: Vec<&Node> = Vec::new();
     let mut fresh = false;
     for st in kids {

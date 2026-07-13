@@ -13,6 +13,6 @@ Executed (2026-07-11), now under done/: 01-10. The catalog below stands as recor
 - `06-manual-srel-vec-chapter.md` — document set-valued relations and vec columns in ano-manual.md.
 - `07-tui-editors.md` — the vim.tiny diagnosis, EDITOR=nvim at project and nix level, the internal editor.
 - `08-world-map-and-bitmap.md` — square cells, inferred glyphs, unicode pieces, the half-block bitmap mode.
-- `09-numeric-edges.md` — document the float64 model and close the inf load/save asymmetry so the seal is airtight.
+- `09-numeric-edges.md` — document the float64 model and close the non-finite load/save asymmetry.
 - `10-debug-observability.md` — the dead-link diagnostic, the per-tick structural trace, the session log as the repro channel. Mission-critical by ruling.
 - `12-unbuilt-scans.md` — the `min\` glyph, running mean, and running count: ruled by the fold/scan table but unbuilt in either tree. Reconcile the table with the emitter — build them, or footnote it. Not started; needs a scope ruling.

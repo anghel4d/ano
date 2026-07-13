@@ -1,7 +1,6 @@
 -- Masked multiply, corrected (spec §7): doubling merchants' gold. Twin of 021-masked-multiply.bqn. (was s07-masked-multiply)
--- Six purses, the merchants' doubled. The law under test: off-mask rows come out bit-identical, not merely similar.
+-- Six purses, with the merchants doubled. The fixture checks that off-mask values remain unchanged.
 -- The factor column is 1+merchant (multiplicative identity 1 off-mask); the .bqn's wrong half (2×merchant, wipes off-mask) and the k=3 form are BQN-only witnesses unreachable from ano semantics.
--- On-mask doubled, off-mask bit-identical to pre-state.
 --! registry ../registries/021-masked-multiply.reg
 --! expect gold = 100 400 300 400 1000 600
 

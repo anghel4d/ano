@@ -1,8 +1,5 @@
-/* Smoke coverage for the ano port of the anoptic strings module and its arena.
- * Exit 0 == pass; failures print what broke. Not the engine's full battery — the
- * witnesses here are the seams the port touched (arena-backed allocation, realloc
- * totality, free-the-last reuse) plus the behaviors kore leans on (collation order
- * for the demos rail, base-letter search, UTF-8 totality). */
+/* Smoke tests for the ported arena and string module: allocation seams, UTF-8 handling,
+ * collation, and filename ordering used by kore. */
 
 #include <stdio.h>
 #include <string.h>
@@ -97,8 +94,7 @@ static void test_collation(void)
     CHECK(anostr_eq_base(anostr_lit("Ålesund"), anostr_lit("alesund")), "base-letter equality");
     CHECK(anostr_find_base(anostr_lit("def Kin = moore"), anostr_lit("kin"), 0) == 4, "base-letter find");
 
-    // the rail's twin rule: with extensions stripped, the ASCII stem is a strict
-    // prefix of its -nihongo conjugate and must sort first
+    // After removing extensions, the ASCII stem must sort before its -nihongo twin.
     anostr_t a = anostr_lit("01-canonical-masked-update");
     anostr_t b = anostr_lit("01-canonical-masked-update-nihongo");
     CHECK(anostr_collate(a, b) < 0, "stem precedes its -nihongo conjugate");

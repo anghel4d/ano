@@ -1,8 +1,5 @@
-// main.rs — PORTER 5: the crate root and CLI entry forms, the interactive event loop, steel
-// discovery, the child invocation, and the 0x1D/0x1F stdout demux (0x1E never reaches kore:
-// --save advances the world as a file). Contract maps: kmaps/kore-world.md ("main dispatch",
-// "the child process layer", "the stdout demux") and kore-term.md §8; C source: kore/kore.c
-// l.929-975 (find_anoc/run_child), l.1229-1298 (cap_split), l.3884-3938 (main).
+// Crate root and CLI: event loop, Steel discovery, child invocation, and 0x1D/0x1F stdout
+// demux. 0x1E does not reach kore because --save advances the world file.
 
 mod app;
 mod sys;
@@ -19,7 +16,7 @@ fn main() {
     std::process::exit(kore_main());
 }
 
-// Mode selection precedes the terminal (kore.c main l.3884): `--check <files>` ORs
+// Mode selection precedes the terminal (kore.c main): `--check <files>` ORs
 // world::check_reg codes; `--edit` with exactly 5 operands runs world::edit_reg; any other
 // `-` flag prints usage (verbatim, three lines) on stderr, exit 2. Bare -> MODE_RAIL
 // (walk_demos + sort by text::cmp_demo, verdict `%d demos — enter opens, r resets the
@@ -105,7 +102,7 @@ fn kore_main() -> i32 {
 }
 
 // Recursive walk from `demos` relative to CWD, dot-entries skipped, `.ano` suffix, cap
-// KMAXDEMO; sorted by text::cmp_demo. kore.c walk_demos l.980.
+// KMAXDEMO; sorted by text::cmp_demo. kore.c walk_demos.
 pub fn walk_demos(app: &mut App, dir: &str) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for de in rd.flatten() {
@@ -130,7 +127,7 @@ pub fn walk_demos(app: &mut App, dir: &str) {
 // Cached: $STEEL when executable; else steel beside kore's own binary via /proc/self/exe
 // (the cargo sibling in target/release or target/debug); else target/release/steel under
 // CWD; else "steel" (PATH via execvp). Kore speaks only to Steel — the C anoc is kore.c's
-// oracle business, never a rung here. kore.c find_anoc l.929 is the ladder's ancestor.
+// oracle business, never a rung here. kore.c find_anoc is the ladder's ancestor.
 pub fn find_steel(app: &mut App) -> String {
     if let Some(p) = &app.steel_path {
         return p.clone();
@@ -169,7 +166,7 @@ pub fn run_steel(argv: &[&str]) -> (Vec<u8>, i32) {
     (cap, code)
 }
 
-// Trailing space/tab/\r stripped copy — the 0x1D tag label. kore.c label_dup l.1211.
+// Trailing space/tab/\r stripped copy — the 0x1D tag label. kore.c label_dup.
 pub fn label_dup(s: &[u8]) -> Vec<u8> {
     let mut d = s.to_vec();
     while matches!(d.last(), Some(b' ' | b'\t' | b'\r')) {
@@ -178,7 +175,7 @@ pub fn label_dup(s: &[u8]) -> Vec<u8> {
     d
 }
 
-// buf_take_rstrip (kore.c l.1201): take the buffer with trailing \n \r space tab stripped.
+// buf_take_rstrip (kore.c): take the buffer with trailing \n \r space tab stripped.
 fn take_rstrip(b: &mut Vec<u8>) -> Vec<u8> {
     while matches!(b.last(), Some(b'\n' | b'\r' | b' ' | b'\t')) {
         b.pop();
@@ -235,7 +232,7 @@ fn scan_q_tag(tag: &[u8]) -> Option<i32> {
     scan_i32(tag, &mut i)
 }
 
-// The one demux (kore.c cap_split l.1229). Nonzero exit: the whole capture to history,
+// The one demux (kore.c cap_split). Nonzero exit: the whole capture to history,
 // a leading 0x1F stripped per non-empty line, no group. Exit 0: walk lines — 0x1F to
 // history sentinel-stripped EVEN mid-record; 0x1D closes any open value (rstripped) and
 // opens a record (tag <= 63 bytes; `q%d@%d` resolves the label through app.run_line, else

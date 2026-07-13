@@ -528,7 +528,7 @@ static int operand_start(const TokBuf *b, int k) {
   return j;
 }
 
-/* Inputs: source, token buffer, err. Output: 0/-1; the normalized ASCII-equivalent
+/* Inputs: source, token buffer, err. Output: 0/-1; the normalized parser
  * stream, T_NL between nonempty lines, no trailing NL. Per word, in order: ^alias /
  * :sym sigils; the closed grammar — particle, keyword, and fold/scan table (with op
  * payload); kanji/Arabic numeral; a fused reducer word (name/ name\); then any legal

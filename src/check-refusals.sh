@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# The negative battery: every fixture under src/refusals/ must REFUSE — exit 2 with the
-# diagnostic it pins ('# expect:' in a .reg, '-- expect:' in a .ano) on stderr. Two
-# shapes: load-*.reg loads through refusals/probe.ano and must die at reg_load (the
-# non-finite seal, outside face); save-*.ano runs under --run --save to a scratch path
-# that must not appear afterward (the refused tick, the world stands). save-*-world.reg
-# are the clean worlds behind the .ano fixtures, not fixtures themselves.
-# Inputs: none (env STEEL overrides the binary, default: target/release/steel at the repo root).
-# Output: one ok-refuse/FAIL-refuse line per fixture. Exit: nonzero iff any fails.
+# Verifies that each load/save refusal fixture exits 2 with its pinned diagnostic. Save
+# refusals must leave no output file. STEEL overrides target/release/steel.
 set -u
 STEEL="${STEEL:-$(dirname "$0")/../target/release/steel}"
 here="$(cd "$(dirname "$0")" && pwd)"

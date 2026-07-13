@@ -74,7 +74,7 @@ void ano_arena_reset(ano_arena_t *a)
 {
     if (a == NULL)
         return;
-    ano_chunk_t *keep = a->head;    // newest = largest-or-equal; the natural survivor
+    ano_chunk_t *keep = a->head;    // retain the current head chunk
     if (keep != NULL) {
         for (ano_chunk_t *c = keep->next; c != NULL; ) {
             ano_chunk_t *next = c->next;

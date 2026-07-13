@@ -1,6 +1,6 @@
 # anoc surface grammar
 
-The implementation contract for the C transpiler in this directory. Derived from ano-language.md (grammar appendix, the 14-level precedence table) and ano-examples.md (ex1-49). This file adds nothing to the language; where it and ano-language.md disagree, ano-language.md wins.
+The surface contract for the frozen C oracle in this directory. Steel is the reference implementation. This file adds nothing to the language; where it and `ano-language.md` disagree, the spec wins.
 
 ## Lexical
 
@@ -79,7 +79,7 @@ The fold prefix at level 9 takes the longest expression at level ≥10 to its ri
 
 Same-column batches commit through the spec's merge laws (§10): the additive family (`+=` `-=`) and the multiplicative family (`*=` `/=`) compose by rebasing the later accumulate on the earlier commit (each RHS still observes pre-state); presence writes of one kind compose idempotently; pair-field SETs compose when the fields differ. Any other pair on one column — `+=` beside `*=`, a double SET, anything beside a verb — is rejected at emit time ("no merge law: written twice in one barrier").
 
-RHS evaluation space: a column expression on the effect side is evaluated over the full world, gathered by the selection at the scatter (`sel/rhs`), and written back under the mask; `index` is the ordinal within the selection (or within the copy run under spawn-replicate); `to shape` produces exactly count-of-selection positions. A `scan(f) … along order` value arrives in along order and its write-back conjugates through the order's grade (sort, act, unsort — the Tier-2 law); it keeps its order through scalar arithmetic and is rejected when composed against a differently-ordered column. Scan steps: `+ * max min`; anything else is rejected, never guessed.
+RHS evaluation space: a column expression on the effect side is evaluated over the full world, gathered by the selection at the scatter (`sel/rhs`), and written back under the mask; `index` is the ordinal within the selection (or within the copy run under spawn-replicate); `to shape` produces exactly count-of-selection positions. A `scan(f) … along order` value is sorted by the order key, scanned, and scattered back by the inverse grade. It keeps that order through scalar arithmetic and is rejected when composed against a differently ordered column. Equivariance with tied order keys is not established. Scan steps: `+ * max min`.
 
 ## Japanese skin (`--! ja`)
 

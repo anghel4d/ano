@@ -1,5 +1,5 @@
 -- The assembled wand (n6): [Twin Spell, Damage Plus, Trigger, Firebolt], cast at an enemy standing over an oil vein. Twin of 119-wand.bqn. (was n6-wand)
--- Every card from n1-n5 in one cast: the multicast mints, the modifier writes, the bolts fly, the hit joins, the trigger detonates the chunk. One wand, one world, every prior demo load-bearing.
+-- One cast composes multicast, modifiers, flight, collision, the trigger, and lattice alchemy.
 -- Cast, cards, one frame of flight, the collision join, the damage spend (a scoped fold: the volley's stacked damage), detonation and one performed ring of spread in the material chunk. The trigger rule that mints payloads at both impacts is installed last: the harness clock beats at the end of an install run, so the payload tick gathers everything the earlier barriers committed.
 -- The detonation is an anchored frame: @ fixes the frame, `at` fills its origin. Here the anchor is the impact binding — the deictic form, the host having resolved the payload's world pos into chunk coordinates (the world-to-chunk (o,S) stays host business); n5 shows the inline mirror-read form (at Firebolt.pos).
 --! registry ../registries/119-wand.reg

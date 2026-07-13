@@ -1,6 +1,6 @@
 -- The two-rule flora pair (c3-b): bloom and wither in ONE tick, one shared barrier (§11). Twin of 108-life-naru.bqn (shared-barrier section). (was c3-life-naru-b)
 -- Life as two laws of nature: bloom grants, wither takes, both in the same breath of one tick. Their guards are complements, so the pair can never disagree about a row.
--- Both rules gather the tick's pre-state and the commit set scatters once. Both write planted with no common merge family, and the admissibility certificate is the complementary guard literals — bloom selects under !Planted, wither under Planted, so the two masks share no row of one pre-state and the writes merge exactly in either order. The per-rule-barrier breakage (ring / lone, order-dependent) stays pinned in the .bqn.
+-- Both rules gather the same pre-state. Their complementary Planted guards make the writes row-disjoint, so the commit has no same-row conflict. The BQN twin keeps the per-rule-barrier counterexample.
 --! registry ../registries/108-life-naru.reg
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
 

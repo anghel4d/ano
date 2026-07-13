@@ -1,7 +1,7 @@
 -- Life, one synchronous generation (c1, B3/S23): the fused value form. Twin of 105-life-step.bqn (fused section). (was c1-life-step-a)
 -- Conway's Game of Life in two lines: a 5x5 garden, a blinker in the middle, kin counting each plot's living Moore neighbors. Birth on 3, survival on 2 or 3 — the whole rule is one masked assignment.
 -- 5x5 lattice world; moore is the registered 8-stencil srel, fibers shrink at the boundary — the border is dead, and a torus is a different fiber table, not a different program.
--- kin is the γ count over the moore fiber; every read observes the statement's pre-state, so the step is synchronous by construction: the barrier is Life's double buffer, and the in-place bug cannot be written in one statement.
+-- kin is the grouped count over each Moore fiber. Every read uses the statement's pre-state and the barrier commits once, producing a synchronous generation without in-place cascading.
 --! registry ../registries/105-life-step-a.reg
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
 

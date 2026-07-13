@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # Inputs: common/ano_unicode_tables.h and common/ano_collate_tables.h (generated C, UCD/DUCET 17.0.0).
 # Output: kore/src/tables.rs — the same const arrays as Rust, zero hand transcription.
-# Invariants: every parsed array's element count must equal its declared C length, and the
-# emitted Rust is re-parsed and its counts and per-array checksums must round-trip the C parse.
+# Invariants: parsed counts match the C declarations; emitted arrays parse back to the same
+# values.
 
 import re
 import sys

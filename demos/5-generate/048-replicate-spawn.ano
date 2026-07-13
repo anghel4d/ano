@@ -8,7 +8,7 @@
 --! expect parent = -1 -1 -1 -1 -1 -1 -1 -1 0 0 2 2 2 5 6 6 6
 --! expect minion = 0 0 0 0 0 0 0 0 1 1 1 1 1 0 0 0 0
 --! expect egg = 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1
--- The fill pins: minted rows take the type zero on every untouched column — a child inheriting its parent's spawner bit or count is exactly the loop-making failure this world must exclude.
+-- Minted ordinary columns not filled by the spawn take type zero. keys and parent are filled separately. The fixture rejects inherited Spawner and Count values.
 --! expect spawner = 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 --! expect count = 2 0 3 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 --! expect nest = 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0

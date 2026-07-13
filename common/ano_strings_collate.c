@@ -9,9 +9,8 @@
 // time (primary, secondary, tertiary), streaming, no allocation.
 // Unlisted code points get UCA implicit weights.
 //
-// Sort builds a u64 collate-prefix key per string (first four primaries, ASCII via a flat
-// one-CE table), a stable LSD radix sorts the (key, index) records, key-equal runs restream
-// (streaming collate when small, full keys plus memcmp when large). Bytes read once.
+// Sort builds a four-primary prefix key, radix-sorts key/index records, then resolves equal
+// prefixes by streaming comparison or full keys.
 
 #include <stdlib.h>
 
@@ -353,7 +352,7 @@ static void tie_insertion(sort_rec_t *r, size_t n, rec_str_fn_t str_of, const vo
     }
 }
 
-enum { TIE_BULK_MIN = 17 };     // below this, restreaming beats full keys
+enum { TIE_BULK_MIN = 17 };     // full-key cutoff
 
 typedef struct tie_view_t {
     const uint8_t *key;

@@ -1,9 +1,8 @@
-// registry.rs — the .reg world loader and dumper. Mirrors src/registry.c. Every load
+// The .reg world loader and dumper. Every load
 // diagnostic is prefixed "registry line %d: " (1-based physical line, comments counted);
 // the two path-level ones ("cannot read '%s'", "cannot write '%s': %s") carry no prefix.
-// Numbers go through num::wnum (the finite seal) and num::dnum (the fixpoint speller);
-// reserved names refuse via lex::lex_reserved_fold; files move through fs::fs_read and
-// fs::fs_write_commit.
+// Numbers parse as finite f64 and dump with round-trip spellings. Reserved names refuse via
+// lex::lex_reserved_fold; files move through fs::fs_read and fs::fs_write_commit.
 
 use crate::{
     AliasRow, BindKind, ColType, Diag, ProtoField, Reap, RegEntry, RegEntryKind, Registry,
@@ -197,9 +196,7 @@ fn ty_admits(ty: ColType, v: f64) -> bool {
     }
 }
 
-// The load seal for a refined column's data at rest: out-of-domain values REFUSE, the
-// unique precedent — distinctness refuses, it does not repair. (The barrier retracts
-// writes silently; the TUI clamps and warns; rest data is the author's and must be honest.)
+// Reject loaded values outside the declared carrier. Effects normalize at commit; loaded data does not.
 fn seal_ty(kw: &str, name: &str, ty: ColType, nums: &[f64], ln: i32) -> Result<(), Diag> {
     for &v in nums {
         if !ty_admits(ty, v) {
@@ -371,8 +368,9 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 // Constraints stack (set-intersection, ano-ecs §10): an optional kind word
                 // refines the carrier — `unique id nat` is injectivity ∩ ℕ. Detected LL(1):
                 // data is always numeric, so a non-number in the kind slot is the kind.
-                // The mint respects any carrier here (1+max clears the maximum), which is
-                // why range alone refuses to stack on unique — a ceiling contradicts it.
+                // The mint respects any carrier here (1+max clears the maximum; the f64
+                // ceiling case is not checked), which is why range alone refuses to stack
+                // on unique — a ceiling contradicts it.
                 if nw < 3 {
                     return Err(rerr(ln, "usage: unique <name> [num|nat|int] <values>".into()));
                 }
@@ -459,8 +457,7 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
             }
 
             "range" => {
-                // declared bounds, a value refinement beside the kind word: rest data seals
-                // here, effect writes clamp at the barrier, the TUI clamps and warns.
+                // Loaded and default values must fit declared bounds; effects clamp at commit.
                 if nw != 4 {
                     return Err(rerr(ln, "usage: range <col> <lo> <hi>".into()));
                 }
@@ -804,8 +801,7 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
             }
 
             "reap" => {
-                // ~ reclamation policy, storage only (ruled 2026-07-11); the emitted algebra
-                // never changes.
+                // Storage metadata only; the emitter does not consult it.
                 if nw != 2 || (words[1].1 != "seal" && words[1].1 != "host") {
                     return Err(rerr(ln, "usage: reap <seal|host>".into()));
                 }
@@ -906,13 +902,9 @@ fn dump_column(b: &mut String, kw: &str, name: &str, ty: ColType, nums: &[f64], 
     b.push('\n');
 }
 
-// Inputs: loaded registry, target path. Output: () or Diag "cannot write '%s': %s"
-// (fs::strerror text, no line prefix).
-// Invariants: emission order — "n %d" always, lattice when nonzero, reap when declared,
-// entries in declaration order (unique/col/field/pres/rel/srel/inv/alias/bind/fn/tag/proto
-// per the C formats, pres and nonzero default beside their column, inv fibers never dumped),
-// then roles, then the alias table; every number num::dnum-canonical; commits through
-// fs::fs_write_commit (staged + rename, nothing torn); dump -> load -> dump byte-fixpoints.
+// Inputs: loaded registry, target path. Output: () or an unprefixed write diagnostic.
+// Emits n, lattice, reap, entries, roles, then aliases in declaration order. Inverse fibers
+// recompute on load. fs_write_commit performs the staged replacement.
 pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
     let mut b = String::new();
     let _ = writeln!(b, "n {}", reg.n);

@@ -1,6 +1,6 @@
 # ano ECS — the world store beneath the language
 
-**Status: working blueprint, 2026-07-02.** This is the design of Anoptic's world store: the C-side backend that ano runs on. It is a commitment, not a survey. The BQN files under `demos/` are the reference semantics. The store is those shapes in bits. An implementation in `src/` is verified against the BQN post-states by differential testing (`demos/demos.md`). We target C23. Dialect notes are in §15.
+**Status: unimplemented blueprint, 2026-07-02.** This is the design of Anoptic's world store: the C-side backend that ano runs on, a commitment, not a survey. Steel and the BQN files under `demos/` define current behavior; the C23 store described here does not exist in `src/` yet. The BQN post-states are the reference semantics an implementation is verified against by differential testing (`demos/demos.md`). Dialect notes are in §15.
 
 ## 0. Position
 
@@ -8,7 +8,7 @@ The division of labor comes first. The game engine is the OS and the hardware. A
 
 A traditional ECS (Flecs, EnTT, Bevy) is a scheduler's data structure. It exists so per-entity update functions iterate fast. Ano never iterates entities. Every statement is a column transformation: build a mask with vector compares, scatter an effect under it. So this store's client is a query executor, not a system scheduler, and its lineage is not Flecs. It is kdb+, Arrow, and the APL runtimes: a column store with validity bitmaps, vectorized kernels over fixed-size pages, and copy-on-write snapshots for the time axis. The relationship is exactly q to kdb+. The store is the database. Ano is its resident query language. The host is the operating system both run on. This document specifies the database and the syscall boundary.
 
-The design rule throughout: every mechanism below is the physical form of a law the spec already states. Where foundations.md proves something, we delete machinery. The tier theorems are storage classes. The `;` commutation law is the parallelism license. Totality by construction means the load-time verifier checks footprints and nothing else. Mathematical consistency is what lets the engine be small.
+The design rule throughout: every mechanism below is the physical form of a law the spec already states. Where foundations.md pins something down, we delete machinery. The tier results are storage classes. The `;` commutation law is the parallelism license. Totality by construction means the load-time verifier checks footprints and nothing else. Mathematical consistency is what lets the engine be small.
 
 ## 1. Law to mechanism
 
@@ -33,9 +33,9 @@ Each row is a spec commitment and the storage decision it forces. The rest of th
 | the lang ingests raw ECS data per the registry (Technical Explanation) | the host boundary: shared slot space, owned vs mapped directory entries, ingest-copy fallback (§11) |
 | readonly bindings: hot host state, predicated on, never written (Binding types) | write-footprint-empty columns on mapped pages, published at ingest (§11) |
 
-## 2. Keys: three storage classes from the tier theorems
+## 2. Keys: three storage classes from the tier results
 
-The generable-vs-nominal asymmetry (foundations §2.1) is an allocator decision, not philosophy. Three classes fall out. Each theorem deletes a mechanism from one of them.
+The generable-vs-nominal asymmetry (foundations §2.1) is an allocator decision, not philosophy. Three classes fall out. Each result deletes a mechanism from one of them.
 
 **Nominal keys (Tier 2).** An entity is a slot in one global index space shared by every record column, and by the host under the boundary contract (§11). The ID carries a generation. Relationship columns store IDs as data, so the hop detects staleness with one compare against `gen[slot]`. No lookup structure. Slot reuse happens only at tick seal, from a slot-sorted free list. Allocation order is a pure function of the statement log (§12). Ruled (2026-07-11): this — generational tombstoning — is the despawn semantics, confirmed over the backtrace alternative: the staleness compare is O(1), no information is destroyed, and it composes with §5 left-join-null so the surface algebra never grows a fault path. The gen bump plus presence clear IS the mark and free-list reuse at tick seal IS the deferred reap, so mark-and-defer is subsumed, not open; only reap ownership and grain is policy (§12, §16). The u32 generation is the width-with-wraparound-in-mind pick: a slot must see 2^32 kills before a stale link can alias.
 
@@ -55,9 +55,9 @@ static inline bool id_live(const uint32_t *gen_col, ano_id x) {
 
 The union is deliberate. Relationship columns store `bits` and compare in one 64-bit op. The hop unpacks `slot` for the gather. C blesses reading a member other than the one last written. The bytes reinterpret (C23 6.5.2.3). We use that liberally, and §9 makes it load-bearing.
 
-**Generable keys (Tier 1).** A lattice cell's key is its coordinate, recomputable from the shape (`I = ↕shape`). So a lattice column carries no allocator, no generations, no free list, and no presence bitmap. A `w×h` column is exactly `w*h` cells. Presence is total. The theorem that rank-changing ops are free over space is, physically, the fact that there is nothing to leak. Dropping cells drops bytes. `↕` remints the index whenever wanted. The header carries what the tier actually demands: shape, the frame `(o, S)`, the boundary policy (foundations §2.4).
+**Generable keys (Tier 1).** A lattice cell's key is its coordinate, recomputable from the shape (`I = ↕shape`). So a lattice column carries no allocator, no generations, no free list, and no presence bitmap. A `w×h` column is exactly `w*h` cells. Presence is total. That rank-changing ops are free over space is, physically, the fact that there is nothing to leak. Dropping cells drops bytes. `↕` remints the index whenever wanted. The header carries what the tier actually demands: shape, the frame `(o, S)`, the boundary policy (foundations §2.4).
 
-**Opaque values (Tier 3).** The column stores fixed-width handles into host-owned pools. Naturality in V says every admitted map is a reindexing. A handle supports exactly that: memcpy, gather, mask, dispatch. The type enforces the theorem. The engine has no accessor that dereferences a handle.
+**Opaque values (Tier 3).** The column stores fixed-width handles into host-owned pools. Naturality in V says every admitted map is a reindexing. A handle supports exactly that: memcpy, gather, mask, dispatch. The type enforces it. The engine has no accessor that dereferences a handle.
 
 ## 3. Columns and pages
 
@@ -195,7 +195,7 @@ void fx_scatter_add_i64(ano_col *c, const ano_delta *d, uint32_t now) {
 
 ## 6. Numbers: the merge laws pick the arithmetic
 
-IEEE float addition is not associative. A store carrying gameplay state in f64 makes the `;` law and the rule-barrier merge a fiction, and parallel commit a nondeterminism engine. The consistency argument runs forward: the language's laws are theorems over integers and fixed point and falsehoods over floats. So Tier-2 mutable numeric columns are `T_I64` or `T_Q` (48.16 fixed point). `T_F64` is admitted only on readonly host columns, which sit outside the replay guarantee by the Binding-types paragraph anyway.
+IEEE float addition is not associative. A store carrying gameplay state in f64 makes the `;` law and the rule-barrier merge a fiction, and parallel commit a nondeterminism engine. The consistency argument runs forward: the language's laws hold over integers and fixed point and fail over floats. So Tier-2 mutable numeric columns are `T_I64` or `T_Q` (48.16 fixed point). `T_F64` is admitted only on readonly host columns, which sit outside the replay guarantee by the Binding-types paragraph anyway.
 
 ```c
 // ano_q.h — 48.16 fixed point. ±1.4e14 world units at 1/65536 resolution; deterministic on every target.
@@ -212,7 +212,7 @@ static inline int64_t sat_i64(_BitInt(128) x) {      // storage-width clamp, app
 
 `_BitInt(128)` is load-bearing twice. First, the delta accumulators (§5). Saturating add is commutative but not associative (`(a ⊞ big) ⊞ −big ≠ a ⊞ (big ⊞ −big)`), so saturating per effect would make the merge order-dependent. Instead operands accumulate in 128-bit lanes, where plain addition is exactly associative and commutative because no sane barrier overflows 128 bits. Saturation happens once at the storage boundary. The merge monoid is a real monoid. The `;` law and the rule-set merge are true statements about the implementation. Second, `q_mul`'s intermediate product, which makes fixed-point multiply exact per pair with no double-rounding path.
 
-The exactness ledger gates what merges freely. ADD (wide lanes), MIN, MAX, OR, AND are exactly associative-commutative. Effects in these classes merge freely across `;` and across standing rules. SET merges only under pairwise-disjoint masks, checked from the buffer's masks. MUL under truncation is exact per pair but not associative in composition. So overlapping MUL effects on one cell in one barrier are rejected. Compose the multipliers in the script. Disjoint-mask MULs merge fine. This is the spec's "overlapping writes are accepted only when the effect algebra proves a deterministic merge" with the proofs discharged by arithmetic class.
+The exactness ledger gates what merges freely. ADD (wide lanes), MIN, MAX, OR, AND are exactly associative-commutative. Effects in these classes merge freely across `;` and across standing rules. SET merges only under pairwise-disjoint masks, checked from the buffer's masks. MUL under truncation is exact per pair but not associative in composition. So overlapping MUL effects on one cell in one barrier are rejected. Compose the multipliers in the script. Disjoint-mask MULs merge fine. This is the spec's "overlapping writes are accepted only when the effect algebra proves a deterministic merge" with that obligation discharged by arithmetic class.
 
 Host callbacks that feed gameplay state (`fib`, `polar`, noise) must be deterministic per seed and target-independent: integer or fixed-point implementations, CORDIC or tables for the trig, never libm. `T_F64` readonly columns may be predicated on. The ingest snapshot (§11) makes host float churn invisible mid-tick, which is all the determinism claim needs.
 
@@ -274,14 +274,14 @@ void dense_rank(const ano_kv *pairs, size_t n, int64_t *rank_by_slot) {
 }
 ```
 
-`top k (grade desc …)` truncates the sorted pairs and ORs the k slots into a mask. That composes ex19's pipeline `(/enemy) ⊏˜ 5↑⍒enemy/threat` into one pass, since the gather already carried world slots through the sort. Scan (`+\ … along`) is the same shape: gather in the declared order (`along` is an index sequence, `⊏` not a mask, per ex17), run the sequential accumulate dense, scatter back. The Tier-2 conjugation theorem (foundations §3.5) is implemented literally as this sort-act-unsort sandwich. The store never offers an entity scan without an order argument because the plan compiler has no instruction for it. The obstruction is grammatical, then physical.
+`top k (grade desc …)` truncates the sorted pairs and ORs the k slots into a mask. That composes ex19's pipeline `(/enemy) ⊏˜ 5↑⍒enemy/threat` into one pass, since the gather already carried world slots through the sort. Scan (`+\ … along`) is the same shape: gather in the declared order (`along` is an index sequence, `⊏` not a mask, per ex17), run the sequential accumulate dense, scatter back. The Tier-2 conjugation construction (foundations §3.5) is implemented literally as this sort-act-unsort sandwich. The store never offers an entity scan without an order argument because the plan compiler has no instruction for it. The obstruction is grammatical, then physical.
 
 ## 9. Space and the opaque, or: the union is the view functor
 
 **Tier 1.** A lattice column is a dense rank-2 (or rank-n) array with a header: shape, frame, boundary.
 
 ```c
-// ano_lat.h — lattice column. No allocator, no gens, no presence: the tier theorem deleted them (§2).
+// ano_lat.h — lattice column. No allocator, no gens, no presence: the tier result deleted them (§2).
 typedef struct ano_frame { ano_q ox, oy, sx, sy; } ano_frame;   // pos = o + S·k, foundations §2.4
 typedef enum : uint8_t { B_SHRINK, B_CLAMP, B_WRAP, B_ZERO } ano_bound;
 typedef struct ano_lat {
@@ -292,7 +292,7 @@ typedef struct ano_lat {
 } ano_lat;
 ```
 
-Generators cost nothing. `8 8 & (x + y) % 2 == 0` never materializes coordinate columns. `x` and `y` are affine functions of the cell index, computed in registers per page. Shifts are strided copies parameterized by `bound`. `scan2(+)` (the summed-area table, ex30 Version B) is two axis passes. Reshape (`to`) and reduce change shape freely because the output index is as definable as the input's. That is the §2 theorem again, now as the absence of bookkeeping in the reshape kernel. The frame and counter checks run at plan time and erase. The runtime never sees a unit.
+Generators cost nothing. `8 8 & (x + y) % 2 == 0` never materializes coordinate columns. `x` and `y` are affine functions of the cell index, computed in registers per page. Shifts are strided copies parameterized by `bound`. `scan2(+)` (the summed-area table, ex30 Version B) is two axis passes. Reshape (`to`) and reduce change shape freely because the output index is as definable as the input's. That is the §2 result again, now as the absence of bookkeeping in the reshape kernel. The frame and counter checks run at plan time and erase. The runtime never sees a unit.
 
 **Tier 3.** A handle column is `T_H64`: an opaque 64-bit value the engine moves but never reads. Dispatch is the registry's envelope: a host function typed over (selection, handle column, output footprint), invoked per barrier with the compressed selection. The host writes an ordinary Tier-2 column back through the same delta buffer as everyone else. `Hostile , shortestPath via Adj` commits under the same laws as `Gold += 1000`.
 
@@ -416,7 +416,7 @@ Reap ownership and timing is registry policy, never semantics (ruled 2026-07-11)
 
 ## 13. Parallelism: the `;` law is the license
 
-The page is the morsel. Predicate evaluation and compressed-space compute parallelize embarrassingly, since pages are independent. The scatter is the interesting half, and the language already solved it. Effects merge through exactly associative-commutative monoids (§6), so per-worker partial deltas merge in any order to the same bits. The commutation law that legalizes `;` and the rule barrier is, unchanged, the proof obligation for parallel commit. γ's scatter-reduce keeps per-worker accumulator strips merged by the same monoids. Integer and fixed arithmetic make the merge tree's shape irrelevant. That is the concrete payoff of evicting floats from mutable state. We steal work over pages with deterministic merge points. The structural class serializes in canonical order, a tiny fraction of any barrier. Nothing in the parallel path is best-effort. Either an op class is in the exact ledger and parallelizes, or it is SET/MUL with a disjointness certificate, or that column's commit runs single-threaded. The determinism claim survives thread count.
+The page is the morsel. Predicate evaluation and compressed-space compute parallelize embarrassingly, since pages are independent. The scatter is the interesting half, and the language already solved it. Effects merge through exactly associative-commutative monoids (§6), so per-worker partial deltas merge in any order to the same bits. The commutation law that legalizes `;` and the rule barrier is, unchanged, the condition parallel commit rests on. γ's scatter-reduce keeps per-worker accumulator strips merged by the same monoids. Integer and fixed arithmetic make the merge tree's shape irrelevant. That is the concrete payoff of evicting floats from mutable state. We steal work over pages with deterministic merge points. The structural class serializes in canonical order, a tiny fraction of any barrier. Nothing in the parallel path is best-effort. Either an op class is in the exact ledger and parallelizes, or it is SET/MUL with a disjointness certificate, or that column's commit runs single-threaded. The determinism claim survives thread count.
 
 ## 14. The VM, and worked plans
 
@@ -464,7 +464,7 @@ Statements compile to plans: a short SSA program over mask and vector registers,
 
 ## 15. C23 inventory
 
-The dialect earns its keep at specific joints. `union` punning: entity IDs (§2), effect operands (§5), tagged directory entries (§11), the tier view functor (§9). Reading the unwritten member is the defined byte reinterpretation the view pun needs. `_BitInt(128)`: exact delta accumulation and fixed-point intermediates (§6), component-set footprints with one-op subset tests (§10). `<stdbit.h>`: `stdc_trailing_zeros` and `stdc_count_ones` are the mask kernels' inner loop. `<stdckdint.h>`: `ckd_add`/`ckd_mul` guard spawn totals and any path that leaves the wide lanes. `constexpr` objects and `static_assert`: frozen registry tables and layout proofs. `enum : type`: stable ABI for op classes and element kinds. Designated initializers: the registry is legible C. `alignas(64)`: page payloads on cacheline boundaries. `unreachable()`: kernel dispatch tails. `auto`, `typeof`: generic kernel macros without a macro language. `#embed`: mission files, board literals (ex34), and the BQN-derived fixtures baked into the conformance binary. Portability: `_BitInt(128)` is clang ≥14 anywhere and GCC 14 on the 64-bit mainline targets. That bounds the compiler floor. Everything else is vanilla C23.
+The dialect earns its keep at specific joints. `union` punning: entity IDs (§2), effect operands (§5), tagged directory entries (§11), the tier view functor (§9). Reading the unwritten member is the defined byte reinterpretation the view pun needs. `_BitInt(128)`: exact delta accumulation and fixed-point intermediates (§6), component-set footprints with one-op subset tests (§10). `<stdbit.h>`: `stdc_trailing_zeros` and `stdc_count_ones` are the mask kernels' inner loop. `<stdckdint.h>`: `ckd_add`/`ckd_mul` guard spawn totals and any path that leaves the wide lanes. `constexpr` objects and `static_assert`: frozen registry tables and layout assertions. `enum : type`: stable ABI for op classes and element kinds. Designated initializers: the registry is legible C. `alignas(64)`: page payloads on cacheline boundaries. `unreachable()`: kernel dispatch tails. `auto`, `typeof`: generic kernel macros without a macro language. `#embed`: mission files, board literals (ex34), and the BQN-derived fixtures baked into the conformance binary. Portability: `_BitInt(128)` is clang ≥14 anywhere and GCC 14 on the 64-bit mainline targets. That bounds the compiler floor. Everything else is vanilla C23.
 
 ## 16. Conformance, module map, open questions
 

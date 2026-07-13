@@ -1,4 +1,4 @@
-// app.rs — the shared application state: kore.c's `static struct App A` (l.1048) as an owned
+// app.rs — the shared application state: kore.c's `static struct App A` as an owned
 // struct, plus the OUTPUTS store ops and the say/log helpers. COMPLETE — no porter owns this
 // file; every module takes &mut App. Text policy: file content and world-model text (lines,
 // names, syms, code, prompt, labels, values, the history log) are Vec<u8> — .reg/.ano bytes are
@@ -53,7 +53,7 @@ pub struct SDef {
     pub name: Vec<u8>,
 }
 
-// One code-undo snapshot: the whole buffer plus the cursor (kore.c cundo, l.2113).
+// One code-undo snapshot: the whole buffer plus the cursor (kore.c cundo).
 pub struct CodeSnap {
     pub code: Vec<Vec<u8>>,
     pub ccx: i32,
@@ -141,9 +141,9 @@ pub struct App {
     pub out_r: Rect,
     pub prompt_r: Rect,
     // relocated C statics:
-    pub dcols: Vec<DCol>,          // table_cols' dcols/ndcols (l.2396)
-    pub vrows: Vec<VRow>,          // world_vrows' vrows/nvrows (l.2979)
-    pub run_lines: Vec<Vec<u8>>,   // the composed program for 0x1D tag resolution (l.1107)
+    pub dcols: Vec<DCol>,          // table_cols' dcols/ndcols
+    pub vrows: Vec<VRow>,          // world_vrows' vrows/nvrows
+    pub run_lines: Vec<Vec<u8>>,   // composed program for 0x1D tag resolution
     pub snap_seq: i32,             // per-process snapshot counter, deliberately not disk-scanned
     pub steel_path: Option<String>, // find_steel's cache
 }
@@ -165,7 +165,7 @@ impl App {
         self.verdict_bad = true;
     }
 
-    // Append to the history feed; snaps the view back to the tail (kore.c logOut, l.1099).
+    // Append to the history feed; snaps the view back to the tail (kore.c logOut).
     pub fn log(&mut self, s: &[u8]) {
         self.out_log.extend_from_slice(s);
         self.out_scroll = 0;
@@ -176,7 +176,7 @@ impl App {
         self.outputs_scroll = 0;
     }
 
-    // u's inverse of a push: every group whose step lies past the restored one goes (l.1152).
+    // u's inverse of a push: every group whose step lies past the restored one goes.
     pub fn outputs_drop_after(&mut self, seq: i32) {
         while self.qgroups.last().is_some_and(|g| g.step > seq) {
             self.qgroups.pop();
@@ -184,7 +184,7 @@ impl App {
         self.outputs_scroll = 0;
     }
 
-    // Whole oldest groups drop while total records exceed the cap; the newest group stays (l.1159).
+    // Whole oldest groups drop while total records exceed the cap; the newest group stays.
     pub fn outputs_bound(&mut self) {
         let mut total: usize = self.qgroups.iter().map(|g| g.recs.len()).sum();
         let mut drop = 0;
@@ -198,7 +198,7 @@ impl App {
     }
 
     // Display lines the OUTPUTS panel holds: a seam per group, a line per record, plus a
-    // multi-line value's own lines indented beneath its label (l.1175).
+    // multi-line value's own lines indented beneath its label.
     pub fn outputs_total_lines(&self) -> i32 {
         let mut t: i32 = 0;
         for g in &self.qgroups {
@@ -213,7 +213,7 @@ impl App {
         t
     }
 
-    // The composed program (next.ano / repl.ano) as lines, kept for the run's duration (l.1110).
+    // The composed program (next.ano / repl.ano) as lines, kept for the run's duration.
     pub fn run_lines_set(&mut self, text: &[u8]) {
         if text.is_empty() {
             self.run_lines = Vec::new();
@@ -226,7 +226,7 @@ impl App {
         }
     }
 
-    // The 1-based program line, leading spaces/tabs trimmed; None out of range (l.1130).
+    // The 1-based program line, leading spaces/tabs trimmed; None out of range.
     pub fn run_line(&self, ln: i32) -> Option<&[u8]> {
         if ln < 1 || ln as usize > self.run_lines.len() {
             return None;
