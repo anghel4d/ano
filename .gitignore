@@ -50,6 +50,7 @@ scratch/
 !.claude/skills/**
 !.claude/hooks/
 !.claude/hooks/**
+.claude/skills/coding-campaign/
 
 # GNU APL repl history
 .apl.history
