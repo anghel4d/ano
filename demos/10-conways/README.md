@@ -1,5 +1,6 @@
 # conways
 
+Status: valid barrier and explicit-relation evidence with a narrow scope. The runnable Life step survives repeated execution because the registry supplies an explicit Moore `srel` whose fibers are rebuilt over a fixed 5×5 field. That does not prove that Steel tracks field habitats or rank; it proves that this explicit relation happens to reconstruct the needed adjacency each step.
 Conway's Game of Life (B3/S23) as a witness suite: what Life demands, the language already contains — a registered Moore srel (fibers shrink at the boundary, so the border is dead; a torus is a different fiber table, not a different program), the γ count over its fibers, mask algebra in a value write, and the barrier. The step is one statement; the flora act it out when the same line moves to the naru hinge. The cN names are Conway witnesses, not ano-examples.md rows.
 
 - `105-life-step.bqn` — one synchronous generation: the fused value write (`Planted = kin == 3 | Planted & kin == 2`) and the Kin-snapshot triple agree with the hand-stepped blinker, either order of the ± pair; the barrier is Life's double buffer, so the in-place bug cannot be written in one statement; the stencil count is asserted equal to the γ fold over the moore fibers; period 2 back to the seed.

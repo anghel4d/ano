@@ -1,4 +1,5 @@
 -- Density fields, tree half (ex32). Twin of 060-density-fields.bqn — prefix program pinning the .bqn's intermediate point after the tree spawn (treePos ≡ 1 1 2 4 4 4 6 7 7, 9 = ≠worldPos).
+-- Formal witness: spawn is a dependent sum over source cells; entity growth does not resize Density or Fertility.
 -- A strip of land where each cell carries a Density: spawn Tree * Density plants that many trees on that cell. Replication driven by a field, not a count column — the forest grows where the field says.
 -- Modeled on the demo's 8-cell strip as an 8 1 lattice (the doc's 64 64 is the same statement at scale); each cell contributes Density copies of the spawn row at its own cell index, zero-count cells (0 3 5) spawn nothing.
 -- pos records each spawned cell as a (cell, 0) pair per the emitter's lattice spawn convention; the tree archetype column stands in for the .bqn's worldType 'T' run.

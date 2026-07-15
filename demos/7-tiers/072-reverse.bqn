@@ -1,7 +1,7 @@
-# 072-reverse - Tier 1 reverse conjugates translation, it does not commute with it (was t1-reverse)
-# ano: ⌽ g    -- the spec's Tier-1 line: reverse/reshape free, order is data not identity
-# Semantics: on a length-8 cyclic lattice with translations shift_t = t⌽, reverse is lawful Tier-1 order-work but it is not G₀-equivariant: it normalizes the translation group rather than centralizing it, rev∘shift_t = shift_{-t}∘rev.
-# Invariant: rev(shift_t v) ≡ shift_{-t}(rev v) for every t (assert), and rev(shift_t v) ≢ shift_t(rev v) at t=1 (assert), refuting the old criterion that Tier-1 legality is G₀-equivariance.
+# 072-reverse - Reverse conjugates translation; maximal lattice equivariance is not a legality criterion
+# ano: ⌽ g    -- a derived order operation on a declared cyclic habitat
+# Semantics: on a length-8 cyclic habitat, reverse is a lawful derived order operation but is not translation-equivariant; it normalizes the translation group rather than centralizing it.
+# Invariant: rev(shift_t v) ≡ shift_{-t}(rev v) for every t, while ordinary commutation fails at t=1. This is the executable counterexample to the retired criterion.
 
 v ← 3‿1‿4‿1‿5‿9‿2‿6            # length-8 cyclic lattice
 

@@ -298,36 +298,24 @@ def slope = abs(Height - neighbor(clamp).Height)
 64 64 & ridge > 0.5 , spawn Peak
 ```
 
-Two flourishes. The board literal reshapes a glyph string into a lattice carrying `char` per cell, so source code looks like the result (`063-board-literal.ano`): `"RNBQ..." to 8 8 , spawn (pieceOf char)`. And cells reach world-space through an affine frame, `pos = o + S·k`, fixed by the `@` scope. Remember that sentence when the wand chapter anchors a blast radius to a moving projectile.
+Two flourishes. A board literal may reshape a glyph string into an anonymous lattice carrying `char` per cell, provided its output-to-input map is explicit. A registered lattice reaches world-space only through a declared affine placement `χ(k) = o + β(k)`; `@` selects a scope and cannot invent that placement. The wand chapter's blast callable must therefore declare its ambient space and linear part before `at Firebolt.pos` can supply an origin.
 
-## The two habitats, and the three tiers
+## Habitats and capabilities
 
-You have now seen every operator twice. That is the point (`demos/7-tiers`, `064-two-habitats-*.ano`):
+You have now seen the same column operators over several finite row domains. That is the point, but they are not one index read at two ranks. The world contains many habitats: live entities, component-presence sets, fields, relation edges, event batches, and derived query views.
 
-```text
-                  over entities (rank 1)        over space (rank 2)
-generator   n            (↕n)             w h          (↕ w‿h)
-reduce      +/ Gold @ Nord               +/ Elevation @ 64 64
-scan        +\ Damage @ graded           +\ Cost @ 64 64
-grade       top 5 (grade Threat)         top 8 (grade Safety @ 64 64)
-outer       [f | a<-A, b<-B]             64 64 & (x+y)%2==0
-replicate   spawn Minion * Count         spawn Tree * Density
-reshape     pos = to 20                  pos = to 4 _
-shift       prev.X                       neighbor.X
-def         def threat = Dmg*Spd/Rng     def ridge = sin(x/8)+sin(y/8)
-```
+A column expression is `Col X V` over the current query habitat `X`. Layout metadata turns `X` into a dense buffer; lineage maps remember where its rows came from. Equal length is never alignment. A stored field is total on one named habitat. An ECS component is partial on the entity habitat.
 
-One generator read at two ranks: the entity key at rank 1, the cell index at rank 2. What differs is not the operators but what a write into the index costs, and that cost ladder is the tier system, the answer to "why was rank value-only?" you were promised.
-
-Tier 1 is space: the index is a regenerable place, so reshape and annihilation remain available. Tier 2 is records: keys must survive, so write-backs stay identity-aligned. Unordered scans need a declared order, and rank write-backs use value-only ties. General sort-act-unsort with ties is not established. Tier 3 is opaque: Ano may select the carrier or dispatch to a registered routine, but native array operations do not inspect the value. The proof sketches are tentative.
+Operations ask for structure rather than a tier. A scan needs order. A stencil needs a lattice chart and boundary rule. World placement needs an ambient affine space, origin, and basis map. A fold needs a carrier algebra. Host dispatch needs a registered signature and footprint.
 
 ```haskell
-Node , OutDeg = +/ Adj@row          -- same bits viewed as a matrix: Tier 1, free
-Hostile , shortestPath via Adj      -- viewed as a graph: Tier 3, the host runs Dijkstra
-^cursor , runBehaviorTree           -- fully opaque: select and dispatch
++/ Elevation @ Ground
+Nord & TwoHanded > 60 , Gold += 1000
+Node , OutDeg = +/ Adj@row
+Hostile , shortestPath via Navmesh
 ```
 
-A datum has no tier of its own. The tier is the (operation, view) pair, and the demos above are the same adjacency bits sliding along the axis.
+These are all columnar lowerings, but their habitats and admitted operations differ. Reads may create derived domains. Writes return through explicit lineage, so a registered field keeps its habitat, shape, and rank across every tick. Opaque host values remain ordinary columns whose native operation set happens to be empty.
 
 ## The grouped fold
 
@@ -443,4 +431,4 @@ You are now great and powerful, so you get the honest map. `ISSUES.md` is short 
 
 Ano numbers are IEEE 754 float64. Integers are contiguous through 2^53. Above that, small additions may be absorbed by the local spacing. Overflow and non-finite values are refused at load or save, and a failed save leaves the world file untouched. The registry's value domain is exactly the finite doubles, and load ∘ save is the identity on it, negative zero included. `src/refusals/` pins the refusal boundary. Host float replay needs recorded input bits or an explicit quantization rule; the host binding is unbuilt.
 
-Where to go next: `ano-language.md` is the spec this manual has been quoting, worth reading end to end now that every section will parse. `src/GRAMMAR.md` is the compiler's implementation contract when you need token-level truth. `ano_nihongo.md` if the Japanese chapter hooked you, `proofs/foundations.md` if the tiers did, and `demos/` for everything, forever, because in this repository the examples are the ground truth and the prose merely keeps up. Now go address something by description.
+Where to go next: `ano-language.md` is the spec this manual has been quoting. `spatialmaths.md` derives habitats, fields, lineage, lattices, placement, boundaries, and the retired-tier counterexamples. `proofs/foundations.md` states the active obligations, `ano_nihongo.md` carries the Japanese surface, and `demos/` holds the executable witnesses. Now go address something by description.

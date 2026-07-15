@@ -498,7 +498,7 @@ Unit , Slot = rank(Initiative)
 top 5 (grade desc Threat) , +Targeted
 ```
 
-Writing `grade()` into an aligned component is retired: the grade permutation is order-work, exactly the misalignment Tier 2 forbids. `rank()` is value-only (dense), so tied values share a rank and the write-back commutes with every relabeling.
+Writing a grade permutation directly into an aligned component is retired because the permutation is an ordering witness, not a column aligned to the original query domain. `rank()` is value-only, so tied values share a rank; an effect still requires explicit lineage back to its target.
 
 Verification:
 ```bqn
@@ -1073,9 +1073,9 @@ update Gold:Gold+500 from w where Farm, Acreage<avg Acreage
 update Gold:Gold*1.05 from w
 ```
 
-## 37 - Tier 1 space examples
+## 37 - Historical space sketches
 
-Show space as generated ground, projection, and ordered scan.
+Historical surface sketches for generated ground, projection, and ordered scan. They predate named habitats and are not conformance examples.
 
 ```haskell
 八八の偶数升に小麦を生成する。
@@ -1102,9 +1102,9 @@ sum Elevation
 sums Cost
 ```
 
-## 38 - Tier 2 record examples
+## 38 - Entity-domain examples
 
-Show record-aligned value write, scalar read, and rank scattered back to identities.
+Show an entity-domain value write, scalar read, and rank scattered back through query lineage.
 
 ```haskell
 両手が六十を超える北に、金を千与える。
@@ -1131,9 +1131,9 @@ select sum Gold from w where Nord
 update Rank:(asc distinct Gold)?Gold from w where Unit
 ```
 
-## 39 - Tier 3 opaque examples
+## 39 - Host-dispatch examples
 
-Use an exposed matrix view for native algebra; hand true opaque values to host routines.
+Use an exposed matrix field for native algebra; hand carriers without native operations to registered host routines.
 
 ```haskell
 節点に、隣接行の総和を出次数にする。

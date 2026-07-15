@@ -1,4 +1,5 @@
 -- The naru register (c3): the standing rule, the tick acting Life out. Twin of 108-life-naru.bqn (shared-barrier section). (was c3-life-naru)
+-- Formal witness: the shared barrier changes field values only; habitat, rank, and shape remain fixed across ticks.
 -- Life installed rather than performed: => registers the rule and the world clock runs it. Nobody calls Life; it becomes (なる) — the tick is the caller.
 -- One installed rule, the fused value form; the harness runs one tick — the rule gathers the tick's pre-state and scatters once, one generation of the blinker.
 -- The two-rule flora pair (bloom => +Planted, wither => -Planted) runs under §11's shared rule barrier in the -b twin; the per-rule breakage stays pinned in the .bqn as the counterexample.

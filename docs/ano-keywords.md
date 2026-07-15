@@ -2,7 +2,7 @@
 
 The closed grammar of both surfaces, catalogued. Ano has two closed vocabularies. The language owns exactly eighteen reserved words — the lexer's closed set, everything else a name resolved against the world. The registry (`.reg` files) owns a separate set of line directives plus a handful of type and kind sub-words. The two meet where a registry schema becomes the nouns of an Ano sentence. This file is the atlas; `ano-language.md` is the spec it derives from, `ano-manual.md` the tutorial. Where this file and `ano-language.md` disagree, the spec wins.
 
-What counts as a keyword. Per GRAMMAR.md: the closed keyword set the lexer owns is `def spawn at to via along order by take desc top grade fold scan scan2 cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. So the eighteen below are the keywords; the structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. All three tiers are catalogued here, separated, because the point of a keyword atlas is completeness — but only the eighteen are lexer keywords.
+What counts as a keyword. Per GRAMMAR.md: the closed keyword set the lexer owns is `def spawn at to via along order by take desc top grade fold scan scan2 cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. So the eighteen below are the keywords; the structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes.
 
 ## Atlas: language keywords
 
@@ -14,7 +14,7 @@ Each keyword carries its Japanese spelling. The `--! ja` skin converges on share
 | `spawn` | 生成 | `T_SPAWN` | generation | mint new entity rows; the only thing that invents keys |
 | `at` | 於 | `T_ATKW` | generation | place spawned rows (`spawn X at pos`); fill an anchored frame's origin |
 | `to` | 至 | `T_TO` | generation | reshape — pour an ordered selection into a shape, minting nothing |
-| `via` | 経由 | `T_VIA` | relational | Tier-3 dispatch: run a registered routine over a relation read as a graph |
+| `via` | 経由 | `T_VIA` | relational | dispatch to a registered routine with declared habitat and footprint |
 | `along` | 沿 | `T_ALONG` | array | name the order a scan accumulates along |
 | `order` | 整列 | `T_ORDER` | order | pipeline sort stage (`\|> order by …`) |
 | `by` | 別 | `T_BY` | order | the sort-key introducer inside `order by` |
@@ -121,7 +121,7 @@ The registry vocabulary is the language's noun vocabulary. Every `col`, `rel`, `
 
 The key machinery couples `unique`, `role`, `default`, and `range` to `spawn` and to writes. `unique` (or `role keys`/`role id`) declares which column mints on `spawn` and refuses effect writes; `default` and `range` fix what `spawn` fills and what an effect write clamps to. The keyword `spawn` has no minting policy of its own — it reads it entirely from the registry.
 
-The relation directives are the hops the language traverses. `rel`, `srel`, and `inv` register the edges that `.` (functional hop), `'` (fiber and image), the grouped fold, and the `via` keyword all walk. `via Adj` is Tier-3 dispatch over a `rel Adj`; `neighbors'.Moisture` folds over an `srel`; `inv` gives the reverse read for free.
+The relation directives are the hops the language traverses. `rel`, `srel`, and `inv` register spans that `.` (functional hop), `'` (fiber and image), the grouped fold, and `via` consume. `via Adj` dispatches over a registered relation; `neighbors(wrap)'.Moisture` folds over an explicit neighborhood and boundary; `inv` exposes the reverse fibers.
 
 Both surfaces are bilingual, but only one carries the mirror. Every language keyword has a kanji spelling (`定義` is `def`, `生成` is `spawn`), and `ja` registry lines alias entry names across surfaces — a natively Japanese world (`col 金 num …`) needs no alias at all. Registry directives, by contrast, are ASCII-only. `reap` sets the policy for the language's `~`; the derived tag from `as` becomes a read-only selection noun. The shared concept-words `num` `vec` `mask` `point` `entity` name registry carriers that are also the language's value kinds: a `col pos vec` is what the program reads as `.pos`, a `bind … mask` is the object the mask algebra produces.
 
@@ -169,7 +169,7 @@ Soldier , pos = to 4 _       -- 4 ranks, width inferred
 
 ### `via` — 経由
 
-Tier-3 dispatch: `fn via Col` hands a selection to a registered routine that reads the relation `Col` as an opaque graph. Ano guarantees the envelope — selection plus dispatch — and never inspects the routine's internals. The same bits at Tier 1 are free: `Node , OutDeg = +/ Adj@row` views `Adj` as a matrix and folds it. The tier is the pair (operation, view), not the data.
+Host dispatch: `fn via Col` hands a selection and registered relation to a callable with declared habitats and footprints. Ano guarantees that envelope and does not inspect the routine's internals. The same stored relation may also expose a boolean field on `Node × Node`, where `Node , OutDeg = +/ Adj@row` is a native fold. These are two registered interfaces, not tiers.
 
 ```haskell
 Hostile , shortestPath via Adj      -- the host runs Dijkstra over the Adj relation
@@ -177,7 +177,7 @@ Hostile , shortestPath via Adj      -- the host runs Dijkstra over the Adj relat
 
 ### `along` — 沿
 
-Names the order a `scan` accumulates along when the selection has no intrinsic order. Steel sorts by the order key, scans, and scatters back by the inverse grade. Tied order keys retain stable-index behavior; the Tier-2 equivariance claim does not cover them.
+Names the order a `scan` accumulates along when the selection has no intrinsic order. Steel sorts by the order key, scans, and scatters back through the inverse grade and query lineage. Tied order keys retain stable-index behavior, so effects depending on ties must declare that policy.
 
 ```haskell
 scan(+) Weight along pathCells       -- order named explicitly
@@ -231,7 +231,7 @@ top 8 (grade desc Safety @ 64 64) , spawn Sentry   -- the same operator at rank 
 
 ### `grade` — 格付
 
-Returns the permutation that sorts (APL `⍋`), a selection-position operator never written back into a component: writing a grade would leak which tied row came first, forbidden index information at Tier 2. Its value-only twin for write-backs is the callable `rank(...)`, where ties share a rank.
+Returns the permutation that sorts (APL `⍋`), an ordering witness rather than a value column aligned to the original query domain. It cannot be written directly into a component. Its value-only twin is `rank(...)`, where ties share a rank; write-back still follows query lineage.
 
 ```haskell
 top 5 (grade desc Threat) , +Targeted     -- grade drives selection
@@ -733,7 +733,7 @@ bind pathCells vec 0 1 2 5 8 7
 
 ### `fn` — registered callable
 
-`fn <name> [verbatim BQN body]`, a host callable — the Tier-3 escape hatch and the home of any true recurrence. The body is the raw line tail, interior spaces kept; a bodyless `fn` names a host-provided routine.
+`fn <name> [verbatim BQN body]`, a registered callable and the home of any true recurrence. The current registry stores a BQN body because CBQN is Steel's backend; the semantic signature must also declare argument/result habitats and footprints. A bodyless `fn` names a host-provided routine.
 
 ```
 fn fib {𝕩≤1 ? 𝕩 ; (𝕊 𝕩-1) + 𝕊 𝕩-2}

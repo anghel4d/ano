@@ -1,4 +1,5 @@
 -- Japanese conjugate of 34 (board literal).
+-- Formal witness: the board is an exact 64-to-64 reshape with source lineage, not an alias to any equal-shaped stored field.
 --! registry ../registries/063-board-literal.reg
 --! ja
 --! expect proto = R N B Q K B N R P P P P P P P P p p p p p p p p r n b q k b n r

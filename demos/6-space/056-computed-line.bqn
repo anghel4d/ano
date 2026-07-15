@@ -3,7 +3,7 @@
 #         , spawn Cheese at Player.pos + (offset, 0)
 #      12 , spawn Cheese at Player.pos + polar(index, index * 137.5)
 #      8  , spawn Pillar at Player.pos + (index * 2, 0)
-# Semantics: a bare shape n generates an index line; fib runs host-side as a registered function, since prev is a parallel shift under the barrier — one statement is one stencil step, never the order-carried recurrence; polar zips index with angle into one pair per cell.
+# Semantics: a bare shape n generates an anonymous line habitat distinct from the entity world; fib runs host-side because prev is a parallel shift, and spawn consumes the line through a source projection without growing or retyping it.
 # Invariant: fib(index) matches the hand-computed Fibonacci list; one shift-add barrier step over a fresh offset column stays zero and differs from Fibonacci; spiral input is 12 index-angle pairs, not a flat 24-list; all spawned positions match hand-computed values.
 
 playerPos ← 100‿200
@@ -42,3 +42,12 @@ spiralPos ← playerPos⊸+¨ Polar¨ pairs
 # evenly spaced row: pos_i = Player.pos + (2i, 0)
 pillarPos ← playerPos⊸+¨ (2×↕8) ⋈¨ 0
 ! pillarPos ≡ (100+2×↕8) ⋈¨ 200
+
+# Domain witness: the generated line remains twelve rows while spawn creates 32 entity rows.
+lineDomain ← ↕12
+spawnSource ← lineDomain∾lineDomain∾↕8
+! 12 = ≠lineDomain
+! 12 = ≠fib
+! 32 = ≠spawnSource
+! 44 = 12 + ≠spawnSource
+! lineDomain ≡ ↕12

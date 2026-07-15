@@ -1,5 +1,6 @@
--- ex38 Tier 2 records: aligned value write, scalar read across the barrier, rank scattered back to identities. Twin of 070-tier2-records.bqn.
--- Tier 2 is records: entity rows with named columns, the home tier of the masked update.
+-- ex38 entity-query lineage: masked value write, scalar read across the barrier, rank scattered back to identities. Twin of 070-tier2-records.bqn.
+-- Formal witness: writes align through the entity query lineage; no universal permutation law is assumed.
+-- Entity rows carry named partial columns; the masked update returns through the query lineage.
 -- Three statements, three barriers. The fold's out value 3665 IS the barrier witness: a same-tick gather of pre-write gold would give 2665. expect gold pins both the masked add (entity 1 is Nord but fails 50>60; entity 4 has 61>60 but is not Nord) and the unselected rows untouched.
 -- rank(Gold) is dense value-only rank; on this tie-free gold it coincides with the .bqn's ⍋⍋ (that coincidence check itself is a BQN-internal witness, left to the .bqn twin along with the explicit sel-mask anchor, both implied by the column expects).
 --! registry ../registries/070-tier2-records.reg

@@ -1,9 +1,9 @@
-# 37 - Tier 1 space: generated ground, projection, ordered scan
+# 37 - Stored-field preservation and the regenerability counterexample
 # ano: 8 8 & (x + y) % 2 == 0 , spawn Wheat
 # ano: +/ Elevation @ 64 64
 # ano: +\ Cost @ 64 64
-# Semantics: space is a conserved ground minted by ↕; spawn inscribes a figure on it, a fold projects a field to a scalar without consuming it, a scan runs in the lattice's leading-axis order. Fields scaled to 8‿8 for hand-checking.
-# Invariant: post-state equals the hand-computed checkerboard, sum, and running rows; annihilating a figure leaves the ground regenerable and the other fields untouched.
+# Semantics: the 8×8 habitat is fixed; masks and folds create derived values, while stored fields retain their habitat and shape. Reminting coordinates does not reconstruct values dropped by a filter.
+# Invariant: post-state equals the hand-computed checkerboard, sum, and running rows; the filtered elevation is a 32-row derived view and is never assigned back to the 8×8 field.
 
 # world: fields over one 8‿8 ground, minted once
 ground ← ↕8‿8
@@ -31,6 +31,13 @@ cb ← >⟨1‿0‿1‿0‿1‿0‿1‿0
 # statement 3: scan cost in lattice order (leading axis); all-ones cost gives running row totals
 ! ((1+↕8)+⌜8⥊0) ≡ +`cost
 
-# annihilate: drop the wheat cells from the elevation figure; positions aren't owed, the ground rebuilds from ↕
-! 1008 ≡ +´(¬⥊mask)/⥊elevation   # each parity class carries half of 2016
-! ground ≡ ↕8‿8                   # every write re-valued a field; the ground minted at the top is what ↕ remints now
+# Filtering creates a derived subdomain. It does not replace or resize the stored elevation field.
+visible ← (¬⥊mask)/⥊elevation
+! 32 = ≠visible
+! 1008 = +´visible
+! 8‿8 ≡ ≢elevation
+! elevation ≡ 8‿8⥊↕64
+
+# Coordinates remint, values do not: ground reconstructs addresses only, while the 32-value view has no inverse back to elevation.
+! ground ≡ ↕8‿8
+! (×´≢elevation) ≠ ≠visible

@@ -1,4 +1,5 @@
 -- 075-ties: rank under ties must be value-only. Twin of 075-ties.bqn. (was t2-ties)
+-- Formal witness: the BQN sibling proves a local order or symmetry fact only; it does not classify all entity programs.
 -- The tie law: equal gold, equal rank. On 5 5 3 the answer is 1 1 0, dense; the ordinal 1 2 0 is the refuted form.
 -- rank(Gold) on 5 5 3 produces dense rank 1 1 0. The BQN twin contrasts the stable ordinal answer 1 2 0.
 -- The Ord anchors, the swap(0,1) counterexample, and the exhaustive Sym(3) quantification of the dense law are BQN-internal witnesses, left to the .bqn twin. rank is zero-initialized scaffold (the .bqn mints it fresh).

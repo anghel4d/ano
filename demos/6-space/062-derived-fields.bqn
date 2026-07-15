@@ -5,7 +5,7 @@
 #      64 64 & ridge > 0.5 , spawn Peak
 #      64 64 & basin , Water = 100
 #      64 64 & slope > 30 , +Cliff
-# Semantics: a def is a derived column over the coordinate columns or over a cell and its clamp-boundary neighbor shift; each statement masks on the derived field and scatters its effect onto the masked cells; the window's frame is pos = o + S·k with o = ¯4 ¯4 here so the basin is inhabited.
+# Semantics: a def is a derived column on one 8×8 lattice habitat; each statement selects a subdomain and scatters through that lineage. Clamp is an explicit boundary map. The ¯4..3 coordinates are a lattice chart for this witness, not an ambient frame inferred by scope.
 # Invariant: ridge mixes BOTH coordinates — sin(x/8)+sin(y/8), asserted against hand-computed corner values, never the §23 dfn's 2·sin(w/8) which reads one coordinate twice; basin, peak, and cliff land on exactly the hand-computed cells; the clamped boundary row has zero slope.
 
 # 8x8 window, frame origin ¯4 ¯4: coordinate columns x (row) and y (column) span ¯4..3
@@ -54,3 +54,11 @@ slope ← |height-nbr
 cliff ← slope>30
 ! 8 = +´⥊cliff
 ! (24+↕8) ≡ /⥊cliff
+
+# Field witness: derivation, masked update, and neighborhood read all preserve the declared 8×8 field shape.
+! 8‿8 ≡ ≢ridge
+! 8‿8 ≡ ≢basin
+! 8‿8 ≡ ≢8‿8⥊water
+! 8‿8 ≡ ≢height
+! 8‿8 ≡ ≢slope
+! 8‿8 ≡ ≢cliff

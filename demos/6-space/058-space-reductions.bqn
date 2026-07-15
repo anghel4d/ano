@@ -37,3 +37,11 @@ cost2 ← 3‿3⥊1+↕9
 # max\ Height @ (Eye + ↕n * north) : running max along the ordered sightline
 ray ← ⟨2,5,3,7,6,7,9,4⟩
 ! (⌈`ray) ≡ ⟨2,5,5,7,7,7,9,9⟩
+
+# Shape witness: folds leave their source fields intact and both scans return 8×8 values on the same input habitat.
+! 8‿8 ≡ ≢elevation
+! 8‿8 ≡ ≢cost
+! 8‿8 ≡ ≢oneAxis
+! 8‿8 ≡ ≢sat
+! elevation ≡ 8‿8⥊↕64
+! cost ≡ 8‿8⥊1

@@ -1,4 +1,5 @@
 -- Japanese conjugate of 108-life-naru (one installed rule, the fused value form; the tick gathers the pre-state and scatters once — one generation of the blinker).
+-- Formal witness: the shared barrier changes field values only; habitat, rank, and shape remain fixed across ticks.
 --! registry ../registries/108-life-naru.reg
 --! ja
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0

@@ -1,4 +1,5 @@
 --! registry ../registries/058-space-reductions.reg
+-- Formal witness: folds produce scalars and scans preserve the declared source field habitat and shape.
 --! ja
 --! out 2016
 --! out 7

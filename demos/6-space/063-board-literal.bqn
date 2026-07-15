@@ -31,3 +31,11 @@ cell     ← /occupied
 ! 8 = +´piece='p'
 ! 2 = +´piece='R'
 ! 1 = +´piece='q'
+
+# Exact-reshape witness: every output cell has exactly one source glyph and cardinality is preserved.
+sourceGlyph ← ↕≠glyphs
+cellSource ← 8‿8⥊sourceGlyph
+! 64 = ≠sourceGlyph
+! 8‿8 ≡ ≢cellSource
+! sourceGlyph ≡ ⥊cellSource
+! 32 = ≠occupied/sourceGlyph

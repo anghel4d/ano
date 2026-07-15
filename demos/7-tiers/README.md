@@ -1,7 +1,8 @@
 # tiers
 
-BQN examples and counterexamples for the tentative tier laws in `proofs/foundations.md`.
+Status: historical counterexamples, not proofs. The three-tier hierarchy is retired in favor of independent habitat and carrier capabilities. The old Tier 1 regenerability argument did not preserve stored field rank; the old Tier 2 permutation law was not universal in a language exposing keys, relationships, bindings, index, and declared order; the Tier 3 naturality argument applied only to genuinely parametric maps.
 
+The BQN files remain useful for the particular algebraic facts they compute. They do not classify Ano data or certify compiler behavior.
 - 064-two-habitats.bqn — every row of the two-habitats table computed over an entity vector and a lattice; recurrence row modeled as shift per the decision record.
 - 069-tier1-space.bqn — checkerboard spawn, scalar projection, lattice scan, figure annihilation on a conserved 8x8 ground.
 - 070-tier2-records.bqn — masked aligned add, scoped fold across a statement barrier, rank scattered back to identities on tie-free gold.

@@ -1,4 +1,4 @@
-# 35 - Two habitats table: the same calculus over ordered entity vectors (rank 1) and spatial lattices (rank 2)
+# 35 - Many habitats: shared column operators over distinct typed domains
 # ano: generator   (↕n)                          (↕ w‿h)
 # ano: reduce      +/ Gold @ Nord                +/ Elevation @ 64 64
 # ano: scan        +\ Damage @ graded            +\ Cost @ 64 64
@@ -8,7 +8,7 @@
 # ano: reshape     to Unit                       to Soldier 4 _
 # ano: shift       prev.X (shift »)              neighbor.X (shift «/»)     -- decision record: row renamed from recurrence; prev is a shift, not a carry
 # ano: def         def threat = Dmg*Spd/Rng      def ridge = sin(x/8)+sin(y/8)
-# Semantics: every row of the table is one array operation read twice, over a first-order key (entities) and over a second-order cell (space); only the rank of the index changes.
+# Semantics: column operators are polymorphic over finite habitats when their required capabilities are present. Rank does not classify the habitat, and equal rank or cardinality does not establish alignment.
 # Invariant: each row computed in both habitats matches its hand-computed expected value.
 
 # generator: the ground is minted by ↕, rank 1 and rank 2
@@ -57,3 +57,11 @@ g ← 2‿3⥊1‿2‿3‿4‿5‿6
 dmgC ← 10‿6‿8 ⋄ spd ← 3‿5‿2 ⋄ rng ← 5‿3‿4
 ! 6‿10‿4 ≡ dmgC×spd÷rng
 ! (>⟨0‿1‿2‿3, 1‿2‿3‿4, 2‿3‿4‿5, 3‿4‿5‿6⟩) ≡ +⌜˜↕4
+
+# Habitat identity is extra information: equal index buffers do not identify their domains.
+entityIndex ← ↕6
+cellIndex ← ↕6
+entityHabitat ← ⟨"entity", entityIndex⟩
+cellHabitat ← ⟨"cell", cellIndex⟩
+! entityIndex ≡ cellIndex
+! entityHabitat ≢ cellHabitat

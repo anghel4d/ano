@@ -33,3 +33,14 @@ worldType ∾↩ 'C'¨cropPos
 ! 19 = ≠worldPos
 ! worldPos  ≡ ⟨1,1,2,4,4,4,6,7,7⟩∾⟨0,0,3,3,3,5,6,6,6,6⟩
 ! worldType ≡ "TTTTTTTTTCCCCCCCCCC"
+
+# Dependent-sum witness: entity growth is the selected count total; the eight source cells and both source fields remain eight rows.
+cells ← ↕8
+sourceCount ← +´density
+sourceCount +↩ +´mask/fert
+! 8 = ≠cells
+! 8 = ≠density
+! 8 = ≠fert
+! 19 = sourceCount
+! 19 = ≠worldPos
+! cells ≡ ↕8

@@ -1,6 +1,6 @@
-# 073-conjugation - Tier 2 conjugation: grade out, do free order-work, index back aligned
+# 073-conjugation - A local tie-free conjugation theorem
 # ano: Unit , Rank = rank(Gold)          -- the rank scatter is the conjugated form of order-work
-# Semantics: on tie-free c the conjugate h = σ_c⁻¹ ∘ f ∘ σ_c (grade out, apply free Tier-1 f in value order, inverse-grade back) is a lawful Tier-2 write-back: h(c∘τ) ≡ h(c)∘τ for every relabeling τ; sorting alone (c∘σ_c) is not, it drops the inverse leg.
+# Semantics: on this tie-free column, grade out, act in value order, and inverse-grade back yields a permutation-equivariant column map for the tested relabellings. Sorting alone drops the lineage needed to return.
 # Invariant: h with f = +` and f = ⌽ is Sym(I)-equivariant across several τ, the grade identity σ_{c∘τ} = τ⁻¹∘σ_c holds, and the hand-computed running-total column anchors h.
 
 c ← 40‿10‿30‿20‿50             # tie-free gold

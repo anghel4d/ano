@@ -1,6 +1,6 @@
-# 075-ties - Tier 2 rank under ties: stable ordinal rank breaks the write-back law, dense rank keeps it
+# 075-ties - Tie policy: stable ordinal rank observes order; dense rank is value-only
 # ano: Unit , Rank = rank(Gold)
-# Semantics: a Tier-2 write-back must be Sym(I)-equivariant, rank(c∘σ) ≡ rank(c)∘σ for every relabeling σ; composition c∘σ is the gather σ⊏c.
+# Semantics: stable ordinal rank observes the declared input order, while dense rank depends only on value. Equivariance is tested here as a local property, not imposed as a universal entity law.
 # Invariant: on tied data ⍋⍋ (stable ordinal rank) violates the law at σ = swap(0,1), and dense value-only rank (∧⍷c)⊐c satisfies it at every σ ∈ Sym(3).
 
 c ← 5‿5‿3

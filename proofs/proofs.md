@@ -1,5 +1,13 @@
 # Proofs
 
-Working through the mathematical structure of the language itself. Formal verification. Proofs of key principles and formulations.
+Visible mathematical obligations and executable witnesses for Ano. These files are active tests of the specification even where Steel does not yet enforce them.
 
-- `foundations.md` — the tiers, the algebra, recurrences, totality. Tentative: proof sketches with executable witnesses in `demos/7-tiers/`, pending Lean4 mechanization.
+- `foundations.md` — schema, habitats, layouts, query lineage, reindexing, relationships, aggregation, effects, structural change, lattice placement, boundaries, and columnar lowering.
+- `../docs/spatialmaths.md` — the complete spatial derivation, including the rejected preliminary definitions and corrected laws.
+- `../demos/6-space/*.bqn` — concrete spatial array laws.
+- `../demos/7-tiers/*.bqn` — counterexamples to the retired tier arguments and local symmetry/order witnesses.
+- `../demos/10-conways/*.bqn` — repeated-step barrier and explicit-neighborhood witnesses.
+
+A BQN witness proves only the equation it asserts. It does not make BQN an oracle for Ano. A proof obligation becomes a language guarantee only when the specification states it and Steel/Kore satisfy the corresponding positive and refusal tests.
+
+The active obligations are deliberately ordinary visible files. Do not hide proof work in dotfiles or temporary audit artifacts.

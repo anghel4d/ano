@@ -1,5 +1,6 @@
--- ex37 Tier 1 space: generated ground, fold, ordered scan. Twin of 069-tier1-space.bqn.
--- Tier 1 uses regenerable lattice coordinates. This demo spawns a checkerboard, folds Elevation, and scans Cost over the same frame.
+-- ex37 stored-field preservation: generated ground, fold, ordered scan, and the regenerability counterexample. Twin of 069-tier1-space.bqn.
+-- Formal witness: this is now the regenerability counterexample—derived filters do not resize or replace the stored 8×8 fields.
+-- Lattice coordinates are regenerable; stored field values are not. This demo spawns a checkerboard, folds Elevation, and scans Cost without resizing any field.
 -- The header's ano lines say 64 64; the demo's own fields are scaled to 8 8 for hand-checking and the fixture reproduces those, so the scopes here say 8 8. The fold scope is a frame marker (dims unread); the scan scope's dims drive the leading-axis reshape and must match the fixture.
 -- spawn Wheat ORs the checkerboard into Wheat. The fold reads Elevation without changing it, which expect elevation checks.
 -- Left to the .bqn twin: the annihilation fold (1008 over the off-parity cells — no header ano line, and a masked lattice fold cannot set its frame in a query) and ground ≡ ↕8‿8 (pure BQN remint witness).

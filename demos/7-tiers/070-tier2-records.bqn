@@ -1,9 +1,9 @@
-# 38 - Tier 2 records: aligned value write, scalar read, rank scattered back to identities
+# 38 - Entity-query lineage: masked value write, scalar read, rank scattered back
 # ano: Nord & TwoHanded > 60 , Gold += 1000
 # ano: +/ Gold @ Nord
 # ano: Unit , Rank = rank(Gold)          -- Version B, canonical
-# Semantics: three statements, three barriers; each write-back is identity-aligned (α→α), each fold exits the tier to one scalar, and each statement's gather observes the previous statement's commit.
-# Invariant: post-states equal the hand-computed columns; the write touches only masked rows; on tie-free gold the ordinal rank ⍋⍋ agrees with the Sym(I)-lawful dense rank (the tie case is 075-ties.bqn).
+# Semantics: three statements, three barriers; each write-back returns through the entity query's retained lineage, each fold produces one scalar, and each statement observes the previous commit.
+# Invariant: post-states equal the hand-computed columns; the write touches only masked rows; on this tie-free input ordinal and dense rank agree. This is a local fact, not a universal symmetry law for Ano programs.
 
 # world: six entities, all Units
 nord      ← 1‿1‿0‿1‿0‿1

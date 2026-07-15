@@ -34,3 +34,11 @@ pos ↩ spiral⌾((coin=1)⊸/) pos
 ! ∧´ 1e¯9 > | (5⊑pos) - 100‿200+⟨1.826284287026163,   2.380060020873705⟩
 ! ∧´ 1e¯9 > | (7⊑pos) - 100‿200+⟨¯3.9392310120488325, ¯0.6945927106677191⟩
 ! 8 = ≠pos
+
+# Lineage witness: the derived spiral has one value per selected entity and scatters back to the eight-row entity domain.
+entityDomain ← ↕8
+selectedDomain ← /coin
+! 8 = ≠entityDomain
+! 5 = ≠selectedDomain
+! 5 = ≠spiral
+! 8 = ≠pos

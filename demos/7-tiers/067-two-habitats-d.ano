@@ -1,4 +1,5 @@
 -- ex35 reshape row: a vector of soldiers into 4 rows, the trailing axis computed. Twin of 064-two-habitats.bqn.
+-- Formal witness: shared operators require local capabilities; rank and cardinality do not identify a habitat.
 -- The reshape row: eight soldiers into four ranks, to 4 _ computing the rest.
 -- Eight soldiers; pos = to 4 _ mints exactly count-of-selection positions as the ravel of ↕4‿2: soldier k gets cell (k div 2, k mod 2), the coordinate form of the .bqn's 4‿∘⥊↕8 with the trailing axis computed as 8/4 = 2.
 -- pos starts as -1 -1 junk pairs to prove the full overwrite; expect compares the flattened pair column.

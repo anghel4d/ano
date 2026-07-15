@@ -1,4 +1,5 @@
 -- Japanese conjugate of 074-diagonal (Tier-2 masked add as a whole-row map).
+-- Formal witness: the BQN sibling proves a local order or symmetry fact only; it does not classify all entity programs.
 --! registry ../registries/074-diagonal.reg
 --! ja
 --! expect gold = 1100 200 1300 1400 500

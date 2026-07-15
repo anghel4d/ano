@@ -13,14 +13,14 @@ kdb+ partitions tables by date and answers "as of" with `aj`; Anoptic can partit
 Ground to work out:
 
 - The temporal-read surface. Something must mark "as of t−1" on a predicate or a gather. Options: a tick scope on `@` (`@ t-1`, but `@` already carries two meanings), a dedicated particle, or explicit keying off the axis. The Japanese tiebreaker cuts here: time in Japanese is case-marked — に on time points, から/まで on ranges, た for the past — so the nihongo answer is that history is a case role, not a function call. に is already claimed by the effect frame; that collision is real and needs writing out.
-- Window reads. "Damage taken over the last 60 ticks" is q's `wj`: a fold along the tick axis per entity. The axis arrives with intrinsic order, so the Tier-2 no-canonical-previous obstruction dissolves along t exactly the way it does along space — which suggests window folds are §12 folds with the axis as one more orderable domain, not a new form. To be worked, not assumed.
+- Window reads. "Damage taken over the last 60 ticks" is q's `wj`: a fold along the tick axis per entity. The history habitat carries a declared tick order, so window folds are §12 folds over one more ordered domain, not a new form. Entity lineage still determines which history fiber belongs to which current row. To be worked, not assumed.
 - Retention. Full history, ring buffer of k ticks, or keyframe plus replay-from-log. Replay makes history recomputable — the Nix insight again — provided every trusted input is retained alongside the log.
 - The host binding. History columns are the readonly data-store's natural cargo: written by the clock, predicated on by scripts, never a scatter target.
 - Identity via the axis. The as-of join answer to "the same bandit as last tick" is recorded in the spec's Identity entry; if the temporal surface exists, that entry's third option gets its syntax for free.
 
 ## The Noita reading (missions in emergent worlds)
 
-The falling-sand world is the friendly case, and the claims here should be tested against it. Materials are Tier 1 lattice columns; per-material behavior is standing rules over neighborhoods (γ folds and stencils, one ring per tick); and a quest in such a world is a predicate over emergent state — "every gold deposit in the lake has melted" is address-by-description with no scripting glue, the selection is the objective.
+The falling-sand world is the friendly case, and the claims here should be tested against it. Materials are fields on one named lattice habitat; per-material behavior is standing rules over explicit neighborhood relations and boundaries; and a quest in such a world is a predicate over emergent state — "every gold deposit in the lake has melted" is address-by-description with no scripting glue, the selection is the objective. Repeated ticks must preserve the field habitat and rank.
 
 Ground to work out:
 

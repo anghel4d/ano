@@ -1,146 +1,143 @@
 # Foundations
 
-**Status: TENTATIVE. 2026-07-02.** These are claims and hand-arguments, not proofs or verified results — nothing here is a theorem and nothing here is load-bearing. Executable counterexamples live in `demos/7-tiers/`. Lean4 work has not started.
+Status: active proof obligations, 2026-07-15. These definitions and laws are visible specification tests; they are not yet machine-checked theorems. The former Tier 1/2/3 development is retired because its write-back laws do not describe Ano or its column store.
 
-## 1. Setting
+## 1. Schema and world
 
-The store is columnar. Fix a finite index set `I`, the keys of the live world. A component is a column `c : I → V`. An entity is a key; "the entity's components" are the entries under that key across columns. Different columns are defined on different subsets of keys; presence itself is data.
+Fix a world schema `Σ`. A habitat is a typed index object named by `Σ`. Habitats may be fixed, such as a lattice window, or nominal and state-varying, such as the live entity population. A world is a value of `World Σ`; spawn and despawn may change the members and cardinality of a nominal habitat while the schema remains `Σ`.
 
-A selection is not an endofunction on `I`. Selection by predicate `P` is the **subobject inclusion** `ι : I_P ↪ I`, the mono picking out the satisfying keys. Writing it `σ_P : I → I` is a type error — there is no sensible value for `σ_P` off the mask, and composing two of them presumes a retraction that does not exist. A selection is a mask; masks have no multiplicity, which is why the image of a set-valued hop applies an effect once per reached target regardless of in-degree.
+For a fixed habitat `H`, a total field with carrier `V` is a family `f : H → V`. A lattice field has this form. An ECS component is generally partial: it is a presence subobject `ι_C : P_C ↪ E` together with a total family `c : P_C → V`. Equivalently it is `E → Option V`; the subobject form exposes the mask that the column engine actually executes.
 
-An effect is a write against pre-state. One statement is one gather-effect-scatter barrier: every read on the right of the comma observes the store as it stood at the statement's gather; the scatter commits at statement end. `;`-batched effects share the barrier and must commute under the registered merge laws. Nothing in this document evaluates mid-statement.
+The same carrier and the same cardinality do not imply the same habitat. `Health : E → Num` and `Elevation : Ground → Num` remain foreign even when `|E| = |Ground|`. Their buffers may have equal lengths without sharing one row.
 
-A datum carries no tier on its own. The tier is the **(operation, view)** pair: the same bits read as `V₀ = 𝔹` (an adjacency matrix) sit in Tier 1 under `+/ Adj@row`, and read as `V = Graph` (asserted traversal meaning) sit in Tier 3 under `shortestPath via Adj`. Promotion and demotion are re-viewing, not conversion.
+## 2. Layout is representation
 
-## 2. Tier 1 — space
+A finite habitat becomes columnar through a layout `ℓ_H : Fin(n) ≅ H`. Storage holds the ravel `f ∘ ℓ_H : Fin(n) → V`. The layout is an implementation witness, not the semantic identity of `H`.
 
-### 2.1 The real distinction: generable versus nominal keys
+A partial component may be stored as one `n`-cell value buffer plus an `n`-bit presence mask. Values outside the presence mask are semantically nonexistent even if the buffer contains defaults or junk. A dense lattice field needs no presence mask because its declared domain is total.
 
-The index of space is **regenerable**: `I = ↕shape`, a definable key, recomputable from the shape alone at any time. The index of records is **nominal**: an allocated key, held only by the store, unrecoverable once dropped. This asymmetry is the whole content of "space is indestructible," and it is exactly why rank-changing index operations — `(¬m)/c`, reshape, fold to lower rank — are free over space and forbidden as record write-backs: over space the output index `J` is as definable as the input index was, so no address is lost that `↕` cannot remint; over records a dropped key is gone.
+Flattening is therefore legal only after the habitat, layout, item carrier, and item shape are known. It may erase none of them from the typed IR. Equal byte counts never license a join, arithmetic operation, or scatter.
 
-### 2.2 What the old proof got wrong
+## 3. The query view
 
-The spec's two-move proof of indestructibility does not hold and is recorded here so the failure is not re-invented.
+Every query plan has a current finite row domain `X`. Every computed value is typed `Col X V`, optionally with a validity subobject when a partial read can fail. A scalar is `Col 1 V` and broadcasts only by an explicit diagonal map `X → 1`.
 
-Move 1 — "a write cannot consume its own domain" — is true but discriminates nothing: it holds for any keyed store, records included. A write `w : I → V` never acts on `I` whether `I` is a lattice or a set of entity IDs. A premise that both tiers satisfy cannot separate them.
+`X` is not necessarily a stored habitat. It may be a selection, an ordered view, a relationship edge set, a product, or a replicated copy set. What makes it useful is lineage: the plan carries the maps from each row of `X` back to the stored habitats from which that row arose.
 
-Move 2 — "nothing refers to a space cell durably" — is false in the language's own examples. `Water = 100` at a cell, `+Cliff`, `+MiningNode`, and moisture diffusion all store state at cells and read it back across ticks. Cells are referred to durably; what is special is not that the figure is owed to no one, but that the ground under it is definable (2.1).
+Examples:
 
-### 2.3 The refuted equivariance criterion
+- Selection gives `X = S` with an inclusion `ι : S ↪ E`.
+- A functional hop gives a partial target map `r : X ⇀ E`.
+- A two-generator comprehension gives `X = A × B` with projections `π_A : X → A` and `π_B : X → B`.
+- Replication by `count : S → Nat` gives `X = Σ(s : S). Fin(count(s))` with source projection `π : X → S`.
 
-The spec asserted: a Tier-1 operation is legal exactly when it is `G₀`-equivariant, `f(g·c) = g·f(c)` for the geometry group `G₀` (translations, uniform scaling, the lattice rotations and reflections). Refuted twice over; witness `demos/7-tiers/t1-reverse.bqn`.
+Two nonscalar operands may combine pointwise only when they are already columns over the same `X`, or when an explicit lineage map reindexes one onto the other. This is the alignment law missing from current Steel.
 
-Reverse conjugates translations rather than commuting with them: `rev(shift_t c) = shift_{−t}(rev c)`. And reverse is a reflection, non-central in the dihedral group `D₄`, so it fails to commute with the lattice rotations the spec itself puts in `G₀`. Yet `⌽` is a canonical Tier-1 operation. So the criterion excludes operations the tier must admit.
+## 4. Reindexing is gather
 
-Worse, the criterion is ill-typed for the operations the tier exists to license. Mask-filter and reduce produce an output index `J` that is a proper — for mask-filter, data-dependent — subset of `I`, and there is no `G₀`-action on `J` against which to state `f(g·c) = g·f(c)`. Equivariance under the geometry group is not the law of Tier 1.
+For `u : J → I` and `f : I → V`, pullback is `u* f = f ∘ u : J → V`. In the column engine this is a gather by an index vector derived from `u`.
 
-### 2.4 What survives
+Reindexing explains restriction, permutation, duplication, functional relationship reads, shifts, mirror reads, and the source-column reads of replicate. It obeys `(u ∘ v)* = v* ∘ u*` and `id* = id`; these are compiler rewrite laws once domains are typed.
 
-Two things, both checks at the de/at boundary rather than laws over morphisms. The **frame check**: `pos = φ(k) = o + S·k`, the affine map from lattice key to world coordinate, with `@` fixing `(o, S)` per the resolved frames rule. The **counter identity**: `[world] = [world] + [world/cell]·[cell]`, unit-consistency of the frame equation, which is what the counter-typed numeral (`3mo`, `64 64`) enforces. Tier 1's demand is unit and frame coherence at the boundary, not symmetry of the operator.
+A functional ECS relationship is not normally a total function. It is a partial map, equivalently a span `E ← R → F` whose left leg is injective. A missing link, dead target, or absent target component removes the corresponding row from the valid subobject. The left-join-null rule is therefore typed partial reindexing, not a numeric sentinel rule.
 
-## 3. Tier 2 — records
+A general relation is a span `I ←p R →q J`. Pulling a target column to `R` produces an edge-aligned column. Producing one value per source or target additionally requires a fold along one leg. A bare set-valued hop cannot pretend that a ragged fiber is a flat `Col I V`; it remains an edge/fiber view until a quantifier, image, or grouped fold consumes it.
 
-### 3.1 The law: diagonal action on the whole record
+## 5. Aggregation is fiber reduction
 
-The spec typed a write-back `w : (I→V) → (I→V)`, one column in, same column out. That signature outlaws its own flagship line — `Nord & TwoHanded > 60 , Gold += 1000` reads `Nord` and `TwoHanded` and writes `Gold`, three columns. The correct statement uses the **diagonal action** of `Sym(I)` on the whole per-entity record:
+Given `u : J → I` and a commutative monoid `(V, ⊕, 0)`, define the unordered pushforward `(u_! f)(i) = ⊕ { f(j) | u(j) = i }`. Its column implementation is segmented reduction or scatter-reduce.
 
-```
-w : (I → V₁ × ⋯ × V_k) → (I → V_j)
-w(ρ ∘ σ) = w(ρ) ∘ σ    for all σ ∈ Sym(I)
-```
+Commutativity is required only when the fiber has no declared order or when parallel merge must be order-independent. An ordered fiber may fold an associative noncommutative monoid in its declared order. A semigroup without an identity is partial on empty fibers. `avg/` is a monoidal fold of sufficient statistics `(sum,count)` followed by a finisher; it is not itself the monoid operation.
 
-Relabel the entities and every column relabels together; the write-back must not notice. Witness `demos/7-tiers/t2-diagonal.bqn`.
+The ordinary fold is reduction along `X → 1`. γ is reduction along a relationship leg. Histogramming and additive scatter are the same fiber reduction with different destination maps. Boolean image uses OR, so duplicate edges collapse by idempotence. A comprehension effect in current Ano likewise takes the Boolean image of the surviving pair relation unless the surface explicitly requests multiplicity.
 
-### 3.2 Characterization
+## 6. Shape-changing reads
 
-For a single column, `f : V^I → V^I` is `Sym(I)`-equivariant iff
+Selection changes the current view from `I` to a subobject `S`. Grade produces an ordering or permutation of a view; it does not change stored identity. Outer product produces `I × J`. Replicate produces the dependent sum `Σ(i : I). Fin(count(i))`. These derived domains are first-class plan objects with lineage.
 
-```
-f(c)_i = φ(c_i, ⟦c⟧)
-```
+`reshape` has three distinct meanings that the old spec conflated. Exact reshape between equal-cardinality boxes is reindexing along a layout equivalence. APL reshape with repetition or truncation is pullback along the output-to-input cycling map and is not an equivalence. Ano's current `pos = to h w` does neither to the entity habitat: it constructs a coordinate column over the selected entity view and scatters that column back to `pos`. The three operations must not share a proof merely because their surface flavor is `⍴`.
 
-for some `φ`, where `⟦c⟧` is the multiset of values. Sketch: the stabilizer of `i` acts as the full symmetric group on the remaining coordinates, so `f(c)_i` can depend on those only through their multiset; transitivity of `Sym(I)` forces one `φ` for every `i`. In the linear case over `ℝ^I` the commutant of the permutation representation is spanned by the identity and the all-ones matrix (Schur), so `f(c) = a·c + b·(Σc)·1` — pointwise work plus broadcast aggregates, nothing else.
+A rank-changing result may be queried, folded further, passed to a host function, or materialized into a separately declared compatible habitat. It may not silently replace a stored field on another domain.
 
-### 3.3 Consequence: no canonical previous
+## 7. Effects and the barrier
 
-Under the proposed equivariance law, `prev` over an unordered record selection depends on an unstated key order and fails under relabeling. Entity scans therefore need a declared order such as `scan(f) … along`.
+An effect over query rows `X` carries a destination map `d : X ⇀ H` into the target habitat, a value column over the valid part of `X`, and a merge family. All reads come from pre-state. Commit groups effect rows by destination and reduces each fiber according to that family.
 
-### 3.4 Ties break the law; value-only rank repairs it
+Plain assignment requires `d` to be injective on the written rows, or a separately declared deterministic conflict rule. Additive, minimum, maximum, Boolean OR, and other certified families may merge collisions by their commutative monoids. A masked write to the current source uses the selection inclusion as `d`; gather-compute-scatter is `ι*` followed by update along `ι`.
 
-Stable tie-breaking and equivariance are mutually inconsistent. Witness `demos/7-tiers/t2-ties.bqn`. Take `c = [5,5,3]` and `σ = swap(0,1)`. Then `c ∘ σ = c`, so stable ascending rank gives `rank(c ∘ σ) = rank(c) = [1,2,0]`; but the law demands `rank(c) ∘ σ = [2,1,0]`. Stability breaks ties by index, and index-dependence is precisely what `Sym(I)`-equivariance forbids. The repair: Tier-2 write-backs use **value-only tie-breaking** — dense or fractional rank — under which tied values receive equal ranks and the counterexample dissolves. Stable grade remains available as a read (it exits the tier) and over space (where the index carries intrinsic order).
+The target column retains its declared habitat before and after commit. Neither mask compression nor a rank-changing intermediate mutates that declaration. This one law applies to entity columns and lattice fields alike.
 
-### 3.5 Conjugation, the intended construction
+A statement plan denotes a pure function `World Σ → EffectBuffer × Output`; commit applies the buffer to obtain another `World Σ`. A performed statement is consequently a partial state transformer `World Σ → Result (World Σ × Output)`, since invalid registered behavior, arithmetic refusal, or allocation failure may reject the tick without committing.
 
-Conjugating by a *fixed* `σ` does not reconcile order-work with the alignment demand: a constant permutation is not `Sym(I)`-equivariant. The construction the design intends instead conjugates by the **data-derived grade** `σ_c` (the permutation sorting `c`):
+Spawn and despawn do not contradict schema closure. They change the current live entity set inside `World Σ`, not `Σ`. If `C = Σ(s : S). Fin(count(s))` is the copy view, allocation supplies fresh nominal keys `a : C ↪ E'`; source fields reach copies through `π*`, and entity-valued parent links are legal only when `S` itself maps to the entity habitat. A lattice cell index is not an entity parent merely because both are integers.
 
-```
-h(c) = f(c ∘ σ_c) ∘ σ_c⁻¹        -- sort, act, unsort
-```
+## 8. Lattice habitats
 
-The intent is that `h` respects relabeling on tie-free data, resting on `σ_{c∘τ} = τ⁻¹ ∘ σ_c`, which needs the grade to ignore index (value-only ties, 3.4). `demos/7-tiers/t2-conjugation.bqn` exercises it on distinct keys and `Unit , Rank = rank(Gold)` is this shape. None of this is proved — it is a hand-argument checked on cases, not a theorem. The tied case has no such grade at all: a swap of equal values fixes the input while permuting their indices, so general sort-act-unsort needs unique keys or an operation defined on tie blocks. Value-only rank stays fine regardless, returning equal values for ties. A 2026-07-13 review called the tie-free argument unsound but asserted it rather than exhibiting a counterexample; asserting is not disproving, so the construction stays as intent, unproven either way.
+An abstract lattice is a free `ℤ`-module `Λ` of rank `r`. A dense finite field needs more: a box `D = ∏_{j<r} Fin(n_j)` and a lattice chart `κ : D → Λ`. For the canonical lattice `Λ = ℤ^r`, `κ` is the ordinary integer coordinate inclusion. The shape `(n_0,…,n_{r-1})` and rank `r` are permanent habitat data.
 
-## 4. Tier 3 — opaque
+A field is `f : D → V`. The rank belongs to `D`; the item dimension belongs to `V`. A scalar field over a 2-D ground has field rank 2 and item rank 0. A velocity field over the same ground still has field rank 2 even if each value is a 3-vector.
 
-### 4.1 The law: naturality in V
+Placement is optional extra structure. Let `A` be an affine ambient space over translation module `T`, choose `o ∈ A`, and choose a linear map `β : Λ → T`. Then `χ(d) = o + β(κ(d))` places the lattice window in `A`. Requiring `β` injective prevents collapsed axes. A written origin and basis matrix are a coordinate presentation of `(o,β)`, not part of an unplaced field.
 
-The native algebra does not inspect `V`. For fixed index sets, require each internal map `f_V : (I→V) → (J→V)` to be natural in `V`.
+Thus `origin 100 0 200` means a point only after a 3-D affine parent and units are declared. It says nothing intrinsic about a root 2-D ground. `ground` is a habitat because it is a declared index object, not merely because it has two axes.
 
-By Yoneda, a fixed natural transformation `Hom(I,−) ⇒ Hom(J,−)` is reindexing by some `u : J → I`. Fixed-mask selection is such a reindexing. Value-dependent selection needs its predicate structure stated separately. Dispatch exits the native algebra through the registry and is not a Yoneda corollary.
+## 9. Neighborhood and boundary
 
-### 4.2 The view pun stays
+A stencil is a relation on the field habitat. A displacement set in `Λ` induces a partial relation on a finite window because some translated coordinates leave `D`.
 
-The adjacency example is unchanged: `Node , OutDeg = +/ Adj@row` treats the bits as `𝔹`-columns and sits in Tier 1; `Hostile , shortestPath via Adj` asserts graph meaning, and by 4.1 no algebra map may act on it — the host runs Dijkstra and writes a column back. The functor asserting or stripping the meaning is the whole distance between the tiers.
+Boundary forms complete that partial relation in different ways. Shrink drops missing edges. Zero or another constant extends the value field outside `D`. Clamp and reflect provide explicit retractions from attempted coordinates to `D`. Wrap equips the box with modular coordinates, equivalently a finite quotient-lattice or toroidal structure. These are semantic structures, not consequences of flat indexing, and the selected form must survive save, reload, and every tick.
 
-## 5. Three obligations
+## 10. Capabilities, not tiers
 
-The current tiers use different obligations:
+The old tiers tried to classify data by how freely a write could change its index. That axis is wrong: every stored target preserves its declared habitat. What varies is which structure and carrier laws an operation requires.
 
-- **Tier 1** — geometry of the index: unit and frame coherence at the de/at boundary (2.4).
-- **Tier 2** — full symmetry of the index: `Sym(I)`-equivariance under the diagonal action (3.1).
-- **Tier 3** — abstraction of the value: naturality in `V` for internal fixed-index maps (4.1).
+- Finite habitat: pointwise map, mask, fold with the required carrier law.
+- Ordered habitat or ordered view: stable grade and scan.
+- Product habitat: axes and outer product.
+- Lattice chart: shifts and displacement stencils.
+- Affine placement: world coordinates and change of frame.
+- Metric: distance and radius.
+- Cell complex: incidence, boundary, and cochains.
+- Opaque carrier: only registry-granted operations; opacity is a capability policy, not a habitat tier.
 
-These obligations do not yet form one proved monotone chain.
+Permutation equivariance remains a useful theorem for operators that claim to ignore nominal identity, order, bindings, and relationship structure. It is not the law of all entity writes: `index`, declared orders, unique keys, singleton bindings, relationships, and `pos = to …` intentionally observe additional structure. Naturality in the carrier remains the characterization of genuinely parametric maps, not the definition of every opaque value.
 
-## 6. The algebra
+## 11. Columnar lowering
 
-### 6.1 σ, ⋈, π do not suffice; γ is primitive
+The semantic objects lower directly:
 
-The selection sublanguage was claimed to be σ (predicate), ⋈ (relationship hop), π (component access). That algebra cannot express grouped or correlated aggregation, and three farm lines need it:
+| object | column-store form |
+|---|---|
+| `Col H V` | typed buffer plus habitat/layout token |
+| partial component | value buffer plus presence bitmap |
+| selection `S ↪ H` | bitmap or selection vector plus parent layout |
+| reindex `u : J → I` | gather index vector |
+| product | paired lineage vectors |
+| relation span | edge arrays or CSR with source/target habitat tokens |
+| replicate | counts, prefix sum, copy-to-source vector |
+| pushforward | segmented reduce or scatter-reduce |
+| effect | destination indices, values, validity mask, merge family |
+| lattice field | buffer plus immutable habitat id, rank, shape, chart, boundary |
 
-```haskell
-Pen , Headcount = #/ (livestock' & Cattle)
-Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
-Plot , Moisture = avg/ neighbors'.Moisture
-```
+Dense execution remains ordinary SoA work. Habitat tokens and lineage maps are compile-time or plan-time metadata; the hot loop still sees contiguous buffers, masks, gathers, segmented reductions, and scatters. Typed index sets do not oppose array performance: they determine which low-level operation is legal before the metadata erases.
 
-So **γ**, the grouped fold, is first-class. Let `r : I → J` be a functional relationship; its fibers `r⁻¹(j)` partition the sources over the targets. For a fold `f` and column `c`:
+## 12. Proof obligations
 
-```
-γ_f(r, c)_j = fold_f { c_i : i ∈ r⁻¹(j) }
-```
+The next formal development owes these statements before stronger optimization claims:
 
-one value per target `j`, the result a column aligned to the target selection, written back under the ordinary Tier-2 alignment rule. A forward set-valued relationship is the transpose reading of the same relation; on the surface the fiber at the selected entity is `r'` (the tick), `r'.Comp` gathers across it, `r' & pred` filters it, and a fold prefix collapses it. `fold/ col @ scope` remains the scoped-global fold and is always one scalar; `@` never groups. This is q's `by` and Datalog's grouped aggregation, expressed as fold-under-each over fibers.
+1. Reindex identity and composition.
+2. Every pointwise expression is aligned over one query domain.
+3. Selection gather followed by scatter through the same inclusion changes exactly the selected target cells.
+4. Every collision at commit has an injective destination or a certified deterministic reduction.
+5. Stored habitat identity, rank, and shape survive every value-only barrier and save/reload cycle.
+6. Spawn and despawn preserve the world schema while changing only declared nominal populations and dependent columns.
+7. Backend layout erasure preserves the typed denotation.
+8. A repeated tick has the same typing derivation as the first tick; no program is accepted only because initial buffer lengths happen to coincide.
 
-Empty fiber: the fold's registered identity when it has one (`#/` and `+/` give 0, `|/` false, `&/` true); a reducer with no identity (`avg`, `max/`, `min/`) fails the row — the left-join-null rule extended from the dangling link to the empty fiber, the entity drops out of the selection and no write lands.
+## 13. Current Steel findings
 
-### 6.2 A reduction is a catamorphism, not a projection
+Steel does not yet enforce these obligations. `Frame` is transient statement-emitter state inferred from surface syntax; registry fields are flattened to `lat_w * lat_h`; `Ev` carries value-shape flags but no habitat; `emit_name_val` accepts entity columns and lattice fields through the same branch; assignment checks BQN lengths only when the generated program happens to fault. Save preserves the registry's one global `lattice w h` header but no expression carries that identity through the compiler.
 
-The spec called a reduction a projection. False in every standard sense: `+/` is not idempotent, is not an endomorphism (`ℝⁿ → ℝ` changes the carrier), and relational π never aggregates — `SELECT SUM` is γ, not π. A reduction is a **fold**, a catamorphism over the finite column. The true content survives untouched: reads are non-destructive; a fold consumes nothing, the column persists.
+The one-step corpus therefore contains false witnesses. Repeating computed-line once grows the entity world from 12 to 44 and the second assignment faults at `12 ≠ 44`. Repeating spatial top-k once grows 64 entities to 72 and the second lattice mask faults against the 72-row column. Conway repeats because its explicit `moore` fibers and 25-cell field buffers reconstruct the needed adjacency; it does not witness rank-preserving field semantics in the compiler.
 
-### 6.3 avg and count are fold-and-finish, not reductions
-
-§12's reduction contract demands an associative operator with an identity. `avg/` is not associative and has no identity; `#/` is not a binary operator at all. Both are **derived forms**: a fold to an intermediate followed by a finisher. `avg = finish(÷) ∘ fold(+,0) △ fold(+1∘const,0)` — sum and count in one pass, divide at the end; `count = fold(+,0) ∘ map(const 1)`. The surface keeps `avg/` and `#/`; the registry records them as fold-and-finish so the empty-fiber rule of 6.1 can distinguish "identity exists" from "row fails."
-
-### 6.4 Comprehension is the θ-join
-
-`[dist(t,c) | t <- Tower, c <- Creep, dist < 50]` is a filtered cross join — `σ_p(Tower × Creep)`, a θ-join in the bag monad. The identification of the double-generator comprehension with `σ_p(A × B)` is correct; the attribution is Trinder and Wadler (1989, 1991: comprehension syntax as relational queries) and Buneman, Libkin, Suciu, Tannen, Wong (1994: nested relational calculus and comprehension syntax), not "Comprehending Monads." And it is not a dependent join: dependent/LATERAL means the second generator's domain is a function of the first, `b <- f(a)`; the independent double generator is the plain product.
-
-## 7. Recurrences and the barrier
-
-`12 , offset = prev.offset + prev.prev.offset` is one barrier step of a two-back stencil. Every read observes pre-state, so `prev` shifts the old column rather than carrying a staged value. Iteration yields stencil steps, not Fibonacci. A read-side scan may carry an internal accumulator and scatter its completed result without observing staged writes. The current Fibonacci form is `offset = fib(index)`, with the recurrence inside a registered function.
-
-Whether to admit a sequential `scan(f) along order` with non-associative `f` remains open. Its computation would stay read-side, require a terminating step, and may scatter the completed column.
-
-## 8. Totality of the native calculus
-
-The native combinators operate over finite columns. The grammar admits no general fixpoint or unbounded iteration, so one native statement terminates over finite inputs. Registered functions and the host scheduler cross this boundary. Whole-program totality is relative to the Ground Registry.
+Until Steel carries habitat and lineage types, the spatial BQN files are design sketches and counterexample material, not conformance oracles.

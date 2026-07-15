@@ -1,4 +1,5 @@
 -- Japanese conjugate of 064-two-habitats-a: rank-1 rows + the 3x2 lattice. で scope postfix; 沿 = along; 上位/格付/降順 for grade-topk; 前 の shift; 、 hinge with に…にする set.
+-- Formal witness: shared operators require local capabilities; rank and cardinality do not identify a habitat.
 --! registry ../registries/064-two-habitats-a.reg
 --! ja
 --! expect g = 0 0 0 1 2 3

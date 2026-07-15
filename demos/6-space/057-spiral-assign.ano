@@ -1,4 +1,5 @@
 -- Assign spiral to existing entities (ex29). Twin of 057-spiral-assign.bqn.
+-- Formal witness: the five derived positions align on the Coin query and scatter back through its entity lineage.
 -- Five coins already in the world rearrange onto the spiral: no spawning here, the same polar formula writes positions to an existing selection, and index counts within the selection, not the world.
 -- One world: the demo's 8 entities plus row 8, the Player anchor (pos 100 200, not a Coin) — the .bqn's external playerPos folded into the entity world, expected values remapped over 9 rows.
 -- index is the position within the selection, not the world row id. Coin rows 0 2 3 5 7 take spiral indices 0..4; non-coin rows and the Player remain unchanged.

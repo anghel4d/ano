@@ -1,4 +1,5 @@
 -- Japanese twin of 28 (computed line generation, Version B recurrence).
+-- Formal witness: the anonymous twelve-row line is distinct from the growing entity world and must remain twelve rows when reconsumed.
 --! registry ../registries/056-computed-line.reg
 --! ja
 --! expect offset = 0 1 1 2 3 5 8 13 21 34 55 89 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

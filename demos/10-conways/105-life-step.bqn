@@ -33,3 +33,10 @@ nbrs ← {𝕊 c: Ok¨⊸/ (c⊸+)¨d}¨ ⥊↕h‿w   # neighbor coords per cel
 ids  ← (≠¨nbrs) / ↕h×w               # source cell per edge
 vals ← ({+´𝕩×w‿1}¨ ∾nbrs) ⊏ ⥊p0      # neighbor Planted per edge
 ! (⥊kin) ≡ +´¨ (ids∾h×w) ⊔ vals
+
+# Tick-closure witness: both generations inhabit the same fixed 5×5 field.
+p2 ← Life p1
+! 5‿5 ≡ ≢p0
+! 5‿5 ≡ ≢p1
+! 5‿5 ≡ ≢p2
+! p0 ≡ p2

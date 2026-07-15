@@ -28,3 +28,8 @@ lone ← Bloom Wither p0               # the arms starve before they can breed: 
 ! next ≢ ring
 ! next ≢ lone
 ! ring ≢ lone                        # order-dependent, so per-rule commit is not even a deterministic wrong
+
+# Shared-barrier and broken per-rule results all remain 5×5 fields; the difference is state, not rank.
+! 5‿5 ≡ ≢next
+! 5‿5 ≡ ≢ring
+! 5‿5 ≡ ≢lone

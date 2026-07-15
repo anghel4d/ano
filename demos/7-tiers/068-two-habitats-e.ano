@@ -1,4 +1,5 @@
 -- ex35 def row: a derived column and a derived field. Twin of 064-two-habitats.bqn.
+-- Formal witness: shared operators require local capabilities; rank and cardinality do not identify a habitat.
 -- The def row: threat derived from three columns, ridge derived from two coordinates — one mechanism, both habitats.
 -- def threat = Dmg*Spd / Rng read back as a query (left-assoc: (Dmg*Spd)/Rng, exact at every row); ridge modeled with exact arithmetic (x + y) in place of sin per the .bqn, written into the 4x4 ridge field. ridge starts at -1 junk to prove the full overwrite; the expect is the row-major ravel of the .bqn's +⌜˜↕4.
 --! registry ../registries/068-two-habitats-e.reg

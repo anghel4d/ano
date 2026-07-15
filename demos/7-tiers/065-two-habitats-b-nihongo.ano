@@ -1,4 +1,5 @@
 -- Japanese conjugate of 065-two-habitats-b: outer-row comprehension as value-form cross, and the checkerboard as a parity predicate over the same table. 交差 cross; & → と; == → 同.
+-- Formal witness: shared operators require local capabilities; rank and cardinality do not identify a habitat.
 --! registry ../registries/065-two-habitats-b.reg
 --! ja
 

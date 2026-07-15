@@ -1,6 +1,6 @@
-# 074-diagonal - Tier 2 masked write: equivariant under the diagonal action, not under one column alone
+# 074-diagonal - A local diagonal-equivariance witness for one masked write
 # ano: Nord & TwoHanded > 60 , Gold += 1000    -- witnessed here as gold + 1000×nord, the spec's Tier-2 masked add
-# Semantics: the masked add w(gold, nord) = gold + 1000×nord is a map on the whole record row, so the Sym(I) law reads diagonally: relabel every column by the same τ and the write commutes; relabeling gold alone tears value from mask and the naive single-column law fails.
+# Semantics: this masked add is equivariant when every input column and its query lineage are relabelled together; relabelling gold alone tears values from their mask. The witness licenses this map only.
 # Invariant: w(gold∘τ, nord∘τ) ≡ w(gold, nord)∘τ for several τ (assert), and w(gold∘τ, nord) ≢ w(gold, nord)∘τ for a τ moving a nord boundary (assert failure of the single-column law).
 
 gold ← 100‿200‿300‿400‿500
