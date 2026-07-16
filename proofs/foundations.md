@@ -1,6 +1,6 @@
 # Foundations
 
-Status: active proof obligations, 2026-07-15. These definitions and laws are visible specification tests; they are not yet machine-checked theorems. The former Tier 1/2/3 development is retired because its write-back laws do not describe Ano or its column store.
+Status: active proof obligations, 2026-07-16. The first ten-result semantic kernel is machine-checked under `Ano/*.lean`; lattice shape, placement, boundaries, save/load, columnar lowering, partial ECS components and relationships, and the Steel certificate bridge remain obligations. The former Tier 1/2/3 development is retired because its write-back laws do not describe Ano or its column store.
 
 ## 1. Schema and world
 

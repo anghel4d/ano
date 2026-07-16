@@ -36,7 +36,7 @@
             pkgs.ocamlPackages.utop
             pkgs.ocamlPackages.menhir
 
-            pkgs.lean4 # proofs/foundations.md, pending mechanization
+            pkgs.lean4 # proofs/Ano/, the machine-checked semantic kernel
           ];
 
           # kore's E hop and every editor-shaped fallback land on a real editor,
@@ -47,9 +47,16 @@
         };
       });
 
-      # `nix flake check` runs every demo under demos/ through check.sh,
-      # and every .ano twin through steel (src/check-ano.sh).
+      # `nix flake check` runs the Lean kernel, every demo under demos/ through
+      # check.sh, and every .ano twin through steel (src/check-ano.sh).
       checks = forAll (pkgs: {
+        proofs = pkgs.runCommand "ano-proofs" { nativeBuildInputs = [ pkgs.lean4 ]; } ''
+          cp -r ${self}/proofs proofs
+          chmod -R +w proofs
+          cd proofs
+          lake build
+          touch $out
+        '';
         demos = pkgs.runCommand "ano-demos" { nativeBuildInputs = [ pkgs.cbqn ]; } ''
           bash ${self}/demos/check.sh
           touch $out
@@ -62,7 +69,7 @@
           make -C src anoc
           touch $out
         '';
-        steel = pkgs.runCommand "ano-steel-demos" { nativeBuildInputs = [ pkgs.rustc pkgs.cargo pkgs.cbqn ]; } ''
+        steel = pkgs.runCommand "ano-steel-demos" { nativeBuildInputs = [ pkgs.rustc pkgs.cargo pkgs.gcc pkgs.cbqn ]; } ''
           cp ${self}/Cargo.toml Cargo.toml && cp -r ${self}/steel steel && cp -r ${self}/kore kore
           cp -r ${self}/src src && cp -r ${self}/demos demos
           chmod -R +w steel kore src demos

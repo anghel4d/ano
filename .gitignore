@@ -59,6 +59,9 @@ scratch/
 result
 result-*
 
+# Lean proof output
+proofs/.lake/
+
 # anoc build output
 src/anoc
 src/*.o
