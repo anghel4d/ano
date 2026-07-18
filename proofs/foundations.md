@@ -1,6 +1,6 @@
 # Foundations
 
-Status: active proof obligations, 2026-07-16. The first ten-result semantic kernel is machine-checked under `Ano/*.lean`; lattice shape, placement, boundaries, save/load, columnar lowering, partial ECS components and relationships, and the Steel certificate bridge remain obligations. The former Tier 1/2/3 development is retired because its write-back laws do not describe Ano or its column store.
+Status: active proof obligations, 2026-07-17. Three semantic-kernel milestones are machine-checked under `Ano/*.lean`: the ten-result field/effect/world kernel; the bounded spatial registry-and-command kernel; and the affine, weighted-interpolation, heterogeneous-bundle, partial-live-`Position`, exact-spawn, and dependent-repeated-tick contract. The checked layer now proves additive torsors and scalar-linear registered embeddings, normalized duplicate-free interpolation fibers with sealed source/cell lineage, exact live player anchoring, actual fresh `Position` writes for all 51 supported spawn rows, old-presence and fixed-field preservation, and per-successor request reconstruction. Concrete lattice lookup, phyllotaxis numerics, metric and collider refinement, general multi-component schema integration, boundaries, save/load, backend refinement, and the Steel certificate bridge remain obligations. The former Tier 1/2/3 development is retired because its write-back laws do not describe Ano or its column store.
 
 ## 1. Schema and world
 
@@ -73,21 +73,82 @@ Spawn and despawn do not contradict schema closure. They change the current live
 
 ## 8. Lattice habitats
 
-An abstract lattice is a free `ℤ`-module `Λ` of rank `r`. A dense finite field needs more: a box `D = ∏_{j<r} Fin(n_j)` and a lattice chart `κ : D → Λ`. For the canonical lattice `Λ = ℤ^r`, `κ` is the ordinary integer coordinate inclusion. The shape `(n_0,…,n_{r-1})` and rank `r` are permanent habitat data.
+For rank `r`, define `Shape r = Fin r → Nat` and `Box n = ∏(j : Fin r). Fin(n(j))`. A named lattice habitat `H` has a nominal site type `D_H` and one registered product presentation `b_H : Box(n_H) ≅ D_H`. Equal rank and shape therefore supply possible coordinate bijections between habitats, not habitat equality or authorized query lineage.
 
-A field is `f : D → V`. The rank belongs to `D`; the item dimension belongs to `V`. A scalar field over a 2-D ground has field rank 2 and item rank 0. A velocity field over the same ground still has field rank 2 even if each value is a 3-vector.
+The product presentation is not the physical layout. `b_H` supplies semantic axes and bounded coordinates; `ℓ_H : Fin(N) ≅ D_H` supplies buffer order. Neither is a declaration that another habitat's coordinates or rows align with `H`.
 
-Placement is optional extra structure. Let `A` be an affine ambient space over translation module `T`, choose `o ∈ A`, and choose a linear map `β : Λ → T`. Then `χ(d) = o + β(κ(d))` places the lattice window in `A`. Requiring `β` injective prevents collapsed axes. A written origin and basis matrix are a coordinate presentation of `(o,β)`, not part of an unplaced field.
+Let `Λ_H` be a free `ℤ`-module of rank `r`. A lattice capability supplies a chart and bounded lookup:
 
-Thus `origin 100 0 200` means a point only after a 3-D affine parent and units are declared. It says nothing intrinsic about a root 2-D ground. `ground` is a habitat because it is a declared index object, not merely because it has two axes.
+```text
+κ_H      : D_H → Λ_H
+lookup_H : Λ_H → Option(D_H)
+```
 
-## 9. Neighborhood and boundary
+They obey `lookup_H(κ_H(d)) = some(d)` and `lookup_H(z) = some(d) → κ_H(d) = z`. Hence `κ_H` is injective, and every attempted lattice displacement either returns one site of `H` or fails explicitly. The integer coordinates of `κ_H(b_H(q))` equal the bounded coordinates `q` embedded in `ℤ`.
+
+A field is `f : D_H → V`. The rank belongs to the registered product presentation of `D_H`; the item dimension belongs to `V`. A scalar field over a 2-D ground has field rank 2 and item rank 0. A velocity field over the same ground still has field rank 2 even if each value is a 3-vector.
+
+## 9. Affine frames and placement
+
+A frame `F` is nominal and supplies distinct carriers `Point F` and `Vector F`. `Vector F` has an additive commutative group law, and `Point F` is its torsor. The kernel must expose point-vector addition and point subtraction only at one frame index and prove `p +ᵥ 0 = p`, `(p +ᵥ u) +ᵥ v = p +ᵥ (u+v)`, `(p +ᵥ v) -ᵥ p = v`, and `p +ᵥ (q -ᵥ p) = q`. A coordinate presentation additionally fixes dimension, axes, scalar carrier, units, and coordinate maps; matching dimensions do not identify frames.
+
+The exact equations are witness obligations, not facts about every physical numeric carrier. IEEE floating-point coordinates may use deterministic evaluation without licensing reassociation or cancellation; an exact or error-bounded lowering theorem is a separate obligation.
+
+An affine map `T : F → G` has `pointMap : Point F → Point G` and an additive `vectorMap : Vector F → Vector G` satisfying `pointMap(p +ᵥ v) = pointMap(p) +ᵥ vectorMap(v)`. Identity and composition must satisfy this law. An affine equivalence adds inverse round trips. Distance or nearest-point preservation requires a stronger registered isometry witness and is not an affine theorem.
+
+A general placement is `Placement D_H F = D_H → Point F`. An affine placement additionally has `o : Point F` and an additive `β : Λ_H → Vector F` with `χ(d) = o +ᵥ β(κ_H(d))`. Injectivity of `β` is required when the declaration promises an embedding; curved or otherwise general placements remain arbitrary typed maps.
+
+Transport along `T` is `T.pointMap ∘ χ`. Identity transport is identity and `U` after `T` equals transport by `U ∘ T`. Consequently a planet-local placement followed by a system transform equals the composed placement. Changing or transporting placement leaves `f : D_H → V`, `D_H`, rank, and shape unchanged.
+
+## 10. Localization and interpolation
+
+A position component remains partial on entities: `P_pos ↪ E` with `pos : P_pos → Point F`. A typed cell reference has carrier `CellRef H = D_H`. Neither the component's name nor its item shape aligns `P_pos` with `D_H`, and a physical offset cannot be coerced into `CellRef H`.
+
+A partial locator has exact endpoints `locate_L : Point F → Option D_H`. Its declaration includes an independent relation `Chosen_L : Point F → D_H → Prop` and proves:
+
+```text
+locate_L(p) = some(d)  iff  Chosen_L(p,d)
+Chosen_L(p,d₁) ∧ Chosen_L(p,d₂)  implies  d₁ = d₂
+```
+
+A bridge paired with placement may additionally prove `locate_L(χ(d)) = some(d)`. A nearest locator owes eligibility, ordered cost, an injective stable tie key into a total order, and minimality under the resulting lexicographic order. Affine placement alone cannot discharge that obligation.
+
+For a position column `p : X → Point F`, pointwise localization gives a partial row-to-cell map `X ⇀ D_H`. An accepted plan stores a registry-authorized lineage witness whose constructors are identity and composition, selection inclusions, product projections, replication source, declared relation legs, typed cell-reference reads, and declared spatial bridges. There is no constructor from physical layout, equal cardinality, equal shape, or an arbitrary function supplied after planning.
+
+An interpolator over weights `K` maps a point to an optional finite duplicate-free nonempty list `[(dᵢ,wᵢ)]` with each `dᵢ : D_H` and declared normalization `Σᵢwᵢ = 1`; nonnegativity and exact center sampling are additional optional laws. Applied to `p : X → Point F`, its support rows form a span `X ← R_I → D_H` with `weight : R_I → K`. Sampling a field gathers along the cell leg and performs the declared weighted fiber reduction along the source leg. The result has at most one value per valid source row, and nearest-cell sampling is the singleton-weight-one case.
+
+## 11. Surface support and exact spatial spawn
+
+A collision surface has a nominal feature habitat `S` in frame `F`, with declared incidence and normal data. Given a registered norm or inner product, a hit records:
+
+```text
+SurfaceHit S F =
+  feature : S
+  point   : Point F
+  normal  : UnitVector F
+  t       : NonnegativeScalar
+```
+
+A support projector `supportBelow : Point F → Option (SurfaceHit S F)` declares a nonzero direction, search interval, admissibility predicate, ordered candidate cost, and an injective stable tie key on candidates into a total order. A returned hit must lie on its feature, satisfy `hit.point = seed +ᵥ hit.t · down`, lie inside the interval, have a valid admissible normal, and minimize the declared `(cost,tie)` key. It returns `none` exactly when no admissible candidate exists. Nearest support below and highest surface in a column are different projectors. Equivariance under change of frame is claimed only for registered isometries with all geometry and policy transported.
+
+A prototype support shape supplies `centerOffset : UnitVector F → Vector F`; a supported object origin is `hit.point +ᵥ centerOffset(hit.normal)`. Collider clearance among several proposals remains a separate validator.
+
+For selected player rows `X`, exact count 51 gives `C = Σ(x:X).Fin(51)`. Let `q : Fin 51 → Vector PlayerPlane2` be the total phyllotaxis pattern, and let each source supply an injective linear embedding `e_x : Vector PlayerPlane2 → Vector World3`. Then:
+
+```text
+seed(x,k) = pos(x) +ᵥ e_x(q(k))
+hit(c)    = supportBelow(seed(c))
+```
+
+The exact policy validates every `hit(c)` before allocation. Any `none` produces the exact input world. If all succeed, `wheelPos(c) = hit(c).point +ᵥ centerOffset(hit(c).normal)`, fresh allocation gives `C ↪ E_after`, and scatter fills only the new `Position<World3>` rows. The target theorem proves `|C| = 51|X|`, unique source and copy lineage, fresh injective allocation, support validity of every position, preservation of all fixed habitats and fields, and world well-formedness for the next tick. The trigonometric identity of the chosen `q` is separate from these spatial safety theorems.
+
+## 12. Neighborhood and boundary
 
 A stencil is a relation on the field habitat. A displacement set in `Λ` induces a partial relation on a finite window because some translated coordinates leave `D`.
 
 Boundary forms complete that partial relation in different ways. Shrink drops missing edges. Zero or another constant extends the value field outside `D`. Clamp and reflect provide explicit retractions from attempted coordinates to `D`. Wrap equips the box with modular coordinates, equivalently a finite quotient-lattice or toroidal structure. These are semantic structures, not consequences of flat indexing, and the selected form must survive save, reload, and every tick.
 
-## 10. Capabilities, not tiers
+## 13. Capabilities, not tiers
 
 The old tiers tried to classify data by how freely a write could change its index. That axis is wrong: every stored target preserves its declared habitat. What varies is which structure and carrier laws an operation requires.
 
@@ -95,14 +156,18 @@ The old tiers tried to classify data by how freely a write could change its inde
 - Ordered habitat or ordered view: stable grade and scan.
 - Product habitat: axes and outer product.
 - Lattice chart: shifts and displacement stencils.
-- Affine placement: world coordinates and change of frame.
-- Metric: distance and radius.
+- Affine frame: point-vector arithmetic within one nominal frame.
+- Placement: cells mapped to typed points without changing their field.
+- Affine map or equivalence: lawful frame transport with only the promised invertibility.
+- Locator or interpolator: explicit point-to-cell lineage and sampling.
+- Metric: distance, radius, and the cost evidence for a nearest operation.
+- Surface projector: typed hits under declared direction, admissibility, order, and tie policy.
 - Cell complex: incidence, boundary, and cochains.
 - Opaque carrier: only registry-granted operations; opacity is a capability policy, not a habitat tier.
 
 Permutation equivariance remains a useful theorem for operators that claim to ignore nominal identity, order, bindings, and relationship structure. It is not the law of all entity writes: `index`, declared orders, unique keys, singleton bindings, relationships, and `pos = to …` intentionally observe additional structure. Naturality in the carrier remains the characterization of genuinely parametric maps, not the definition of every opaque value.
 
-## 11. Columnar lowering
+## 14. Columnar lowering
 
 The semantic objects lower directly:
 
@@ -110,31 +175,53 @@ The semantic objects lower directly:
 |---|---|
 | `Col H V` | typed buffer plus habitat/layout token |
 | partial component | value buffer plus presence bitmap |
+| `Point F` or `Vector F` item | frame and carrier tokens plus fixed-shape item buffer |
+| `CellRef H` item | habitat-typed index buffer |
 | selection `S ↪ H` | bitmap or selection vector plus parent layout |
-| reindex `u : J → I` | gather index vector |
+| authorized reindex `u : J → I` | gather index vector plus lineage provenance |
 | product | paired lineage vectors |
 | relation span | edge arrays or CSR with source/target habitat tokens |
 | replicate | counts, prefix sum, copy-to-source vector |
 | pushforward | segmented reduce or scatter-reduce |
 | effect | destination indices, values, validity mask, merge family |
-| lattice field | buffer plus immutable habitat id, rank, shape, chart, boundary |
+| lattice field | buffer plus immutable habitat id, rank, shape, chart, lookup, boundary |
+| placement | source habitat and target frame tokens plus point map or affine origin and basis |
+| locator | typed destination indices, validity, and registry provenance |
+| interpolation | support edge rows, typed destination cells, weights, and segment offsets |
+| surface hit | feature indices, points, normals, parameters, and validity |
 
 Dense execution remains ordinary SoA work. Habitat tokens and lineage maps are compile-time or plan-time metadata; the hot loop still sees contiguous buffers, masks, gathers, segmented reductions, and scatters. Typed index sets do not oppose array performance: they determine which low-level operation is legal before the metadata erases.
 
-## 12. Proof obligations
+## 15. Proof accounting
 
-The next formal development owes these statements before stronger optimization claims:
+The three checked milestones discharge these statements:
 
-1. Reindex identity and composition.
-2. Every pointwise expression is aligned over one query domain.
-3. Selection gather followed by scatter through the same inclusion changes exactly the selected target cells.
-4. Every collision at commit has an injective destination or a certified deterministic reduction.
-5. Stored habitat identity, rank, and shape survive every value-only barrier and save/reload cycle.
-6. Spawn and despawn preserve the world schema while changing only declared nominal populations and dependent columns.
-7. Backend layout erasure preserves the typed denotation.
-8. A repeated tick has the same typing derivation as the first tick; no program is accepted only because initial buffer lengths happen to coincide.
+1. `Box(shape)` coordinates round-trip through one registered nominal habitat presentation, and equal rank, shape, cardinality, or storage never erase nominal habitat identity.
+2. `Point` and `SpatialVector` carry nominal frame indices. `AffineFrame` proves the torsor laws; additive and scalar-linear maps prove identity, composition, extensionality, and affine action laws; an exact `OffsetMapToken` refines an injective anchored linear embedding without implying an isometry or equivalence.
+3. Position views, boxes, semantic lineage, frame maps, offset embeddings, situated habitats, and interpolators require exact registry endpoints. `Lineage` has a private constructor and admits structural, registered, successfully located, and registered interpolation-source/cell legs, never a physical layout or raw function.
+4. A `Locator` is sound, complete, and functional against its independent acceptance relation. Successful localization gathers exactly the located field cell, while injective registered destinations support deterministic field scatter.
+5. A `WeightedSupport` is finite, nonempty, cell-duplicate-free, and normalized. Its induced `WeightedSpan` retains source and cell maps, enumerates each fiber exactly, agrees with direct weighted sampling, reproduces constants, and reduces independently of support-edge order under the declared commutative value law; nonnegativity is an independent optional certificate.
+6. `SupportSpec.Best` and a stable-key tie law make the declared best hit unique. Frozen prepared batches retain one exact input snapshot, pattern, projector, resting capability, resolved hit per seed, and support proof per returned center.
+7. The exact copy habitat is `Fin 51`; every copy retains its selected player source. A private-constructor live anchor additionally ties the exact pre-world, live selected key, stored `some Position`, resolver token, and registered scalar-linear embedding to every generated seed.
+8. `SpatialWorld` stores one partial live `Position` family as `Fin entityCount → Option (Point frame)`. An accepted exact cheese request either refuses with the identical world or adds exactly 51 entities, preserves every old `Position` value including `none`, writes every fresh row to the exact supported payload point, preserves every fixed field, and preserves well-formedness.
+9. `LiveCheeseResolver` reconstructs its dependent request from each successor world. Arbitrarily many successful ticks therefore preserve well-formedness without reusing an obsolete entity carrier or first-tick anchor.
+10. A heterogeneous `Bundle` admits `n` carrier types on one shared query domain only through sealed fixed/located-field lineage, exact registered weighted interpolation rows with their value law, or certified present live-position rows. `EntityPositionEffect.apply_hit_registered_inputs` composes that n-ary row into the exact point written through an injective live destination; the effect also proves miss, fixed-field, population, and well-formedness laws. Registered lattice assignment currently proves field-level hit and miss only.
+11. Guarded negative witnesses reject foreign equal-shaped habitats and frames, local vectors in world slots, rows as cell references, layouts and raw interpolation legs as lineage, unregistered affine embeddings, foreign-frame interpolation, and raw functions as registered bundle inputs.
 
-## 13. Current Steel findings
+The stronger spatial theory and implementation bridge still owe these statements:
+
+1. Bounded integer-lattice chart and lookup round trips, chart injectivity, displacement lookup, and boundary policies.
+2. Concrete 2-D/3-D coordinate, scalar, unit, and module instances plus metric, orthogonality, isometry, or dimension laws wherever the language promises distance, nearest, or rigid orientation.
+3. The analytic sine, cosine, square-root, and golden-angle phyllotaxis generator, its offset uniqueness property, and exact or error-bounded refinement to the chosen deterministic numeric backend.
+4. Concrete registered interpolators and, where convex interpolation is promised, separately certified nonnegative weights; reverse interpolation or write-back additionally needs injectivity or an explicit commutative collision merge.
+5. Concrete support geometry: ray parameters and intervals, surface incidence, unit normals, slope/collision admissibility, collider resting poses, clearance, metrics, and proof or validation that engine queries construct the abstract support certificates.
+6. An executable unique-player and all-51 preparation validator, explicit host snapshot/service versions, allocation-capacity refusal, prototype/component defaults, and atomic transaction integration.
+7. Promotion of the companion `EntitySpatialRegistry` and partial `Position` family into the general schema's multi-component storage, archetype/relationship effects, global well-formedness metadata, and world-level lattice effects.
+8. A compiler-facing accepted-plan IR whose constructors are sealed or certificate-checked, including a restricted operation language for `PositionMapping`; public mathematical helpers such as raw scatter and arbitrary ordinary updates are not themselves accepted Ano plans.
+9. Save/load observational identity, schema/token/version preservation, relationship/despawn repair, boundary totality, and surface-complex laws where declared.
+10. Dense-array refinement for gather, CSR fiber reduction, prefix-sum replication, scatter/scatter-reduce, physical relayout invariance, and proof that Steel and Kore construct only the admitted certificates.
+
+## 16. Current Steel findings
 
 Steel does not yet enforce these obligations. `Frame` is transient statement-emitter state inferred from surface syntax; registry fields are flattened to `lat_w * lat_h`; `Ev` carries value-shape flags but no habitat; `emit_name_val` accepts entity columns and lattice fields through the same branch; assignment checks BQN lengths only when the generated program happens to fault. Save preserves the registry's one global `lattice w h` header but no expression carries that identity through the compiler.
 

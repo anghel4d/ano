@@ -2,7 +2,7 @@
 
 Task files from the 2026-07-11 demo-pass review. One work item per file, numbered in execution order, not the order they arose. Each file is self-contained for a dedicated agent: findings with code pointers, the author's rulings (binding), open sub-questions (surface at execution, never resolve silently), work items, and invariants that must hold after. 00 is the exception: a Q/A for the author holding only the unanswered decision points. When a file is executed, cross it off in TODO.md and move it to done/.
 
-Executed (2026-07-11), now under done/: 01-10. The catalog below stands as record; still live here is 00 (the open rulings), 11-next-steps.md (the blocking residue that needs the author's hand), and 12-unbuilt-scans.md (surfaced 2026-07-13, not started).
+Executed (2026-07-11), now under done/: 01-10. The catalog below stands as record; still live here is 00 (the open rulings), 11-next-steps.md (the blocking residue that needs the author's hand), 12-unbuilt-scans.md (surfaced 2026-07-13, not started), 12-spatial-formalization.md (the observable spatial outcome), and 13-spatial-formalization.md (the proof-derived implementation handoff).
 
 - `00-open-rulings.md` — the deferred decision points, in Q/A form; the answered rulings from the 2026-07-11 pass are folded into their consuming task files. Consuming tasks read the A-lines first.
 - `01-kore-query-outputs.md` — query results are computed, asserted, never shown. Make every query visible in kore. FIRST agent task, by ruling.
@@ -16,3 +16,5 @@ Executed (2026-07-11), now under done/: 01-10. The catalog below stands as recor
 - `09-numeric-edges.md` — document the float64 model and close the non-finite load/save asymmetry.
 - `10-debug-observability.md` — the dead-link diagnostic, the per-tick structural trace, the session log as the repro channel. Mission-critical by ruling.
 - `12-unbuilt-scans.md` — the `min\` glyph, running mean, and running count: ruled by the fold/scan table but unbuilt in either tree. Reconcile the table with the emitter — build them, or footnote it. Not started; needs a scope ruling.
+- `12-spatial-formalization.md` — the observable Steel/Kore outcome for habitats, domains, lineage, and spatial behavior. Specified and proved at the semantic boundary where stated; not implemented in Steel or Kore.
+- `13-spatial-formalization.md` — the proof-derived implementation handoff: typed descriptors, sealed tokens, exact-51 spatial spawn pipeline, migration sequence, acceptance tests, and trust boundary. Specified; not implemented in Steel or Kore.

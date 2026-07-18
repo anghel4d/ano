@@ -479,13 +479,34 @@ Composed, the array operations chain:
 
 ## Part IV — Space
 
-A habitat is a finite index type `H`: the identity of the places at which a column may vary. A stored field is a total function `f : H → V`. Its physical column is a ravelled buffer plus a layout bijection `ℓ : Fin(n) ≅ H`; the buffer alone does not identify `H`. An ECS component is different: it is a partial column on the entity habitat `E`, represented by a presence subobject `P_C ↪ E` and a total column `c : P_C → V`.
+A habitat is a nominal finite index type `H`: the identity of the places at which a column may vary. A stored field is a total function `f : H → V`. Its physical column is a ravelled buffer plus a layout bijection `ℓ : Fin(n) ≅ H`; the buffer alone does not identify `H`. An ECS component is different: it is a partial column on the entity habitat `E`, represented by a presence subobject `P_C ↪ E` and a total column `c : P_C → V`. Two habitats remain foreign when cardinality, rank, shape, carrier, coordinates, and physical layout all happen to agree.
 
-A space is not merely something 2D. It is a habitat carrying spatial structure. A lattice habitat of rank `r` has a finite box `D = ∏ⱼ Fin(nⱼ)` and a chart `κ : D → Λ` into a free integer module `Λ ≅ ℤʳ`. The shape `n₀ … nᵣ₋₁` and rank `r` belong to `D`, hence to every stored field on it. A field update preserves that habitat. A filter may expose a subdomain; a generator or reshape may produce a derived domain; neither silently changes the rank or identity of the stored field.
+A space is not merely something 2D. It is a habitat carrying spatial structure. For `shape : Fin(r) → Nat`, `Box(shape) = ∏ⱼ Fin(shape(j))`. A named lattice habitat `H` has a nominal site type `D_H`, a product presentation `b_H : Box(shape_H) ≅ D_H`, and a chart `κ_H : D_H → Λ_H` into a free integer module `Λ_H ≅ ℤʳ`, with a bounded partial lookup back to `D_H`. The product presentation supplies semantic axes; the physical layout supplies buffer order. Neither identifies another equal-shaped habitat. The rank and shape belong to the registered presentation of `D_H`, hence to every stored field on it. A field update preserves that habitat. A filter may expose a subdomain; a generator or reshape may produce a derived domain; neither silently changes the rank or identity of the stored field.
 
-Placement is optional and separate. To put a lattice into a game world, declare an ambient affine space `A` over a translation space `T`, a point `o ∈ A`, and a linear map `β : Λ → T`. Then `χ(d) = o + β(κ(d))` places cell `d`. The basis vectors are the images of the lattice generators under `β`. Thus `origin 100 0 200` means a point only after the parent ambient space has three coordinates with declared axes and units. It says nothing in a freshly declared abstract lattice, and it cannot by itself make `Ground` a space.
+A frame `F` is nominal and supplies distinct carriers `Point<F>` and `Vector<F>`. A position component is still entity-indexed, for example `pos : P_pos → Point<World3>` with `P_pos ↪ E`; the frame belongs to each value while the component habitat remains `P_pos`. A `Point<MarsLocal>` is not a `Point<World3>`, a `Vector<PlayerPlane2>` is not a world point, and a `CellRef<Ground>` is neither an entity key nor a flat buffer offset. Matching item dimensions never establish any of those conversions.
 
-A bare numeric shape, where retained by the surface, denotes a fresh anonymous lattice value. It never aliases a registered field merely because their buffers have equal length. Named stored fields are reached through their declared habitat. The registry spelling for habitats and placements is open; the semantic separation is not.
+Placement is optional and separate. To put a lattice into a game world, declare an ambient affine frame `F`, a point `o : Point<F>`, and a linear map `β : Λ_H → Vector<F>`. Then `χ(d) = o + β(κ_H(d))` gives a placement `χ : D_H → Point<F>`. Placement transforms values covariantly; it is not row lineage, does not reindex a field, and need not be injective or invertible. Changing `χ` leaves `f : D_H → V`, `D_H`, rank, and shape unchanged.
+
+The return direction is always explicit. A registered locator has type `Point<F> ⇀ D_H` and proves its declared choice law; an interpolator returns a finite typed support in `D_H`; a frame map relates exact nominal frames; a registered lineage map relates exact row habitats. A `situated(H,F)` capability is the registry evidence naming the admitted placement and any admitted return bridges for that exact habitat-frame pair. No bridge is inferred from equal dimensions, equal shapes, equal cardinalities, a component called `pos`, or compatible physical buffers. Placement alone never manufactures a locator.
+
+Surface support is another registered partial bridge, not an affine consequence. It consumes a `Point<F>` and one frozen world snapshot, then returns a typed hit only when that hit satisfies the declared incidence, ray, interval, normal, admissibility, and `Best` laws. `Best` uses a semantic cost and stable semantic tie key, never candidate enumeration or buffer row order; a policy without a unique certified choice refuses. The returned hit point is contact geometry, not necessarily an object's origin, so a prototype supplies a `RestingPose` or collider support offset before spawn placement.
+
+The denotational signatures below are illustrative; registry and surface spelling remain open.
+
+```text
+pos             : P_Player → Point<World3>
+groundAt        : Point<World3> ⇀ CellRef<Ground>
+groundSample    : Point<World3> ⇀ weighted CellRef<Ground>
+playerPlane     : Point<World3> × Vector<PlayerPlane2> → Point<World3>
+supportBelow    : Snapshot × Point<World3> ⇀ SurfaceHit<CollisionWorld,World3>
+
+Ground[4096] + MarsSurface[4096]       -- rejected: equal length is not lineage
+Point<MarsLocal> + Vector<World3>       -- rejected: foreign frames
+layout(Ground) as CellRef<Ground>       -- rejected: physical order is not a site reference
+placement(Ground,World3)⁻¹              -- rejected unless a locator or affine equivalence was separately registered
+```
+
+A bare numeric shape, where retained by the surface, denotes a fresh anonymous lattice value. It never aliases a registered field merely because their buffers have equal length. Named stored fields are reached through their declared habitat. The registry spelling for habitats, frames, situated capabilities, placements, locators, interpolators, and support projectors is open; the semantic separation and authorization boundary are not.
 
 ### 20. Patterns from a coordinate lattice (outer product)
 
@@ -547,6 +568,16 @@ Ground & Fertility > 0 , spawn Crop * Fertility
 ```
 
 A cell index is not an entity parent. A `parent` component may be filled from the source only when the source view carries entity lineage.
+
+An exact spatial spawn evaluates against one frozen pre-state. “The player” must resolve to exactly one source row or the statement refuses; for that source, 51 copies form `Fin(51)`, while a general selected source `X` forms `Σ(x:X).Fin(51)` and means 51 per source. Each copy retains both source and copy index, derives its local phyllotaxis offset, crosses into `World3` only through the source's registered player-plane map, and asks the registered support projector for one certified hit.
+
+Exact means all before any. Every required hit and `RestingPose` is validated before fresh allocation, then one injective allocation map supplies the entity keys shared by every spawned component effect. If all 51 validate, the commit creates exactly 51 fresh wheels for the unique player, writes only frame-correct supported positions, and preserves every fixed field. If one projection misses, one tie remains unresolved, or one resting pose is invalid, the statement returns the exact input world; there is no 37-wheel prefix. Geometric overlap between otherwise valid wheels is separate from effect-destination collision and is checked only when the declared policy requests clearance.
+
+```haskell
+Player , spawn CheeseWheel * 51 at supportBelow(playerPlane(Player.pos, phyllotaxis(index)))
+```
+
+This line is an explanatory reading, not a ruling on the eventual surface spelling of the frame map or support projector. The ruled content is unique-source resolution, copy lineage, frozen-snapshot projection, validate-before-allocate, collider-aware resting placement, and atomic success or refusal.
 
 ### 25. Fields, neighborhoods, and boundaries
 
@@ -620,9 +651,11 @@ What the model buys is determinism and replay. Compilation produces a pure plan 
 
 Architecture. Scripts stage calls to host-registered functions, compile to a domain-and-lineage IR, lower column kernels to bytecode or a JIT target, and return an effect buffer describing the work. The host interprets the buffer. The staging and registration mechanics are eBPF-shaped, but totality comes from the grammar: no unbounded loop, no general recursion, registered callables, declared footprints.
 
-The registry is ano's entire contact surface with the host. Every stored column declares a value carrier, a semantic habitat, a physical layout, mutability, and refinements. Every relationship declares its endpoint habitats and cardinality facts. Every effect declares a destination map and collision algebra.
+The registry is ano's entire contact surface with the host. Every stored column declares a value carrier, a semantic habitat, a physical layout, mutability, and refinements. Every relationship declares its endpoint habitats and cardinality facts. Every frame declares its point and vector carriers. Every spatial bridge declares exact habitat and frame endpoints. Every effect declares a destination map and collision algebra.
 
 - A mutable ECS component is a partial column on the entity habitat. A mutable field is a total column on one named field habitat. They share a column interface, not an index type.
+- A position component carries `Point<F>` for one nominal frame `F`; its row habitat remains its component-presence habitat. The name `pos` and a three-number item shape confer no spatial authority.
+- A registered lineage, frame map, locator, interpolator, situated capability, or support projector is an admitted bridge with exact endpoints and laws. An arbitrary function, placement, equal shape, and physical layout are not substitutes.
 - A readonly column has an empty write footprint. Host mutation enters only at the tick's ingest boundary, so scripts still observe one snapshot.
 - A callable function declares the habitats of its arguments and result together with its footprint. A callable may derive a column or dispatch an opaque value; neither is a separate tier.
 - An alias such as `^cursor` is re-resolved per evaluation. The registry supplies the resolver, never a stored ID.
@@ -630,7 +663,7 @@ The registry is ano's entire contact surface with the host. Every stored column 
 
 The namespace is flat. Sentence position fixes syntactic use, while the registry fixes denotation and habitat. Provenance is tooling metadata, never a glyph.
 
-The registry also carries algebraic witnesses. A reducer owes an identity and associativity law; an unordered parallel reducer additionally owes commutativity. A merge operation owes the law that makes collision fibers deterministic. These are local capabilities of operations on carriers, not tiers of data. Ground entries are trusted facts about storage and host functions; sky entries are laws the optimizer may use only with the required witness. `ano-sky.md` develops the witness question.
+The registry also carries algebraic witnesses. A reducer owes an identity and associativity law; an unordered parallel reducer additionally owes commutativity. A merge operation owes the law that makes collision fibers deterministic. A locator owes its choice law; a support projector owes candidate, `Best`, and refusal laws under a stable semantic tie policy. These are local capabilities of operations on carriers, not tiers of data. Ground entries are trusted facts about storage and host functions; sky entries are laws the optimizer may use only with the required witness. `ano-sky.md` develops the witness question.
 
 ### Data model
 
@@ -872,7 +905,7 @@ They never compete: `!` negates a mask, `^` names a thing. `!^cursor` is "not th
 
 - Outer product as a value. The double-generator comprehension covers the filtered-pairs case. Whether ano lets a script hold a materialized N×M matrix (`cross f A B`) as a first-class value is open.
 
-- Habitat and reshape spelling. The denotation is ruled: a registered field has one named habitat; a bare shape creates an anonymous derived habitat; selection retains lineage; exact reshape is an equivalence; cycling or truncation is a gather map; `pos = to shape` is placement over the current query domain, not habitat mutation. The remaining surface questions are how habitats, layouts, placements, and boundaries are declared in the registry, whether first-class value reshape uses `to` or `⥊`, and whether the allative placement `to` deserves a distinct spelling. Unresolved.
+- Habitat and spatial spelling. The denotation is ruled: a registered field has one nominal habitat; equal shape never aligns foreign habitats; a bare shape creates an anonymous derived habitat; selection retains lineage; exact reshape is an equivalence; cycling or truncation is a gather map; `Point<F>` and `Vector<F>` carry nominal frames; placement is a covariant point map and never lineage or localization; locators, interpolators, frame maps, situated capabilities, and support projectors are separately registered partial bridges with exact endpoints and laws; an exact spatial spawn validates every proposal before allocation and refuses atomically. The remaining surface questions are how habitats, layouts, frames, placements, locators, interpolators, projectors, boundaries, and exact spawn policy are declared, whether first-class value reshape uses `to` or `⥊`, and whether the allative placement `to` deserves a distinct spelling. Unresolved.
 
 - The Sky Registry, the witness obligation. A ground entry is a trusted storage or host fact and a sky entry is a law the compiler may rewrite by; their failure modes are not symmetric. Candidate rungs remain trusted, property-tested against generated Steel/Kore worlds, and machine-checked against the obligations in `proofs/foundations.md`. BQN twins may remain explanatory witnesses but are neither semantic nor differential oracles. Whether the rung varies per law kind remains open. `ano-sky.md` carries the development. Unresolved.
 

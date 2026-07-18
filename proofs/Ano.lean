@@ -6,3 +6,15 @@ import Ano.Allocation
 import Ano.World
 import Ano.Validation
 import Ano.Negative
+import Ano.Space
+import Ano.SpatialRegistry
+import Ano.Affine
+import Ano.Interpolation
+import Ano.Lineage
+import Ano.SpatialQuery
+import Ano.SpatialPlan
+import Ano.SpatialSpawn
+import Ano.SpatialWorld
+import Ano.ColumnBundle
+import Ano.SpatialNegative
+import Ano.SpatialAdvancedNegative
