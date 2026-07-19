@@ -1,5 +1,7 @@
 # 12 — the ruled-but-unbuilt scans: the `min\` glyph, running mean, running count
 
+Standing verified 2026-07-19: the gap is unchanged — `emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), `#\` stays lexer-barred. One rider joins this file: ruling A13 (00-open-rulings) brings `fold(f)` to parity with `scan(f)` — operator spellings admitted, not just reducer names — and is likewise unbuilt (`steel/src/parse.rs:387` accepts names only). Same emitter pass, same battery gate; build it with the scans.
+
 Surfaced 2026-07-13 while writing `docs/ano-keywords.md`. The fold/scan permutation table (task 04, landed verbatim into `ano-language.md`'s Appendix and mirrored in `ano-manual.md`) promises a running value for every reducer, but the emitter builds only a subset, and the two scan spellings build different subsets. Task 04's own closing invariant — "the table must not promise what the code refuses" — is standing violated for three rows. This file is the reconcile: build the missing scans, or footnote the table. Needs the author's call on scope (which of the three, and the running-count spelling); the work items below are gated on it, the sub-questions are not to be resolved silently.
 
 ## What the emitter actually builds (verified against both trees)
