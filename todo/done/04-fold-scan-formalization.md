@@ -29,9 +29,9 @@ The identity column restates the §12/§13 law: a fold with a registered identit
 - `&\` — still-all: e.g. `&\ Alive @ marchOrder`, "the column is intact up to here".
 - Both with .bqn witnesses (`∨\`, `∧\`), pinned outs, nihongo twins, registry fixtures. Slot them into the fold-scan series under task 03's numbering.
 
-## The max ruling (recorded verdict)
+## The max ruling and its superseding Greater/Lesser ruling
 
-`max/` and `max\` stay named forms. The `>/` idea was examined and rejected: `>` is a comparison returning bool, folding it is non-associative nonsense, and making `>/` mean max requires reinterpreting `>` as "the greater-of" in fold position, the same pun refused for `-/` (APL's alternating sum). k earns `|/` as max-fold because k's `|` IS max natively, not a fold-position reinterpretation. Under task 05's unification, max/min/avg become registered reducers like any other name, so no glyph is needed. Accepted by the author (2026-07-11); record the verdict in the table's notes. Deferred alongside, deliberately unruled (lives in 00-open-rulings): adopting k's `|` as native max — which would earn `|/` honestly — and renaming boolean OR to `||` to free the glyph; the author notes he is not aware of any language where OR is bare `|`.
+The 2026-07-11 ruling kept `max/` and `max\` and rejected `>/` because `>` is a comparison, not Greater. The author resolved the deferred half on 2026-07-21. Ano now adopts q's `|` as Greater and `&` as Lesser. `|` is OR on masks and maximum on numbers. `&` is AND on masks and minimum on numbers. Their folds and scans follow. Boolean OR stays `|`, so no `||` exists. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. Implementation is pending in `todo/17-greater-lesser.md`.
 
 ## Fibonacci, for the record
 

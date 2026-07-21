@@ -47,7 +47,8 @@ Structural operators, glyphs and not keywords, for completeness. Each carries it
 | `=>` | なる | anonymous standing-rule hinge |
 | `;` | て | effect separator (all against one pre-state, one barrier) |
 | `\|>` | `\|>` | pipeline stage separator |
-| `&` `\|` `!` | と か ない | mask algebra: and, or, not |
+| `&` `\|` | と か | Lesser and Greater over masks or numbers |
+| `!` | ない | mask NOT |
 | `@` | で | scope — fold scope, locative binding, frame fix (distinct from the `at` keyword) |
 | `.` | の | functional hop (`rel.Comp`) |
 | `'` | tick | fiber or image (`targets'`, `sel.rel'`) |
@@ -64,15 +65,15 @@ Fold and scan operators, the closed reducer family. Each is a fold under `/` and
 |---|---|---|---|---|
 | `+/` | `+\` | 総和 / 累和 | sum / running sum | 0 |
 | `*/` | `*\` | 総積 / 累積 | product / running product | 1 |
-| `&/` | `&\` | 皆 / 累皆 | all / still-all latch | 1 (vacuous truth) |
-| `\|/` | `\|\` | 或 / 累或 | any / ever-any latch | 0 |
+| `&/` | `&\` | 皆 / 累皆 | all or minimum / still-all or running minimum | mask 1, number none |
+| `\|/` | `\|\` | 或 / 累或 | any or maximum / ever-any or running maximum | mask 0, number none |
 | `#/` | `#\` | 総数 / — | count / running count | 0 |
-| `max/` | `max\` | 最大 / 累大 | maximum / running peak | none — row drops |
-| `min/` | `min\` | 最小 / — | minimum / running floor | none — row drops |
+| `max/` | `max\` | 最大 / 累大 | numeric bridge for `\|/` / `\|\` | none — row drops |
+| `min/` | `min\` | 最小 / — | numeric bridge for `&/` / `&\` | none — row drops |
 | `avg/` | `avg\` | 平均 / — | mean / running mean | none — row drops |
 | `f/` | `f\` | `脅威/` / `脅威\` | named reducer / its scan | registered |
 
-The three scans with no Japanese spelling above — `#\ min\ avg\` — are the incomplete corner, but not equally. The running minimum exists under the other scan spelling, `scan(min) X along order`; only the `min\` glyph is missing. The running mean and running count exist in no spelling at all. Full mechanism, and why (a byte-for-byte port of the C, which had the same gaps), under the fold and scan markers below. `-/` and `//` are rejected outright as non-associative.
+The incomplete bridge scans are `#\`, `min\`, and `avg\`. Numeric `&\` is now the canonical running minimum, but Steel does not yet implement the carrier overload. `scan(min) X along order` already works. The running mean and running count exist in no spelling. Full status lives under the fold and scan markers below. `-/` and `//` remain rejected as non-associative.
 
 ## Atlas: registry keywords
 
@@ -88,7 +89,7 @@ The three scans with no Japanese spelling above — `#\ min\ avg\` — are the i
 | `pres` | `pres <col> <mask>` | presence mask — makes a component partial |
 | `default` | `default <name> <v>` | the spawn-fill value for a column |
 | `range` | `range <col> <lo> <hi>` | declared value bounds — seals rest data, clamps writes |
-| `rel` | `rel [key] <name> <values…>` | functional relationship (one target per source); `-1` dangling |
+| `rel` | `rel [key] <name> <values…>` | functional relationship (one target per source); `-1` means no link |
 | `srel` | `srel [key] <name> <fibers…>` | set-valued relationship (`\|`-separated fibers) |
 | `inv` | `inv <name> <rel>` | the inverse read of a functional `rel`; fibers computed at load |
 | `alias` | `alias <name> <mask>` | a stored boolean mask — a value with a name |
@@ -240,7 +241,7 @@ Unit , Slot = rank(Initiative)            -- rank(), not grade, on the effect si
 
 ### `fold` — 縮約
 
-The long form of the reducer, `fold(f) col @ scope`, collapsing a column to exactly one scalar under `@`; equivalent to the fused slash forms `+/ */ #/ &/ |/ max/ min/ avg/` and named reducers like `threat/`. Two honesty rules. A fold with an identity yields it on an empty scope (`+/` and `#/` give 0, `&/` true); an identity-less reducer (`avg/ max/ min/`) fails the row on an empty scope, which then drops from the selection — the left-join-null law. The grouped fold is the same word over a tick-marked hop instead of `@`: it yields one value per selected source, a column, not one scalar. `@` never groups; the tick does.
+The long form of the reducer, `fold(f) col @ scope`, collapses a column to one scalar under `@`. Its head is any admitted operator or registered reducer, not a special case for `+`. It covers `+/ */ #/ &/ |/ max/ min/ avg/` and named reducers like `threat/`. An empty fold uses the operand carrier's identity. `+/` and `#/` give 0. Mask `|/` gives false and mask `&/` gives true. Numeric `|/`, numeric `&/`, their `max/` and `min/` bridges, and `avg/` fail the row. Failure is no result row, so a bare query prints nothing. The grouped fold is the same word over a tick-marked hop. It yields one value per selected source. `@` never groups; the tick does. Steel still accepts names only inside `fold(f)`, with operator parity pending in `todo/12-unbuilt-scans.md`.
 
 ```haskell
 +/ Gold @ Nord                                -- total Nord gold, one scalar
@@ -429,7 +430,7 @@ Oil @ blast(5) at Firebolt.pos , +Fire  -- frame fixed by @, origin by at
 
 ### `.` — the functional hop (の)
 
-The single-valued relationship hop, `rel.Comp`, chainable; a dangling `¯1` fails the row like a left-join null. It also mirror-reads a vec column's pair (`Player.pos`) and spells the stencil shift over pre-state (`prev.offset`, `neighbor(clamp).Height`), never a carry. Level 13.
+The single-valued relationship hop, `rel.Comp`, chainable. A bare relationship is its found mask: true exactly when the stored target resolves now. A dangling `¯1` or missing target fails the row like a left-join null. It also mirror-reads a vec column's pair (`Player.pos`) and spells the stencil shift over pre-state (`prev.offset`, `neighbor(clamp).Height`), never a carry. Level 13.
 
 ```haskell
 12 , spawn Cheese at Player.pos + polar(index, index * 137.5)
@@ -448,7 +449,7 @@ Plot , Moisture = avg/ neighbors'.Moisture   -- the gathered fiber column
 
 ### `/  \` — the fold and scan markers
 
-Glued to a name or operator with no interior whitespace, `/` lexes the whole as one fold token and `\` as one scan token: `+/ */ &/ |/ #/`, a named reducer `threat/` (`脅威/` on the JA surface), and the scans `+\ *\ &\ |\ max\`, `threat\`. The lexer is registry-blind here, so an unregistered reducer name in fold position fails at emit, not at lex. These are the fused spellings the `fold` and `scan` keywords write in long form, and each operator below is one row of the family — a fold under `/`, a scan under `\`, one table.
+Glued to a name or operator with no interior whitespace, `/` lexes one fold token and `\` lexes one scan token. The family includes `+/ */ &/ |/ #/`, named reducers such as `threat/`, and the scans `+\ *\ &\ |\ max\ threat\`. Ano's `|/` and `&/` are q's folds. The operand carrier selects Greater or Lesser. The lexer stays registry-blind, so an unregistered reducer fails at emit.
 
 ```haskell
 #/ (Nord & TwoHanded > 60)   -- count over a parenthesized mask
@@ -456,23 +457,23 @@ threat/ Damage @ Enemies     -- the slash attaches to the reducer name
 +\ Weight @ Route            -- the scan marker, one running value per cell
 ```
 
-Two honesty rules govern the whole family. The raw fold is an associative operator with a registered identity; the derived forms keep their spellings while the registry records the truth (`avg/` folds sum-and-count then divides, `#/` is `+/` over ones). And the empty scope: a fold with an identity yields it, while a reducer with no identity (`avg/ max/ min/`) fails the row, which drops from the selection exactly like a dangling hop — no NaN, no default, the left-join-null law. A scan needs no identity: it is length-preserving, so an empty scope yields the empty column.
+A raw fold needs an associative operator. Its identity depends on the carrier. The derived forms keep their spellings while the registry records the truth. `avg/` folds sum and count, then divides. `#/` is `+/` over ones. A fold without an identity fails the row. This is an empty result, so a bare query prints nothing rather than a placeholder scalar. A scan needs no identity, so empty input yields an empty column.
 
 | operator | `f/` fold | `f\` scan | empty-scope identity | Steel emits the scan? |
 |---|---|---|---|---|
 | `+/` `+\` | sum | running sum | 0 | yes |
 | `*/` `*\` | product | running product | 1 | yes |
-| `&/` `&\` | all | still-all latch | 1 (vacuous truth) | yes |
-| `\|/` `\|\` | any | ever-any latch | 0 | yes |
+| `&/` `&\` | all on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none | mask yes, number no |
+| `\|/` `\|\` | any on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none | mask yes, number no |
 | `#/` `#\` | count | running count | 0 | no |
-| `max/` `max\` | maximum | running peak | none — row drops | yes |
-| `min/` `min\` | minimum | running floor | none — row drops | only via `scan(min) … along` |
+| `max/` `max\` | numeric bridge for `\|/` | numeric bridge for `\|\` | none — row drops | yes |
+| `min/` `min\` | numeric bridge for `&/` | numeric bridge for `&\` | none — row drops | only via `scan(min) … along` |
 | `avg/` `avg\` | mean | running mean | none — row drops | no |
 | `f/` `f\` | named reducer | registered scan | registered | yes |
 | `-/` | rejected — not associative | — | — | — |
 | `//` | rejected — not associative, and unlexable (`/` is fold-marker and replicate) | — | — | — |
 
-The scan family has two spellings, and they cover different operators. The glyph `f\`, taking an `@` scope, emits `+\ *\ &\ |\ max\` and named-reducer scans. The spelled-out `scan(f) X along order` emits `+ * max min`. So the running minimum is available — written `scan(min) X along order`, never as the `min\` glyph: the glyph table has no `min`, so `min\` fails with `emit: line N: unknown scan op 'min'` (exit 2) while `scan(min) … along` compiles. Genuinely absent from both spellings are the running mean and the running count. `avg\` is the same emit error; `#\` never even lexes, since `#` forms only the fold `#/` — `line N: '#' begins only the fold '#/'`. Both are ruled but unbuilt: the design settled their meaning (a scan is length-preserving, so each names a running value), only the codegen was never written, so they are compile errors today rather than silent wrong answers (`todo/12-unbuilt-scans.md`). All of this is inherited from the frozen C — the same five glyph scans and the same `+ * max min` along-form there; the Rust is a byte-for-byte port, so it neither added nor dropped a scan. Why no `>/` for max: `>` is a comparison returning bool, folding it is non-associative nonsense, and under the named-reducer unification `max min avg` are names like any other, so no glyph is owed.
+The scan family has two spellings. The 2026-07-21 ruling makes numeric `|\` the running maximum and numeric `&\` the running minimum. Steel still emits both glyphs only for masks. `max\` works as the numeric maximum bridge. `scan(min) X along order` works, but the `min\` bridge is still unbuilt. Running mean and running count remain absent. `avg\` is an emit error, and `#\` is a lex error. Those bridge gaps stay in `todo/12-unbuilt-scans.md`. The carrier overload is pending in `todo/17-greater-lesser.md`. `>` remains a comparison, so `>/` stays rejected.
 
 ### `+/`  `+\` — sum, running sum
 
@@ -492,22 +493,24 @@ Multiplication. `*/` multiplies the scope; `*\` returns the running product. Ide
 *\ Multiplier @ comboChain   -- the running combo up each step
 ```
 
-### `&/`  `&\` — all, still-all
+### `&/`  `&\` — all and minimum, still-all and running minimum
 
-Conjunction, k's numeric min read as a mask. `&/` is ALL — true when every cell holds. `&\` is the still-all latch: it trips off at the first false and stays off, "the column intact up to here." Identity 1, vacuous truth over the empty scope.
+`&` is q's Lesser. On masks, `&/` is ALL and `&\` is the still-all latch. On numbers, `&/` is minimum and `&\` is running minimum. Empty mask input yields true. Empty numeric input has no identity and fails the row.
 
 ```haskell
 &/ Alive @ Party             -- is the whole party alive?
 &\ Intact @ Hull             -- still whole up to each section
 ```
 
-### `|/`  `|\` — any, ever-any
+### `|/`  `|\` — any and maximum, ever-any and running maximum
 
-Disjunction, k's numeric max read as a mask. `|/` is ANY — true when some cell holds. `|\` is the ever-any latch: it trips on at the first true and stays on, "has the fire reached each point yet." Identity 0.
+`|` is q's Greater. On masks, `|/` is ANY and `|\` is the ever-any latch. On numbers, `|/` is maximum and `|\` is running maximum. Empty mask input yields false. Empty numeric input has no identity and fails the row.
 
 ```haskell
 |/ Burning @ Forest          -- is anything burning?
 |\ Reached @ Fuse            -- has the flame passed each cell yet
+|/ Threat @ Frontier         -- maximum threat
+|\ Height @ Ray              -- running maximum
 ```
 
 ### `#/`  `#\` — count, running count
@@ -521,7 +524,7 @@ Target , Hits += #/ attackers'         -- in-degree: count per target
 
 ### `max/`  `max\` — maximum, running peak
 
-Maximum. `max/` takes the largest; `max\` returns the running peak, the high-water or occlusion read. No identity — an empty scope drops the row.
+`max/` and `max\` remain numeric bridges for `|/` and `|\`. An empty scope drops the row because finite float64 has no maximum identity.
 
 ```haskell
 max/ Height @ Ray            -- the tallest along the ray
@@ -530,7 +533,7 @@ max\ Height @ Ray            -- the running skyline up the sightline
 
 ### `min/`  `min\` — minimum, running floor
 
-Minimum. `min/` takes the smallest; the running floor is available, but only through the spelled-out `scan(min) X along order` form, not the `min\` glyph — the glyph table has no `min`, so `min\` is the emit error `unknown scan op 'min'` while `scan(min) … along` compiles. No identity — an empty scope drops the row.
+`min/` and `min\` remain numeric bridges for `&/` and `&\`. `min/` works today. The `min\` bridge is still unbuilt, while `scan(min) X along order` works. An empty scope drops the row because finite float64 has no minimum identity.
 
 ```haskell
 Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 10
@@ -595,7 +598,7 @@ Soldier , pos = to 4 _         -- 4 ranks, width inferred
 
 ### `^` — the alias sigil
 
-A caret immediately followed by a name, no whitespace, lexes as one alias token; a bare `^` is a lex error. It names a registry alias or a host default such as `^cursor`, and follows the identifier policy so `^世界` is legal.
+A caret immediately followed by a name, no whitespace, lexes as one alias token; a bare `^` is a lex error. It selects the dynamic alias overlay. Lookup reads the live alias first and falls through to the bare namesake when none exists, so `^Whiterun` may shadow bare `Whiterun` without replacing it. It follows the identifier policy, so `^世界` is legal.
 
 ```haskell
 ^cursor , runBehaviorTree
@@ -689,7 +692,7 @@ range health 0 8         -- writes clamp into 0..8
 
 ### `rel` — functional relationship
 
-`rel <name> <n values>`, one target per source, `-1` the dangling sentinel, keyed to the row index. The keyed form `rel <keycol> <name> <n values>` names a `unique` key column first (negatives refused); the hop then resolves stored ids by index-of against that key with a found-guard, so a despawned target fails the row rather than faulting. A dangling `-1` fails its row like a left-join null.
+`rel <name> <n values>`, one target per source, `-1` the None sentinel, keyed to the row index. The keyed form `rel <keycol> <name> <n values>` names a `unique` key column first (negatives refused). Bare `rel` is the found mask, so it is true only when the stored target resolves in the current world. The hop uses the same index-of and found-guard. Any nonnegative target that fails it is DEAD, with no finer missing-state taxonomy. The `-1` sentinel stays silent.
 
 ```
 rel target 2 0 -1 4 1              -- entity 0 → 2, entity 2 → nobody

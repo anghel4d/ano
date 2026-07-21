@@ -1,23 +1,25 @@
-# 12 — the ruled-but-unbuilt scans: the `min\` glyph, running mean, running count
+# 12 — ruled fold and scan parity
 
-Standing verified 2026-07-19: the gap is unchanged — `emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), `#\` stays lexer-barred. One rider joins this file: ruling A13 (00-open-rulings) brings `fold(f)` to parity with `scan(f)` — operator spellings admitted, not just reducer names — and is likewise unbuilt (`steel/src/parse.rs:387` accepts names only). Same emitter pass, same battery gate; build it with the scans.
+Standing verified 2026-07-21. `emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), and `#\` stays lexer-barred. The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` is an accumulator operation. Every semantically admitted operator or registered reducer belongs there. This is general parity, not a special case for `fold(+)`. Steel's `fold(f)` parser still accepts names only while `scan(f)` and `scan2(f)` use a separate operator-or-name parser.
 
-Surfaced 2026-07-13 while writing `docs/ano-keywords.md`. The fold/scan permutation table (task 04, landed verbatim into `ano-language.md`'s Appendix and mirrored in `ano-manual.md`) promises a running value for every reducer, but the emitter builds only a subset, and the two scan spellings build different subsets. Task 04's own closing invariant — "the table must not promise what the code refuses" — is standing violated for three rows. This file is the reconcile: build the missing scans, or footnote the table. Needs the author's call on scope (which of the three, and the running-count spelling); the work items below are gated on it, the sub-questions are not to be resolved silently.
+Haskell folds and scans and LINQ Aggregate establish the useful policy: the parenthesized argument denotes the accumulator function, not a privileged identifier class. Their sequential forms can apply arbitrary functions because traversal order is fixed. Ano keeps its stricter semantic license. An unordered fold still requires associativity, and unordered parallel reassociation still requires commutativity. Syntax admits the common callable head, then the semantic checker accepts or refuses the operation for that fold or scan.
 
-## What the emitter actually builds (verified against both trees)
+The fold/scan permutation table promises a running value for every admitted reducer, but Steel builds only a subset and its spellings maintain different whitelists. The ruled work is to converge the grammar and emitter on one semantic operation set. Only the running-count spelling remains an open surface decision.
+
+## What Steel actually builds
 
 Two spellings reach the emitter, and their op sets diverge:
 
-- the glyph `f\` under an `@` scope — `N_SCANEXPR` / `emit_scan` — builds `+ * max & |` and named-reducer scans. Rust: `steel/src/emit.rs:1126-1141` (the glyph match, then the registry-fn fallback), refusal `unknown scan op '<op>'` at `:1137`. C oracle: `src/emit.c:653-654`, refusal at `:658`. Same five, both trees.
-- the long `scan(f) X along order` — `N_SCANALONG` — builds `+ * max min`. Rust: `steel/src/emit.rs:1526-1532`, refusal `scan(<op>): no registered scan step` at `:1531`. C oracle: `src/emit.c:943-944`, refusal at `:945`. Same four, both trees.
+- the glyph `f\` under an `@` scope — `N_SCANEXPR` / `emit_scan` — builds `+ * max & |` and named-reducer scans. `steel/src/emit.rs:1126-1141` holds the glyph match, registry-function fallback, and `unknown scan op '<op>'` refusal.
+- the long `scan(f) X along order` — `N_SCANALONG` — builds `+ * max min`. `steel/src/emit.rs:1526-1532` holds the whitelist and the `scan(<op>): no registered scan step` refusal.
 
 Confirmed by running `target/release/steel --emit`:
 
 - `min\ Height @ Ray` → `emit: line N: unknown scan op 'min'` (exit 2), but `scan(min) X along order` compiles. The running minimum exists, spelled long only.
 - `avg\ …` → `emit: line N: unknown scan op 'avg'`. Absent in both spellings.
-- `#\ …` → refused one stage earlier, at the lexer: `line N: '#' begins only the fold '#/'` (`steel/src/lex.rs:501-507`, `src/lex.c:265-267`). `#` forms only the fold `#/`, so the running count has no spelling at all.
+- `#\ …` → refused one stage earlier, at the lexer: `line N: '#' begins only the fold '#/'` (`steel/src/lex.rs:501-507`). `#` forms only the fold `#/`, so the running count has no spelling at all.
 
-The fold side is whole: `min/ avg/ #/` all emit and are exercised by the corpus. The gap is scans only.
+The glyph fold side is whole: `min/ avg/ #/` all emit and are exercised by the corpus. The remaining fold gap is the long-form parser's refusal of operator heads. The scan gaps are the missing rows and divergent whitelists above.
 
 ## The gap, exactly
 
@@ -25,23 +27,22 @@ The fold side is whole: `min/ avg/ #/` all emit and are exercised by the corpus.
 - `avg\` — running mean, absent in both spellings. The `avg/` fold already carries the sum-and-count-then-divide (`AnoAvg`, `steel/src/emit.rs` ~`:951`/`:1089`); the scan needs the running form of the same.
 - running count — absent, and unspellable: `#\` is lexer-barred. Needs a spelling decision before it can be built.
 
-## Work items (gated on the scope ruling)
+## Work items
 
-- Add the `min\` glyph: one arm in `emit_scan`'s glyph table (`⌊\``), mirrored in `src/emit.c:653`. The along-form proves the codegen; this only opens the second spelling.
-- Build `avg\`: the running mean over the scan's scope, off the same sum-and-count `avg/` uses. Decide empty-scope behavior — a scan is length-preserving, so an empty scope is the empty column (no identity consulted), consistent with the named-reducer scan note already in `emit_scan`.
-- Build the running count once it has a spelling (see sub-questions).
-- Witnesses: `.bqn` twins (`⌊\`, and the mean/count equivalents), pinned `--! out`, nihongo twins, registry fixtures, slotted into the fold-scan demo series (task 03 numbering). Gate on the differential battery: `src/check-ano.sh` byte-compares Rust emit against the C oracle, so the C arms must land in lockstep with the Rust.
-- Reconcile the docs. `docs/ano-keywords.md` was corrected this session to state the real behavior (the two spellings, the exact refusals). `ano-language.md`'s Appendix table and `ano-manual.md`'s folds chapter still promise the unbuilt rows unqualified — either they gain the same footnote, or the ops land and the promise becomes true.
+- Give `fold(f)`, `scan(f)`, and `scan2(f)` one operator-or-registered-reducer head parser. Apply semantic admission after parsing instead of maintaining syntax-specific whitelists. This admits `+`, `*`, `&`, `|`, the named bridges, and registered reducers wherever their fold or scan instance exists. It does not admit subtraction or division into unordered folds.
+- Add the `min\` bridge to `emit_scan`'s glyph table. The along-form already proves the codegen.
+- Build `avg\`, the running mean over the scan's scope, from the same sum-and-count state as `avg/`. Empty input yields the empty column without consulting an identity.
+- Build the running count once it has a spelling (see the open sub-question).
+- Add Ano and Nihongo acceptance and refusal tests for every long-form head. Add BQN explanatory witnesses for the emitted operations. Exercise the result through Steel and Kore.
+- Reconcile the liveness notes after implementation so the table and emitter agree.
 
-## Open sub-questions (surface at execution, do not resolve silently)
+## Open sub-question
 
-- The running-count spelling. `#\` is lexer-barred because `#` is fold-only. Options: (a) relex `#\` as the running-count scan, freeing the glyph on the scan side only; (b) a name — a registered `count` reducer, so `count\` scans and `count/` folds, retiring the `#` special-case pun; (c) leave it unspellable and strike the row from the table. Ties into 00-open-rulings Q13 (fold/scan grammar parity) and the max ruling's named-reducer unification (task 04).
-- Scope: are all three wanted, or does `scan(min) … along` already suffice for min, leaving only `avg\`? The `min\` glyph is nearly free but adds a second spelling for one op — a grammar-surface choice, not just a codegen one.
-- The glyph-vs-along asymmetry itself. `& |` build under the glyph but not `scan(&)…along`; `min` builds under along but not the glyph. Should the two spellings converge on one op set, or is the split intended (latches are glyph-native, min is order-native)? A prior question the build should not silently answer.
+- The running-count spelling. `#\` is lexer-barred because `#` is fold-only. Option (a): relex `#\` as the running-count scan and free the glyph on the scan side only. Option (b): use a registered `count` reducer, so `count\` scans and `count/` folds, retiring the `#` special-case pun. Option (c): leave it unspellable and strike the row from the table. This ties into fold/scan grammar parity. The Greater/Lesser carrier overload is separate and lives in `17-greater-lesser.md`.
 
 ## Invariants
 
-- Both surfaces move together: every Rust arm has its C-oracle twin, emit stays byte-identical across the corpus, dump fixpoints hold. The battery is the gate.
-- The table and the emitter agree after landing: no row promises what the code refuses, and no spelling the code accepts is undocumented. Task 04's invariant, finally made true.
-- No fold-side change: `min/ avg/ #/` already emit; this task is scans only.
+- Steel is the reference compiler. The archived C predecessor is not an oracle. BQN files explain and witness the denotation but do not constrain it independently.
+- The table and emitter agree after landing: no row promises what Steel refuses, and no accepted spelling is undocumented.
+- Long forms share one callable-head policy. The operation's registered laws and the fold or scan's order determine semantic admission.
 - Empty-scope law preserved: a scan is length-preserving, so the empty scope yields the empty column — no identity, no NaN, consistent with the existing named-reducer scan path.

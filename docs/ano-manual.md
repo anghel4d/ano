@@ -89,7 +89,7 @@ reap seal                          # despawn reclamation policy: seal (default) 
 ja 北 nord                         # Japanese alias for the ja skin
 ```
 
-That list is also a census of the ways a name reaches the host: a mutable column, a readonly column (write footprint declared empty: physics positions you may predicate on but never move), a callable, an alias, a binding, and a proto — the archetype noun `spawn` fills through. The namespace is flat, and sentence position alone decides what a name is doing. Applied to arguments it is a callable, in a value position a column, bare in a predicate a mask, a proper noun in source position a binding. No sigil marks provenance: `polar` from the prelude and `phyllotaxis` from the host read identically, the way C holds `sin` from libm and your own function in one identifier space. The one sigil, `^`, marks deixis. `^cursor` moves with the context, bare `Player` was fixed at registration.
+That list is also a census of the ways a name reaches the host: a mutable column, a readonly column (write footprint declared empty: physics positions you may predicate on but never move), a callable, an alias, a binding, and a proto — the archetype noun `spawn` fills through. The bare namespace is flat, and sentence position alone decides what a name is doing. Applied to arguments it is a callable, in a value position a column, bare in a predicate a mask, a proper noun in source position a binding. No sigil marks provenance: `polar` from the prelude and `phyllotaxis` from the host read identically, the way C holds `sin` from libm and your own function in one identifier space. The one sigil, `^`, selects the dynamic alias overlay. `^cursor` moves with the context. `^Whiterun` reads a live alias named `Whiterun` when one exists and otherwise falls through to bare `Whiterun`; rebinding or deleting the alias never changes the registered name.
 
 ## Selection
 
@@ -105,7 +105,7 @@ Merchant @ Whiterun , Gold += 5000
 
 Four small rules carry all of that. The colon is the atom literal of Erlang and Ruby: `:Bandit` is the enum value, `Bandit` the component mask, decided lexically, never by lookup. The equals glyph is positional, the SQL rule: left of the hinge `=` compares (identical to `==`, which stays legal everywhere), right of it assigns. So `NPC & Tunic = :Red , Gold = 0` reads one comparison, one assignment. `@` and `^` get their own paragraphs in a moment. Precedence runs loosest-to-tightest through hinge, `;`, `|>`, effect verbs, `|`, `&`, `!`, comparisons, fold prefixes, `+ -`, `* / %`, `@`, dot. So `Cheese @ cellar & Aged > 3mo` is `(Cheese @ cellar) & (Aged > 3mo)` and you can stop counting parentheses. The full fourteen-level table is the spec appendix.
 
-The sigil first. `^cursor` is a pronoun, not a name. `bind Player entity 2` made a proper noun: the referent was chosen once, at registration, and never moves. `^cursor` is the word "you". Who it refers to is decided at the moment of speaking, by the engine, not the script. Concretely, the host registers a resolver (a tiny function like "raycast from the mouse") and every gather re-runs it. So `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: you must know this name can move between statements. In C# it is an expression-bodied property, never a field. `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, the way `DateTime.Now` differs from a stored timestamp. In Haskell it is `asks cursor` in a Reader: the script is a function of an environment the engine rebuilds each tick, and pointedly not an `IORef`, because nothing can store or write it. In filesystem terms, `Player` is `/home/pyrus` and `^cursor` is `./`, the same spelling landing somewhere different depending on where you are standing. Against `Nord` the difference is arity. A component name is a mask over many rows. `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`). `^` glued to a name is one identifier and appears nowhere else, so nothing has to guess.
+The sigil first. `^cursor` is a dynamic alias. `bind Player entity 2` made a proper noun: the referent was chosen once, at registration, and never moves. `^cursor` is the word "you". Who it refers to is decided at the moment of speaking, by the engine, not the script. Concretely, the host registers a resolver (a tiny function like "raycast from the mouse") and every gather re-runs it. So `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: you must know this name can move between statements. In C# it is an expression-bodied property, never a field. `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, the way `DateTime.Now` differs from a stored timestamp. In Haskell it is `asks cursor` in a Reader: the script is a function of an environment the engine rebuilds each tick. The host may install, rebind, or delete the alias between statement steps. In filesystem terms, `Player` is `/home/pyrus` and `^cursor` is `./`, the same spelling landing somewhere different depending on where you are standing. Against `Nord` the difference is arity. A component name is a mask over many rows. `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`). A sigiled name first reads the live alias overlay and falls through to its bare namesake when no alias exists. `^` glued to a name is one identifier and appears nowhere else, so nothing has to guess.
 
 `@` is the scope operator, and it has exactly one meaning, always: evaluate the left thing within this scope. The Japanese surface keeps them as separate words: the operator is the particle で ("at"), the sigil a demonstrative ("this one here"). What varies across the operator's uses is what you asked it to evaluate, never what `@` does:
 
@@ -127,7 +127,7 @@ Presence is three-valued, and the tuple form tells the cases apart: present-and-
 (Nord, !TwoHanded)     , +Untrained
 ```
 
-A relationship is a component whose value is another entity's id, and the dot is the hop: `rel.Comp` reads the target id and gathers `Comp` there, one indexed read, chainable (`mentor.mentor.Dead`). The left-join-null law rides along: an absent or dangling link fails the predicate and the row drops out, no null ever surfaces. What "id" means is the rel's key column: declare `unique id …` and write the key first (`rel id mentor …`) and the hop resolves stored ids against it — a target that despawned simply fails the found-guard and drops, staleness included in the same law. An undeclared rel is keyed to the row index, which is exactly what its values say. The same dot rooted at a binding is the mirror-read (`Player.pos`), and into a compound component it is field projection (`pos.x`). Dot always gathers. It never groups, scopes, or folds.
+A relationship is a component whose value is another entity's id, and the dot is the hop: `rel.Comp` reads the target id and gathers `Comp` there, one indexed read, chainable (`mentor.mentor.Dead`). A bare relationship is the same found-guard as a mask: true only when the target resolves now, not merely when an id was once assigned. The left-join-null law rides along: an absent or dangling link fails the predicate and the row drops out, no null ever surfaces. What "id" means is the rel's key column: declare `unique id …` and write the key first (`rel id mentor …`) and the hop resolves stored ids against it — a target that despawned simply fails the found-guard and drops, staleness included in the same law. `DEAD` is the one diagnostic word for any nonnegative target that fails that guard. Never-existed, despawned, and mistyped do not become separate states, while the `-1` None sentinel stays silent. An undeclared rel is keyed to the row index, which is exactly what its values say. The same dot rooted at a binding is the mirror-read (`Player.pos`), and into a compound component it is field projection (`pos.x`). Dot always gathers. It never groups, scopes, or folds.
 
 ```haskell
 Nord & mentor.TwoHanded > 80 , Gold += 1000
@@ -187,12 +187,14 @@ APL's `/` and `\`, aimed at selections (`demos/3-fold-scan`). A fold collapses a
 ```haskell
 +/ Gold @ Nord               -- total Nord gold
 &/ Alive @ Party             -- all alive?
+|/ Threat @ Frontier         -- maximum threat
+&/ Distance @ Route          -- minimum distance
 #/ (Nord & TwoHanded > 60)   -- count; takes a parenthesized mask
 threat/ Damage @ Enemies     -- named registered reducer: the slash attaches to the name
 fold(threat) Damage @ Enemies    -- the long form, same fold
 ```
 
-Two honesty rules. The raw fold contract is an associative operator with a registered identity, and the derived forms keep their spellings while the registry records the truth: `avg/` folds sum-and-count then divides, `#/` is `+/` over ones. And the empty scope: a fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true), while a reducer with no identity (`avg/`, `max/`, `min/`) fails the row, which drops out of the selection exactly like a dangling hop. No NaN, no default, the left-join-null law again (`032-avg-fold-finish.ano`).
+Two honesty rules. A raw fold needs an associative operator. Its identity depends on the carrier. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel's current bare-query `0` is an implementation bug tracked in `todo/18-empty-result-output.md`.
 
 A scan accumulates and returns a column of equal length, which means it needs an order, and an abstract selection has none. Either the source view carries one, or you name one. The same scan, two spellings, same result (`030-scans.ano`, `031-scan-along.ano`):
 
@@ -201,22 +203,24 @@ A scan accumulates and returns a column of equal length, which means it needs an
 scan(+) Weight along pathCells       -- the order named explicitly
 ```
 
-The whole family fits one table, folds and scans together. Lineage: in k, `&` IS min and `|` IS max over numerics; ano's boolean reading is the k reading restricted to masks. The two boolean scans are latches — `|\` is ever-any, "has the fire reached each point yet" (`038-ever-any.ano`); `&\` is still-all, "the column intact up to here" (`039-still-all.ano`) — and a named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
+The whole family fits one table. Ano adopts q's Greater and Lesser operations directly. `|` is OR on masks and pointwise maximum on numbers. `&` is AND on masks and pointwise minimum on numbers. A mask and number never coerce. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
 
 | f | `f/` fold | `f\` scan | empty-scope identity |
 |---|---|---|---|
 | `+` | sum | running sum | 0 |
 | `*` | product | running product | 1 |
-| `&` | ALL | still-all: a latch that trips off at the first false and stays off | 1 (vacuous truth) |
-| `\|` | ANY | ever-any: a latch that trips on at the first true and stays on | 0 |
+| `&` | ALL on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none → row drops |
+| `\|` | ANY on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none → row drops |
 | `#` | count | running count | 0 |
-| `max` | maximum | running peak (occlusion, high-water) | none → row drops |
-| `min` | minimum | running floor | none → row drops |
+| `max` | numeric bridge for `\|/` | numeric bridge for `\|\` | none → row drops |
+| `min` | numeric bridge for `&/` | numeric bridge for `&\` | none → row drops |
 | `avg` | fold-and-finish mean | running mean | none → row drops |
 | `-` | rejected: not associative | — | — |
 | `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
 
-The identity column is the honesty rule again, extended to the empty fiber, and a scan needs no identity at all: it is length-preserving, so the empty scope yields the empty column. Why no `>/` for max? Recorded verdict: `>` is a comparison returning bool, folding it is non-associative nonsense, and k only earns `|/` because k's `|` IS max natively — under the named-reducer unification max/min/avg are names like any other, so no glyph is needed. Scan cells Steel does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses; `+\ *\ &\ |\ max\` and named-reducer scans are live.
+A scan needs no identity. Empty input yields an empty column. The 2026-07-21 ruling keeps boolean OR as `|` and adds numeric maximum to the same dyad. `&` mirrors it as AND and numeric minimum. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. Steel does not yet implement numeric `|` or numeric `&` in direct, fold, or scan form. That work is pending in `todo/17-greater-lesser.md`. The `min\` bridge, running mean, and running count remain pending in `todo/12-unbuilt-scans.md`.
+
+The parenthesized head of `fold(f)`, `scan(f)`, and `scan2(f)` is any admitted operator or registered reducer, not a one-off allowance for `+`. Like Haskell folds and scans or LINQ Aggregate, the head denotes the accumulator operation. Ano then applies its own laws: an unordered fold still requires associativity, and parallel reassociation still requires commutativity. Steel's long-form parser parity remains pending in `todo/12-unbuilt-scans.md`.
 
 And now the trap this repository has pinned four different ways (`034-fib-stencil-a` through `-d`): the tempting recurrence. You cannot write Fibonacci like this —
 

@@ -110,7 +110,8 @@ Player , Gold += 9999
 ^selected , Damage *= 2
 ```
 
-`^cursor` is a pronoun, not a name. `Player` is a proper noun: the referent was chosen once, at registration, and never moves. `^cursor` is the word "you". Who it refers to is decided at the moment of speaking, by the engine, not the script. The registry supplies a resolver (a raycast from the mouse, the camera's focus), and every gather re-runs it. So `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: the reader must know this name can move between statements. In C# it is an expression-bodied property, never a field. `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, like `DateTime.Now` against a stored timestamp. In Haskell it is `asks cursor` in a Reader: the script is a function of an environment the engine rebuilds each tick. Pointedly not an `IORef`, since nothing can store or write it. In filesystem terms `Player` is `/home/pyrus` and `^cursor` is `./`, the same spelling landing somewhere different depending on where you stand. Against a component name the difference is arity. `Nord` is a mask over many rows. `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`).
+`^cursor` is a pronoun, not a name. `Player` is a proper noun: the referent was chosen once, at registration, and never moves. `^cursor` is the word "you". Who it refers to is decided at the moment of speaking, by the engine, not the script. The registry supplies a resolver (a raycast from the mouse, the camera's focus), and every gather re-runs it. So `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: the reader must know this name can move between statements. In C# it is an expression-bodied property, never a field. `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, like `DateTime.Now` against a stored timestamp. In Haskell it is `asks cursor` in a Reader: the script is a function of an environment the engine rebuilds each tick. Pointedly not a script-owned `IORef`: the host may replace or delete the alias between statement steps. In filesystem terms `Player` is `/home/pyrus` and `^cursor` is `./`, the same spelling landing somewhere different depending on where you stand. Against a component name the difference is arity. `Nord` is a mask over many rows. `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`).
+Dynamic aliases occupy an overlay namespace keyed by the bare spelling. `^Whiterun` reads the live `Whiterun` alias target, such as another column or an existing mask, when one exists and otherwise falls through to bare `Whiterun`. Installing, rebinding, or deleting the alias changes only `^Whiterun`; bare `Whiterun` remains the registered column or binding. The caret promises only that the referent may change between statement steps.
 
 ### 3. Pattern-match selectors (Erlang)
 
@@ -146,7 +147,7 @@ skill[mentor]                ⍝ gather: index one column by another's entity-ID
 dead[mentor[student]]        ⍝ two hops chained
 ```
 
-A relationship is a component whose value is another entity's ID. `rel.Comp` reads `rel` to get a target ID per entity, then gathers `Comp` at those IDs. One hop is one indexed read. An absent or dangling link fails the predicate, the left-join-null behavior.
+A relationship is a component whose value is another entity's ID. `rel.Comp` reads `rel` to get a target ID per entity, then gathers `Comp` at those IDs. One hop is one indexed read. A bare relationship in predicate position is its found mask: true exactly when the stored target resolves in the current world, not merely when an ID was assigned. The hop carries the same guard. An absent or dangling link fails the predicate, the left-join-null behavior.
 
 ```haskell
 Nord & mentor.TwoHanded > 80 , Gold += 1000
@@ -164,7 +165,7 @@ Pen & &/ livestock'.Healthy , +Certified  -- all: every animal in the pen health
 
 The image is a selection and a selection is a mask. A target reachable from two sources appears once, and the effect applies once: set semantics, idempotent scatter. This is consistent with the predicate-is-the-reference stance, since masks have no multiplicity. In-degree is never silently summed into a value effect. To accumulate per in-edge, fold at the target over the inverse fiber: `Target , Hits += #/ attackers'`.
 
-The keyed hop (ruled 2026-07-11). A `unique` column is declared injectivity — pairwise-distinct, checked at load — and injectivity is precisely the license a hop needs, since an injective column is invertible on its image: the keyed hop is `rel ; unique⁻¹`, one index-of against the key column with one found-guard. A relationship declares its key column by writing it before the name (`rel id mentor -1 0 0 3 …`, reading type-annotation-first: mentor is a rel over id), and an undeclared rel stays keyed to the row index — zero churn for every existing world. Not-found is dangling is dead: a stored ID whose target despawned fails the found-guard and clears the mask bit, the same left-join-null, so staleness never grows a fault path (the storage mechanism is ano-ecs §2's generational compare; the diagnostic surface, never the semantics, is the debug layer's dead-link report). The inverse of a keyed rel is keyed automatically, and `unique` subsumes the id/keys name magic: it declares what the emitter used to guess. `unique` means exactly one thing (ruled 2026-07-11): every element distinct, enforced at load and held across the run. Minting is spawn machinery, never a `unique` semantic, so several unique columns never compete for a mint; spawn fills each one fresh because the declared injectivity admits nothing else.
+The keyed hop (ruled 2026-07-11). A `unique` column is declared injectivity — pairwise-distinct, checked at load — and injectivity is precisely the license a hop needs, since an injective column is invertible on its image: the keyed hop is `rel ; unique⁻¹`, one index-of against the key column with one found-guard. A relationship declares its key column by writing it before the name (`rel id mentor -1 0 0 3 …`, reading type-annotation-first: mentor is a rel over id), and an undeclared rel stays keyed to the row index — zero churn for every existing world. Not-found is dangling is dead: a stored ID whose target despawned fails the found-guard and clears the mask bit, the same left-join-null, so staleness never grows a fault path (the storage mechanism is ano-ecs §2's generational compare; the diagnostic surface, never the semantics, is the debug layer's dead-link report). `DEAD` deliberately names every nonnegative stored target that fails the found-guard. Never-existed, despawned, and mistyped are not separate language states. The `-1` None sentinel stays silent. The inverse of a keyed rel is keyed automatically, and `unique` subsumes the id/keys name magic: it declares what the emitter used to guess. `unique` means exactly one thing (ruled 2026-07-11): every element distinct, enforced at load and held across the run. Minting is spawn machinery, never a `unique` semantic, so several unique columns never compete for a mint; spawn fills each one fresh because the declared injectivity admits nothing else.
 
 The undeclared world keeps its meaning after rows shift (the surfaced no-id choice, taken 2026-07-11). The fixture row identity is itself a key space: materialized once at fixture time as a hidden column, thinned by despawns and carried forward by spawns, so an idx-keyed read after a `~` resolves through it — the same algebra, not a second semantics. The alternative, refusing structural effects in worlds with no unique column, was considered and set aside: left-join-null already gives those programs meaning. The Steel perimeter around `unique` — spawn mints 1+max, `default` and proto fields on a key column refuse at load, effect assignment to one is a compile error — is surfaced implementation decision, not ruling; the ruled content of `unique` is distinctness alone.
 
@@ -300,6 +301,8 @@ The stage-4 rules stand inert until the data says otherwise. On advance, `stage3
 
 A column expression is a typed column over the current query domain. If the current view has row domain `X`, every expression has the form `Col X V`: one value of `V` per row, with an optional validity mask. `Gold` is one after the query has gathered it onto `X`; a scalar is the constant column on `X`. These operators build other columns, and a column expression appears anywhere a component name appears: in a predicate, a fold, an effect, an ordering. Equal length never establishes alignment. The view carries lineage maps from `X` to the stored habitats from which its columns were gathered.
 
+Ano adopts q's Greater and Lesser operators over the carriers that Ano admits. `a | b` is OR on masks and pointwise maximum on numbers. `a & b` is AND on masks and pointwise minimum on numbers. A mask and a number never coerce into one another. Mixed application refuses.
+
 ### 12. Reduction (`/`)
 
 ```apl
@@ -316,10 +319,12 @@ Collapse a column to a scalar. The contract for a raw `fold/` is strict: an asso
 */ (1 - Resist) @ Hits      -- combined damage multiplier
 &/ Alive @ Party            -- whole party alive
 |/ Burning @ Forest         -- any tile burning
+|/ Threat @ Frontier        -- maximum threat
+&/ Distance @ Route         -- minimum distance
 #/ (Nord & TwoHanded > 60)  -- count of masters
 ```
 
-Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms. `avg/` folds sum and count in one pass and divides at the end. `#/` is `+/` over the constant 1. The surface keeps the spellings, and the registry records them as fold-and-finish. That is what makes the empty case honest. A fold with an identity yields it (`+/` and `#/` give 0, `|/` false, `&/` true). A reducer with no identity over finite component values (`avg/`, `max/`, `min/`) fails the empty scope and the row drops, the left-join-null rule again.
+Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms. `avg/` folds sum and count in one pass and divides at the end. `#/` is `+/` over the constant 1. The surface keeps the spellings, and the registry records them as fold-and-finish. That is what makes the empty case honest. A fold identity depends on the carrier. `|/` over masks yields false on empty input and `&/` yields true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so an empty scope fails the row. `max/` and `min/` are bridge spellings for those numeric folds and obey the same law. `avg/` also fails an empty scope.
 
 or, spelled for named reducers — the slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form. Scans come free: `threat\`.
 
@@ -342,7 +347,7 @@ Plot , Moisture = avg/ neighbors'.Moisture    -- per-plot mean over the neighbor
 Target , Hits += #/ attackers'                -- in-degree, folded at the target
 ```
 
-`fold/ col @ scope` remains the scoped-global fold and is always one scalar. `fold/ rel'…` is always per-source. The result-type split is lexical, never a registry lookup. After a fold, `@` yields one scalar, `'` yields a per-source column, and `@` never groups. Empty fiber: the fold's registered identity when it has one (`#/` and `+/` give 0, `|/` false, `&/` true). A reducer with no identity (`avg/`, `max/`, `min/`) fails the row. This is the §5 left-join-null rule extended from the dangling link to the empty fiber: the entity drops out of the selection and no write lands.
+`fold/ col @ scope` remains the scoped-global fold and is always one scalar when the fold produces a row. `fold/ rel'…` is always per-source. The result-type split is lexical, never a registry lookup. After a fold, `@` yields one scalar, `'` yields a per-source column, and `@` never groups. Empty fibers use the carrier's identity when it has one. `#/` and `+/` give 0. Mask `|/` gives false and mask `&/` gives true. Numeric `|/`, numeric `&/`, `max/`, `min/`, and `avg/` fail the row. This is the §5 left-join-null rule extended from the dangling link to the empty fiber: the entity drops out of the selection and no write lands. A scoped-global identityless fold over nothing produces the same empty result as a predicate with no matches. A bare query prints nothing, never a placeholder scalar.
 
 ### 14. Scan (`\`)
 
@@ -356,7 +361,10 @@ Accumulate a column along an ordered selection. Returns a column of equal length
 ```haskell
 +\ Weight @ (til steps |> route A B) -- cumulative movement cost along a route
 *\ Multiplier @ comboChain           -- running combo multiplier
-max\ Height @ (Eye + til n * fwd)    -- running peak along a sightline (occlusion)
+|\ Height @ (Eye + til n * fwd)      -- running maximum along a sightline
+&\ Depth @ Descent                   -- running minimum along a descent
+max\ Height @ Ray                    -- numeric bridge for |\
+min\ Depth @ Descent                 -- numeric bridge for &\
 ```
 
 or, with an explicit ordering:
@@ -658,8 +666,8 @@ The registry is ano's entire contact surface with the host. Every stored column 
 - A registered lineage, frame map, locator, interpolator, situated capability, or support projector is an admitted bridge with exact endpoints and laws. An arbitrary function, placement, equal shape, and physical layout are not substitutes.
 - A readonly column has an empty write footprint. Host mutation enters only at the tick's ingest boundary, so scripts still observe one snapshot.
 - A callable function declares the habitats of its arguments and result together with its footprint. A callable may derive a column or dispatch an opaque value; neither is a separate tier.
-- An alias such as `^cursor` is re-resolved per evaluation. The registry supplies the resolver, never a stored ID.
-- An explicit binding such as `Player` or `Whiterun` has a declared denotation. Whether one name may expose several denotations remains open.
+- A sigiled alias such as `^cursor` is re-resolved per evaluation. Sigiled lookup reads the live alias overlay first and falls through to the bare binding when no alias exists. Rebinding or deleting `^name` never changes bare `name`.
+- An explicit binding such as `Player` or `Whiterun` has a declared denotation. A same-stem sigiled alias is a separate dynamic lookup and never changes that bare denotation.
 
 The namespace is flat. Sentence position fixes syntactic use, while the registry fixes denotation and habitat. Provenance is tooling metadata, never a glyph.
 
@@ -794,8 +802,8 @@ Fourteen levels, loosest to tightest. Everything else in the document is a conse
 - 2 — `;`: effect batching within the statement's one barrier.
 - 3 — `|>`: pipeline stages (`order by`, `take`, `expand`).
 - 4 — effect verbs and assignment: `= += -= *= /=` (`=` assigns only in effect position; the equals glyph, below), `+Comp -Comp ~ spawn`, the locatives `at` and `to`, replicate `*` in `spawn X * n`.
-- 5 — `|`: mask or.
-- 6 — `&`: mask and.
+- 5 — `|`: Greater, OR on masks and maximum on numbers.
+- 6 — `&`: Lesser, AND on masks and minimum on numbers.
 - 7 — `!`: mask not, prefix on one mask term.
 - 8 — comparison: `== != < <= > >=`, and `=` in selection position (the equals glyph, below).
 - 9 — fold and scan prefixes: `f/ f\` with f an operator or a registered reducer name, `fold(f)`, `scan(f) … along`, `grade`, `top k`.
@@ -809,26 +817,27 @@ Resolution, worked: `Cheese @ cellar & Aged > 3mo` parses as `(Cheese @ cellar) 
 
 ### Fold and scan permutations
 
-One table for the whole level-9 family, folds and scans together. Lineage: in k, `&` IS min and `|` IS max over numerics; ano's boolean reading is the k reading restricted to masks.
+One table governs the whole level-9 family. Ano's `|/` and `&/` are q's folds. The operand carrier selects Greater or Lesser.
 
 | f | `f/` fold | `f\` scan | empty-scope identity |
 |---|---|---|---|
 | `+` | sum | running sum | 0 |
 | `*` | product | running product | 1 |
-| `&` | ALL | still-all: a latch that trips off at the first false and stays off | 1 (vacuous truth) |
-| `\|` | ANY | ever-any: a latch that trips on at the first true and stays on | 0 |
+| `&` | ALL on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none → row drops |
+| `\|` | ANY on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none → row drops |
 | `#` | count | running count | 0 |
-| `max` | maximum | running peak (occlusion, high-water) | none → row drops |
-| `min` | minimum | running floor | none → row drops |
+| `max` | numeric bridge for `\|/` | numeric bridge for `\|\` | none → row drops |
+| `min` | numeric bridge for `&/` | numeric bridge for `&\` | none → row drops |
 | `avg` | fold-and-finish mean | running mean | none → row drops |
 | `-` | rejected: not associative | — | — |
 | `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
 
-The identity column restates the §12/§13 law: a fold with a registered identity yields it on the empty scope, and a reducer without one fails the row. That is left-join-null extended to the empty fiber. The γ column-form (`f/ rel'.Comp`) inherits the same identities per fiber. A named reducer (`threat/`) enters the same scheme — registered identity or fail the empty scope — and its scan (`threat\`) is length-preserving, so the empty scope yields the empty column with no identity consulted.
+The identity column restates the §12/§13 law. A fold with an identity yields it on the empty scope. A fold without one fails the row, so an identityless scoped-global fold is an empty result and a bare query prints nothing. The γ column-form (`f/ rel'.Comp`) inherits the carrier-specific law per fiber. A named reducer (`threat/`) uses its registered identity or fails the empty scope. Its scan (`threat\`) is length-preserving, so empty input yields an empty column without consulting an identity. Steel's query emitter still substitutes `0` after a guarded identityless global fold. Removing that placeholder is pending in `todo/18-empty-result-output.md`.
 
-The max ruling, recorded (2026-07-11): `max/` and `max\` stay named forms. `>/` was examined and rejected — `>` is a comparison returning bool, folding it is non-associative nonsense, and making `>/` mean max requires reinterpreting `>` as "the greater-of" in fold position, the same pun refused for `-/` (APL's alternating sum). k earns `|/` as max-fold because k's `|` IS max natively, not a fold-position reinterpretation. Under the named-reducer unification, max/min/avg are registered reducers like any other name, so no glyph is needed. Adopting k's `|` as native max — which would earn `|/` honestly, with boolean OR renamed to `||` — stays deliberately unruled.
+The Greater and Lesser ruling supersedes the deferred half of the 2026-07-11 max ruling (2026-07-21). Ano adopts q's operations directly. `|` is OR on masks and maximum on numbers. `&` is AND on masks and minimum on numbers. Their folds and scans follow from the same dyads. Boolean OR stays `|`. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. `>` remains a comparison, so `>/` stays rejected.
 
-Scan cells Steel does not yet emit: `min\`, the running mean, and the running count are ruled forms the compiler still refuses (`unknown scan op`); `+\ *\ &\ |\ max\` and named-reducer scans are live. The γ column-form takes operator folds today — a named reducer over fibers (`threat/ livestock'.Weight`) is refused with its own diagnostic, not yet in Steel.
+Steel does not yet implement the carrier overload. It emits `|` and `&` only as mask operations. Numeric `|`, numeric `&`, numeric `|/`, numeric `&/`, numeric `|\`, and numeric `&\` are pending in `todo/17-greater-lesser.md`. The bridge `max\` is live. `min\`, running mean, and running count remain pending in `todo/12-unbuilt-scans.md`. The γ column-form takes operator folds today. A named reducer over fibers (`threat/ livestock'.Weight`) is still refused.
+The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` denotes an admitted accumulator operation. It may be an operator or a registered reducer name. This is one callable-head policy, not a special case for `fold(+)`. Syntactic admission does not waive the algebraic license: an unordered fold still requires associativity, and an unordered parallel fold requires commutativity. Steel's `fold(f)` parser still accepts names only. Long-form parity is pending in `todo/12-unbuilt-scans.md`.
 
 ### Desugarings
 
@@ -876,16 +885,16 @@ Dot is gather under declared structure. A functional relationship hop `rel.Comp`
 
 `@` means evaluate within a declared scope. On a selection it restricts the current query view; after a fold or scan it supplies the scoped input and does not group. A scope does not create an affine frame. The form `mask @ frame(args) at origin` is meaningful only when `frame` is registered as a constructor of a placed habitat with a declared ambient space and linear part; `at` then supplies its origin. `+/ Gold @ Nord` and `+/ Elevation @ Ground` are scoped-global folds, one scalar each. Grouping is the tick.
 
-The alias sigil `^` is not an operator: `^` glued to a name is one identifier (`^cursor`, `^observer`, `^world`), the こそあど deixis, re-resolved per evaluation. `^` appears nowhere else in the grammar, so `^name` never needs disambiguating.
+The alias sigil `^` is not an operator: `^` glued to a name is one identifier (`^cursor`, `^observer`, `^world`), the こそあど deixis, re-resolved per evaluation. Sigiled lookup reads the dynamic alias overlay first and falls through to the bare binding when no alias exists. `^` appears nowhere else in the grammar, so `^name` never needs disambiguating.
 
 ### `!` and `^`
 
 | sigil | is | precedence | binds to | resolved |
 |---|---|---|---|---|
 | `!` | mask NOT, a prefix operator | level 7 | one mask term | at evaluation, pointwise |
-| `^` | not an operator: lexically part of the identifier; the alias/deixis sigil (`^cursor`, `^observer`, `^world`), こそあど | atom, level 14 | the name it is glued to | re-resolved per evaluation via the host |
+| `^` | not an operator: lexically part of the identifier; the alias/deixis sigil (`^cursor`, `^observer`, `^world`), こそあど | atom, level 14 | the name it is glued to | live alias first, then the bare binding; re-resolved per evaluation |
 
-They never compete: `!` negates a mask, `^` names a thing. `!^cursor` is "not the thing under the cursor" — the sigils compose, they do not overlap. One seam is deferred (2026-07-11): demo 14 pins both `!Whiterun` and `!^Whiterun` for one registered `bind … mask`, and whether `^` stays reserved to host-resolved deictics or reads as optional constant-reference sugar on any registered constant awaits its ruling. Both spellings stay legal meanwhile.
+They never compete: `!` negates a mask, `^` names a dynamic alias. `Whiterun` is the bare registered column or binding, `!Whiterun` negates its mask, and `^Whiterun` reads the live alias of that name. Without a live alias, `^Whiterun` falls through to bare `Whiterun`. With one, sigiled lookup shadows the bare binding without replacing it. Deleting the alias restores the fallback. `!^cursor` is "not the thing under the cursor": the sigils compose, they do not overlap. Ruled 2026-07-21; implementation is pending in `todo/16-dynamic-alias-overlay.md`.
 
 ## Open Questions, Next Steps
 

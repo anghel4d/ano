@@ -6,7 +6,7 @@ Mission-critical by ruling (author, 2026-07-11). The semantics stay silent. The 
 
 ## The dead-link diagnostic
 
-Author's design, specified in the s10b ruling (the message is observability, never semantics, per 02): when a relational hop crosses a link whose target no longer exists, the algebra silently clears the mask bit (left-join-null, §5) and the debug surface reports it, in the author's format: `RELATION <column> <origin> -> <sink> IS DEAD !`. In Steel this is the gen-mismatch compare. In the anoc/BQN prototype the hook is the hop's found-guard landing with 02's fix. A debug mode (e.g. `anoc --trace`, or a kore toggle) emits one line per dropped link and per empty-fiber row failure, plumbed into kore's history pane. Off by default, zero cost when off, never changes post-state.
+Author's design, specified in the s10b ruling (the message is observability, never semantics, per 02): when a relational hop crosses a link whose target does not resolve, the algebra silently clears the mask bit (left-join-null, §5) and the debug surface reports it in the author's format: `RELATION <column> <origin> -> <sink> IS DEAD !`. `DEAD` is deliberately the only missing-target state. The language does not distinguish despawned, never-existent, and mistyped target IDs. The `-1` None sentinel remains silent. Steel hooks the hop's found-guard and emits one line per dropped link and per empty-fiber row failure through `--trace`, plumbed into kore's history pane. Off by default, zero cost when off, never changes post-state.
 
 ## The tick trace
 

@@ -18,6 +18,8 @@ A query has one current row habitat. Every non-scalar value consumed together is
 
 A shape-changing read creates a derived value. It does not mutate the habitat, rank, or shape of a stored source or target. Exact reshape, cycling reshape, and `pos = to shape` have the three distinct meanings in `docs/spatialmaths.md`.
 
+The destination's registry declaration supplies the position carrier and spatial axes. A two-coordinate `to` result is valid when that carrier has at least two axes. No lattice placement is required.
+
 A plain assignment has at most one value for each destination. A colliding effect succeeds only when its declared merge makes the result independent of evaluation order. Otherwise the statement refuses before commit.
 
 Every neighborhood has an explicit boundary meaning. Shrink, constant, clamp, reflect, and wrap remain observably distinct. No spelling silently chooses clamp for all habitats.
@@ -52,7 +54,11 @@ A refused spatial tick leaves the play world and undo history in the same atomic
 
 A map or bitmap view uses declared spatial and placement metadata. It does not infer a 2D ground from a buffer length.
 
+Kore renders and targets through the registry-declared position role and spatial axes.
+
 ## Required demo outcomes
+
+`050-reshape-positions-a` and `051-reshape-positions-b` witness direct two-coordinate position generation over the selected entity view. The registry declares the destination as position-bearing. No lattice placement is implied.
 
 `055-lattice-patterns` witnesses coordinate predicates on one declared lattice habitat. Pattern effects update or place from cells without converting the 64 cells into entity-row storage. The ground remains the same habitat after every statement.
 
