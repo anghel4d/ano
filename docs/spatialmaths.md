@@ -162,9 +162,9 @@ Given `x : J → M`, a grouped reduction produces a column on `I`:
 (u_! x)(i) = ⊕ { x(j) | u(j) = i }
 ```
 
-For an unordered or parallel fiber, `(M,⊕,e)` must be a commutative monoid. Associativity permits regrouping; the identity handles an empty fiber; commutativity removes dependence on edge order.
+For an unordered fiber whose traversal is fixed but whose grouping is not, `⊕` must be associative. For parallel/unordered execution that may partition and merge without preserving traversal order, `⊕` must also be commutative. An identity handles an empty fiber; without one the empty fiber produces no row.
 
-For a declared ordered fiber, associativity and identity are sufficient. Noncommutative folds may then respect that order.
+For a declared ordered fiber, exact left accumulation accepts any compatible step: the first value starts the state and the rest apply in order. Associativity licenses regrouping or a parallel tree while preserving that order; an identity licenses a value for the empty fiber. Noncommutative and nonassociative folds are valid when evaluation preserves the exact traversal.
 
 `avg` is not a primitive associative binary operation on averages. It reduces sufficient statistics:
 

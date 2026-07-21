@@ -457,7 +457,7 @@ threat/ Damage @ Enemies     -- the slash attaches to the reducer name
 +\ Weight @ Route            -- the scan marker, one running value per cell
 ```
 
-A raw fold needs an associative operator. Its identity depends on the carrier. The derived forms keep their spellings while the registry records the truth. `avg/` folds sum and count, then divides. `#/` is `+/` over ones. A fold without an identity fails the row. This is an empty result, so a bare query prints nothing rather than a placeholder scalar. A scan needs no identity, so empty input yields an empty column.
+A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. The derived forms keep their spellings while the registry records the step, identity, finish, and available laws. `avg/` folds sum and count, then divides. `#/` is `+/` over ones. A fold without an identity fails the empty row. This is an empty result, so a bare query prints nothing rather than a placeholder scalar. A scan needs no identity, so empty input yields an empty column.
 
 | operator | `f/` fold | `f\` scan | empty-scope identity | Steel emits the scan? |
 |---|---|---|---|---|

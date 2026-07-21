@@ -301,7 +301,7 @@ The stage-4 rules stand inert until the data says otherwise. On advance, `stage3
 
 A column expression is a typed column over the current query domain. If the current view has row domain `X`, every expression has the form `Col X V`: one value of `V` per row, with an optional validity mask. `Gold` is one after the query has gathered it onto `X`; a scalar is the constant column on `X`. These operators build other columns, and a column expression appears anywhere a component name appears: in a predicate, a fold, an effect, an ordering. Equal length never establishes alignment. The view carries lineage maps from `X` to the stored habitats from which its columns were gathered.
 
-Ano adopts q's Greater and Lesser operators over the carriers that Ano admits. `a | b` is OR on masks and pointwise maximum on numbers. `a & b` is AND on masks and pointwise minimum on numbers. A mask and a number never coerce into one another. Mixed application refuses.
+Ano's Greater/Lesser family is exactly q/kdb+'s convention over the carriers that Ano admits; this is not a claim of general q compatibility. `a | b` is OR on masks and pointwise maximum on numbers. `a & b` is AND on masks and pointwise minimum on numbers. Their folds and scans are the corresponding reductions and scans. A mask and a number never coerce into one another. Mixed application refuses. See KX's definitions of [Greater](https://code.kx.com/q/ref/greater/), [Lesser](https://code.kx.com/q/ref/lesser/), [max](https://code.kx.com/q/ref/max/), and [min](https://code.kx.com/q/ref/min/).
 
 ### 12. Reduction (`/`)
 
@@ -312,7 +312,7 @@ Ano adopts q's Greater and Lesser operators over the carriers that Ano admits. `
 ∧/ alive          ⍝ all
 ```
 
-Collapse a column to a scalar. The contract for a raw `fold/` is strict: an associative binary operator, with a registered identity if the empty scope is to mean anything. `@` scopes the fold to a selection, and a fold under `@` is always one scalar.
+Collapse a column to a scalar. On a declared traversal order, a fold is exact left accumulation and admits any carrier-compatible binary operation. An unordered fold that may regroup a fixed traversal requires associativity. A parallel/unordered fold that may also discard traversal order requires associativity and commutativity. An identity is required only if the empty scope is to yield a value. `@` scopes the fold to a selection, and a fold under `@` is always one scalar.
 
 ```haskell
 +/ Gold @ Nord              -- total Nord gold
@@ -326,7 +326,24 @@ Collapse a column to a scalar. The contract for a raw `fold/` is strict: an asso
 
 Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms. `avg/` folds sum and count in one pass and divides at the end. `#/` is `+/` over the constant 1. The surface keeps the spellings, and the registry records them as fold-and-finish. That is what makes the empty case honest. A fold identity depends on the carrier. `|/` over masks yields false on empty input and `&/` yields true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so an empty scope fails the row. `max/` and `min/` are bridge spellings for those numeric folds and obey the same law. `avg/` also fails an empty scope.
 
-or, spelled for named reducers — the slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form. Scans come free: `threat\`.
+The slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form of `f/`. `scan(f)` is the long form of `f\`; `scan2(f)` applies the same accumulator step over its declared second axis. The short and long spellings never select different semantics.
+
+Operationally, Ano follows LINQ's unseeded `Aggregate` model. `f` denotes the accumulator step and is resolved through the registry: an operator selects its built-in entry and a name selects a registered reducer. On a nonempty ordered input, the first value starts the accumulator and each remaining value is applied from left to right. A fold returns the final accumulator. A scan returns the first value followed by every successive accumulator state, so it preserves input length. The registry entry supplies the step and, where applicable, its identity, finishing function, and algebraic witnesses. Haskell supplies the useful fold/scan and direction vocabulary; LINQ is the closer operational precedent because Ano dispatches the named accumulator through its registry.
+
+Ano improves on LINQ because the registry can prove which execution strategies are legal:
+
+- Ordered fold: any compatible registered accumulator.
+- Unordered fold: requires associativity.
+- Parallel/unordered fold: requires associativity and commutativity.
+- Empty fold: returns the registered identity, or nothing when none exists.
+- Scan: uses the same accumulator but returns every successive accumulator state.
+- Empty scan: produces an empty column; it does not need an identity unless a seeded form explicitly emits the seed.
+
+Here an unordered fold may regroup the fixed traversal but may not permute it; parallel/unordered evaluation may partition and merge without preserving traversal order. Ano has no seeded fold or scan form today.
+
+LINQ supplies query and accumulation as a library over a host language. Ano makes the query-and-accumulator model part of the language itself and joins it to the functional array calculus. The accumulator is therefore not an opaque callback: its registry entry can carry the laws that license execution freedom.
+
+This generalization changes none of the established operators. Mask `|/` remains ANY, numeric `|/` remains maximum, `+\` remains running sum, `|\` remains running ANY or running maximum according to its carrier, and every other existing fold and scan keeps its dyad, identity, empty behavior, and prefix results. The broader contract only admits additional accumulator heads where the order and registered laws license them.
 
 ```haskell
 threat/ Damage @ Enemies
@@ -546,7 +563,7 @@ The leading comma remains a new statement and barrier. The first statement mater
 
 ### 22. Reduction and scan
 
-A reduction maps a column on `X` to a scalar. In an unordered or parallel view it requires a commutative monoid; in a declared order an associative monoid is sufficient. `avg/` reduces the sufficient statistic `(sum, count)` and then finishes by division. A scan additionally requires a declared order or axis and returns a column on the same domain.
+A reduction maps a column on `X` to a scalar. A declared order licenses exact left accumulation with any compatible registered step. An unordered fold that may regroup that traversal requires associativity. A parallel/unordered fold that may discard traversal order requires associativity and commutativity. A registered identity supplies the empty result but is not required for nonempty input. `avg/` reduces the sufficient statistic `(sum, count)` and then finishes by division. A scan requires a declared order or axis, applies the same left-accumulator law, and returns a column on the same domain.
 
 ```haskell
 +/ Elevation @ Ground
@@ -671,7 +688,7 @@ The registry is ano's entire contact surface with the host. Every stored column 
 
 The namespace is flat. Sentence position fixes syntactic use, while the registry fixes denotation and habitat. Provenance is tooling metadata, never a glyph.
 
-The registry also carries algebraic witnesses. A reducer owes an identity and associativity law; an unordered parallel reducer additionally owes commutativity. A merge operation owes the law that makes collision fibers deterministic. A locator owes its choice law; a support projector owes candidate, `Best`, and refusal laws under a stable semantic tie policy. These are local capabilities of operations on carriers, not tiers of data. Ground entries are trusted facts about storage and host functions; sky entries are laws the optimizer may use only with the required witness. `ano-sky.md` develops the witness question.
+The registry also carries accumulator entries and algebraic witnesses. A reducer supplies a carrier-compatible step; identity, finish, associativity, and commutativity are independent optional capabilities. Identity licenses a value for the empty fold, associativity licenses unordered regrouping over a fixed traversal, and associativity plus commutativity license parallel/unordered execution that may discard traversal order. Exact left accumulation on a declared order needs only the compatible step. A merge operation owes the law that makes collision fibers deterministic. A locator owes its choice law; a support projector owes candidate, `Best`, and refusal laws under a stable semantic tie policy. These are local capabilities of operations on carriers, not tiers of data. Ground entries are trusted facts about storage and host functions; sky entries are laws the optimizer may use only with the required witness. `ano-sky.md` develops the witness question.
 
 ### Data model
 
@@ -683,13 +700,24 @@ Physical storage remains columnar. Every finite semantic habitat has a layout bi
 
 A query constructs a row habitat `X` and lineage maps to the stored habitats it touches. Every expression consumed by a kernel is aligned on `X`. Selection creates a subobject of `X`; scalar broadcast creates the constant column; a functional hop gathers along a partial map; a general relationship keeps an edge or fiber view until a quantifier or fold consumes it.
 
+For one statement, let the source view have row domain `X`:
+
+```text
+X = source domain
+p : X → Bool
+S = {x ∈ X | p(x)}
+i : S ↪ X
+```
+
+Equivalently, `S = p⁻¹({true})`, and `i` is the canonical subdomain inclusion. Here `p` is the final total predicate mask after presence, validity, and foundness guards; a failed partial read contributes false. Every predicate mask is a column on `X`, so pointwise `&` combines masks on that common domain and never short-circuits one conjunct through another. After the comma, an effect-side source column `c : X → V` is restricted to `c ∘ i : S → V`. Diagnostics follow the same domains: predicate-side `RELATION` and `FIBER` crossings range over `X`, effect-side crossings range over `S`, and distinct source crossings remain distinct trace events.
+
 This is the missing bridge between relational selection and array execution. The compiler need not box rows or abandon structure-of-arrays storage. It passes an aligned buffer bundle plus masks and lineage vectors.
 
 ### Effects
 
-An effect carries a target column, a destination map `d : X ⇀ H`, values aligned on `X`, and a merge policy. Plain assignment requires an injective destination map unless an explicit conflict resolver is registered. Additive, min, max, and similar effects may accept collisions only by reducing each destination fiber with a certified commutative merge. A masked field write is gather through a subdomain inclusion followed by scatter through that same inclusion.
+An effect carries a target column, a destination map `d : S ⇀ H`, values aligned on `S`, and a merge policy. Plain assignment requires an injective destination map unless an explicit conflict resolver is registered. Additive, min, max, and similar effects may accept collisions only by reducing each destination fiber with a certified commutative merge. A masked field write restricts source columns along `i : S ↪ X` and scatters through the destination map.
 
-Spawn is structural. Counts on `X` form `Σ(x : X). Fin(count(x))`; allocation maps that derived habitat to fresh entity keys. Despawn and spawn may change `E`, but not the schema or the habitat of a registered field.
+Spawn is structural. Counts on `S` form `Σ(x : S). Fin(count(x))`; allocation maps that derived habitat to fresh entity keys. Despawn and spawn may change `E`, but not the schema or the habitat of a registered field.
 
 ### The relationship hop
 
@@ -829,15 +857,15 @@ One table governs the whole level-9 family. Ano's `|/` and `&/` are q's folds. T
 | `max` | numeric bridge for `\|/` | numeric bridge for `\|\` | none → row drops |
 | `min` | numeric bridge for `&/` | numeric bridge for `&\` | none → row drops |
 | `avg` | fold-and-finish mean | running mean | none → row drops |
-| `-` | rejected: not associative | — | — |
-| `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
+| `-` | ordered left subtraction; unordered refused | running subtraction | none → row drops |
+| `/` (divide) | `fold(/)` is ordered left division; unordered refused; `//` remains unlexable | `scan(/)` is running division | none → row drops |
 
 The identity column restates the §12/§13 law. A fold with an identity yields it on the empty scope. A fold without one fails the row, so an identityless scoped-global fold is an empty result and a bare query prints nothing. The γ column-form (`f/ rel'.Comp`) inherits the carrier-specific law per fiber. A named reducer (`threat/`) uses its registered identity or fails the empty scope. Its scan (`threat\`) is length-preserving, so empty input yields an empty column without consulting an identity. Steel's query emitter still substitutes `0` after a guarded identityless global fold. Removing that placeholder is pending in `todo/18-empty-result-output.md`.
 
-The Greater and Lesser ruling supersedes the deferred half of the 2026-07-11 max ruling (2026-07-21). Ano adopts q's operations directly. `|` is OR on masks and maximum on numbers. `&` is AND on masks and minimum on numbers. Their folds and scans follow from the same dyads. Boolean OR stays `|`. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. `>` remains a comparison, so `>/` stays rejected.
+The Greater and Lesser ruling supersedes the deferred half of the 2026-07-11 max ruling (2026-07-21). Ano adopts q's operations directly over its admitted carriers. `|` is OR on masks and maximum on numbers. `&` is AND on masks and minimum on numbers. Their folds and scans follow from the same dyads. Boolean OR stays `|`. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. `>` remains a comparison, so `>/` stays rejected.
 
 Steel does not yet implement the carrier overload. It emits `|` and `&` only as mask operations. Numeric `|`, numeric `&`, numeric `|/`, numeric `&/`, numeric `|\`, and numeric `&\` are pending in `todo/17-greater-lesser.md`. The bridge `max\` is live. `min\`, running mean, and running count remain pending in `todo/12-unbuilt-scans.md`. The γ column-form takes operator folds today. A named reducer over fibers (`threat/ livestock'.Weight`) is still refused.
-The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` denotes an admitted accumulator operation. It may be an operator or a registered reducer name. This is one callable-head policy, not a special case for `fold(+)`. Syntactic admission does not waive the algebraic license: an unordered fold still requires associativity, and an unordered parallel fold requires commutativity. Steel's `fold(f)` parser still accepts names only. Long-form parity is pending in `todo/12-unbuilt-scans.md`.
+The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` follows the LINQ accumulator model: it may be an operator or a registered reducer name, and the registry resolves the step, identity, finish, and laws. This is one callable-head policy, not a special case for `fold(+)`. A declared order admits any compatible step under exact left accumulation; unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. Steel's `fold(f)` parser still accepts names only, and the emitters still maintain incompatible operation tables. Long-form parity and ordered subtraction/division are pending in `todo/12-unbuilt-scans.md`.
 
 ### Desugarings
 

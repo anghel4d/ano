@@ -1,8 +1,8 @@
 # 12 — ruled fold and scan parity
 
-Standing verified 2026-07-21. `emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), and `#\` stays lexer-barred. The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` is an accumulator operation. Every semantically admitted operator or registered reducer belongs there. This is general parity, not a special case for `fold(+)`. Steel's `fold(f)` parser still accepts names only while `scan(f)` and `scan2(f)` use a separate operator-or-name parser.
+Standing verified 2026-07-21. `emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), and `#\` stays lexer-barred. The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` is a registry-resolved accumulator operation. Every semantically admitted operator or registered reducer belongs there. This is general parity, not a special case for `fold(+)`. Steel's `fold(f)` parser still accepts names only while `scan(f)` and `scan2(f)` use a separate operator-or-name parser.
 
-Haskell folds and scans and LINQ Aggregate establish the useful policy: the parenthesized argument denotes the accumulator function, not a privileged identifier class. Their sequential forms can apply arbitrary functions because traversal order is fixed. Ano keeps its stricter semantic license. An unordered fold still requires associativity, and unordered parallel reassociation still requires commutativity. Syntax admits the common callable head, then the semantic checker accepts or refuses the operation for that fold or scan.
+LINQ's unseeded `Aggregate` is the closest operational precedent: the parenthesized argument denotes an accumulator step selected through a callable mechanism, and the first input value starts the state. Ano resolves that step through its registry, which also carries any identity, finishing function, and algebraic witnesses. That is where Ano improves on LINQ: ordered fold admits any compatible registered accumulator; unordered regrouping requires associativity; parallel/unordered execution requires associativity and commutativity; empty fold uses the registered identity or yields nothing; scan returns every successive accumulator state; empty scan is empty and needs no identity unless a seeded form explicitly emits the seed. Ano has no seeded form today. Haskell supplies the useful fold/scan and direction vocabulary.
 
 The fold/scan permutation table promises a running value for every admitted reducer, but Steel builds only a subset and its spellings maintain different whitelists. The ruled work is to converge the grammar and emitter on one semantic operation set. Only the running-count spelling remains an open surface decision.
 
@@ -29,7 +29,7 @@ The glyph fold side is whole: `min/ avg/ #/` all emit and are exercised by the c
 
 ## Work items
 
-- Give `fold(f)`, `scan(f)`, and `scan2(f)` one operator-or-registered-reducer head parser. Apply semantic admission after parsing instead of maintaining syntax-specific whitelists. This admits `+`, `*`, `&`, `|`, the named bridges, and registered reducers wherever their fold or scan instance exists. It does not admit subtraction or division into unordered folds.
+- Give `fold(f)`, `scan(f)`, and `scan2(f)` one operator-or-registered-reducer head parser. Apply semantic admission after parsing instead of maintaining syntax-specific whitelists. This admits `+`, `*`, `&`, `|`, the named bridges, and registered reducers wherever their fold or scan instance exists. Admit subtraction and division for exact traversal on a declared order; refuse them when the fold has no order or would reassociate.
 - Add the `min\` bridge to `emit_scan`'s glyph table. The along-form already proves the codegen.
 - Build `avg\`, the running mean over the scan's scope, from the same sum-and-count state as `avg/`. Empty input yields the empty column without consulting an identity.
 - Build the running count once it has a spelling (see the open sub-question).
@@ -44,5 +44,5 @@ The glyph fold side is whole: `min/ avg/ #/` all emit and are exercised by the c
 
 - Steel is the reference compiler. The archived C predecessor is not an oracle. BQN files explain and witness the denotation but do not constrain it independently.
 - The table and emitter agree after landing: no row promises what Steel refuses, and no accepted spelling is undocumented.
-- Long forms share one callable-head policy. The operation's registered laws and the fold or scan's order determine semantic admission.
+- Long forms share one registry-resolved accumulator policy. Ordered fold admits any compatible registered accumulator; unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity.
 - Empty-scope law preserved: a scan is length-preserving, so the empty scope yields the empty column — no identity, no NaN, consistent with the existing named-reducer scan path.

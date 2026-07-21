@@ -194,7 +194,7 @@ threat/ Damage @ Enemies     -- named registered reducer: the slash attaches to 
 fold(threat) Damage @ Enemies    -- the long form, same fold
 ```
 
-Two honesty rules. A raw fold needs an associative operator. Its identity depends on the carrier. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel's current bare-query `0` is an implementation bug tracked in `todo/18-empty-result-output.md`.
+Two honesty rules. A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. An identity is needed only to produce a value on empty input. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel's current bare-query `0` is an implementation bug tracked in `todo/18-empty-result-output.md`.
 
 A scan accumulates and returns a column of equal length, which means it needs an order, and an abstract selection has none. Either the source view carries one, or you name one. The same scan, two spellings, same result (`030-scans.ano`, `031-scan-along.ano`):
 
@@ -215,8 +215,8 @@ The whole family fits one table. Ano adopts q's Greater and Lesser operations di
 | `max` | numeric bridge for `\|/` | numeric bridge for `\|\` | none → row drops |
 | `min` | numeric bridge for `&/` | numeric bridge for `&\` | none → row drops |
 | `avg` | fold-and-finish mean | running mean | none → row drops |
-| `-` | rejected: not associative | — | — |
-| `/` (divide) | rejected: not associative; `//` additionally unlexable (`/` is fold-marker and replicate) | — | — |
+| `-` | ordered left subtraction; unordered refused | running subtraction | none → row drops |
+| `/` (divide) | `fold(/)` is ordered left division; unordered refused; `//` remains unlexable | `scan(/)` is running division | none → row drops |
 
 A scan needs no identity. Empty input yields an empty column. The 2026-07-21 ruling keeps boolean OR as `|` and adds numeric maximum to the same dyad. `&` mirrors it as AND and numeric minimum. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. Steel does not yet implement numeric `|` or numeric `&` in direct, fold, or scan form. That work is pending in `todo/17-greater-lesser.md`. The `min\` bridge, running mean, and running count remain pending in `todo/12-unbuilt-scans.md`.
 
