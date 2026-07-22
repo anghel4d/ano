@@ -1,4 +1,3 @@
--- Japanese conjugate of 130-central. Central fixture in demos/registries/, reached via ../registries/.
 --! registry ../registries/130-central.reg
 --! ja
 --! expect hp = 110 100 110

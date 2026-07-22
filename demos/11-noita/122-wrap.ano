@@ -1,4 +1,3 @@
--- The wrap (w2): the deck is a ring; wrapping is modular index arithmetic, and no row ever moves. Twin of 122-wrap.bqn. (was w2-wrap)
 -- The classic trick: hang a modifier at the deck's end to catch the first slot. The deck is a ring, the rotation is arithmetic, and no card ever changes rows.
 -- Wand [SB, DP] with the cast pointer at slot 1: the block draws DP, needs one more, and wraps to the front — the classic trick that hangs a modifier at the buffer's end to catch the first slot.
 -- DrawPos is modular position arithmetic. Bal scans in the tie-free draw order and scatters back by inverse grade. The modifier at the end then binds to the first slot.

@@ -1,6 +1,4 @@
-# s58 — hop-after-despawn fixture (mirrors demos/2-effects/026-hop-after-despawn.bqn)
 # No id column: the functional rel is keyed to the fixture row index. Row 1 despawns
-# first, so every stored id below the new row count lands on the WRONG row positionally
 # (mentor 3 would read shifted slot 3 = old row 4) — the emitter resolves through the
 # hidden fixture-row column instead.
 n 6

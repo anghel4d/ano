@@ -1,6 +1,5 @@
 # ano 時 — time, transformations, and the mission register
 
-Preliminary working note, 2026-07-02. The design conversation behind it: quests are data, the Anoptic engine runs a monotonic tick counter at a fixed rate, determinism is load-bearing, a declarative language like Nix but for gaming. The settled parts already landed in the spec — §11 campaign logic, the Binding types paragraph, the Recurrences/Identity/Rule-retraction open questions. This note is the workspace for what is not settled. Where it touches a spec open question it points in; the spec entry stays the record.
 
 ## The one idea
 
@@ -25,7 +24,7 @@ The falling-sand world is the friendly case, and the claims here should be teste
 Ground to work out:
 
 - Stage advance and retraction. A stage rule must withdraw itself on firing; the retraction surface is the spec's open question and the mission register is where it earns its answer. What the register owes: install, withdraw, and a stance on rules that install rules — which is the staging/quotation question, not a new one.
-- Generated missions. Host callbacks (`fib`, noise, spatial queries) key content off indexes today; the generator subclause would bring bounded corecursion in-calculus. Both live in the Recurrences entry. The mission case sharpens the requirement: generation must be deterministic per seed or replay dies.
+- Generated missions. Host callbacks (`fib`, noise, spatial queries) key content off indexes; the generator subclause would bring bounded corecursion in-calculus. Both live in the Recurrences entry. The mission case sharpens the requirement: generation must be deterministic per seed or replay dies.
 - The mission file format. Registry declarations, defs, standing rules, a schedule, a seed. Beyond that it owes a tick-0 snapshot reference, input references, and version pinning — the lockfile of a mission.
 
 ## The transformation reading (F itself)

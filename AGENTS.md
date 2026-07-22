@@ -3,7 +3,7 @@
 ## What this is
 Ano (あの). A programming language design. An embedded ECS query-and-command engine that addresses entities by description: the selection predicate is the entity reference. FP / APL lineage, ASCII surface, SQL/Datalog/production-rules class — the FP/array sibling of Lua, to the game world what q is to kdb+; beside a Lua-class host the split is coroutines versus triggers. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
 
-The spec is `docs/ano-language.md`; satellite working notes orbit it (`docs/ano-ecs.md` the world store, `docs/ano-time.md` time and missions, `docs/ano-sky.md` purity, the Sky Registry, and the machine-as-world hypothesis). Steel, the Rust reference compiler and standalone launcher, lives in `steel/`; Kore, the Rust interactive world, lives in `kore/`. `src/` is an archived C predecessor and is neither an implementation target nor an oracle.
+The spec is `docs/ano-language.md`; satellite working notes orbit it (`docs/ano-ecs.md` the world store, `docs/ano-time.md` time and missions, `docs/ano-sky.md` purity, the Sky Registry, and the machine-as-world hypothesis). Steel is the reference compiler and Kore is the interactive world.
 
 ## The shape
 One form governs the static layer:
@@ -19,10 +19,9 @@ Selection on the left, effect on the right, comma between. `source` defaults to 
 - The spec borrows surface flavor across languages: APL/BQN/J/k, Haskell, Erlang, q/kdb+, SQL, Datalog, Lisp. Keep each example idiomatic to the language it cites.
 - Read `ano-language.md` before editing it. Match its part/section numbering and the canonical-task addendum already in place.
 - Open design questions live under "Open Questions, Next Steps". Never resolve one silently in prose; surface the tradeoff.
-- Bootstrap is ruled (2026-07-10, superseded in part 2026-07-15): Steel is the reference compiler and Kore is the current world. The archived C predecessor and BQN twins are not semantic or differential oracles. The bytecode VM and JIT target stay fixed.
+- Steel and Kore implement Ano. BQN witnesses are not semantic or differential oracles. The bytecode VM and JIT target stay fixed.
 - No heavyweight deps. No frameworks.
-- Work tracking: TODO.md is a laundry list of current tasks. Crossed off items go under `## Closed` and get a green checkmark emoji or other relevant depending on whether resolved, cancelled, etc.
-- PATCHES.md is the ledger of big patches as they get merged to main, in the style of Notch's early Minecraft Patch notes (intellectual property-safe).
+- TODO.md lists current tasks.
 
 ## Writing Style
 - Comments should follow the existing convention and generally be constrained to the top of functions: Inputs and their types, outputs and their types, invariants.

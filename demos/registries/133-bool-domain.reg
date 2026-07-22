@@ -1,4 +1,3 @@
-# t1 — bool domain fixture (mirrors demos/13-typed-registries/133-bool-domain.bqn)
 # alarm is bool: the barrier retracts every write by 0< — positive is true.
 n 4
 col alive bool 1 1 1 1

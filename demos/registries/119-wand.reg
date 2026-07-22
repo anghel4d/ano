@@ -1,5 +1,3 @@
-# n6 — the assembled wand (mirrors demos/11-noita/119-wand.bqn): the n1 entity world beside the n5 material chunk.
-# Row 0 the wand at (5,5), row 1 the enemy at (40,5) standing over the chunk, row 2 a bystander; default damage 3 stamps minted projectiles.
 n 3
 col keys num 0 1 2
 col wand bool 1 0 0
@@ -15,8 +13,6 @@ col health num 0 30 0
 col pos vec 5 5 | 40 5 | 0 0
 col parent num -1 -1 -1
 fn dist {√+´×˜(𝕨⊑pos)-𝕩⊑pos}
-# the impact deixis: the host resolves the payload's world pos into chunk coordinates;
-# blast is the frame predicate, per cell Fn ⟨cell, origin, r2⟩ with r2 the squared radius.
 bind impact point 6 6
 fn blast {c‿o‿r2: r2 ≥ +´×˜c-o}
 lattice 12 12

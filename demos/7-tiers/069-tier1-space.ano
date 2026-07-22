@@ -1,20 +1,11 @@
--- ex37 stored-field preservation: generated ground, fold, ordered scan, and the regenerability counterexample. Twin of 069-tier1-space.bqn.
--- Formal witness: this is now the regenerability counterexample—derived filters do not resize or replace the stored 8×8 fields.
--- Lattice coordinates are regenerable; stored field values are not. This demo spawns a checkerboard, folds Elevation, and scans Cost without resizing any field.
--- The header's ano lines say 64 64; the demo's own fields are scaled to 8 8 for hand-checking and the fixture reproduces those, so the scopes here say 8 8. The fold scope is a frame marker (dims unread); the scan scope's dims drive the leading-axis reshape and must match the fixture.
--- spawn Wheat ORs the checkerboard into Wheat. The fold reads Elevation without changing it, which expect elevation checks.
--- Left to the .bqn twin: the annihilation fold (1008 over the off-parity cells — no header ano line, and a masked lattice fold cannot set its frame in a query) and ground ≡ ↕8‿8 (pure BQN remint witness).
 --! registry ../registries/069-tier1-space.reg
 --! expect wheat = 1 0 1 0 1 0 1 0 0 1 0 1 0 1 0 1 1 0 1 0 1 0 1 0 0 1 0 1 0 1 0 1 1 0 1 0 1 0 1 0 0 1 0 1 0 1 0 1 1 0 1 0 1 0 1 0 0 1 0 1 0 1 0 1
 --! expect elevation = 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63
 
--- statement 1: spawn Wheat on the checkerboard figure; cell (0,0) is selected
 8 8 & (x + y) % 2 == 0 , spawn Wheat
 
--- statement 2: fold Elevation to one scalar; 0+1+...+63 = 2016, and the field survives
 --! out 2016
 +/ Elevation @ 8 8
 
--- statement 3: scan cost in lattice order (leading axis); all-ones cost gives running row totals, row i all (i+1)
 --! out 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5 6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7 8 8 8 8 8 8 8 8
 +\ Cost @ 8 8

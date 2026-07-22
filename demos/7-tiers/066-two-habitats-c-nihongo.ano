@@ -1,5 +1,3 @@
--- Japanese conjugate of 066-two-habitats-c: replicate row, one source id per spawned copy.
--- Formal witness: shared operators require local capabilities; rank and cardinality do not identify a habitat.
 --! registry ../registries/066-two-habitats-c.reg
 --! ja
 --! expect-n 14

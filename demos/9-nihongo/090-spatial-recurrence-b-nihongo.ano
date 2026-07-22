@@ -1,4 +1,3 @@
--- 46b の日本語対訳: 全零の新しい行にステンシルを八回適用しても零のまま。各段はその段の前状態を読む。
 --! registry ../registries/090-spatial-recurrence-b.reg
 --! ja
 --! expect height = 0 0 0 0 0 0 0 0

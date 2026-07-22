@@ -1,6 +1,4 @@
--- Named selections (ex9). Twin of 009-named-selections.bqn.
 -- Five fighters, but the predicates now have names: def binds a selection, and master and rich thereafter stand for the whole mask.
--- A def names a predicate, not a saved mask: entity 0 starts at 9500 gold and crosses rich's threshold only via statement 1's scatter — marked row 0 = 1 is the .bqn's "def is a predicate, not a snapshot" witness (a snapshot compiler yields 0 0 1 1 0). Within a statement, ;-batched effects evaluate the mask once and share one barrier.
 --! registry ../registries/009-named-selections.reg
 --! expect gold = 10500 3000 20000 15000 500
 --! expect faction = Hostile Friendly Hostile Hostile Friendly

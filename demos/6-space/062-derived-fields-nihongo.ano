@@ -1,5 +1,3 @@
--- Japanese conjugate of 33 (spatial derived fields, version B: boundary policy visible). def bodies over x/y coords, dotted neighbor(clamp) hop, spawn 生成, effect set 水 に … にする, +崖 grant.
--- Formal witness: derived columns, masked writes, and the explicit clamp relation preserve the 8×8 field habitat.
 --! registry ../registries/062-derived-fields.reg
 --! ja
 --! expect peak = 1 1 1

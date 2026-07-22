@@ -1,4 +1,3 @@
-# s64 — reducer-spellings fixture (mirrors demos/3-fold-scan/040-reducer-spellings.bqn); the ex15 world, one reducer under three spellings
 n 8
 col enemies bool 0 1 1 0 1 0 1 0
 col damage nat 5 12 7 0 30 4 9 2

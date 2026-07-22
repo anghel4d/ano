@@ -1,5 +1,3 @@
-# w4 — the Greek letters (mirrors demos/11-noita/126-greek.bqn)
-# Wand [DP, SB, Bomb, Triple]: a reflective spell is a query over the wand's own table; parent pins which slot each letter copied.
 n 5
 col keys num 0 1 2 3 4
 col wand bool 1 0 0 0 0

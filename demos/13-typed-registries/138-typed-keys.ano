@@ -1,4 +1,3 @@
--- Typed keys (t6): unique may refine its numeric carrier. id is unique nat; slot is unique int and admits negative keys. Twin of 138-typed-keys.bqn.
 -- Spawn mints 1 + max(existing keys, -1): id becomes 6, and the all-negative slot column becomes 0.
 --! registry ../registries/138-typed-keys.reg
 --! expect-n 3

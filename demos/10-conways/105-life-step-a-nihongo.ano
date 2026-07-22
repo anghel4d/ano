@@ -1,5 +1,3 @@
--- Japanese conjugate of c1 (Life, one synchronous B3/S23 generation; fused value form).
--- Formal witness: step one and step two consume the same fixed 5×5 habitat through the explicit Moore relation.
 --! registry ../registries/105-life-step-a.reg
 --! ja
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0

@@ -1,7 +1,3 @@
-# ex34 — board literal fixture (mirrors demos/6-space/063-board-literal.bqn)
-# The glyph lattice comes from the statement's own string literal; the world starts empty.
-# pieceOf maps a glyph to its piece proto — here the piece IS the glyph (the .bqn's
-# piece ≡ occupied/⥊board), so the lookup wraps the char as a one-glyph sym.
 n 0
 col proto sym
 col pos num

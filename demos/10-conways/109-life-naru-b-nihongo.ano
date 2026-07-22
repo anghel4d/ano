@@ -1,5 +1,3 @@
--- Japanese conjugate of 109-life-naru-b (two-rule flora pair, one shared barrier: bloom under !Planted, wither under Planted).
--- Formal witness: the shared barrier changes field values only; habitat, rank, and shape remain fixed across ticks.
 --! registry ../registries/108-life-naru.reg
 --! ja
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0

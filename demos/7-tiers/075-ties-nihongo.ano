@@ -1,5 +1,3 @@
--- Japanese conjugate of 075-ties: rank under ties is value-only. On the tied 5 5 3 fixture rank(Gold) must be the dense 1 1 0, not the ordinal 1 2 0. RHS is a single call so にする grabs it without parens.
--- Formal witness: the BQN sibling proves a local order or symmetry fact only; it does not classify all entity programs.
 --! registry ../registries/075-ties.reg
 --! ja
 --! expect rank = 1 1 0

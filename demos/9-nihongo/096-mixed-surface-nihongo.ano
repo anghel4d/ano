@@ -1,4 +1,3 @@
--- Mixed surfaces over an English registry (s51): English nouns under Japanese grammar (already worked before native nouns landed — pinned so it never regresses), then kanji and Latin nouns in one statement.
 --! registry ../registries/001-canonical-masked-update.reg
 --! ja
 --! expect gold = 2100 200 300 2400 500 600

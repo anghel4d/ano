@@ -1,4 +1,3 @@
-# spec §10 — pre-state fixture (mirrors demos/2-effects/024-pre-state.bqn)
 n 4
 col trickster bool 0 1 1 0
 col gold nat 10 20 30 40

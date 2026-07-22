@@ -1,4 +1,3 @@
-# Assignment (ex11): replace selected values in an aligned component column.
 # ano: Bandit , Faction = :Hostile
 #      Dead , Loot = :Empty
 # Semantics: masked overwrite; the backtick names are symbol atoms (enum codes here), the constant lands on-mask only. Structural Under with a bare scalar is invalid BQN; the constant must be lifted per cell with each.

@@ -1,4 +1,3 @@
--- Japanese conjugate of s60 (the keyed hop: rel;unique⁻¹). Twin of 015-keyed-hop.ano.
 --! registry ../registries/015-keyed-hop.reg
 --! ja
 --! expect-n 4

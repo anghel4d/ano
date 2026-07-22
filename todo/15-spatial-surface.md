@@ -1,6 +1,6 @@
 # 15 — the spatial registry surface: the capability ladder, both surfaces, and the five-world prototype path
 
-Surfaced 2026-07-19, the same session as `14-registry-border.md`; this file is the candidate spelling that 14's item 3 gates, plus the prototype route that needs none of the pending proofs. Grammar ruling (author, 2026-07-19, binding): the registry surface is adjectives applied to an essential noun, then a name, then optional data — enum adjectives on the array, no relative token positioning, no new keyword families. Layout is always SoA and is never surface; no `rowmajor` word exists anywhere. Nothing here is built without the author's explicit go — the same gate as TODO's registry-taxonomy item and 14's item 3.
+The registry surface is adjectives applied to an essential noun, then a name, then optional data. Layout is always SoA and is never surface. Nothing here is built without the author's explicit go.
 
 ## The ladder
 
@@ -19,15 +19,6 @@ The current mathematics has ten layers between the raw buffer and a placed eucli
 | 9 | metric (§21–22) | distance, nearest, radius | `metric` adjective | defined only |
 | 10 | policies: numeric refinement (`todo/13:207`), boundary (§20) | lawful refusals on IEEE and edges | `numeric` and `boundary` adjectives | defined only |
 
-## Corrections of record
-
-The 2026-07-19 session settled the nouns; these supersede every earlier sketch.
-
-- The fundamental kernel of a continuous space is the **frame** (rung 6), not the lattice. `lattice` is the discrete noun: cells, charts, stencils, Ground-shaped things.
-- A frame has no origin. `spatialmaths.md` §14: "An abstract lattice needs no origin. A stored field needs no origin. A placement needs an origin." Origin appears only in a `placement`. This is what lets planets move later without touching Σ (14's item 2).
-- Frame axes are names in the coordinate presentation, not stored columns. A `coordinate col` exists only over a lattice (a field storing the cells' own coordinates).
-- A position column names its frame and axis through the kind slot with the dotted hop already in the language: `col PosX World.x [...]` — zero new keywords, and the col stays a partial entity column whose item carrier names the frame (§15). It never becomes a lattice field.
-- The entity handle is the index, as everywhere else. No id column, no ceremony.
 
 ## The maximal surface — a euclidean 3D volume, every witness explicit
 
@@ -75,11 +66,11 @@ Defaults: `euclid3` mints dim 3 and axes x y z; scalar defaults to the repo's f6
 
 Minimal and maximal load to the identical certificate. A macro-adjective (`euclid3`) expands at load; the certificate keeps metric, dimension, module, and injectivity as separate witnesses per `todo/13:196`. Defaults are elaboration, never weaker checking. Surface bundling is legal precisely because it dies at the loader.
 
-## The five-world prototype path — possible today, below the certificate line
+## The five-world prototype path — below the certificate line
 
-Ruled feasible 2026-07-19: discrete 2D grid, discrete 3D voxels, continuous 2D euclid, continuous 3D euclid, continuous 3D sphere, without completing the pending proofs. Capabilities compose by conjunction (§22); each world stands on a short stack.
+discrete 2D grid, discrete 3D voxels, continuous 2D euclid, continuous 3D euclid, continuous 3D sphere, without completing the pending proofs. Capabilities compose by conjunction (§22); each world stands on a short stack.
 
-| world | rungs needed | exists today |
+| world | rungs needed | exists |
 |---|---|---|
 | discrete 2D grid | lattice | yes — `lattice <w> <h>` (`steel/src/registry.rs:269`), Conway demos run |
 | discrete 3D voxels | lattice, rank 3 | same code, one more axis |
@@ -93,7 +84,7 @@ The price is refusal, not function. The unwritten rungs are the type-is-the-lice
 
 - Every fixture checks rank, shape, and habitat after each tick and runs a second tick (§26's law as `--! expect` assertions).
 - The sphere trap in the fixture, not the footnote: naive lerp leaves the sphere; positions renormalize at the barrier or move by registered slerp.
-- Every prototype header says convention-not-certificate. The retired tiers died of overclaiming; these fixtures must not.
+- Every prototype header says convention-not-certificate. These fixtures must not overclaim.
 - Written as `--! expect` fixtures they are not throwaway: they are the acceptance corpus the certified path must later reproduce byte-identically, per `todo/12-spatial-formalization.md`'s framing.
 
 ## Open sub-questions (surface at execution, never resolve silently)

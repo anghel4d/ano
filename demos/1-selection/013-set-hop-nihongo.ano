@@ -1,4 +1,3 @@
--- Japanese conjugate of s05d (set hop: image selection, quantifiers, duplicate rule). Twin of 013-set-hop.ano.
 --! registry ../registries/013-set-hop.reg
 --! ja
 --! expect frenzied = 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

@@ -1,5 +1,3 @@
--- Japanese conjugate of 107-life-glider: the glider flipbook, one barrier per generation (B3/S23).
--- Formal witness: every generation remains on the same 8×8 field habitat while values move.
 --! registry ../registries/107-life-glider.reg
 --! ja
 --! out 5

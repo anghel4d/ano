@@ -1,4 +1,3 @@
--- Native proto and id roles (s56), ASCII twin: the set hop resolves role id through 識別, whose prime values rule out row-index fallback. Board spawn writes role proto through 種別; removing either role breaks a pin. (was s56-native-proto-id)
 --! registry ../registries/104-native-proto-id.reg
 --! expect-n 6
 --! expect 狂乱 = 1 0 0 0 0 0

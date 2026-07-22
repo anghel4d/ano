@@ -1,4 +1,3 @@
--- Japanese tokenizer skin (ex40): two readers, shared token kinds, one parser. Twin of 082-tokenizer-skin.bqn.
 -- The JA reader resolves aliases and particles, then feeds the shared parser. same-tokens compares normalized kinds and payloads with the ASCII line.
 --! registry ../registries/082-tokenizer-skin.reg
 --! ja

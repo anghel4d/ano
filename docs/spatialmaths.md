@@ -1,20 +1,6 @@
 # Spatial mathematics
 
-This document collects the spatial formalization developed during the 2026-07-15 audit, including the preliminary proposals, their failures, and the corrected model. `docs/ano-language.md` remains the language specification. This document gives the mathematics behind its habitats, fields, relations, effects, lattices, and columnar lowering.
-
-## 1. The preliminary proposal and its correction
-
-The first proposal was to define a field by an origin and basis vectors of arbitrary dimension. That is too much structure for a field and too little structure for a placed space.
-
-A field needs only a domain and values. For a finite habitat `H` and carrier `V`, a total field is a function:
-
-```text
-f : H → V
-```
-
-The origin and basis do not belong to `f`. They belong to an optional placement of a structured habitat into an ambient affine space. A health component, a chessboard glyph field, and a heightmap are all fields in this sense; only some carry spatial structure.
-
-The minimal semantic object is therefore not “origin plus basis.” It is a named habitat `H`. Structure is added only when an operation requires it.
+`docs/ano-language.md` remains the language specification. This document gives the mathematics behind its habitats, fields, relations, effects, lattices, and columnar lowering.
 
 ## 2. Habitats
 
@@ -582,7 +568,7 @@ This supports contours, connected boundaries, surfaces, and homology. It is not 
 
 ## 22. Capability structure
 
-The retired tiers are replaced by independent capabilities.
+Capabilities are independent.
 
 ```text
 finite(H)
@@ -612,66 +598,6 @@ An operation's type states the evidence it needs. Scan needs order. Transpose ne
 Registry-authorized lineage is the capability that permits a typed map to participate in a plan. It can expose the function denoted by a locator or relation without admitting every function between equal finite types. Physical layout never supplies this capability.
 
 The type is the license for the operation.
-
-## 23. Why the former Tier 1 proof failed
-
-The old argument said spatial indices were regenerable, therefore rank-changing operations were free.
-
-Coordinates are regenerable:
-
-```text
-D ≅ ∏ Fin(n_j)
-```
-
-Persistent field state is not:
-
-```text
-f : D → V
-```
-
-Recreating `D` does not recreate the association between each `d` and `f(d)` after values have been filtered, graded, replicated, or reshaped. A derived read may change domain. A write into `f` must return through a destination map to `D`.
-
-The valid theorem is:
-
-```text
-ordinary field update : (D → V) → (D → V)
-```
-
-not:
-
-```text
-arbitrary array operation : (D → V) → (D' → V)
-```
-
-The latter produces a new value, not an update to the old field.
-
-## 24. Why the former Tier 2 proof was not universal
-
-Permutation equivariance is a useful law for operations that claim to ignore labels:
-
-```text
-F(c ∘ σ) = F(c) ∘ σ
-```
-
-Ano does not universally ignore labels. It exposes generational keys, `index`, explicit singleton bindings, relationships, declared order, placement, and structural allocation. These structures restrict which permutations are symmetries.
-
-The correct use is local. An optimizer may use equivariance when an operation and view certify that the relevant relabelling preserves every observed structure.
-
-Stable grade intentionally observes an order witness. A fixed relationship intentionally observes edges. Neither is illegal. Their extra structure simply invalidates the maximal symmetry premise.
-
-## 25. Why the former Tier 3 proof was too broad
-
-For a genuinely parametric family:
-
-```text
-F_V : (I → V) → (J → V)
-```
-
-natural in every carrier `V`, Yoneda-style reasoning characterizes `F` as reindexing along a map `J → I`.
-
-That theorem applies only when `F` is parametric in `V`. An opaque host operation is usually not parametric: a pathfinder inspects a navmesh, and a behavior-tree runner inspects nodes. Opacity means the native Ano algebra does not contain that operation. It does not mean the host operation cannot inspect the carrier.
-
-Opaque values remain columns on habitats. Dispatch is a registered capability, not a third tier.
 
 ## 26. Time and repeated evaluation
 

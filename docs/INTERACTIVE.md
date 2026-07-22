@@ -1,107 +1,57 @@
 # INTERACTIVE — the ano editor.
 
-Transcription of the author's notebook pages (2026-07-07 the editor and the registry, 2026-07-08 the data model). The ask, verbatim: an ano editor — "get me a harness for this lang!" — integrated into anoptic_engine as a debug panel. Rendering candidates from the margin: a space, or ncurses. The registry plan (REGFIX.md) and the data-model plan (DATAMODEL.md) are executed — PATCHES.md snapshot 26w28b is the record, `.archive/` holds the plans; this file holds the pictures.
+Kore is Ano's interactive world. It opens `.ano` and `.reg`, runs Steel, displays the resulting columns and outputs, and edits the world through the text registry boundary. `kore/kore.md` is the operational reference.
 
 ## The panel and the commit loop
 
-```
-┌─ ano editor ───────────────────────────────────────┐    ┌──────────────┐
-│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │    │  .reg files  │◄───────┐
-│                                                    │    └──────┬───────┘        │
-│                 columns         relations          │           │ read in        │
-│                 race      gold  twohanded  stamina │           ▼                │
-│  ┌ 1 0 3 0 ┐    Nord       300     60        100   │    ┌───────────────┐       │
-│  │ 0 1 0 4 │    Khajit     400     20        110   │◄───│ binary tables │       │ mv
-│  │ 3 0 1 0 │    NORD        57     28        110   │───►│   in-memory   │       │ commit
-│  │ 0 4 0 1 │    Imperial  1000     31        100   │    └───────┬───────┘       │
-│  └ 1 1 1 0 ┘    Nord       800     50         90   │            │ write out     │
-│       ▲                                            │            ▼               │
-│  space? ncurses?                                   │    ┌───────────────┐       │
-├────────────────────────────────────────────────────┤    │ .reg (staged) │───────┘
-│ > Nord & Gold > 50 , Gold += 500                 ▷ │    └───────────────┘
-└────────────────────────────────────────────────────┘
+```text
+┌─ demos ─┬─ code ───────────────┬─ world / map / bitmap ─┐
+│ rail    │ .ano play copy       │ columns and fields      │
+├─────────┴───────────────────────┴─────────────────────────┤
+│ outputs                         │ history and trace       │
+├─────────────────────────────────┴─────────────────────────┤
+│ > statement                                               │
+└───────────────────────────────────────────────────────────┘
 ```
 
-The world as a spreadsheet: the relation matrix beside the column store, an ano REPL line at the bottom running statements against the live tables. The loop to the right is the whole persistence story — registries read into binary in-memory tables, written out to a staged file, committed by rename. mv is atomic, so saves are crash-safe; a save file is a registry dump.
+Demo files are immutable. The first mutation creates a play copy under `.kore/play/`. Every successful statement, tick, or cell edit stages the pre-state on the undo ring and commits the new `.reg` by rename. A failed operation leaves the world unchanged.
 
-The panel's own data draws the case contract: `Gold` at the prompt folds to the `gold` column — names are always case-insensitive — while the race values `Nord` and `NORD` stay distinct — values never fold.
+`r` restores the pristine registry, `n` advances one tick, and `u` restores the previous world. Prompt statements run as Ano programs against the play registry. Query results enter outputs. Compiler output and trace diagnostics enter history.
 
 ## The registry, three layers
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ C API             structs at compile time — authoritative;  │
-│                   anostr_t-style checked value types        │
-├─────────────────────────────────────────────────────────────┤
-│ storage files     .reg / .anoreg — data at rest:            │
-│                   saves, arcade user data                   │
-├─────────────────────────────────────────────────────────────┤
-│ in-memory         virtual ◄──────────────────► direct ECS   │
-│ representation    (anoc arena tables)   (anoptic_engine)    │
-└─────────────────────────────────────────────────────────────┘
+```text
+host declarations → Steel world and typed plan → .reg fixture/save boundary → Kore views and edits
 ```
 
-One API, three layers. `.reg` text is one frontend of the C API, not the API; the in-memory representation runs the full span from anoc's private arena tables to the engine's live store.
+The host registry defines names, carriers, relationships, bindings, callables, prototypes, and spatial capabilities. Steel owns language validation and execution. `.reg` is the repository's text fixture and save boundary. Kore presents that world without becoming a second semantic authority.
 
 ## The staged file, zoomed
 
-```
-╭╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╮
-┆  column definitions                 ┆
-┆  alias bindings                     ┆   directives: as · ja · role
-┆  function bindings (function ptrs)  ┆
-┆  spatial lattice definitions        ┆
-┆  enums                              ┆
-┆                                     ┆
-┆  ⟨ actual columnar data & arrays ⟩  ┆
-╰╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╯
+```text
+declarations
+columns and presence
+relationships and fibers
+bindings, aliases, defaults, prototypes, and callables
+fields and current spatial data
 ```
 
-One file carries schema, vocabulary, and data: definitions and bindings above, the columnar payload below.
+Save and reload must preserve every declaration the loader understands. Spatial formalization requires habitat, layout, frame, carrier, boundary, and bridge identity to survive the same boundary. That metadata is pending in Steel and Kore.
 
 ## The entry taxonomy
 
-```
-columns       →  classic ECS, discrete number of columns
-spaces        →  configuring basis vectors, dimensionality, lattices
-arrays        →  any other array or matrix types
-extern func   →  struct { ano_fptr, attributes }, strongly typed
-net           →  struct { socket, format }
-```
+- `col`, `pres`, and `unique`: stored columns and carrier refinements.
+- `rel`, `srel`, and `inv`: functional and set-valued relationships.
+- `bind`, `default`, and registry `def`: constants, spawn defaults, and prototypes.
+- `fn`: registered callable behavior.
+- `as`, `ja`, and `role`: derived names, surface names, and system roles.
+- Fixture `alias`: stored fixture masks, distinct from the pending live `^name` overlay.
+- Spatial declarations: named habitats and capabilities. Equal length never establishes alignment.
 
 ## The data model — the ladder
 
-From the second page, titled "あの ano lang full syntax list". The flagship line, annotated:
+The order is Mathematics > Denotation > domain-and-lineage IR > Grammar > Surface > lowering. Kore may display storage details, but those details do not define Ano.
 
-```
-Nord  &  Gold > 50 ,  Gold += 500
-─┬──     ─┬──   ┬─         ┬─
- │        │     │          └─ or just +, can be inferred analytically
- │        │     └─ value of gold
- │        └─ column name
- ├─ Option A: Nord is just a tag an entity can have. 1d.
- └─ Option B: Nord is an item of a Race column, wired up "as" tag in the registry.
-```
+The table view presents stored columns. Map and bitmap views must use declared habitat, placement, position role, and axes. They must not infer a 2D ground or universal `(x,y)` order from buffer length or a raw pair. The required repair is tracked in `todo/TODO.md`.
 
-The ladder, with the two space sketches (a curved manifold, a lattice cross) at its left end:
-
-```
-        change of basis          one col
- spaces ◄─────────────► matrices ─────► arrays ◄────► columns ◄────► relations ─────► tags
-   nd                     n×m          dense 1d      dense 1d       sparse 1d       points
-```
-
-Dimensionality, in the author's reading: nd → 3d → dense 1d (numerical arrays, record columns) → sparse 1d (relations-as-indexes belonging to an entity, row to row) → points (tags, sparse or dense, enum values). Spaces and transformations can be represented as matrices; a matrix column is an array; an array indexed by entities is a column; a column of row indexes is a relation; a relation or column collapsed to membership is a tag.
-
-The right half of the ladder, walked on live data:
-
-```
-                              Gold        Master        tags
- ┌ 0 8 9 0 ┐   ┌ 0 ┐   [0]    400         [2] ──┐       Nord
- │ 1 1 6 1 │   │ 1 │   [1]    600          /    │       Khajiit
- │ 4 2 1 2 │   │ 2 │   [2]    200 ◄─────────────┘       Nord
- │ 6 3 1 3 │   │ 3 │   [3]    150         [4] ──┐       Nord
- └ 5 0 1 4 ┘   └ 4 ┘   [4]    221 ◄─────────────┘       Orc
-```
-
-Master stores row indexes — a sparse relation, `/` is none, each arrow one hop. The tags column is Option B drawn out: race values as points, one per row, read as tags. The plan that coheres all of this with the shipped semantics is DATAMODEL.md.
+The session log and its base registry are the repro artifact. Trace output is observational only and cannot change output or post-state.

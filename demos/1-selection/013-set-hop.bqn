@@ -1,4 +1,3 @@
-# Set hop: image selection, quantifiers, duplicate rule (decision record setHop; spec §5, §9).
 # ano: Frenzy.targets' , +Frenzied ; Health -= 10
 # ano: Plot & |/ neighbors'.Planted , +Sprouting
 # ano: Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
@@ -21,7 +20,6 @@ health -↩ 10 × image
 
 ! 0‿0‿0‿1‿1‿1‿0‿0 ≡ frenzied
 ! 100‿100‿100‿90‿90‿90‿100‿100 ≡ health
-# entity 4, targeted by both frenzied sources, was hit once — a selection is a mask, masks have no multiplicity
 "idempotent scatter" ! 90 ≡ 4⊑health
 
 # --- gamma at the target: Target , Hits += #/ attackers'  (attackers = inverse fiber of targets)

@@ -1,4 +1,3 @@
-# Natural floor (t2): nat clamps subtraction at 0 — no underflow, no wraparound.
 # ano: Alive , hp -= 55
 #      Alive , hp -= 55
 # Semantics: nat is ℕ∩[0,2^53]. Every committed write passes ⌊ then the clamp 2^53⌊0⌈ at the barrier. 60 and 10 and 30 park at 0 across two ticks; 200 decrements exactly, 145 then 90.

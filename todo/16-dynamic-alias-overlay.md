@@ -1,6 +1,6 @@
 # 16 — dynamic alias overlay
 
-Status. Ruled 2026-07-21. Implementation and tests are pending in Steel and Kore.
+Status. Implementation and tests are pending in Steel and Kore.
 
 ## Ruling
 
@@ -14,7 +14,7 @@ The notation `^Whiterun = value` states the binding relation here. It does not b
 
 Steel lexes `^name` separately but `steel/src/emit.rs` strips the sigil and performs an ordinary registry lookup. This accidentally provides bare fallback but has no distinct live overlay, no alias lifecycle, and no way for a same-stem alias to shadow only sigiled lookup. Kore therefore has no complete host-side contract for the ruling.
 
-The registry directive `alias name ...` currently stores fixture masks. It must not be mistaken for the live overlay without an explicit migration decision.
+The registry directive `alias name ...` stores fixture masks and is distinct from the live overlay.
 
 ## Work
 

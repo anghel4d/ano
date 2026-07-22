@@ -1,4 +1,3 @@
--- Japanese conjugate of s07 (masked multiply): doubling merchants' gold, off-mask unchanged.
 --! registry ../registries/021-masked-multiply.reg
 --! ja
 --! expect gold = 100 400 300 400 1000 600

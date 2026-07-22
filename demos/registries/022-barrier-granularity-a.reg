@@ -1,6 +1,3 @@
-# decision record barrier — granularity fixture (mirrors demos/2-effects/022-barrier-granularity.bqn)
-# keys is the .bqn's id column, unique nat — injectivity ∩ ℕ: spawn mints fresh keys from it (6, 7).
-# Spawn defaults 1 for nord and dead: ghosts of dead Nords keep Nord and Dead (the .bqn's copies).
 # Shared by 022-barrier-granularity-a.ano and 023-barrier-granularity-b.ano.
 n 6
 unique keys nat 0 1 2 3 4 5

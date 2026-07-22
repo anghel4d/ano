@@ -1,7 +1,5 @@
--- Barrier granularity (decision record; ex13/ex49 ruling): `~` is a new statement and a new barrier over the SAVED mask. Twin of 022-barrier-granularity.bqn. (was s10-barrier-granularity-b)
 -- The continuation despawns the antecedent's saved mask, padded with zeroes for the new rows. Both Ghosts survive although they match Nord & Dead.
 -- Barrier two's gather observes barrier one's scatter (8 rows exist); it is the effect's subject that is frozen, not the world.
--- The re-gather counterexample (idW/ghostW, zero ghosts) is BQN-only; this twin pins the saved-mask post-state.
 --! registry ../registries/022-barrier-granularity-a.reg
 --! expect-n 6
 --! expect keys = 1 2 4 5 6 7

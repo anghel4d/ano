@@ -1,5 +1,3 @@
--- Japanese conjugate of 106-life-step-b (Life one generation: freeze the kin count, then birth and death as disjoint structural writes).
--- Formal witness: step one and step two consume the same fixed 5×5 habitat through the explicit Moore relation.
 --! registry ../registries/106-life-step-b.reg
 --! ja
 --! expect kin = 0 0 0 0 0 1 2 3 2 1 1 1 2 1 1 1 2 3 2 1 0 0 0 0 0

@@ -1,6 +1,3 @@
--- Alchemy (n5): the material world is the lattice, the alchemy table is rules. Twin of 116-alchemy.bqn. (was n5-alchemy)
--- The first detonation uses the coordinate disc. The second uses the registered blast frame anchored at Firebolt.pos. Both writes target Fire and are idempotent. The final pin checks their combined result, not equality of the two masks. Spread then runs one registered step over Oil; Water is never selected.
--- Oil persists under its fire here; the -b twin adds consumption (Fire & Oil => -Oil) in the SAME tick, under §11's shared rule barrier.
 --! registry ../registries/116-alchemy.reg
 --! expect fire = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 --! expect oil = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

@@ -1,4 +1,3 @@
-# Bool domain (t1): the barrier retracts bool writes by 0< — positive is true.
 # ano: Alive , alarm = alarm + trips
 #      Trips > 2 , alarm = alarm - 5
 # Semantics: a bool column admits {0,1}. The loader refuses out-of-domain data at rest; a committed write passes the retraction 0<x at the barrier: 2→1, 3→1, ¯4→0. The retraction is a barrier property — merged writes retract once, at commit — and applies to the whole committed column, which on off-mask cells (in-domain by the load seal) is the identity.

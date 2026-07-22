@@ -1,4 +1,3 @@
-# s61 — proto-spawn fixture (mirrors demos/5-generate/054-proto-spawn.bqn)
 # The proto is the registered archetype, the registry's first row-oriented named-value
 # construct. Spawn fill is the three-layer lookup: proto value (soldier, hp), else the
 # column's default (ammo), else the type zero (gold). The unique id mints fresh — the

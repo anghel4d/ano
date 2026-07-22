@@ -1,6 +1,6 @@
 # 18 — empty results are empty output
 
-Status. Ruled 2026-07-21. Steel/Kore implementation and tests are pending.
+Status. Steel/Kore implementation and tests are pending.
 
 ## Ruling
 

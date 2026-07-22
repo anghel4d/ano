@@ -1,6 +1,3 @@
-# ex21 — outer product as value fixture (mirrors demos/5-generate/047-outer-product-value.bqn)
-# Same world layout as ex20: rows 0-2 towers, rows 3-6 creeps, rows 7-10 bodies.
-# Here dist is the .bqn's squared euclidean so the materialized table pins its exact integer values (200 8200 ... 2501); ex20's registry carries the euclidean form to honor the surface threshold 50.
 n 11
 col tower bool 1 1 1 0 0 0 0 0 0 0 0
 col creep bool 0 0 0 1 1 1 1 0 0 0 0

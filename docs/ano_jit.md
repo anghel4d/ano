@@ -1,6 +1,6 @@
 # ano JIT — the execution engine, and why the racebike is not LuaJIT
 
-**Status: design note, 2026-07-05.** This orbits ano-sky.md and ano-ecs.md. The sky note argues why every statement lands in the one fragment where static proof beats dynamic guessing, and grades the payoff (bandwidth-optimal columnar, the affine schedule, the machine-as-world end). The ECS note specifies the store the engine runs on. This note is the engine itself: how ano source becomes machine code, what the backend is, and why the fast path is a different genre from the one people reach for when they say "make it fast like LuaJIT." A position, not a survey.
+This orbits ano-sky.md and ano-ecs.md. The sky note argues why every statement lands in the one fragment where static proof beats dynamic guessing, and grades the payoff (bandwidth-optimal columnar, the affine schedule, the machine-as-world end). The ECS note specifies the store the engine runs on. This note is the engine itself: how ano source becomes machine code, what the backend is, and why the fast path is a different genre from the one people reach for when they say "make it fast like LuaJIT." A position, not a survey.
 
 ## What Lua actually answers
 
@@ -14,7 +14,7 @@ So the genre is not the tracing JIT. It is the query and array compilers: kdb+/q
 
 ## The current ceiling
 
-Today Steel transpiles ano to BQN and CBQN interprets the BQN (steel/, src/GRAMMAR.md). CBQN is a fast array interpreter, but it is still an interpreter: it dispatches array primitives and materializes intermediates, a fresh array for the mask, one for each effect temp, one for the commit. That materialization is the ceiling. The differential-tested BQN twins are the reference semantics and stay so. The engine's job is to compute those same post-states without walking a primitive-dispatch loop and without allocating the intermediates.
+Steel transpiles Ano to BQN and CBQN interprets it. CBQN is a fast array interpreter, but it is still an interpreter: it dispatches array primitives and materializes intermediates, a fresh array for the mask, one for each effect temp, one for the commit. That materialization is the ceiling. BQN is not the semantic authority. The engine's job is to compute those same post-states without walking a primitive-dispatch loop and without allocating the intermediates.
 
 ## The build
 

@@ -1,4 +1,3 @@
-# Typed keys (t6): unique stacks with the carrier refinements — injectivity ∩ carrier.
 # ano: Grunt , spawn Grunt
 # Semantics: the unique line takes a kind word; `unique id nat` seals the naturals AND pairwise distinctness at rest, `unique slot int` admits negative keys. Spawn mints 1+max per unique column (the ¯1 seed floors the empty max), so the mint respects either carrier: a nat key column mints natural, a negative-keyed int column mints past its maximum.
 # Invariant: post-spawn, both key columns stay pairwise-distinct and in-carrier.

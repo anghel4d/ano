@@ -27,7 +27,7 @@ Each keyword carries its Japanese spelling. The `--! ja` skin converges on share
 | `scan2` | 二重走査 | `T_SCAN2` | array | two-axis scan — the summed-area table over a lattice |
 | `cross` | 交差 | `T_CROSS` | generation | outer product: apply a function to every pair of two selections |
 | `expand` | 展開 | `T_EXPAND` | generation | pipeline replicate and flat-map (`\|> expand Count`) |
-| `til` | 連番 | `T_IOTA` | generation | the generator: `til n` is `0 1 … n-1` (q's iota; `↕` is retired) |
+| `til` | 連番 | `T_IOTA` | generation | the generator: `til n` is `0 1 … n-1` |
 
 Adjacent vocabulary, closed grammar but not lexer keywords, listed so the atlas is honest. These resolve as names or contextual heads, and a registry entry can shadow most of them.
 
@@ -73,7 +73,7 @@ Fold and scan operators, the closed reducer family. Each is a fold under `/` and
 | `avg/` | `avg\` | 平均 / — | mean / running mean | none — row drops |
 | `f/` | `f\` | `脅威/` / `脅威\` | named reducer / its scan | registered |
 
-The incomplete bridge scans are `#\`, `min\`, and `avg\`. Numeric `&\` is now the canonical running minimum, but Steel does not yet implement the carrier overload. `scan(min) X along order` already works. The running mean and running count exist in no spelling. Full status lives under the fold and scan markers below. `-/` and `//` remain rejected as non-associative.
+The incomplete bridge scans are `#\`, `min\`, and `avg\`. Numeric `&\` is the running minimum, but Steel does not yet implement the carrier overload. `scan(min) X along order` already works. The running mean and running count exist in no spelling. Full status lives under the fold and scan markers below. `-/` and `//` remain rejected as non-associative.
 
 ## Atlas: registry keywords
 
@@ -118,7 +118,7 @@ The registry and the language are the schema and the query over one column store
 
 The registry vocabulary is the language's noun vocabulary. Every `col`, `rel`, `srel`, `bind`, `fn`, `as`, and `def` name declared in a `.reg` becomes a resolvable word in the program's selection predicates: `col gold num …` makes `Gold` a mask and column you write `Gold += 100` against. Resolution folds case for registry names (so `Gold` reaches column `gold`), then walks the alias table one hop — but program-level `def` heads, comprehension binders, and values (`:Sym`, sym and char data) stay exact-byte. Complexity lives registry-side; the language stays flat.
 
-`def` lives on both sides and they never meet. Registry `def` is a proto, a row-oriented archetype of `col=value` fields consumed by `spawn`. Program `def` is a predicate or rule, inlined at use or installed on `=>`. Ruled fine 2026-07-11: registry `def` resolves at load, program `def` at parse, so the reuse is deliberate, not a collision. `spawn Marine` reaches the registry proto; `def master = Human & Nord …` names a program predicate.
+`def` lives on both sides and they never meet. Registry `def` is a proto, a row-oriented archetype of `col=value` fields consumed by `spawn`. Program `def` is a predicate or rule, inlined at use or installed on `=>`. Registry `def` resolves at load, program `def` at parse, so the reuse is deliberate, not a collision. `spawn Marine` reaches the registry proto; `def master = Human & Nord …` names a program predicate.
 
 The key machinery couples `unique`, `role`, `default`, and `range` to `spawn` and to writes. `unique` (or `role keys`/`role id`) declares which column mints on `spawn` and refuses effect writes; `default` and `range` fix what `spawn` fills and what an effect write clamps to. The keyword `spawn` has no minting policy of its own — it reads it entirely from the registry.
 
@@ -170,7 +170,7 @@ Soldier , pos = to 4 _       -- 4 ranks, width inferred
 
 ### `via` — 経由
 
-Host dispatch: `fn via Col` hands a selection and registered relation to a callable with declared habitats and footprints. Ano guarantees that envelope and does not inspect the routine's internals. The same stored relation may also expose a boolean field on `Node × Node`, where `Node , OutDeg = +/ Adj@row` is a native fold. These are two registered interfaces, not tiers.
+Host dispatch: `fn via Col` hands a selection and registered relation to a callable with declared habitats and footprints. Ano guarantees that envelope and does not inspect the routine's internals. The same stored relation may also expose a boolean field on `Node × Node`, where `Node , OutDeg = +/ Adj@row` is a native fold. These are two registered interfaces.
 
 ```haskell
 Hostile , shortestPath via Adj      -- the host runs Dijkstra over the Adj relation
@@ -289,7 +289,7 @@ Spawner |> expand Count , spawn Minion
 
 ### `til` — 連番
 
-The generator, q's iota: `til n` is `0 1 … n-1`, an ordered index view. `↕` is retired from both surfaces; a stale `↕5` errors by codepoint.
+The generator, q's iota: `til n` is `0 1 … n-1`, an ordered index view.
 
 ```haskell
 +\ Weight @ (til steps |> route A B)      -- ordered scope from a generated view
@@ -473,7 +473,7 @@ A fold on a declared order is exact left accumulation and accepts any compatible
 | `-/` | rejected — not associative | — | — | — |
 | `//` | rejected — not associative, and unlexable (`/` is fold-marker and replicate) | — | — | — |
 
-The scan family has two spellings. The 2026-07-21 ruling makes numeric `|\` the running maximum and numeric `&\` the running minimum. Steel still emits both glyphs only for masks. `max\` works as the numeric maximum bridge. `scan(min) X along order` works, but the `min\` bridge is still unbuilt. Running mean and running count remain absent. `avg\` is an emit error, and `#\` is a lex error. Those bridge gaps stay in `todo/12-unbuilt-scans.md`. The carrier overload is pending in `todo/17-greater-lesser.md`. `>` remains a comparison, so `>/` stays rejected.
+The scan family has two spellings. Numeric `|\` is running maximum and numeric `&\` is running minimum. Steel still emits both glyphs only for masks. `max\` works as the numeric maximum bridge. `scan(min) X along order` works, but the `min\` bridge is still unbuilt. Running mean and running count remain absent. `avg\` is an emit error, and `#\` is a lex error. Those bridge gaps stay in `todo/12-unbuilt-scans.md`. The carrier overload is pending in `todo/17-greater-lesser.md`. `>` remains a comparison, so `>/` stays rejected.
 
 ### `+/`  `+\` — sum, running sum
 
@@ -533,7 +533,7 @@ max\ Height @ Ray            -- the running skyline up the sightline
 
 ### `min/`  `min\` — minimum, running floor
 
-`min/` and `min\` remain numeric bridges for `&/` and `&\`. `min/` works today. The `min\` bridge is still unbuilt, while `scan(min) X along order` works. An empty scope drops the row because finite float64 has no minimum identity.
+`min/` and `min\` remain numeric bridges for `&/` and `&\`. `min/` works. The `min\` bridge is still unbuilt, while `scan(min) X along order` works. An empty scope drops the row because finite float64 has no minimum identity.
 
 ```haskell
 Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 10

@@ -1,4 +1,3 @@
--- The proto and the three-layer spawn fill. Twin of 054-proto-spawn.bqn. (was s61-proto-spawn)
 -- Two grunts and a barracks order. def Marine is the archetype — the proto — and a spawned row fills proto-first, registered-default second, type-zero last.
 -- spawn Marine fills soldier and hp from the proto, ammo from its registered default, and gold from the type zero. The runtime mints id 1+max to preserve unique. proto records Marine.
 -- One soldier selects, one Marine lands: row 2, id 6.

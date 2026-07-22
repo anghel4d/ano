@@ -1,6 +1,6 @@
 # Foundations
 
-Status: active proof obligations, 2026-07-17. Three semantic-kernel milestones are machine-checked under `Ano/*.lean`: the ten-result field/effect/world kernel; the bounded spatial registry-and-command kernel; and the affine, weighted-interpolation, heterogeneous-bundle, partial-live-`Position`, exact-spawn, and dependent-repeated-tick contract. The checked layer now proves additive torsors and scalar-linear registered embeddings, normalized duplicate-free interpolation fibers with sealed source/cell lineage, exact live player anchoring, actual fresh `Position` writes for all 51 supported spawn rows, old-presence and fixed-field preservation, and per-successor request reconstruction. Concrete lattice lookup, phyllotaxis numerics, metric and collider refinement, general multi-component schema integration, boundaries, save/load, backend refinement, and the Steel certificate bridge remain obligations. The former Tier 1/2/3 development is retired because its write-back laws do not describe Ano or its column store.
+Status: active proof obligations. Three semantic-kernel milestones are machine-checked under `Ano/*.lean`: the ten-result field/effect/world kernel; the bounded spatial registry-and-command kernel; and the affine, weighted-interpolation, heterogeneous-bundle, partial-live-`Position`, exact-spawn, and dependent-repeated-tick contract. The checked layer proves additive torsors and scalar-linear registered embeddings, normalized duplicate-free interpolation fibers with sealed source/cell lineage, exact live player anchoring, actual fresh `Position` writes for all 51 supported spawn rows, old-presence and fixed-field preservation, and per-successor request reconstruction. Concrete lattice lookup, phyllotaxis numerics, metric and collider refinement, general multi-component schema integration, boundaries, save/load, backend refinement, and the Steel certificate bridge remain obligations.
 
 ## 1. Schema and world
 
@@ -55,7 +55,7 @@ The ordinary fold is reduction along `X → 1`. γ is reduction along a relation
 
 Selection changes the current view from `I` to a subobject `S`. Grade produces an ordering or permutation of a view; it does not change stored identity. Outer product produces `I × J`. Replicate produces the dependent sum `Σ(i : I). Fin(count(i))`. These derived domains are first-class plan objects with lineage.
 
-`reshape` has three distinct meanings that the old spec conflated. Exact reshape between equal-cardinality boxes is reindexing along a layout equivalence. APL reshape with repetition or truncation is pullback along the output-to-input cycling map and is not an equivalence. Ano's current `pos = to h w` does neither to the entity habitat: it constructs a coordinate column over the selected entity view and scatters that column back to `pos`. The three operations must not share a proof merely because their surface flavor is `⍴`.
+`reshape` has three distinct meanings. Exact reshape between equal-cardinality boxes is reindexing along a layout equivalence. APL reshape with repetition or truncation is pullback along the output-to-input cycling map and is not an equivalence. Ano's current `pos = to h w` does neither to the entity habitat: it constructs a coordinate column over the selected entity view and scatters that column back to `pos`. The three operations must not share a proof merely because their surface flavor is `⍴`.
 
 A rank-changing result may be queried, folded further, passed to a host function, or materialized into a separately declared compatible habitat. It may not silently replace a stored field on another domain.
 
@@ -148,9 +148,9 @@ A stencil is a relation on the field habitat. A displacement set in `Λ` induces
 
 Boundary forms complete that partial relation in different ways. Shrink drops missing edges. Zero or another constant extends the value field outside `D`. Clamp and reflect provide explicit retractions from attempted coordinates to `D`. Wrap equips the box with modular coordinates, equivalently a finite quotient-lattice or toroidal structure. These are semantic structures, not consequences of flat indexing, and the selected form must survive save, reload, and every tick.
 
-## 13. Capabilities, not tiers
+## 13. Capabilities
 
-The old tiers tried to classify data by how freely a write could change its index. That axis is wrong: every stored target preserves its declared habitat. What varies is which structure and carrier laws an operation requires.
+Every stored target preserves its declared habitat. What varies is which structure and carrier laws an operation requires.
 
 - Finite habitat: pointwise map, mask, fold with the required carrier law.
 - Ordered habitat or ordered view: stable grade and scan.
@@ -163,7 +163,7 @@ The old tiers tried to classify data by how freely a write could change its inde
 - Metric: distance, radius, and the cost evidence for a nearest operation.
 - Surface projector: typed hits under declared direction, admissibility, order, and tie policy.
 - Cell complex: incidence, boundary, and cochains.
-- Opaque carrier: only registry-granted operations; opacity is a capability policy, not a habitat tier.
+- Opaque carrier: only registry-granted operations; opacity is a capability policy.
 
 Permutation equivariance remains a useful theorem for operators that claim to ignore nominal identity, order, bindings, and relationship structure. It is not the law of all entity writes: `index`, declared orders, unique keys, singleton bindings, relationships, and `pos = to …` intentionally observe additional structure. Naturality in the carrier remains the characterization of genuinely parametric maps, not the definition of every opaque value.
 

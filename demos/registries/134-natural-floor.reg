@@ -1,4 +1,3 @@
-# t2 — natural floor fixture (mirrors demos/13-typed-registries/134-natural-floor.bqn)
 # hp is nat, the naturals: repeated subtraction clamps at 0 and never underflows.
 n 4
 col alive bool 1 1 1 1

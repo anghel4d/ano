@@ -1,4 +1,3 @@
-# ex41 — Japanese dotted hop fixture (mirrors demos/9-nihongo/083-dotted-hop.bqn)
 n 6
 rel mentor 2 3 3 0 5 1
 col twoHanded num 70 85 90 81 60 40

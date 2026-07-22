@@ -1,4 +1,3 @@
--- Quotation (w6): eval — APL's ⍎, constrained to what stays analyzable. Twin of 128-eval.bqn. (was w6-eval)
 -- A literal statement is re-lexed and spliced before conflict analysis.
 -- Dynamic strings are unsupported; templates with holes remain open in ISSUES.md.
 --! registry ../registries/128-eval.reg

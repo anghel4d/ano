@@ -1,6 +1,4 @@
--- Modifier cards, the commuting pair (n2): two Damage Plus in one barrier. Twin of 111-modifiers.bqn (merge section). (was n2-modifiers-c)
 -- This fixture batches two +10 writes through the additive merge family, producing 3+10+10 = 23.
--- += and *= on one column have no common merge law, so Steel rejects them in one barrier. The -a/-b twins put them in separate statements and expose their order.
 --! registry ../registries/111-modifiers.reg
 --! expect damage = 0 23 23 23 8
 --! expect speed = 0 6 6 6 2

@@ -1,6 +1,5 @@
 # 14 — the registry border: two languages, Σ-immutability, and the placement seam
 
-Surfaced 2026-07-19 in a late-night design session, audited against this branch the same night. Most of the session restated what commits d20bccf/d554bbe/2482c06 already formalized in `docs/spatialmaths.md`, `proofs/foundations.md`, and the Lean kernel; this file carries only the residue that is genuinely new, with the restated ground listed first so no agent re-derives it. The author's endorsement in-session ("that is the language") makes the two-language ruling binding; the sub-questions under each item are open and are never to be resolved silently.
 
 ## Already on disk — do not re-derive
 
@@ -11,9 +10,9 @@ Surfaced 2026-07-19 in a late-night design session, audited against this branch 
 - The backend agreement obligation. `todo/13-spatial-formalization.md:396` — CBQN may remain the initial backend, Steel must reject an invalid plan before generating CBQN, and tests compare backend output with the typed Ano semantics; `proofs/foundations.md` obligation 10 and `proofs/lean.md`'s pending list carry the dense-array refinement. The session's ⟦typed plan⟧_semantic = ⟦Steel-emitted BQN⟧_CBQN is this standing obligation in bracket notation, not a new target.
 - The two closed vocabularies, descriptively. `docs/ano-keywords.md:3` — the language owns eighteen reserved words, the registry owns a separate directive set, and the two meet where a registry schema becomes the nouns of a sentence.
 
-## The ruling (2026-07-19, binding)
+## The contract
 
-Two languages sharing resolved names and mathematical meanings, never grammar. The registry file (today's `.reg`, prospectively `.anoreg` — TODO item 3 carries the name) is a purely declarative schema language: it constructs Σ, the universe in which the comma has meaning. `.ano` is the sentence language, typed `Ano_Σ : World Σ → Result (World Σ × Output)`. No registry declaration syntax is ever admitted into `.ano`; the comma remains the only border in a sentence, and schema construction lives outside the sentence entirely. Steel keeps intentionally separate ASTs — registry declarations and statements — meeting only at elaboration against the validated registry.
+Two languages sharing resolved names and mathematical meanings, never grammar. The registry file is a purely declarative schema language: it constructs Σ, the universe in which the comma has meaning. `.ano` is the sentence language, typed `Ano_Σ : World Σ → Result (World Σ × Output)`. No registry declaration syntax is ever admitted into `.ano`; the comma remains the only border in a sentence, and schema construction lives outside the sentence entirely. Steel keeps intentionally separate ASTs — registry declarations and statements — meeting only at elaboration against the validated registry.
 
 Σ is immutable during ordinary execution. The lawful mutations under a fixed Σ are exactly three: registered field values per their declared effect permissions; entity populations via explicit structural effects; placement and transform values while their registered types stay fixed (a planet moves without touching the schema). The fourth kind — registry replacement, Σ → Σ′ — is a host/Steel/Kore operation at a world barrier, never a right-of-comma effect. The first two arms are already proven (see above); the third and fourth are the new work, items 2 and 1 below.
 
@@ -43,12 +42,11 @@ Work items:
 
 ## Item 3 — the adjective-noun registry surface (new spelling, gated)
 
-The session sketched a declaration surface: `euclidean3 f32 frame World`, `product2 rowmajor lattice Ground`, `Ground x f32 coordinate col GroundX`, `entity World Position x f32 position col PosX`. No file carries any of this. Steel's `.reg` today has `lattice <w> <h>` (`steel/src/registry.rs:269`) and `bind … point` as a frame origin (`docs/ano-keywords.md:726`). `todo/13-spatial-formalization.md:196` fixes the law any spelling must obey: injectivity, equivalence, isometry, dimension, and numeric refinement are separate flags backed by separate witnesses, never consequences of a three-number representation — and the sketch violates this as written, since `euclidean3` bundles dimension and metric into one adjective.
 
 Work items:
 
 - Design the declaration surface against todo/13's certificate layering, splitting the bundled adjectives into their witness flags.
-- Settle the file-name question alongside TODO item 3's registry taxonomy (`.reg` vs `.anoreg`; `docs/INTERACTIVE.md:36` already lists both as data-at-rest).
+- Settle the file-name question alongside TODO item 3's registry taxonomy (`.reg` vs `.anoreg`).
 - Do not build without the author's explicit go — the same gate TODO item 3 already states.
 
 ## Invariants after

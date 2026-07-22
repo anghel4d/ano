@@ -1,6 +1,3 @@
--- Spatial recurrence (ex46): a fresh line stays zero under iteration. Twin of 089-spatial-recurrence.bqn (second assertion).
--- Iterate the step on a fresh line and nothing ever happens: zero in, zero out, eight times over.
--- Eight barriers apply eight stencil steps. Each reads its own pre-state, and the all-zero line remains zero through all eight.
 --! registry ../registries/090-spatial-recurrence-b.reg
 --! expect height = 0 0 0 0 0 0 0 0
 

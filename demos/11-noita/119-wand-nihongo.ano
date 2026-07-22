@@ -1,4 +1,3 @@
--- Japanese conjugate of n6 (the assembled wand: cast, join, scoped damage fold, detonation, spread ring, trigger rule).
 --! registry ../registries/119-wand.reg
 --! ja
 --! expect-n 5

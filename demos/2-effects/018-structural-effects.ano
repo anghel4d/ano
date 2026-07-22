@@ -1,4 +1,3 @@
--- Structural effects (ex12): despawn, +Frenzied across the set-hop image, -Encumbered. Twin of 018-structural-effects.bqn.
 -- Eight fighters with stable ids: the Dead despawn, the frenzied pair's targets take a tag, one burden lifts. Structural effects change the world's shape — ~ removes rows, +Tag and -Tag grant and strip components on whoever remains.
 -- Statement barriers commit in order: the despawn lands before the hop's gather; 6 rows survive, ids 0 2 3 4 5 7, and all expects are over those survivors.
 -- targets hold stable entity ids (0->{2,4}, 3->{4,5}): 4 edges land on 3 distinct targets, the +Frenzied scatter is idempotent; id 7 keeps Frenzied, id 4 (not Burdened) keeps Encumbered.

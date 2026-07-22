@@ -1,5 +1,3 @@
-# ex37 Tier 1 space fixture (mirrors demos/7-tiers/069-tier1-space.bqn)
-# pure-space world: one 8x8 ground, fields row-major; wheat empty, elevation 8‿8⥊↕64, cost all ones.
 n 0
 lattice 8 8
 field wheat bool 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

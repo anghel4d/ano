@@ -1,4 +1,3 @@
-# Scoped selection (ex4).
 # ano: Merchant @ Whiterun , Gold += 5000
 # Semantics: @ is the locative scope — evaluate the mask within the region, an AND with the region's membership mask.
 # Invariant: only merchants inside Whiterun gain gold; merchants elsewhere and non-merchants inside are untouched.

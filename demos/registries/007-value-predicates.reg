@@ -1,4 +1,3 @@
-# ex07 — value predicates fixture (mirrors demos/1-selection/007-value-predicates.bqn)
 # greedy row 4 starts at 1: +Greedy is a mask-or, it never clears
 n 5
 col gold num 500 700 500 100 90

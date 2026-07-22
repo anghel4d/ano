@@ -1,15 +1,7 @@
-# s05d — set hop fixture, the wrap-up of the s05 family (mirrors demos/1-selection/013-set-hop.bqn)
-# The .bqn's four sub-worlds concatenated into one 23-row entity world:
-#   rows 0-7   frenzy world (.bqn n=8; target ids 3 4 5 unchanged)
-#   rows 8-13  plots (.bqn plot rows 0-5 shifted +8; neighbors remapped)
-#   rows 14-18 animals (.bqn animal rows 0-4 shifted +14)
-#   rows 19-22 pens (.bqn pens 0-3 shifted +19)
 # target/plot/pen are archetype masks gating each statement to its sub-world.
 # attackers is the inverse read of targets, spelled as an explicit srel (inv needs a
-# functional rel). The .bqn's functional rel `pen` (animal -> pen) is renamed penOf to
 # clear the Pen archetype mask; livestock = inv penOf. headcount and target back the
 # `Pen , Headcount = #/ livestock'` and `Target , Hits += #/ attackers'` statements,
-# which the .bqn runs unmasked over bare arrays.
 n 23
 col frenzy bool 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 srel targets 3 4 | 4 5 | | | | | | | | | | | | | | | | | | | | |

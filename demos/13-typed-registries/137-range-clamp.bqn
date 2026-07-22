@@ -1,4 +1,3 @@
-# Range clamp (t5): declared bounds clamp writes; the carrier stays the untyped double.
 # ano: Alive , hp += 30
 #      Hp > 99 , hp -= 200
 # Semantics: `range hp 0 100` is a value refinement beside the kind word — rest data seals at load, committed writes clamp at the barrier, fractions pass (the carrier is num). 80 + 30 and 95 + 30 park at the cap; the overkill then parks the same rows at the floor.

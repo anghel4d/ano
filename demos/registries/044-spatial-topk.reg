@@ -1,7 +1,3 @@
-# ex31 — spatial top-k fixture at 8x8 (mirrors demos/4-order/044-spatial-topk.bqn)
-# 64 cell-entities, row id = flat index k; the '@ 8 8' frame synthesizes x = k mod 8, y = k div 8 per cell, so no coordinate columns sit at rest (a spawn would extend them with false zeros)
-# safety = 100 - ((x-2)^2 + (y-3)^2), peaks 100 at the keep (2,3) = cell 26; resource = x*y, max 49 at cell 63
-# sentry marks spawn-appended Sentry rows (the .bqn's per-cell count becomes rows parented to their cell)
 n 64
 col safety num 87 90 91 90 87 82 75 66 92 95 96 95 92 87 80 71 95 98 99 98 95 90 83 74 96 99 100 99 96 91 84 75 95 98 99 98 95 90 83 74 92 95 96 95 92 87 80 71 87 90 91 90 87 82 75 66 80 83 84 83 80 75 68 59
 col resource nat 0 0 0 0 0 0 0 0 0 1 2 3 4 5 6 7 0 2 4 6 8 10 12 14 0 3 6 9 12 15 18 21 0 4 8 12 16 20 24 28 0 5 10 15 20 25 30 35 0 6 12 18 24 30 36 42 0 7 14 21 28 35 42 49

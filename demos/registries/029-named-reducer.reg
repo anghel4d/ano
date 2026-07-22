@@ -1,8 +1,7 @@
-# ex15 — named reducer fixture (mirrors demos/3-fold-scan/029-named-reducer.bqn)
 n 8
 col enemies bool 0 1 1 0 1 0 1 0
 col damage nat 5 12 7 0 30 4 9 2
-col none bool 0 0 0 0 0 0 0 0   # the .bqn's empty scope; unused by the .ano — no-identity row failure has no directive spelling
+col none bool 0 0 0 0 0 0 0 0
 fn threat {𝕨⌈𝕩}
 ja 敵勢 enemies
 ja 損傷 damage

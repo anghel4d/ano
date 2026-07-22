@@ -56,33 +56,8 @@ A map or bitmap view uses declared spatial and placement metadata. It does not i
 
 Kore renders and targets through the registry-declared position role and spatial axes.
 
-## Required demo outcomes
 
-`050-reshape-positions-a` and `051-reshape-positions-b` witness direct two-coordinate position generation over the selected entity view. The registry declares the destination as position-bearing. No lattice placement is implied.
 
-`055-lattice-patterns` witnesses coordinate predicates on one declared lattice habitat. Pattern effects update or place from cells without converting the 64 cells into entity-row storage. The ground remains the same habitat after every statement.
-
-`056-computed-line` witnesses an anonymous line habitat separate from the entity world. Its twelve source rows remain twelve after all 32 spawns. A second evaluation either creates a new twelve-row line or reuses an explicitly materialized one according to the ruled surface; it never tries to scatter a 12-row value into 44 entity rows.
-
-`058-space-reductions` witnesses that fold results are scalars and scans preserve their input habitat and shape. A summed-area result, when materialized, has its own declared compatible habitat.
-
-`060-density-fields` witnesses dependent-sum spawn. The number of new entities equals the selected density total, every copy retains its source cell for placement, and the density and fertility field habitats remain unchanged.
-
-`062-derived-fields` witnesses a field derived from both coordinate axes, a named boundary policy, a masked field update through retained lineage, and unchanged rank and shape after a second tick.
-
-`063-board-literal` witnesses exact 64-to-64 reshape with output-to-input lineage. A 71-glyph input refuses rather than truncating, cycling, or stripping separators. The anonymous board does not alias a registered 8×8 field by shape alone.
-
-`064-two-habitats` is reinterpreted as a many-habitat witness. It demonstrates shared column operators over distinct domains without claiming that rank alone classifies them. It includes a negative equal-cardinality case.
-
-`069-tier1-space` is a counterexample to the retired regenerability proof. Filtering a field produces a derived subdomain; reminting coordinates does not reconstruct or authorize replacement of the stored field. The stored field remains 8×8.
-
-`070-tier2-records`, `073-conjugation`, `074-diagonal`, and `075-ties` witness local alignment, order, and symmetry facts only. They make no universal permutation claim about entity programs.
-
-`071-tier3-opaque` witnesses two registered interfaces to information: a native matrix field and a host callable over a graph or behavior carrier. It makes no tier claim.
-
-`105-life-step` witnesses a fixed 5×5 field and explicit Moore relation. Two consecutive steps return the blinker to its seed without rebuilding adjacency from entity-row length. The habitat, rank, and shape are identical at seed, step one, and step two.
-
-Every English Ano demo changed for this formalization keeps its Nihongo sibling semantically identical.
 
 ## Required negative witnesses
 
@@ -109,7 +84,7 @@ The work is complete only when all affected Ano tests, their Nihongo siblings, a
 ## Follow-up script
 
 ```text
-Read AGENTS.md, docs/ano-language.md, docs/spatialmaths.md, docs/ano-ecs.md, proofs/foundations.md, and todo/12-spatial-formalization.md completely. Treat Steel and Kore as the only active implementations. Do not consult the archived C compiler as an oracle.
+Read AGENTS.md, docs/ano-language.md, docs/spatialmaths.md, docs/ano-ecs.md, proofs/foundations.md, and todo/12-spatial-formalization.md completely. Treat Steel and Kore as the only active implementations.
 
 Your task is to make every observable outcome in todo/12-spatial-formalization.md true. The file specifies results, not an implementation plan. Choose the smallest coherent Steel and Kore changes that satisfy the contract without weakening, deleting, skipping, or converting any positive or negative witness.
 

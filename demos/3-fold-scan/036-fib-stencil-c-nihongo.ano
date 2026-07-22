@@ -1,4 +1,3 @@
--- Japanese twin of 036-fib-stencil-c: two Version A stencil steps yield the binomial spread 0 0 1 3 3 1 0..., not Fibonacci — prev is a zero-fill shift, no carry ever forms (spec §21). = effect set → に…にする; the arithmetic RHS is more than one primary, so wrap it in parens.
 --! registry ../registries/035-fib-stencil-b.reg
 --! ja
 --! expect offset = 0 0 1 3 3 1 0 0 0 0 0 0

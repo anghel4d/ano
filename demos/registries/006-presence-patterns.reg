@@ -1,4 +1,3 @@
-# ex06 — presence patterns fixture (mirrors demos/1-selection/006-presence-patterns.bqn)
 # twoHanded rows 2 and 5 carry junk (99, 77) behind absent presence — the decoys are load-bearing
 n 6
 col nord bool 1 1 1 0 1 1

@@ -1,4 +1,3 @@
--- Japanese conjugate of 13 (sequenced effects). `;`-batched effects → て share one statement barrier.
 --! registry ../registries/019-sequenced-effects.reg
 --! ja
 --! expect pos = 0 10 25 30 40 50

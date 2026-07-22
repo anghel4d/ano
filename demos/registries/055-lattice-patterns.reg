@@ -1,7 +1,3 @@
-# ex27 — coordinate lattice patterns fixture (mirrors demos/6-space/055-lattice-patterns.bqn)
-# x is the ROW coordinate (k div 8), y the COLUMN (k mod 8): registered as fields so the
-# demo's row-major 8x+y convention wins over the emitter's synthesized coordinates.
-# Entity world starts empty; the five statements spawn 32+32+8+24 rows into it.
 n 0
 col wheat bool
 col barley bool

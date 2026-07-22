@@ -1,8 +1,8 @@
-# URGENT CRITICAL ULTRA — decommission superseded demos
+# URGENT CRITICAL ULTRA — decommission demos
 
-Status: urgent demolition task. This pass does not write replacements, repair old demonstrations, or silently reinterpret their success. It removes every listed number from the active proof and acceptance surface until that number is rewritten from first principles against the current contract.
+Status: urgent demolition task. This pass does not write replacements, repair demonstrations, or silently reinterpret their success. It removes every listed number from the active proof and acceptance surface until that number is rewritten from first principles against the current contract.
 
-Decommissioning means that the numbered demo, every language twin under that number, its registry fixture, its golden output, and every README or test claim derived from it cease to count as evidence. The old artifact may remain only as explicitly quarantined historical material; passing Steel or CBQN is not a reprieve when the demo proves the wrong denotation.
+Decommissioning means that the numbered demo, every language twin under that number, its registry fixture, its golden output, and every README or test claim derived from it cease to count as evidence. Passing Steel or CBQN is not evidence when the demo proves the wrong denotation.
 
 ## Tally
 
@@ -57,7 +57,7 @@ bare~1010b
 
 Demos: `028–033`.
 
-Deviation: these demos present an old closed table of reductions and scans, leave ordered non-associative accumulation unresolved, overstate associativity as a condition of ordinary left-to-right execution, teach numeric bridge names without the carrier-directed Greater/Lesser family, or omit identityless empty results because the old harness could not spell a no-row answer. The current contract is registry-driven and preserves the established meanings of `|/`, `|\`, `&/`, `&\`, `+/`, `+\`, and their compatible peers.
+Deviation: these demos present an closed table of reductions and scans, leave ordered non-associative accumulation unresolved, overstate associativity as a condition of ordinary left-to-right execution, teach numeric bridge names without the carrier-directed Greater/Lesser family, or omit identityless empty results because the harness could not spell a no-row answer. The current contract is registry-driven and preserves the established meanings of `|/`, `|\`, `&/`, `&\`, `+/`, `+\`, and their compatible peers.
 
 For booleans, `a | b = a ∨ b` and `a & b = a ∧ b`; for numbers, `a | b = max(a,b)` and `a & b = min(a,b)`. This is exactly the q/kdb+ Greater/Lesser convention over carriers admitted by Ano, not a claim of general q compatibility; the bridge spellings `max/`, `max\`, `min/`, and `min\` remain during migration. See KX's definitions of [Greater](https://code.kx.com/q/ref/greater/), [Lesser](https://code.kx.com/q/ref/lesser/), [max](https://code.kx.com/q/ref/max/), and [min](https://code.kx.com/q/ref/min/).
 
@@ -93,11 +93,11 @@ anoMax:{ $[0=count x;0#0j;enlist |/x] };
 
 Demos: `033–037`, `044`, `046–047`, `050–053`, `055–078`, `089–091`, `093`, `099`, `101–102`, `104–110`, `114–119`.
 
-Deviation: every current spatial demonstration is decommissioned. Together they rely on some combination of an implicit singleton lattice, raw buffer coincidence, inferred frames, implicit axis order, equal-length alignment, `vec` masquerading as a point carrier, a supposedly regenerable space index or placement derived from shape alone, raw `x/y` defaults standing in for a raycast point, undeclared boundaries, one-step success where lineage must survive a later tick, or the retired tier ladder. Even when the arithmetic inside a demo is sound, its advertised spatial proof is not.
+Deviation: every current spatial demonstration is decommissioned. Together they rely on some combination of an implicit singleton lattice, raw buffer coincidence, inferred frames, implicit axis order, equal-length alignment, `vec` masquerading as a point carrier, a supposedly regenerable space index or placement derived from shape alone, raw `x/y` defaults standing in for a raycast point, undeclared boundaries, one-step success where lineage must survive a later tick, or the tier ladder. Even when the arithmetic inside a demo is sound, its advertised spatial proof is not.
 
 A habitat is nominal. For habitats `H` and `K`, `|H| = |K|` does not imply `H = K` and does not authorize alignment. A stored field has type `f : H → V`; a storage layout is an isomorphism `ℓ_H : Fin(n) ≅ H`, not the habitat itself. A query has source domain `X` and explicit partial lineage `λ_H : X ⇀ H`. After selection, an effect destination is `d : S ⇀ H`; compatibility is proved by habitat identity, lineage, placement, or an explicit declared map, never by equal buffer length.
 
-A position component has a declared carrier and frame, `pos : P_pos → Point⟨F⟩`. A lattice has a declared logical domain `D_H`, axes, boundary policy, and chart into `H`; when world-space placement exists it is an explicit map `χ : D_H → Point⟨F⟩`. Two coordinates are entirely valid when the declared destination carrier exposes at least two spatial axes. Legacy `pos = to shape` therefore needs neither a fabricated third coordinate nor a blanket refusal: it is legal exactly when registry declarations determine a compatible two-or-more-axis destination and placement, and otherwise remains ambiguous.
+A position component has a declared carrier and frame, `pos : P_pos → Point⟨F⟩`. A lattice has a declared logical domain `D_H`, axes, boundary policy, and chart into `H`; when world-space placement exists it is an explicit map `χ : D_H → Point⟨F⟩`. Two coordinates are entirely valid when the declared destination carrier exposes at least two spatial axes. `pos = to shape` therefore needs neither a fabricated third coordinate nor a blanket refusal: it is legal exactly when registry declarations determine a compatible two-or-more-axis destination and placement, and otherwise remains ambiguous.
 
 BQN sentinel:
 

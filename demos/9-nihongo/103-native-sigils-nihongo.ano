@@ -1,4 +1,3 @@
--- Native sigils and a char pin (s55): ^照準 と narrows, 同 matches the :Sym, にする writes the kanji symbol 賊軍, and 印 is pinned as its glyph run — the sigils carry UTF-8 names on the Japanese surface too.
 --! registry ../registries/103-native-sigils.reg
 --! ja
 --! expect 印 = .#..#.

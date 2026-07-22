@@ -1,7 +1,5 @@
-# s57b — the derived tag (option B): race carries the value and `as nord race Nord`
 # names the equality mask over the live column — δ_Nord ∘ race, recomputed at each use.
 # The case contract in one line: nord folds (a name), Nord never does (a race value).
-# Twin registry 131-derived-tag-a.reg stores the same tag as written bits; the demo pins
 # are identical across both — that equality is the claim. Delete the `as` line and the
 # program's Nord has no referent: the demo fails at compile.
 n 5

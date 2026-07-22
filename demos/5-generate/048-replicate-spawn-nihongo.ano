@@ -1,4 +1,3 @@
--- Japanese twin of 22 (replicate spawn): a per-source count mints that many fresh rows.
 --! registry ../registries/048-replicate-spawn.reg
 --! ja
 --! expect-n 17

@@ -1,7 +1,3 @@
--- The trigger (n4): a hit becomes a cast at the impact. Twin of 115-trigger.bqn. (was n4-trigger)
--- A bolt that casts on impact: the hit is a join, the payload spawns at the point of death, and the carrier is consumed in the same barrier.
--- The collision pass is the theta-join comprehension marking both sides; plain bolts break on impact; the trigger card is a standing rule — spawn the payload at the carrier's own pos and consume the carrier, one barrier.
--- Parent keeps the trigger bolt's gather-time row id even though the barrier removes that row. The pin records this identity edge case.
 --! registry ../registries/115-trigger.reg
 --! expect-n 5
 --! expect keys = 2 3 4 5 6

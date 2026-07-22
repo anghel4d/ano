@@ -1,5 +1,3 @@
-# c1 blinker 5x5 (mirrors demos/10-conways/105-life-step.bqn, fused section)
-# planted row-major: the horizontal blinker at row 2. moore: 8-stencil fibers, boundary shrunk (dead border), linear ids row*5+col, ascending.
 lattice 5 5
 field plot bool 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 field planted bool 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0

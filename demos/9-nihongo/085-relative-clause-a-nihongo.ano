@@ -1,4 +1,3 @@
--- Japanese conjugate of 43 (relative-clause selection): the attributive clause before the noun is the selector.
 --! registry ../registries/085-relative-clause-a.reg
 --! ja
 --! expect gold = 1005 5 5 1005 5 5

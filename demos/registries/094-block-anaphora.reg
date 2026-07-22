@@ -1,4 +1,3 @@
-# ex49 — block anaphora fixture (mirrors demos/9-nihongo/094-block-anaphora.bqn)
 # archetype bool columns mirror the type strings exactly: nord/imperial/khajiit partition the six rows; no ghosts pre-state.
 n 6
 col type sym nord nord imperial nord nord khajiit

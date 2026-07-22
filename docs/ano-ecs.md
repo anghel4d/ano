@@ -1,6 +1,6 @@
 # ano ECS — the column store beneath the language
 
-Status: replacement design, 2026-07-15. Steel and Kore are the only live implementations. This document is the storage and typed-IR contract they must grow into; it is not a C implementation plan and no C tree is an oracle.
+Status: storage and typed-IR contract for Steel and Kore.
 
 ## 0. Position
 
@@ -186,7 +186,7 @@ A tick is `World Σ → Result(World Σ × Output)`. Rules gather one pre-state 
 
 Save and reload must preserve schema identity, habitat and frame declarations, layouts, field rank and shape, point and vector carrier frames, authorized relationship and spatial-bridge endpoints, placement and locator identities, support policy and semantic tie identity, boundary forms, and live nominal keys. Persisting only flat values plus a global width and height is not sufficient.
 
-Repeated execution is a type invariant: a program accepted at tick zero must have the same domain derivation at tick one regardless of entity population growth. Computed-line and spatial-top-k currently violate this because their temporary numeric frames are not stored in the IR.
+Repeated execution is a type invariant: a program accepted at tick zero must have the same domain derivation at tick one regardless of entity population growth.
 
 ## 12. Steel migration order
 

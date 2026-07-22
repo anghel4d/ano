@@ -1,7 +1,5 @@
--- The timeless ledger (w5): delay, recharge, and mana are columns, and a cast block's cost is a fold. Twin of 127-ledger.bqn. (was w5-ledger)
 -- Mana, delay, and recharge are columns, and the block cost is a fold. This demo covers ledger arithmetic, not scheduling.
 -- Wand [Add Mana, SB, SB, Chainsaw], the whole block drawn. The credit and debit share the additive merge family and both land in this barrier.
--- The Chainsaw's negative recharge cancels the bolts' exactly: the rapid-fire trick is a ledger fact, no clock required; the negative net delay is data too — clamping to zero is the host's business at schedule time.
 --! registry ../registries/127-ledger.reg
 --! expect mana = 69 0 0 0 0
 --! expect delay = -7 0 0 0 0

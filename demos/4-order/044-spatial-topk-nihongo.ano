@@ -1,4 +1,3 @@
--- Japanese conjugate of 31 (spatial top-k). で postfix; spawn 生成 is prefix.
 --! registry ../registries/044-spatial-topk.reg
 --! ja
 --! out 26 18 25 27 34 17 19 33

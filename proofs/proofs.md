@@ -6,10 +6,7 @@ Visible mathematical obligations and executable witnesses for Ano. These files a
 - `lean.md` — all three machine-checked milestones, their theorem maps, build commands, axiom accounting, and exact trust boundary.
 - `Ano/*.lean` — the dependency-free Lean semantic kernels and guarded negative witnesses.
 - `Ano/{Space,SpatialRegistry,Lineage,SpatialQuery,SpatialPlan,SpatialSpawn,SpatialWorld,ColumnBundle,Affine,Interpolation,SpatialNegative,SpatialAdvancedNegative}.lean` — the spatial contract: nominal domains and frames, sealed location and interpolation lineage, affine torsors and registered linear embeddings, weighted support, deterministic support choice, actual partial live `Position` writes, heterogeneous aligned inputs, exact-51 planning, dependent repeated ticks, and guarded rejection witnesses.
-- `../docs/spatialmaths.md` — the complete spatial derivation, including the rejected preliminary definitions and corrected laws.
-- `../demos/6-space/*.bqn` — concrete spatial array laws.
-- `../demos/7-tiers/*.bqn` — counterexamples to the retired tier arguments and local symmetry/order witnesses.
-- `../demos/10-conways/*.bqn` — repeated-step barrier and explicit-neighborhood witnesses.
+- `../docs/spatialmaths.md` — the complete spatial derivation.
 
 A BQN witness proves only the equation it asserts. It does not make BQN an oracle for Ano. A Lean theorem proves its stated semantic kernel law; it becomes an implemented language guarantee only when the specification states it and Steel/Kore satisfy the corresponding positive and refusal tests.
 

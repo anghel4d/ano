@@ -1,4 +1,3 @@
--- The soul gate (ruled 2026-07-11): spawn fuel is consumed in the barrier that mints the Ghost. Twin of 025-soul-gate.bqn. (was s10-soul-gate)
 -- The statement consumes each selected Soul while spawning one Ghost. Spawned Ghosts receive Soul 0, so a second run over this unchanged world emits nothing.
 --! registry ../registries/025-soul-gate.reg
 --! expect-n 8

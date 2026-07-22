@@ -1,4 +1,3 @@
-# ex46 — spatial recurrence fixture, fresh all-zero line (mirrors demos/9-nihongo/089-spatial-recurrence.bqn, second assertion)
 n 8
 col cell bool 1 1 1 1 1 1 1 1
 col height num 0 0 0 0 0 0 0 0

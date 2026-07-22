@@ -1,12 +1,5 @@
-# Target aliases (ex5).
-# ano: ^cursor , Health = 0
-# ano: ^observer , Faction = :Friendly
-# ano: Player , Gold += 9999
-# ano: ^selected , Damage *= 2
-# Semantics: aliases are predicates with short names, resolved per evaluation to singleton or small masks; effects are the ordinary masked forms.
-# Invariant: each effect lands only where its alias mask holds; *= 2 down a mask is v×1+mask.
 
-symFriendly‿symHostile‿symNone ← ↕3   # enum codes standing in for :Friendly :Hostile :None
+symFriendly‿symHostile‿symNone ← ↕3
 
 cursor   ← 0‿0‿1‿0‿0
 observer ← 0‿1‿0‿0‿0

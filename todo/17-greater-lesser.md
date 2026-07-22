@@ -1,6 +1,6 @@
 # 17 — Greater and Lesser
 
-Status. Ruled 2026-07-21. Steel/Kore implementation and tests are pending.
+Status. Steel/Kore implementation and tests are pending.
 
 ## Ruling
 
@@ -12,7 +12,7 @@ The derived folds and scans are the same q operations. Mask `|/` is ANY and nume
 
 `max/` and `max\` remain numeric bridges for `|/` and `|\`. `min/` and `min\` remain numeric bridges for `&/` and `&\`. The paired spellings must compile and evaluate identically.
 
-The empty law is carrier-directed. Mask `|/` has identity false. Mask `&/` has identity true. Ano numbers are finite float64, so numeric Greater and Lesser have no identity in the carrier. Empty numeric `|/`, `&/`, `max/`, and `min/` fail the row. Empty scans yield empty columns. An identityless bare query prints nothing by the 2026-07-21 ruling. Steel's placeholder removal is pending in `todo/18-empty-result-output.md`.
+The empty law is carrier-directed. Mask `|/` has identity false. Mask `&/` has identity true. Ano numbers are finite float64, so numeric Greater and Lesser have no identity in the carrier. Empty numeric `|/`, `&/`, `max/`, and `min/` fail the row. Empty scans yield empty columns. An identityless bare query prints nothing. Steel's placeholder removal is pending in `todo/18-empty-result-output.md`.
 
 ## Current implementation
 

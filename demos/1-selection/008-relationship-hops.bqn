@@ -1,4 +1,3 @@
-# Relationship hops (ex8).
 # ano: Nord & mentor.TwoHanded > 80 , Gold += 1000
 # ano: Student & mentor.Dead , -Mentored
 # ano: Soldier & leader.AtWar , Morale -= 20

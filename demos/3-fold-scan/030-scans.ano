@@ -1,8 +1,3 @@
--- Scans +\ *\ max\ along index-order views: one running value per selected cell (ex16). Twin of 030-scans.bqn.
--- Three journeys: pack weights accumulating along a route, a combo chain multiplying up, heights peaking along a ray. A scan is the fold that shows its work — one running value per selected cell.
--- Registered folds require an associative dyad. Subtraction and division do not qualify. A separate left-to-right scan could support them, but that rule remains open.
--- Header lines 1 and 3 spell generated views (til steps |> route A B; Eye + til n * fwd); the .bqn fixture realizes both as the masks route/ray, whose declared order is index order, so the twin scans over those mask scopes; line 2 is verbatim.
--- The out vector lengths (5, 4, 5) pin the same-length invariant: result length = popcount of the mask, never world length; unselected multiplier/height cells are decoy 9s — a leak detector for the max scan (any 9 there is a leak); the product passes 9 legitimately at step 3 (2×3×1.5), so the decoys witness only the max.
 --! registry ../registries/030-scans.reg
 
 --! out 3 4 8 10 15

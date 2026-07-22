@@ -1,4 +1,3 @@
-# ex16 — scans fixture (mirrors demos/3-fold-scan/030-scans.bqn); unselected multiplier/height cells are decoy 9s
 n 8
 col route bool 1 0 1 1 0 1 0 1
 col weight num 3 9 1 4 8 2 7 5

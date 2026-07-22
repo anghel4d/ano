@@ -1,7 +1,3 @@
--- Version B, canonical: the recurrence lives in the registered host fn fib; the statement witnesses only the committed column (spec §21, pre-renumbering §19). Twin of 033-fib-scan.bqn. (was s19-fib-scan)
--- Across ticks the host loop carries state. Within this statement fib(index) is a registered host function that computes each demanded term.
--- The BQN twin models fib with an order-carried scan. Ano has no native recurrence spelling yet. A future read-side scan may carry an internal accumulator without observing staged writes.
--- Omitted, left to the .bqn twin: the shift-add contrast from the same seed (pinned by the 034-fib-stencil-* twins instead).
 --! registry ../registries/033-fib-scan.reg
 --! expect offset = 1 1 2 3 5 8 13 21 34 55 89 144
 

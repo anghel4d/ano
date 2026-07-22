@@ -1,8 +1,8 @@
 # Lean semantic kernel
 
-Status: three semantic-kernel milestones machine-checked with Lean 4.30.0: the first ten-result kernel, the bounded spatial registry-and-command kernel, and the affine/interpolation/live-position contract on 2026-07-17. The kernel uses Lean `Std` only and lives under `proofs/Ano/`.
+Status: three semantic-kernel milestones machine-checked with Lean 4.30.0: the first ten-result kernel, the bounded spatial registry-and-command kernel, and the affine/interpolation/live-position contract. The kernel uses Lean `Std` only and lives under `proofs/Ano/`.
 
-Run `cd proofs && lake build` from the repository root. The umbrella target imports every proof and negative compile-time witness. A clean umbrella build passed all 23 jobs on 2026-07-17; the repository-wide Nix check is the final integration command.
+Run `cd proofs && lake build` from the repository root. The umbrella target imports every proof and negative compile-time witness. The umbrella build has 23 jobs; the repository-wide Nix check is the final integration command.
 
 ## First milestone map
 
@@ -59,7 +59,7 @@ The commutative merge theorem applies only when the supplied operation satisfies
 
 The third milestone proves the abstract affine and weighted-interpolation contract, but it does not yet instantiate concrete 2-D/3-D coordinate modules, units, a metric, orthogonality, isometry, or error-bounded floating-point refinement. `Boxed` still proves only nominal box-coordinate round trips rather than bounded integer-lattice lookup. `SupportSpec.candidate`, its score, and `RestingPose.supported` remain proof-carrying inputs; the kernel does not derive ray, interval, incidence, unit-normal, collider, nearest-distance, or no-penetration laws from engine geometry.
 
-The worked pattern remains an arbitrary injective `Fin 51 → SpatialVector` supplied in the proof object; Lean does not yet prove the analytic sine, cosine, square-root, golden-angle implementation, IEEE refinement, or dense lowering. The companion `SpatialWorld` now performs an actual partial ECS `Position` extension for all 51 fresh entities and preserves old presence exactly. This is one certified component family around the core `World`, not yet a general multi-component schema, archetype transaction, persistence model, or Steel implementation.
+The worked pattern remains an arbitrary injective `Fin 51 → SpatialVector` supplied in the proof object; Lean does not yet prove the analytic sine, cosine, square-root, golden-angle implementation, IEEE refinement, or dense lowering. The companion `SpatialWorld` performs an actual partial ECS `Position` extension for all 51 fresh entities and preserves old presence exactly. This is one certified component family around the core `World`, not yet a general multi-component schema, archetype transaction, persistence model, or Steel implementation.
 
 Steel certificate construction, a restricted evaluator for registered `PositionMapping`, concrete phyllotaxis numerics, engine support/raycast refinement, collision-aware reverse interpolation, promotion of lattice assignment to a schema-valid world action, CBQN or another dense-array refinement, boundary policies, save/load, general partial ECS storage and relationships, despawn repair, and surface-complex theorems remain pending in `foundations.md`.
 
