@@ -1,8 +1,8 @@
 # Ano keywords
 
-The closed grammar of both surfaces, catalogued. Ano has two closed vocabularies. The language owns exactly eighteen reserved words — the lexer's closed set, everything else a name resolved against the world. The registry (`.reg` files) owns a separate set of line directives plus a handful of type and kind sub-words. The two meet where a registry schema becomes the nouns of an Ano sentence. This file is the atlas; `ano-language.md` is the spec it derives from, `ano-manual.md` the tutorial. Where this file and `ano-language.md` disagree, the spec wins.
+The closed grammar of both surfaces, catalogued. Ano has two closed vocabularies. The language owns exactly seventeen reserved words. Everything else is a name resolved against the world. The registry (`.reg` files) owns a separate set of line directives plus a handful of type and kind sub-words. The two meet where a registry schema becomes the nouns of an Ano sentence. This file is the atlas; `ano-language.md` is the spec it derives from, `ano-manual.md` the tutorial. Where this file and `ano-language.md` disagree, the spec wins.
 
-What counts as a keyword. Per GRAMMAR.md: the closed keyword set the lexer owns is `def spawn at to via along order by take desc top grade fold scan scan2 cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. So the eighteen below are the keywords; the structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes.
+What counts as a keyword. Per GRAMMAR.md: the closed keyword set is `def spawn at to via along order by take desc top grade fold scan cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. The seventeen below are the keywords. The structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes. Steel still reserves the legacy `scan2` and `二重走査` tokens pending their deletion under `todo/12-unbuilt-scans.md`.
 
 ## Atlas: language keywords
 
@@ -24,7 +24,6 @@ Each keyword carries its Japanese spelling. The `--! ja` skin converges on share
 | `grade` | 格付 | `T_GRADE` | order | the permutation that sorts (APL `⍋`); selection-only, never a write-back |
 | `fold` | 縮約 | `T_FOLDKW` | array | long form of the reducer (`fold(f) col @ scope`); collapses a column to a scalar |
 | `scan` | 走査 | `T_SCANKW` | array | long form of the scan (`scan(f) col along order`); length-preserving accumulation |
-| `scan2` | 二重走査 | `T_SCAN2` | array | two-axis scan — the summed-area table over a lattice |
 | `cross` | 交差 | `T_CROSS` | generation | outer product: apply a function to every pair of two selections |
 | `expand` | 展開 | `T_EXPAND` | generation | pipeline replicate and flat-map (`\|> expand Count`) |
 | `til` | 連番 | `T_IOTA` | generation | the generator: `til n` is `0 1 … n-1` |
@@ -160,7 +159,7 @@ Wand , spawn SparkBolt * 3 at pos + polar(12, (index - 1) * 90)   -- a fan of 3
 
 ### `to` — 至
 
-Reshape: pours an ordered selection into a numeric shape, producing exactly count-of-selection positions and minting nothing. A `_` axis is inferred. Also drives the board literal (`"glyphs" to 8 8`). Rule of thumb: generate when the rows don't exist, reshape with `to` when they do.
+Reshape: pours an ordered selection into a numeric shape, producing exactly count-of-selection positions and minting nothing. A position destination must have a registry-declared carrier with at least two spatial axes. This coordinate pour requires no lattice placement; placement is separately required only when an operation maps lattice sites into a world frame. A `_` axis is inferred. Also drives the board literal (`"glyphs" to 8 8`). Rule of thumb: generate when the rows don't exist, reshape with `to` when they do.
 
 ```haskell
 Soldier , pos = to 8 8       -- reshape the soldiers into an 8×8 block
@@ -260,15 +259,6 @@ The long form of the scan, `scan(f) col along order`. Unlike a fold, a scan is l
 *\ Multiplier @ comboChain   -- running combo product
 max\ Height @ Ray            -- running high-water along a sightline
 scan(+) Weight along pathCells
-```
-
-### `scan2` — 二重走査
-
-The two-axis scan, taken along both lattice axes to build a summed-area table, the integral image.
-
-```haskell
-+\ Cost @ 8 8         -- Version A: single leading-axis scan
-scan2(+) Cost @ 8 8   -- Version B: the summed-area table (both axes)
 ```
 
 ### `cross` — 交差

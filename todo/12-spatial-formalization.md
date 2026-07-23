@@ -18,7 +18,7 @@ A query has one current row habitat. Every non-scalar value consumed together is
 
 A shape-changing read creates a derived value. It does not mutate the habitat, rank, or shape of a stored source or target. Exact reshape, cycling reshape, and `pos = to shape` have the three distinct meanings in `docs/spatialmaths.md`.
 
-The destination's registry declaration supplies the position carrier and spatial axes. A two-coordinate `to` result is valid when that carrier has at least two axes. No lattice placement is required.
+The destination's registry declaration supplies the position carrier and spatial axes. A two-coordinate `to` result is valid when that carrier has at least two axes. No lattice placement is required. Placement is separately required only when an operation maps lattice sites into a world frame.
 
 A plain assignment has at most one value for each destination. A colliding effect succeeds only when its declared merge makes the result independent of evaluation order. Otherwise the statement refuses before commit.
 

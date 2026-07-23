@@ -1,8 +1,8 @@
 # 12 — ruled fold and scan parity
 
-`emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), and `#\` stays lexer-barred. The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` is a registry-resolved accumulator operation. Every semantically admitted operator or registered reducer belongs there. This is general parity, not a special case for `fold(+)`. Steel's `fold(f)` parser still accepts names only while `scan(f)` and `scan2(f)` use a separate operator-or-name parser.
+`emit_scan`'s glyph table still builds `+ * max & |` only (`steel/src/emit.rs:1126-1131`), the along-form still builds `+ * max min` (`:1530`), and `#\` stays lexer-barred. The long-form head in `fold(f)` and `scan(f)` is a registry-resolved accumulator operation. Every semantically admitted operator or registered reducer belongs there. This is general parity, not a special case for `fold(+)`. Steel's `fold(f)` parser still accepts names only while `scan(f)` uses a separate operator-or-name parser. `scan2(f)` is an old hardcoded two-axis prefix-scan convenience, not a distinct scan law; delete it instead of generalizing it.
 
-LINQ's unseeded `Aggregate` is the closest operational precedent: the parenthesized argument denotes an accumulator step selected through a callable mechanism, and the first input value starts the state. Ano resolves that step through its registry, which also carries any identity, finishing function, and algebraic witnesses. That is where Ano improves on LINQ: ordered fold admits any compatible registered accumulator; unordered regrouping requires associativity; parallel/unordered execution requires associativity and commutativity; empty fold uses the registered identity or yields nothing; scan returns every successive accumulator state; empty scan is empty and needs no identity unless a seeded form explicitly emits the seed. Ano has no seeded form. Haskell supplies the useful fold/scan and direction vocabulary.
+LINQ's unseeded `Aggregate` is the closest operational precedent: the parenthesized argument denotes an accumulator step selected through a callable mechanism, and the first input value starts the state. Ano resolves that step through its registry, which also carries any identity, finishing function, and algebraic witnesses. That is where Ano improves on LINQ: ordered fold admits any compatible registered accumulator; unordered regrouping requires associativity; parallel/unordered execution requires associativity and commutativity; empty fold uses the registered identity or yields nothing; scan returns every successive accumulator state; empty scan is empty and needs no identity unless a seeded form explicitly emits the seed. Haskell supplies the useful fold/scan and direction vocabulary.
 
 The fold/scan permutation table promises a running value for every admitted reducer, but Steel builds only a subset and its spellings maintain different whitelists. The ruled work is to converge the grammar and emitter on one semantic operation set. Only the running-count spelling remains an open surface decision.
 
@@ -12,6 +12,7 @@ Two spellings reach the emitter, and their op sets diverge:
 
 - the glyph `f\` under an `@` scope — `N_SCANEXPR` / `emit_scan` — builds `+ * max & |` and named-reducer scans. `steel/src/emit.rs:1126-1141` holds the glyph match, registry-function fallback, and `unknown scan op '<op>'` refusal.
 - the long `scan(f) X along order` — `N_SCANALONG` — builds `+ * max min`. `steel/src/emit.rs:1526-1532` holds the whitelist and the `scan(<op>): no registered scan step` refusal.
+- `scan2(f) X @ h w` reaches the same emitter with a boolean flag and hardcodes two BQN scans over a reshaped buffer. It does not use registry-declared axes and is marked for deletion.
 
 Confirmed by running `target/release/steel --emit`:
 
@@ -29,7 +30,8 @@ The glyph fold side is whole: `min/ avg/ #/` all emit and are exercised by the c
 
 ## Work items
 
-- Give `fold(f)`, `scan(f)`, and `scan2(f)` one operator-or-registered-reducer head parser. Apply semantic admission after parsing instead of maintaining syntax-specific whitelists. This admits `+`, `*`, `&`, `|`, the named bridges, and registered reducers wherever their fold or scan instance exists. Admit subtraction and division for exact traversal on a declared order; refuse them when the fold has no order or would reassociate.
+- Give `fold(f)` and `scan(f)` one operator-or-registered-reducer head parser. Apply semantic admission after parsing instead of maintaining syntax-specific whitelists. This admits `+`, `*`, `&`, `|`, the named bridges, and registered reducers wherever their fold or scan instance exists. Admit subtraction and division for exact traversal on a declared order; refuse them when the fold has no order or would reassociate.
+- Delete `scan2` end to end: remove the English and Nihongo lexer keywords, parser branch, AST/emitter `scan2` flag and hardcoded double-scan lowering, keyword/spec/manual claims, and the superseded uses in demos 058 and 059. A two-axis prefix scan is composition of ordinary scans along registry-declared axes, not a primitive fixed-rank keyword. Do not write replacement demos in this task.
 - Add the `min\` bridge to `emit_scan`'s glyph table. The along-form already proves the codegen.
 - Build `avg\`, the running mean over the scan's scope, from the same sum-and-count state as `avg/`. Empty input yields the empty column without consulting an identity.
 - Build the running count once it has a spelling (see the open sub-question).

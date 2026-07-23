@@ -216,7 +216,7 @@ The whole family fits one table. Ano adopts q's Greater and Lesser operations di
 
 A scan needs no identity. Empty input yields an empty column. `|` is boolean OR and numeric maximum. `&` mirrors it as AND and numeric minimum. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. Steel does not yet implement numeric `|` or numeric `&` in direct, fold, or scan form. That work is pending in `todo/17-greater-lesser.md`. The `min\` bridge, running mean, and running count remain pending in `todo/12-unbuilt-scans.md`.
 
-The parenthesized head of `fold(f)`, `scan(f)`, and `scan2(f)` is any admitted operator or registered reducer, not a one-off allowance for `+`. Like Haskell folds and scans or LINQ Aggregate, the head denotes the accumulator operation. Ano then applies its own laws: an unordered fold still requires associativity, and parallel reassociation still requires commutativity. Steel's long-form parser parity remains pending in `todo/12-unbuilt-scans.md`.
+The parenthesized head of `fold(f)` and `scan(f)` is any admitted operator or registered reducer, not a one-off allowance for `+`. Like Haskell folds and scans or LINQ Aggregate, the head denotes the accumulator operation. Ano then applies its own laws: an unordered fold still requires associativity, and parallel reassociation still requires commutativity. Steel's long-form parser parity remains pending in `todo/12-unbuilt-scans.md`.
 
 
 ## Order

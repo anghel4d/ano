@@ -325,7 +325,7 @@ Collapse a column to a scalar. On a declared traversal order, a fold is exact le
 
 Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms. `avg/` folds sum and count in one pass and divides at the end. `#/` is `+/` over the constant 1. The surface keeps the spellings, and the registry records them as fold-and-finish. That is what makes the empty case honest. A fold identity depends on the carrier. `|/` over masks yields false on empty input and `&/` yields true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so an empty scope fails the row. `max/` and `min/` are bridge spellings for those numeric folds and obey the same law. `avg/` also fails an empty scope.
 
-The slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form of `f/`. `scan(f)` is the long form of `f\`; `scan2(f)` applies the same accumulator step over its declared second axis. The short and long spellings never select different semantics.
+The slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form of `f/`. `scan(f)` is the long form of `f\`. The short and long spellings never select different semantics.
 
 Operationally, Ano follows LINQ's unseeded `Aggregate` model. `f` denotes the accumulator step and is resolved through the registry: an operator selects its built-in entry and a name selects a registered reducer. On a nonempty ordered input, the first value starts the accumulator and each remaining value is applied from left to right. A fold returns the final accumulator. A scan returns the first value followed by every successive accumulator state, so it preserves input length. The registry entry supplies the step and, where applicable, its identity, finishing function, and algebraic witnesses. Haskell supplies the useful fold/scan and direction vocabulary; LINQ is the closer operational precedent because Ano dispatches the named accumulator through its registry.
 
@@ -338,7 +338,7 @@ Ano improves on LINQ because the registry can prove which execution strategies a
 - Scan: uses the same accumulator but returns every successive accumulator state.
 - Empty scan: produces an empty column; it does not need an identity unless a seeded form explicitly emits the seed.
 
-Here an unordered fold may regroup the fixed traversal but may not permute it; parallel/unordered evaluation may partition and merge without preserving traversal order. Ano has no seeded fold or scan form.
+Here an unordered fold may regroup the fixed traversal but may not permute it; parallel/unordered evaluation may partition and merge without preserving traversal order.
 
 LINQ supplies query and accumulation as a library over a host language. Ano makes the query-and-accumulator model part of the language itself and joins it to the functional array calculus. The accumulator is therefore not an opaque callback: its registry entry can carry the laws that license execution freedom.
 
@@ -388,6 +388,8 @@ or, with an explicit ordering:
 ```haskell
 scan(+) Weight along pathCells
 ```
+
+A two-axis prefix scan is a composition of ordinary scans along two registry-declared axes, not a separate language form.
 
 ### 15. Grade and rank (`⍋ ⍒`)
 
@@ -466,7 +468,7 @@ Spawner |> expand Count , spawn Minion
 4 16 ⍴ army       ⍝ same army, 4 ranks of 16
 ```
 
-Array reshape changes a value's shape. Exact equal-cardinality reshape is a reindexing; APL's cycling or truncating reshape is an output-to-input gather map, not an equivalence. The Ano form `pos = to shape` is neither: it derives one coordinate per row of the current query domain and writes those coordinates through the effect's destination lineage. It does not reshape the entity habitat, and it does not license a stored field to change rank. The surface spells this placement combinator `to`, the allative; the spelling of first-class value reshape remains open.
+Array reshape changes a value's shape. Exact equal-cardinality reshape is a reindexing; APL's cycling or truncating reshape is an output-to-input gather map, not an equivalence. The Ano form `pos = to shape` is neither: it derives one position value per row of the current query domain and writes those values through the effect's destination lineage. Its destination registry declaration must supply a position carrier with at least two declared spatial axes. It does not require a lattice placement, does not reshape the entity habitat, and does not license a stored field to change rank. Placement is separately required only when an operation maps lattice sites into a world frame. The surface spells this coordinate pour `to`, the allative; the spelling of first-class value reshape remains open.
 
 ```haskell
 Soldier , pos = to 8 8           -- form into an 8×8 block
@@ -567,7 +569,7 @@ A reduction maps a column on `X` to a scalar. A declared order licenses exact le
 ```haskell
 +/ Elevation @ Ground
 max/ Threat @ Frontier
-scan2(+) Cost @ Ground
+scan(+) Cost along groundOrder
 ```
 
 A fold does not alter the source field. Its result is a scalar or a separately declared derived value.
@@ -862,7 +864,7 @@ The identity column restates the §12/§13 law. A fold with an identity yields i
 Ano adopts q's operations directly over its admitted carriers. `|` is OR on masks and maximum on numbers. `&` is AND on masks and minimum on numbers. Their folds and scans follow from the same dyads. Boolean OR stays `|`. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. `>` remains a comparison, so `>/` stays rejected.
 
 Steel does not yet implement the carrier overload. It emits `|` and `&` only as mask operations. Numeric `|`, numeric `&`, numeric `|/`, numeric `&/`, numeric `|\`, and numeric `&\` are pending in `todo/17-greater-lesser.md`. The bridge `max\` is live. `min\`, running mean, and running count remain pending in `todo/12-unbuilt-scans.md`. The γ column-form takes operator folds. A named reducer over fibers (`threat/ livestock'.Weight`) is still refused.
-The long-form head in `fold(f)`, `scan(f)`, and `scan2(f)` follows the LINQ accumulator model: it may be an operator or a registered reducer name, and the registry resolves the step, identity, finish, and laws. This is one callable-head policy, not a special case for `fold(+)`. A declared order admits any compatible step under exact left accumulation; unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. Steel's `fold(f)` parser still accepts names only, and the emitters still maintain incompatible operation tables. Long-form parity and ordered subtraction/division are pending in `todo/12-unbuilt-scans.md`.
+The long-form head in `fold(f)` and `scan(f)` follows the LINQ accumulator model: it may be an operator or a registered reducer name, and the registry resolves the step, identity, finish, and laws. This is one callable-head policy, not a special case for `fold(+)`. A declared order admits any compatible step under exact left accumulation; unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. Steel's `fold(f)` parser still accepts names only, and the emitters still maintain incompatible operation tables. Long-form parity and ordered subtraction/division are pending in `todo/12-unbuilt-scans.md`.
 
 ### Desugarings
 

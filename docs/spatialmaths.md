@@ -256,13 +256,13 @@ f' = f ∘ q
 
 It is a gather, not an equivalence. It may duplicate or omit input positions.
 
-Ano placement such as `pos = to 4 16` derives one position value per row of the current query habitat `X`:
+An Ano coordinate pour such as `pos = to 4 16` derives one position value per row of the current query habitat `X`:
 
 ```text
 position : X → Point
 ```
 
-It does not reshape `X`, the live entity habitat, or a stored field.
+The destination registry declaration must supply a position carrier with at least two declared spatial axes. No lattice placement is required. Placement is separately required only when an operation maps lattice sites into a world frame. The pour does not reshape `X`, the live entity habitat, or a stored field.
 
 A rank-changing result may be queried, folded, passed to a callable, or materialized as a new value on its own habitat. It cannot silently overwrite a stored target on another habitat.
 
