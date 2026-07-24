@@ -124,7 +124,7 @@ pub fn walk_demos(app: &mut App, dir: &str) {
     }
 }
 
-// Cached: $STEEL when executable; else steel beside kore's own binary via /proc/self/exe
+// Cached: $STEEL when executable; else steel beside kore's own binary via current_exe
 // (the cargo sibling in target/release or target/debug); else target/release/steel under
 // CWD; else "steel" (PATH via execvp). Kore speaks only to Steel — the C anoc is kore.c's
 // oracle business, never a rung here. kore.c find_anoc is the ladder's ancestor.
@@ -144,7 +144,7 @@ fn find_steel_probe() -> String {
             return env;
         }
     }
-    if let Ok(exe) = std::fs::read_link("/proc/self/exe") {
+    if let Ok(exe) = std::env::current_exe() {
         let exe = exe.to_string_lossy().into_owned();
         if let Some(sl) = exe.rfind('/') {
             let cand = format!("{}/steel", &exe[..sl]);
