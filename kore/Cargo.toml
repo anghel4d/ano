@@ -6,3 +6,6 @@ edition = "2024"
 [[bin]]
 name = "kore"
 path = "src/main.rs"
+
+[dependencies]
+nix = { version = "0.31", default-features = false, features = ["fs", "ioctl", "poll", "process", "signal", "term"] }

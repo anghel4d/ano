@@ -5,14 +5,22 @@
 
   outputs = { self, nixpkgs }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" ];
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+
+      # nixpkgs cbqn ships bin/BQN + bin/cbqn everywhere but adds the lowercase
+      # bqn only on Linux; steel spawns `bqn`, so darwin gets the name declaratively.
+      bqnPkgs = pkgs: [ pkgs.cbqn ] ++ nixpkgs.lib.optionals pkgs.stdenv.isDarwin [
+        (pkgs.runCommand "bqn-name" { } "mkdir -p $out/bin && ln -s ${pkgs.cbqn}/bin/BQN $out/bin/bqn")
+      ];
+
+      # crates.io deps vendored from the lockfile; the sandboxed checks stay offline.
+      cargoVendor = pkgs: pkgs.rustPlatform.importCargoLock { lockFile = ./Cargo.lock; };
     in
     {
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {
-          packages = [
-            pkgs.cbqn # BQN, the verification language for all executable claims
+          packages = bqnPkgs pkgs ++ [
             pkgs.rlwrap # line editing for the bqn and apl repls
 
             # anoc, the ano -> BQN transpiler in src/ (C23).
@@ -29,7 +37,6 @@
             pkgs.cabal-install
 
             # Bootstrap front-end candidates (spec: APL, Haskell, or OCaml).
-            pkgs.gnuapl # .apl.history is a GNU APL repl history
             pkgs.ocaml
             pkgs.dune_3
             pkgs.ocamlPackages.findlib
@@ -37,6 +44,8 @@
             pkgs.ocamlPackages.menhir
 
             pkgs.lean4 # proofs/Ano/, the machine-checked semantic kernel
+          ] ++ nixpkgs.lib.optionals pkgs.stdenv.isLinux [
+            pkgs.gnuapl # .apl.history is a GNU APL repl history; no aarch64-darwin build in nixpkgs
           ];
 
           # kore's E hop and every editor-shaped fallback land on a real editor,
@@ -57,7 +66,7 @@
           lake build
           touch $out
         '';
-        demos = pkgs.runCommand "ano-demos" { nativeBuildInputs = [ pkgs.cbqn ]; } ''
+        demos = pkgs.runCommand "ano-demos" { nativeBuildInputs = bqnPkgs pkgs; } ''
           bash ${self}/demos/check.sh
           touch $out
         '';
@@ -69,11 +78,13 @@
           make -C src anoc
           touch $out
         '';
-        steel = pkgs.runCommand "ano-steel-demos" { nativeBuildInputs = [ pkgs.rustc pkgs.cargo pkgs.gcc pkgs.cbqn ]; } ''
-          cp ${self}/Cargo.toml Cargo.toml && cp -r ${self}/steel steel && cp -r ${self}/kore kore
+        steel = pkgs.runCommand "ano-steel-demos" { nativeBuildInputs = bqnPkgs pkgs ++ [ pkgs.rustc pkgs.cargo pkgs.stdenv.cc ] ++ nixpkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.apple-sdk ]; } ''
+          cp ${self}/Cargo.toml Cargo.toml && cp ${self}/Cargo.lock Cargo.lock && cp -r ${self}/steel steel && cp -r ${self}/kore kore
           cp -r ${self}/src src && cp -r ${self}/demos demos
           chmod -R +w steel kore src demos
           export CARGO_HOME=$PWD/.cargo
+          mkdir -p .cargo
+          printf '[source.crates-io]\nreplace-with = "vendored-sources"\n[source.vendored-sources]\ndirectory = "%s"\n' ${cargoVendor pkgs} > .cargo/config.toml
           cargo build --release --offline --workspace
           STEEL=$PWD/target/release/steel bash src/check-ano.sh
           touch $out
