@@ -58,16 +58,16 @@ The planner/emitter must carry the semantic use site and its row domain into tra
 
 ## Work
 
-1. Attach a stable trace-use identifier and semantic phase to every planned relationship/fiber crossing.
-2. Carry the exact query-domain ID and any selection inclusion needed to map a reported source row back to stable entity/field identity.
-3. Keep predicate crossings on `X` even when another conjunct excludes the row.
-4. Restrict effect crossings to `S` before evaluating and reporting the hop.
-5. Preserve multiple use records when one relationship appears in predicate and effect, or appears twice in one statement.
-6. Seal functional-relationship targets at every introduction path: registry load, defaults/prototypes, spawn fill, ordinary assignment/update, migration, and save/reload. Admit `-1` and any finite value the declared endpoint carrier admits; require exact integers for unkeyed row/index targets and the declared unique-key carrier for keyed targets, with sign decided only by the carrier (A11). A refused write leaves the exact pre-state.
-7. Keep `-1` silent while reporting every evaluated valid non-sentinel dead key. Set-valued relationships represent no links by an empty fiber; do not introduce `-1` as a silent member convention there.
-8. Define deterministic trace order independent of backend chunking. Prefer source/use order and stable row identity; do not use hash-map iteration order.
+1. [X] DONE — Attach a stable trace-use identifier and semantic phase to every planned relationship/fiber crossing.
+2. [X] DONE — Carry the exact query-domain ID and any selection inclusion needed to map a reported source row back to stable entity/field identity.
+3. [X] DONE — Keep predicate crossings on `X` even when another conjunct excludes the row.
+4. [X] DONE — Restrict effect crossings to `S` before evaluating and reporting the hop.
+5. [X] DONE — Preserve multiple use records when one relationship appears in predicate and effect, or appears twice in one statement.
+6. [X] DONE except the migration path, which does not exist yet — Seal functional-relationship targets at every introduction path: registry load, defaults/prototypes, spawn fill, ordinary assignment/update, migration, and save/reload. Admit `-1` and any finite value the declared endpoint carrier admits; require exact integers for unkeyed row/index targets and the declared unique-key carrier for keyed targets, with sign decided only by the carrier (A11). A refused write leaves the exact pre-state.
+7. [X] DONE — Keep `-1` silent while reporting every evaluated valid non-sentinel dead key. Set-valued relationships represent no links by an empty fiber; do not introduce `-1` as a silent member convention there.
+8. [X] DONE — Define deterministic trace order independent of backend chunking. Prefer source/use order and stable row identity; do not use hash-map iteration order.
 9. Keep presentation aggregation downstream of the machine trace. Aggregation must expose a count and cannot change exit status, world state, or expected-output semantics.
-10. Ensure grouped/fiber operations report the source row and group/fiber identity without widening beyond the operation's semantic domain.
+10. [X] DONE — Ensure grouped/fiber operations report the source row and group/fiber identity without widening beyond the operation's semantic domain.
 11. Document the phase table in the trace/diagnostic reference and make Ano/Nihongo examples semantically identical.
 
 ## Sentinel
@@ -102,27 +102,27 @@ dead:(t<>-1)&not found;
 
 Add exact trace tests for:
 
-- a dead relationship in a predicate conjunct whose sibling mask is false: predicate event still appears;
-- the same dead relationship used only in an effect on a row excluded by `p`: no effect event appears;
-- the same relationship used in predicate and effect: two use records with their respective domains;
-- two textual crossings of one relationship in the same phase: two stable use records;
-- `-1` in predicate and effect: no `DEAD` record;
-- `-2` and another negative non-sentinel through a carrier that admits them: admitted at every introduction path and `DEAD` at each evaluated crossing, never silent and never refused by sign;
-- a fractional unkeyed index, a nonfinite computed target, a negative keyed target through a `nat` key, and a keyed target outside its declared key carrier at registry/default/prototype construction, migration, or effect commit: exact refusal with unchanged state;
-- a nonnegative never-existing key and a formerly-live despawned key: both are `DEAD` when evaluated;
-- keyed and index-keyed worlds, including a dead target after despawn;
-- grouped/fiber diagnostics with source and group identity;
-- tracing disabled versus enabled: identical output and post-state;
-- deterministic ordering across repeated runs and any available parallel/backend mode;
+- [X] DONE — a dead relationship in a predicate conjunct whose sibling mask is false: predicate event still appears;
+- [X] DONE — the same dead relationship used only in an effect on a row excluded by `p`: no effect event appears;
+- [X] DONE — the same relationship used in predicate and effect: two use records with their respective domains;
+- [X] DONE — two textual crossings of one relationship in the same phase: two stable use records;
+- [X] DONE — `-1` in predicate and effect: no `DEAD` record;
+- [X] DONE except migration — `-2` and another negative non-sentinel through a carrier that admits them: admitted at every introduction path and `DEAD` at each evaluated crossing, never silent and never refused by sign;
+- [X] DONE except migration — a fractional unkeyed index, a nonfinite computed target, a negative keyed target through a `nat` key, and a keyed target outside its declared key carrier at registry/default/prototype construction, migration, or effect commit: exact refusal with unchanged state;
+- [X] DONE — a nonnegative never-existing key and a formerly-live despawned key: both are `DEAD` when evaluated;
+- [X] DONE — keyed and index-keyed worlds, including a dead target after despawn;
+- [X] DONE — grouped/fiber diagnostics with source and group identity;
+- [X] DONE — tracing disabled versus enabled: identical output and post-state;
+- [X] DONE — deterministic ordering across repeated runs and any available parallel/backend mode;
 - Kore's diagnostic pane and standalone Steel's machine-readable trace.
 
 The relationship/spatial rewrite campaign must cover this cross-cutting contract especially in demo numbers `105–109` and `114–115`. Those numbers are already part of `99`'s spatial demolition set; this task adds no demolition number and must not inflate the global total above 64.
 
 ## Completion gate
 
-- Predicate diagnostics range over `X`; effect diagnostics range over `S`.
-- Pointwise conjunction remains order-independent and does not acquire short-circuit trace behavior.
-- Distinct semantic crossings remain distinct trace events.
-- `-1` is the only silent functional no-link representation; every evaluated valid non-sentinel dead target is `DEAD`, and only carrier-invalid targets refuse.
-- Enabling diagnostics changes neither denotation nor committed state.
+- [X] DONE — Predicate diagnostics range over `X`; effect diagnostics range over `S`.
+- [X] DONE — Pointwise conjunction remains order-independent and does not acquire short-circuit trace behavior.
+- [X] DONE — Distinct semantic crossings remain distinct trace events.
+- [X] DONE — `-1` is the only silent functional no-link representation; every evaluated valid non-sentinel dead target is `DEAD`, and only carrier-invalid targets refuse.
+- [X] DONE — Enabling diagnostics changes neither denotation nor committed state.
 - Steel and Kore agree on event identity, domain, order, and presentation for the acceptance matrix.

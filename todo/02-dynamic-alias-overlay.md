@@ -47,50 +47,50 @@ enum AliasTarget {
 
 The concrete ownership and arena design may differ. The required properties are:
 
-- canonical keys use the registry's existing ASCII name-folding rule;
-- targets retain carrier, row-domain, schema/service version, and host-snapshot information needed to reject stale or incompatible handles;
-- a statement captures an immutable environment version or snapshot;
-- installation validates the target before publishing a new environment;
-- rebinding is atomic replacement of one key;
-- deletion is idempotent at the host API or reports a clear host error, but never touches the bare namespace;
+- [X] DONE — canonical keys use the registry's existing ASCII name-folding rule;
+- [X] DONE — targets retain carrier, row-domain, schema/service version, and host-snapshot information needed to reject stale or incompatible handles;
+- [X] DONE — a statement captures an immutable environment version or snapshot;
+- [X] DONE — installation validates the target before publishing a new environment;
+- [X] DONE — rebinding is atomic replacement of one key;
+- [X] DONE — deletion is idempotent at the host API or reports a clear host error, but never touches the bare namespace;
 - stale registry-bound targets are invalidated or revalidated across a `Σ → Σ′` migration described in `05`.
 
 ## Host and replay boundary
 
-1. Expose host operations to install, rebind, inspect, and delete a dynamic alias between statement steps. The exact Steel CLI, API, and Kore command spelling is a host-interface decision, not Ano grammar.
+1. [X] DONE — Expose host operations to install, rebind, inspect, and delete a dynamic alias between statement steps. The exact Steel CLI, API, and Kore command spelling is a host-interface decision, not Ano grammar.
 2. Apply an alias transition only after its target has resolved and validated. A failed transition leaves the old environment unchanged.
-3. Add each successful transition to the deterministic session/input log with the statement barrier and environment version at which it became visible. Resolver-backed aliases also require the resolver version and the frozen host-input events needed to reproduce each statement.
-4. Save/reload must choose one explicit policy and test it end to end:
+3. [X] DONE — Add each successful transition to the deterministic session/input log with the statement barrier and environment version at which it became visible. Resolver-backed aliases also require the resolver version and the frozen host-input events needed to reproduce each statement.
+4. [X] DONE — Save/reload must choose one explicit policy and test it end to end:
    - persist the alias environment as session state; or
    - persist/replay the alias transition log.
 
-   Either policy is valid only if replay reproduces the same environment versions and statement observations. The overlay must not be serialized as immutable registry schema.
-5. Kore must display enough alias state to diagnose shadowing without presenting the overlay as a column declaration.
+   Either policy is valid only if replay reproduces the same environment versions and statement observations. The overlay must not be serialized as immutable registry schema. The chosen policy is persist-environment with barrier-stamped transition records; replay reproduces versions and plans.
+5. [X] DONE — Kore must display enough alias state to diagnose shadowing without presenting the overlay as a column declaration.
 
 ## Resolver work
 
-- Bare `name` always bypasses `A_t`.
-- `^name` checks the captured overlay first, then runs the exact bare resolver path only when the canonical key is absent. An invalid present entry is an alias-resolution refusal, not a miss.
-- A spelling alias may still participate in resolving the bare target according to the existing registry rules; it must not become a live alias entry merely because the word “alias” is shared.
-- `!^name` resolves first and then negates the resulting mask.
+- [X] DONE — Bare `name` always bypasses `A_t`.
+- [X] DONE — `^name` checks the captured overlay first, then runs the exact bare resolver path only when the canonical key is absent. An invalid present entry is an alias-resolution refusal, not a miss.
+- [X] DONE — A spelling alias may still participate in resolving the bare target according to the existing registry rules; it must not become a live alias entry merely because the word “alias” is shared.
+- [X] DONE — `!^name` resolves first and then negates the resulting mask.
 - An overlay mask with the wrong query domain follows the ordinary alignment/lineage rules; the overlay is not permission to align equal-length buffers.
-- Diagnostics identify whether the value came from a binding, materialized mask, resolver, or bare fallback and include the captured overlay, resolver, and host-input versions when tracing is enabled.
+- [X] DONE — Diagnostics identify whether the value came from a binding, materialized mask, resolver, or bare fallback and include the captured overlay, resolver, and host-input versions when tracing is enabled.
 
 ## Tests
 
 Add Steel, host/API, replay, and Kore tests for:
 
-- fallback with no dynamic alias;
-- same-stem shadowing of a bare column or binding;
-- installation, rebinding, and deletion across consecutive statement steps;
-- survival of the bare binding through the full alias lifecycle;
-- `!name` versus `!^name` before, during, and after shadowing;
-- ASCII case-fold equivalence and non-ASCII controls matching registry behavior;
-- a statement that performs multiple gathers while the host queues a rebind, proving one overlay snapshot is observed;
-- a resolver-backed deictic invoked by multiple gathers, proving that it may rerun but receives one frozen world/host-input snapshot, followed by a later statement that observes changed host input;
+- [X] DONE — fallback with no dynamic alias;
+- [X] DONE — same-stem shadowing of a bare column or binding;
+- [X] DONE — installation, rebinding, and deletion across consecutive statement steps;
+- [X] DONE — survival of the bare binding through the full alias lifecycle;
+- [X] DONE — `!name` versus `!^name` before, during, and after shadowing;
+- [X] DONE — ASCII case-fold equivalence and non-ASCII controls matching registry behavior;
+- [X] DONE — a statement that performs multiple gathers while the host queues a rebind, proving one overlay snapshot is observed;
+- [X] DONE — a resolver-backed deictic invoked by multiple gathers, proving that it may rerun but receives one frozen world/host-input snapshot, followed by a later statement that observes changed host input;
 - failed installation of an unknown, stale, wrong-carrier, or wrong-schema target with no environment change, plus a stale present entry proving that lookup refuses rather than falling through;
-- deterministic log replay and save/reload under the chosen policy;
-- coexistence with a spelling alias and a static `AliasMask` fixture of related names.
+- [X] DONE — deterministic log replay and save/reload under the chosen policy;
+- [X] DONE — coexistence with a spelling alias and a static `AliasMask` fixture of related names.
 
 ## Sentinel
 
@@ -122,9 +122,9 @@ Rewrite them only after the overlay implementation lands. New witnesses must pro
 
 ## Completion gate
 
-- The value denotation of `^name` can differ from bare `name` only while the captured overlay contains the stem; diagnostics still retain the sigiled source request.
-- Alias lifecycle cannot mutate a bare binding or registry declaration.
-- One statement cannot observe two alias-environment or host-input versions; resolver-backed deictics may rerun only against that frozen snapshot.
-- Replay and save/reload reproduce the same observations.
-- The three alias mechanisms are named and tested separately in code and documentation.
+- [X] DONE — The value denotation of `^name` can differ from bare `name` only while the captured overlay contains the stem; diagnostics still retain the sigiled source request.
+- [X] DONE — Alias lifecycle cannot mutate a bare binding or registry declaration.
+- [X] DONE — One statement cannot observe two alias-environment or host-input versions; resolver-backed deictics may rerun only against that frozen snapshot.
+- [X] DONE — Replay and save/reload reproduce the same observations.
+- [X] DONE — The three alias mechanisms are named and tested separately in code and documentation.
 - All rewritten alias demos pass through Steel and Kore; the old six numbers remain out of the active evidence surface until then.

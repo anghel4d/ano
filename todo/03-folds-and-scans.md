@@ -110,12 +110,12 @@ Steel currently maintains divergent parser and emitter whitelists for glyph scan
 
 Required surface results:
 
-- `fold(+)` is valid.
-- Every symbolic and long spelling that denotes the same admitted operation resolves to the same descriptor.
-- `min\` is added as the missing glyph bridge.
-- `avg\` is added from the same state/projector used by `avg/`.
-- `#\` is admitted as running cardinality over the same selection-presence semantics as `#/`. This is settled, not an open surface question: q/kdb+'s scan adverb gives every admitted fold its running form, and `#\` is the same convention already carried by `+\`, `|\`, and `&\`. It increments on admitted/true rows, not merely on every physical input slot. Do not add a second built-in `count/` spelling unless it is an ordinary registered name.
-- `scan2` is deleted end to end. Remove English and Nihongo keywords, parser/AST/emitter flags, documentation, and hardcoded two-axis lowering. A two-axis prefix operation is composition of ordinary scans along explicitly declared axes, not a fixed-rank primitive.
+- [X] DONE — `fold(+)` is valid.
+- [X] DONE — Every symbolic and long spelling that denotes the same admitted operation resolves to the same descriptor.
+- [X] DONE — `min\` is added as the missing glyph bridge.
+- [X] DONE — `avg\` is added from the same state/projector used by `avg/`.
+- [X] DONE — `#\` is admitted as running cardinality over the same selection-presence semantics as `#/`. This is settled, not an open surface question: q/kdb+'s scan adverb gives every admitted fold its running form, and `#\` is the same convention already carried by `+\`, `|\`, and `&\`. It increments on admitted/true rows, not merely on every physical input slot. Do not add a second built-in `count/` spelling unless it is an ordinary registered name.
+- [X] DONE in code, grammar, and demos; the documentation claim awaits the docs triage — `scan2` is deleted end to end. Remove English and Nihongo keywords, parser/AST/emitter flags, documentation, and hardcoded two-axis lowering. A two-axis prefix operation is composition of ordinary scans along explicitly declared axes, not a fixed-rank primitive.
 
 The glyph and long forms may have different syntax, but they must not have separate semantic operation tables.
 
@@ -131,53 +131,53 @@ resolve/compute → apply validity guard → bind/label → compare --! out → 
 
 A false scalar guard produces the same zero-row result as an ordinary query whose predicate selects nothing.
 
-- Bare query: print nothing.
-- Labeled query: emit no value row; do not print a label followed by `0`.
-- Assignment: write nothing.
+- [X] DONE — Bare query: print nothing.
+- [X] DONE — Labeled query: emit no value row; do not print a label followed by `0`.
+- [X] DONE — Assignment: write nothing.
 - Kore OUTPUTS: show no fabricated scalar.
-- Expectations: compare against the empty-result representation, not the backend placeholder.
-- No option carrier, `none` marker, exception, NaN, infinity, or display-only special case is introduced.
+- [X] DONE — Expectations: compare against the empty-result representation, not the backend placeholder.
+- [X] DONE — No option carrier, `none` marker, exception, NaN, infinity, or display-only special case is introduced.
 
 Forms with a declared empty result remain real scalar results on empty input: `+/ → 0`, `*/ → 1`, `#/ → 0`, mask `|/ → false`, and mask `&/ → true`. For `#/`, `0` is the count machine's registered empty result, not evidence that `#` is a homogeneous binary reducer.
 
 ## Implementation order
 
-1. Add carrier-resolved operation descriptors and one fold/scan head resolver.
-2. Make direct `|` and `&` dispatch on the checked operand carrier while preserving mask precedence and behavior.
-3. Lower homogeneous folds/scans by the exact recurrence above; retain declared order in the plan.
-4. Lower `avg` and count through explicit state and projection; count consumes the checked selection-presence stream, not arbitrary numeric payloads.
-5. Add `min\`, `avg\`, and `#\`; converge glyph, long, grouped, and along forms.
-6. Apply identity metadata per carrier rather than per glyph. Remove any carrier-blind assumption that `|` or `&` always has an identity.
-7. Repair query guard consumption before binding, labeling, expectations, and display.
-8. Delete `scan2` and replace its documentation with axis-composition semantics; do not retain it as compatibility sugar.
+1. [X] DONE — Add carrier-resolved operation descriptors and one fold/scan head resolver.
+2. [X] DONE — Make direct `|` and `&` dispatch on the checked operand carrier while preserving mask precedence and behavior.
+3. [X] DONE — Lower homogeneous folds/scans by the exact recurrence above; retain declared order in the plan.
+4. [X] DONE — Lower `avg` and count through explicit state and projection; count consumes the checked selection-presence stream, not arbitrary numeric payloads.
+5. [X] DONE — Add `min\`, `avg\`, and `#\`; converge glyph, long, grouped, and along forms.
+6. [X] DONE — Apply identity metadata per carrier rather than per glyph. Remove any carrier-blind assumption that `|` or `&` always has an identity.
+7. [X] DONE — Repair query guard consumption before binding, labeling, expectations, and display.
+8. [X] DONE in code and demos; the documentation replacement awaits the docs triage — Delete `scan2` and replace its documentation with axis-composition semantics; do not retain it as compatibility sugar.
 9. Update Ano/Nihongo grammar tables, registry documentation, BQN explanatory witnesses, and Kore output/inspection behavior.
 
 ## Acceptance matrix
 
 Positive tests must include:
 
-- direct scalar and column numeric Greater/Lesser, including the chain `1 | 7 | 9 | 8 | 6 | 1 | 9 | 8 | 99 | 1 | 23 | 4 | 5 | 174 | 1 | 2 | 3 → 174`;
-- unchanged mask truth tables and precedence;
-- `|/`, `|\`, `&/`, and `&\` on masks and numbers;
-- exact equivalence of `max`/`min` bridges with the numeric `|`/`&` instances;
-- `fold(+)`, `scan(+)`, named registered reducers, and exact ordered subtraction/division where an order is declared;
-- grouped/fiber folds and scans with domain and guard parity;
-- running mean prefixes; running count on mixed masks (`1,0,1,1 → 1,1,2,3`), filtered fibers, and an all-true control (`1…n`);
-- empty scans for every instance;
-- folds with declared empty results, including homogeneous identities and count's explicit `0` law;
-- empty identityless folds as no result row in bare, labeled, expected-output, assignment, and Kore paths;
-- Ano and Nihongo parity.
+- [X] DONE — direct scalar and column numeric Greater/Lesser, including the chain `1 | 7 | 9 | 8 | 6 | 1 | 9 | 8 | 99 | 1 | 23 | 4 | 5 | 174 | 1 | 2 | 3 → 174`;
+- [X] DONE — unchanged mask truth tables and precedence;
+- [X] DONE — `|/`, `|\`, `&/`, and `&\` on masks and numbers;
+- [X] DONE — exact equivalence of `max`/`min` bridges with the numeric `|`/`&` instances;
+- [X] DONE — `fold(+)`, `scan(+)`, named registered reducers, and exact ordered subtraction/division where an order is declared;
+- [X] DONE — grouped/fiber folds and scans with domain and guard parity;
+- [X] DONE — running mean prefixes; running count on mixed masks (`1,0,1,1 → 1,1,2,3`), filtered fibers, and an all-true control (`1…n`);
+- [X] DONE — empty scans for every instance;
+- [X] DONE — folds with declared empty results, including homogeneous identities and count's explicit `0` law;
+- [X] DONE except the Kore path — empty identityless folds as no result row in bare, labeled, expected-output, assignment, and Kore paths;
+- [X] DONE — Ano and Nihongo parity.
 
 Refusal tests must include:
 
-- mask-number Greater/Lesser mixtures;
-- `max`/`min` on masks;
-- an operation with no fold or scan descriptor;
+- [X] DONE — mask-number Greater/Lesser mixtures;
+- [X] DONE — `max`/`min` on masks;
+- [X] DONE — an operation with no fold or scan descriptor;
 - an unordered or regrouped non-associative fold;
 - a registered identity whose carrier does not match the reducer result;
 - a stale or incompatible registered operation handle;
-- `scan2` as an unknown removed keyword;
-- any attempt to observe the guarded backend placeholder.
+- [X] DONE — `scan2` as an unknown removed keyword;
+- [X] DONE — any attempt to observe the guarded backend placeholder.
 
 Property tests should compare exact left recurrence with the emitted backend for arbitrary nonempty vectors, verify scan length preservation, verify the last scan element equals the fold result for homogeneous instances, verify the last emitted prefix equals the finish result for nonempty mean/count machines, and test bridge equality including float edge cases under the declared numeric policy.
 
@@ -222,10 +222,10 @@ Still-correct controls `011`, `012`, `038`, `039`, and `040` remain active. Do n
 
 ## Completion gate
 
-- One semantic descriptor table governs direct dyads, glyph folds/scans, long forms, grouped forms, and along forms.
-- Ordered semantics exactly match the recurrence in this file.
-- Running mean and count are represented honestly as stateful prefix machines.
-- `|` and `&` have carrier-directed q-style behavior without coercion.
-- Empty identityless queries cannot expose a placeholder.
-- `scan2` no longer exists in code, grammar, docs, or active demos.
+- [X] DONE — One semantic descriptor table governs direct dyads, glyph folds/scans, long forms, grouped forms, and along forms.
+- [X] DONE — Ordered semantics exactly match the recurrence in this file.
+- [X] DONE — Running mean and count are represented honestly as stateful prefix machines.
+- [X] DONE — `|` and `&` have carrier-directed q-style behavior without coercion.
+- [X] DONE — Empty identityless queries cannot expose a placeholder.
+- [X] DONE except docs — `scan2` no longer exists in code, grammar, docs, or active demos.
 - Steel, Kore, Ano, Nihongo, and explanatory BQN witnesses agree on all positive and refusal cases.

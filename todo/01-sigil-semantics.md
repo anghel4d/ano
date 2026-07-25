@@ -1,6 +1,6 @@
 # 01 — sigil semantics and the resolver boundary
 
-Status: first implementation task. This is the small compiler change that must land before the live alias overlay in `02`.
+Status: [X] DONE. The resolver boundary landed in Steel with the sigil test suite — bare/sigiled/negated forms, case-fold and non-ASCII controls, spelling-alias and static-mask separation, provenance diagnostics, byte-identical fallback plans — and `02` attached at this boundary as intended.
 
 ## Verified current state
 
