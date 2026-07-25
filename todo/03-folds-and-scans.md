@@ -115,7 +115,7 @@ Required surface results:
 - [X] DONE — `min\` is added as the missing glyph bridge.
 - [X] DONE — `avg\` is added from the same state/projector used by `avg/`.
 - [X] DONE — `#\` is admitted as running cardinality over the same selection-presence semantics as `#/`. This is settled, not an open surface question: q/kdb+'s scan adverb gives every admitted fold its running form, and `#\` is the same convention already carried by `+\`, `|\`, and `&\`. It increments on admitted/true rows, not merely on every physical input slot. Do not add a second built-in `count/` spelling unless it is an ordinary registered name.
-- [X] DONE in code, grammar, and demos; the documentation claim awaits the docs triage — `scan2` is deleted end to end. Remove English and Nihongo keywords, parser/AST/emitter flags, documentation, and hardcoded two-axis lowering. A two-axis prefix operation is composition of ordinary scans along explicitly declared axes, not a fixed-rank primitive.
+- [X] DONE — `scan2` is deleted end to end. Remove English and Nihongo keywords, parser/AST/emitter flags, documentation, and hardcoded two-axis lowering. A two-axis prefix operation is composition of ordinary scans along explicitly declared axes, not a fixed-rank primitive.
 
 The glyph and long forms may have different syntax, but they must not have separate semantic operation tables.
 
@@ -149,7 +149,7 @@ Forms with a declared empty result remain real scalar results on empty input: `+
 5. [X] DONE — Add `min\`, `avg\`, and `#\`; converge glyph, long, grouped, and along forms.
 6. [X] DONE — Apply identity metadata per carrier rather than per glyph. Remove any carrier-blind assumption that `|` or `&` always has an identity.
 7. [X] DONE — Repair query guard consumption before binding, labeling, expectations, and display.
-8. [X] DONE in code and demos; the documentation replacement awaits the docs triage — Delete `scan2` and replace its documentation with axis-composition semantics; do not retain it as compatibility sugar.
+8. [X] DONE — Delete `scan2` and replace its documentation with axis-composition semantics; do not retain it as compatibility sugar.
 9. Update Ano/Nihongo grammar tables, registry documentation, BQN explanatory witnesses, and Kore output/inspection behavior.
 
 ## Acceptance matrix
@@ -227,5 +227,5 @@ Still-correct controls `011`, `012`, `038`, `039`, and `040` remain active. Do n
 - [X] DONE — Running mean and count are represented honestly as stateful prefix machines.
 - [X] DONE — `|` and `&` have carrier-directed q-style behavior without coercion.
 - [X] DONE — Empty identityless queries cannot expose a placeholder.
-- [X] DONE except docs — `scan2` no longer exists in code, grammar, docs, or active demos.
+- [X] DONE — `scan2` no longer exists in code, grammar, docs, or active demos.
 - Steel, Kore, Ano, Nihongo, and explanatory BQN witnesses agree on all positive and refusal cases.

@@ -2,7 +2,7 @@
 
 The closed grammar of both surfaces, catalogued. Ano has two closed vocabularies. The language owns exactly seventeen reserved words. Everything else is a name resolved against the world. The registry (`.reg` files) owns a separate set of line directives plus a handful of type and kind sub-words. The two meet where a registry schema becomes the nouns of an Ano sentence. This file is the atlas; `ano-language.md` is the spec it derives from, `ano-manual.md` the tutorial. Where this file and `ano-language.md` disagree, the spec wins.
 
-What counts as a keyword. Per GRAMMAR.md: the closed keyword set is `def spawn at to via along order by take desc top grade fold scan cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. The seventeen below are the keywords. The structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes. Steel still reserves the legacy `scan2` and `二重走査` tokens pending their deletion under `todo/12-unbuilt-scans.md`.
+What counts as a keyword. Per GRAMMAR.md: the closed keyword set is `def spawn at to via along order by take desc top grade fold scan cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. The seventeen below are the keywords. The structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes.
 
 ## Atlas: language keywords
 
@@ -23,7 +23,7 @@ Each keyword carries its Japanese spelling. The `--! ja` skin converges on share
 | `top` | 上位 | `T_TOP` | order | top-k graded selection (`top 5 (grade …)`) |
 | `grade` | 格付 | `T_GRADE` | order | the permutation that sorts (APL `⍋`); selection-only, never a write-back |
 | `fold` | 縮約 | `T_FOLDKW` | array | long form of the reducer (`fold(f) col @ scope`); collapses a column to a scalar |
-| `scan` | 走査 | `T_SCANKW` | array | long form of the scan (`scan(f) col along order`); length-preserving accumulation |
+| `scan` | 走査 | `T_SCANKW` | array | long form of the scan (`scan(f) col along order`, `along` optional); length-preserving accumulation |
 | `cross` | 交差 | `T_CROSS` | generation | outer product: apply a function to every pair of two selections |
 | `expand` | 展開 | `T_EXPAND` | generation | pipeline replicate and flat-map (`\|> expand Count`) |
 | `til` | 連番 | `T_IOTA` | generation | the generator: `til n` is `0 1 … n-1` |
@@ -66,13 +66,15 @@ Fold and scan operators, the closed reducer family. Each is a fold under `/` and
 | `*/` | `*\` | 総積 / 累積 | product / running product | 1 |
 | `&/` | `&\` | 皆 / 累皆 | all or minimum / still-all or running minimum | mask 1, number none |
 | `\|/` | `\|\` | 或 / 累或 | any or maximum / ever-any or running maximum | mask 0, number none |
-| `#/` | `#\` | 総数 / — | count / running count | 0 |
+| `#/` | `#\` | 総数 / 累数 | count / running count | 0 |
 | `max/` | `max\` | 最大 / 累大 | numeric bridge for `\|/` / `\|\` | none — row drops |
-| `min/` | `min\` | 最小 / — | numeric bridge for `&/` / `&\` | none — row drops |
-| `avg/` | `avg\` | 平均 / — | mean / running mean | none — row drops |
+| `min/` | `min\` | 最小 / 累小 | numeric bridge for `&/` / `&\` | none — row drops |
+| `avg/` | `avg\` | 平均 / 累平均 | mean / running mean | none — row drops |
+| `-/` | `-\` | — | ordered left subtraction / running subtraction | none — row drops |
+| `fold(/)` | `/\` | — | ordered left division / running division | none — row drops |
 | `f/` | `f\` | `脅威/` / `脅威\` | named reducer / its scan | registered |
 
-The incomplete bridge scans are `#\`, `min\`, and `avg\`. Numeric `&\` is the running minimum, but Steel does not yet implement the carrier overload. `scan(min) X along order` already works. The running mean and running count exist in no spelling. Full status lives under the fold and scan markers below. `-/` and `//` remain rejected as non-associative.
+Every scan in the table is live. `#\`, `min\`, and `avg\` landed with the rest, numeric `&\` and `|\` are the running minimum and maximum under the carrier overload, and `scan(min) X along order` is the same operation as `min\`. `-\` and `/\` carry no Japanese spelling. `//` stays unlexable, since `/` is already the fold marker and the replicate glyph. Full semantics live under the fold and scan markers below.
 
 ## Atlas: registry keywords
 
@@ -240,7 +242,7 @@ Unit , Slot = rank(Initiative)            -- rank(), not grade, on the effect si
 
 ### `fold` — 縮約
 
-The long form of the reducer, `fold(f) col @ scope`, collapses a column to one scalar under `@`. Its head is any admitted operator or registered reducer, not a special case for `+`. It covers `+/ */ #/ &/ |/ max/ min/ avg/` and named reducers like `threat/`. An empty fold uses the operand carrier's identity. `+/` and `#/` give 0. Mask `|/` gives false and mask `&/` gives true. Numeric `|/`, numeric `&/`, their `max/` and `min/` bridges, and `avg/` fail the row. Failure is no result row, so a bare query prints nothing. The grouped fold is the same word over a tick-marked hop. It yields one value per selected source. `@` never groups; the tick does. Steel still accepts names only inside `fold(f)`, with operator parity pending in `todo/12-unbuilt-scans.md`.
+The long form of the reducer, `fold(f) col @ scope`, collapses a column to one scalar under `@`. Its head is any admitted operator or registered reducer, not a special case for `+`. It covers `+/ */ -/ #/ &/ |/ max/ min/ avg/` and named reducers like `threat/`. An empty fold uses the operand carrier's identity. `+/` and `#/` give 0. Mask `|/` gives false and mask `&/` gives true. Numeric `|/`, numeric `&/`, their `max/` and `min/` bridges, and `avg/` fail the row. Failure is no result row, so a bare query prints nothing. The grouped fold is the same word over a tick-marked hop. It yields one value per selected source. `@` never groups; the tick does. Steel's `fold(f)` admits every head the glyph fold admits, so `fold(+)`, `fold(-)`, and `fold(min)` are the same operations as `+/`, `-/`, and `min/`. There is no long count spelling: bare `#` forms only `#/` and `#\`.
 
 ```haskell
 +/ Gold @ Nord                                -- total Nord gold, one scalar
@@ -252,7 +254,7 @@ Plot , Moisture = avg/ neighbors'.Moisture    -- grouped: per-plot mean
 
 ### `scan` — 走査
 
-The long form of the scan, `scan(f) col along order`. Unlike a fold, a scan is length-preserving — one running value per selected cell — so it needs an order, from the view or from `along`. Live steps split by spelling: the glyph `f\` under an `@` scope emits `+ * max & |` and named reducers (the boolean latches `&\` still-all and `|\` ever-any among them); this long `scan(f) … along` form emits `+ * max min`, so the running minimum runs only through it, never as a `min\` glyph. Steps like `-` and `/` are rejected as non-associative, and the running mean and running count are unbuilt in either spelling (the fold and scan table maps it). The barrier trap the repository pins four ways: `offset = prev.offset + prev.prev.offset` is not a recurrence — the comma is a barrier and every read observes pre-state, so `prev` is a parallel shift, not a carry. Recurrences belong in a callable or across ticks.
+The long form of the scan, `scan(f) col along order`. Unlike a fold, a scan is length-preserving — one running value per selected cell — so it needs an order, from the view or from `along`. One descriptor table governs both spellings: the glyph `f\` and the long `scan(f) …` admit `+ * - / max min & |`, `#`, `avg`, and registered reducers alike, over whichever carrier the head is defined on. `along` is optional — `scan(f) col` takes its order from the view, exactly as the glyph does. `-` and `/` are exact ordered left steps and are refused only by a strategy that would regroup or reorder them. The barrier trap the repository pins four ways: `offset = prev.offset + prev.prev.offset` is not a recurrence — the comma is a barrier and every read observes pre-state, so `prev` is a parallel shift, not a carry. Recurrences belong in a callable or across ticks.
 
 ```haskell
 +\ Weight @ Route            -- running pack weight along a route
@@ -439,7 +441,7 @@ Plot , Moisture = avg/ neighbors'.Moisture   -- the gathered fiber column
 
 ### `/  \` — the fold and scan markers
 
-Glued to a name or operator with no interior whitespace, `/` lexes one fold token and `\` lexes one scan token. The family includes `+/ */ &/ |/ #/`, named reducers such as `threat/`, and the scans `+\ *\ &\ |\ max\ threat\`. Ano's `|/` and `&/` are q's folds. The operand carrier selects Greater or Lesser. The lexer stays registry-blind, so an unregistered reducer fails at emit.
+Glued to a name or operator with no interior whitespace, `/` lexes one fold token and `\` lexes one scan token. The family includes `+/ */ &/ |/ #/ -/ max/ min/ avg/`, named reducers such as `threat/`, and the scans `+\ *\ &\ |\ #\ -\ /\ max\ min\ avg\ threat\`. Ano's `|/` and `&/` are q's folds. The operand carrier selects Greater or Lesser. The lexer stays registry-blind, so an unregistered reducer fails at emit.
 
 ```haskell
 #/ (Nord & TwoHanded > 60)   -- count over a parenthesized mask
@@ -451,19 +453,19 @@ A fold on a declared order is exact left accumulation and accepts any compatible
 
 | operator | `f/` fold | `f\` scan | empty-scope identity | Steel emits the scan? |
 |---|---|---|---|---|
-| `+/` `+\` | sum | running sum | 0 | yes |
-| `*/` `*\` | product | running product | 1 | yes |
-| `&/` `&\` | all on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none | mask yes, number no |
-| `\|/` `\|\` | any on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none | mask yes, number no |
-| `#/` `#\` | count | running count | 0 | no |
-| `max/` `max\` | numeric bridge for `\|/` | numeric bridge for `\|\` | none — row drops | yes |
-| `min/` `min\` | numeric bridge for `&/` | numeric bridge for `&\` | none — row drops | only via `scan(min) … along` |
-| `avg/` `avg\` | mean | running mean | none — row drops | no |
-| `f/` `f\` | named reducer | registered scan | registered | yes |
-| `-/` | rejected — not associative | — | — | — |
-| `//` | rejected — not associative, and unlexable (`/` is fold-marker and replicate) | — | — | — |
+| `+/` `+\` | sum | running sum | 0 | yes, numbers only |
+| `*/` `*\` | product | running product | 1 | yes, numbers only |
+| `&/` `&\` | all on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none | yes, both carriers |
+| `\|/` `\|\` | any on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none | yes, both carriers |
+| `#/` `#\` | count | running count | 0 | yes, over selection presence |
+| `max/` `max\` | numeric bridge for `\|/` | numeric bridge for `\|\` | none — row drops | yes, numbers only |
+| `min/` `min\` | numeric bridge for `&/` | numeric bridge for `&\` | none — row drops | yes, numbers only |
+| `avg/` `avg\` | mean | running mean | none — row drops | yes, numbers only |
+| `f/` `f\` | named reducer | registered scan | registered | yes, numbers only |
+| `-/` `-\` | ordered left subtraction | running subtraction | none — row drops | yes, numbers only |
+| `fold(/)` `/\` | ordered left division | running division | none — row drops | yes, numbers only; `//` stays unlexable |
 
-The scan family has two spellings. Numeric `|\` is running maximum and numeric `&\` is running minimum. Steel still emits both glyphs only for masks. `max\` works as the numeric maximum bridge. `scan(min) X along order` works, but the `min\` bridge is still unbuilt. Running mean and running count remain absent. `avg\` is an emit error, and `#\` is a lex error. Those bridge gaps stay in `todo/12-unbuilt-scans.md`. The carrier overload is pending in `todo/17-greater-lesser.md`. `>` remains a comparison, so `>/` stays rejected.
+Both scan spellings resolve through one table. Numeric `|\` is running maximum and numeric `&\` is running minimum; the mask instances are the ever-any and still-all latches. `max\` and `min\` are their numeric bridges and emit the same program as the glyphs they bridge, and `scan(min) X along order` is that same operation under a named order. `#\` is running cardinality over selection presence and `avg\` is the running mean; both are prefix machines. A head with no instance on the operand carrier refuses: `+\ mask` and `avg\ mask` are errors for the same reason `+/ mask` and `avg/ mask` are. `>` remains a comparison, so `>/` stays rejected.
 
 ### `+/`  `+\` — sum, running sum
 
@@ -505,11 +507,12 @@ Multiplication. `*/` multiplies the scope; `*\` returns the running product. Ide
 
 ### `#/`  `#\` — count, running count
 
-Cardinality. `#/` counts, taking a parenthesized mask; it is `+/` over ones. Identity 0, and the fold is live. The running count `#\` has no spelling at all: `#` forms only the fold `#/`, so `#\` is a lex error — `line N: '#' begins only the fold '#/'`.
+Cardinality over selection presence. `#/` counts, taking a parenthesized mask; identity 0, the count machine's registered empty result. `#\` is the running count: it advances by one on each admitted row and by zero on each false mask element, so `1,0,1,1` scans to `1,1,2,3` and an all-true stream scans to `1…n`. `#` forms nothing else — a bare `#` is a lex error, `line N: '#' begins only '#/' or '#\'`.
 
 ```haskell
 #/ (Nord & TwoHanded > 60)             -- how many trained Nords
 Target , Hits += #/ attackers'         -- in-degree: count per target
+#\ Burning @ Fuse                      -- how many have caught fire by each cell
 ```
 
 ### `max/`  `max\` — maximum, running peak
@@ -523,19 +526,21 @@ max\ Height @ Ray            -- the running skyline up the sightline
 
 ### `min/`  `min\` — minimum, running floor
 
-`min/` and `min\` remain numeric bridges for `&/` and `&\`. `min/` works. The `min\` bridge is still unbuilt, while `scan(min) X along order` works. An empty scope drops the row because finite float64 has no minimum identity.
+`min/` and `min\` remain numeric bridges for `&/` and `&\`, and `scan(min) X along order` is the same operation under a named order. An empty scope drops the row because finite float64 has no minimum identity, so no seed is ever prepended and no infinity is manufactured.
 
 ```haskell
 Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 10
+min\ Depth @ Descent         -- the running floor down the descent
 ```
 
 ### `avg/`  `avg\` — mean, running mean
 
-Arithmetic mean folds sum and count, then divides. `avg/` is live. `avg\` is the ruled running mean but has no emit rule. An empty fold fails the row.
+Arithmetic mean. The machine carries state `(sum,count)` and projects `sum/count`, so `avg/` finishes on the last prefix and `avg\` emits the mean of every prefix. An empty fold fails the row; an empty scan is an empty column.
 
 ```haskell
 Cow & Weight < avg/ Weight @ Cow , +Marked   -- @: one scalar, the herd mean
 Plot , Moisture = avg/ neighbors'.Moisture   -- ': a column, one mean per plot
+avg\ Yield @ Season                          -- the running mean, one per cell
 ```
 
 ### `f/`  `f\` — the named reducer
@@ -547,9 +552,9 @@ threat/ Damage @ Enemies     -- fold with the registered reducer
 threat\ Damage @ graded      -- its scan, free
 ```
 
-### `-/`  `//` — the rejected reducers
+### `-/`  `-\`  `/\` — the ordered steps
 
-`-/` is rejected because subtraction is not associative, and `//` is rejected on the same ground and is additionally unlexable, since `/` is already the fold marker and the replicate glyph. Neither is guessed at; both are errors.
+Subtraction and division fold and scan as exact left steps: `-/` is left subtraction, `-\` its running form, `fold(/)` left division, and `/\` running division. Neither declares associativity or commutativity, so a strategy that would regroup or reorder refuses them while exact left execution over a declared order does not. `//` is unlexable, since `/` is already the fold marker and the replicate glyph; the long `fold(/)` spells that fold instead.
 
 ### `( )` — grouping, call, tuple
 
@@ -588,7 +593,7 @@ Soldier , pos = to 4 _         -- 4 ranks, width inferred
 
 ### `^` — the alias sigil
 
-A caret immediately followed by a name, no whitespace, lexes as one alias token; a bare `^` is a lex error. It selects the dynamic alias overlay. Lookup reads the live alias first and falls through to the bare namesake when none exists, so `^Whiterun` may shadow bare `Whiterun` without replacing it. It follows the identifier policy, so `^世界` is legal.
+A caret immediately followed by a name, no whitespace, lexes as one alias token; a bare `^` is a lex error. It selects the dynamic alias overlay. Lookup reads the live alias first and falls through to the bare namesake when none exists, so `^Whiterun` may shadow bare `Whiterun` without replacing it. It follows the identifier policy, so `^世界` is legal. This is the dynamic overlay, host-managed session state in the registry's `.aliases` sidecar; the other two alias mechanisms are the spelling table (`as`, `ja`) and the stored `alias` mask, and neither seeds it.
 
 ```haskell
 ^cursor , runBehaviorTree
@@ -708,7 +713,7 @@ inv owned owner          -- owned' gives each entity its set of owned rows
 
 ### `alias` — stored mask
 
-`alias <name> <n-mask>`, a boolean mask given a name — a value, distinct from the name alias `as`. Read in selection position like any mask.
+`alias <name> <n-mask>`, a boolean mask given a name — a value, distinct from the name alias `as`. Read in selection position like any mask. This is registry data, the second of three alias mechanisms: the spelling table is `as` and `ja`, and the dynamic overlay behind `^name` is host session state this directive never seeds.
 
 ```
 alias frontline 1 1 0 0 1
@@ -735,7 +740,7 @@ fn shortestPath                    -- host-provided, dispatched via `via`
 
 ### `as` — name alias or derived tag
 
-Two forms by arity. `as <word> <name>` is a pure name alias: one hop, no transitivity, outranked by real entries. `as <word> <col> <value>` is a derived tag, the word naming the live equality mask (present ∧ col = value), recomputed at each use, hops included. Num, bool, and sym carriers only; char and vec are rejected at load. A tag is read-only as an effect target — assignment, presence writes, and protos all reject, naming the carrier — and cannot be pinned by `--! expect`, which pins storage.
+Two forms by arity. `as <word> <name>` is a pure name alias: one hop, no transitivity, outranked by real entries. `as <word> <col> <value>` is a derived tag, the word naming the live equality mask (present ∧ col = value), recomputed at each use, hops included. Num, bool, and sym carriers only; char and vec are rejected at load. A tag is read-only as an effect target — assignment, presence writes, and protos all reject, naming the carrier — and cannot be pinned by `--! expect`, which pins storage. The 2-word form is the spelling table, immutable with the registry and shared with `ja`; it is neither the stored `alias` mask nor the dynamic overlay behind `^name`.
 
 ```
 as HP health              -- name alias: HP resolves to column health
@@ -744,7 +749,7 @@ as Hostile faction 2      -- derived tag: the mask (faction == 2)
 
 ### `ja` — Japanese-surface alias
 
-`ja <word> <name>`, filling the same one-hop alias table as 3-word `as` but flagging the row as documenting the Japanese surface at the declaration site. An alias works from either surface; a natively Japanese registry needs none.
+`ja <word> <name>`, filling the same one-hop alias table as 3-word `as` but flagging the row as documenting the Japanese surface at the declaration site. An alias works from either surface; a natively Japanese registry needs none. Like `as`, this is the spelling table, not the stored `alias` mask and not the dynamic overlay behind `^name`.
 
 ```
 ja 金 gold                -- 金 resolves to column gold
