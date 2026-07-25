@@ -146,6 +146,10 @@ pub struct App {
     pub run_lines: Vec<Vec<u8>>,   // composed program for 0x1D tag resolution
     pub snap_seq: i32,             // per-process snapshot counter, deliberately not disk-scanned
     pub steel_path: Option<String>, // find_steel's cache
+    // the dynamic-alias overlay as the host sees it: A_t is session state, never world time
+    pub sess_barrier: u32,       // successful submissions this session — the record's barrier index
+    pub alias_ver: Option<u64>,  // last observed environment version; None until the first observation
+    pub alias_list: Vec<String>, // last observed `^name<TAB>describe` lines
 }
 
 impl App {

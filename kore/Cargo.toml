@@ -8,4 +8,5 @@ name = "kore"
 path = "src/main.rs"
 
 [dependencies]
+steel = { path = "../steel" }
 nix = { version = "0.31", default-features = false, features = ["fs", "ioctl", "poll", "process", "signal", "term"] }

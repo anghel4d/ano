@@ -1,0 +1,4 @@
+# The world behind save-rel-fraction.ano: an unkeyed rel whose targets are row indices.
+n 2
+col marked bool 1 0
+rel mentor -1 0

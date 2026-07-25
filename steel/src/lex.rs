@@ -164,7 +164,6 @@ fn kwkind(nm: &str) -> Option<TokKind> {
         "grade" => TokKind::Grade,
         "fold" => TokKind::FoldKw,
         "scan" => TokKind::ScanKw,
-        "scan2" => TokKind::Scan2,
         "cross" => TokKind::Cross,
         "expand" => TokKind::Expand,
         "til" => TokKind::Iota,
@@ -466,6 +465,14 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 if d == b'=' {
                     b.push(t(TokKind::MinusEq), line);
                     i += 2;
+                } else if d == b'/' {
+                    let ix = b.push(t(TokKind::Fold), line);
+                    b.name[ix] = it.intern("-");
+                    i += 2;
+                } else if d == b'\\' {
+                    let ix = b.push(t(TokKind::ScanOp), line);
+                    b.name[ix] = it.intern("-");
+                    i += 2;
                 } else {
                     b.push(t(TokKind::Minus), line);
                     i += 1;
@@ -492,20 +499,24 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 if d == b'=' {
                     b.push(t(TokKind::SlashEq), line);
                     i += 2;
+                } else if d == b'\\' {
+                    let ix = b.push(t(TokKind::ScanOp), line);
+                    b.name[ix] = it.intern("/");
+                    i += 2;
                 } else {
-                    b.push(t(TokKind::Slash), line);
+                    b.push(t(TokKind::Slash), line); // '//' stays unlexable as a fold of '/'
                     i += 1;
                 }
             }
-            b'#' => {
-                if d == b'/' {
+            b'#' => { if d == b'/' {
                     let ix = b.push(t(TokKind::Fold), line);
                     b.name[ix] = it.intern("#");
                     i += 2;
-                } else {
-                    return Err(lex_err(line, "'#' begins only the fold '#/'"));
-                }
-            }
+                } else if d == b'\\' {
+                    let ix = b.push(t(TokKind::ScanOp), line);
+                    b.name[ix] = it.intern("#");
+                    i += 2;
+                } else { return Err(lex_err(line, "'#' begins only '#/' or '#\\'")); } }
             b'@' => {
                 b.push(t(TokKind::At), line);
                 i += 1;
@@ -522,7 +533,7 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 }
             }
             b'\'' => return Err(lex_err(line, "stray tick: ' is postfix on a name")),
-            b'\\' => return Err(lex_err(line, "stray '\\': scans are +\\ *\\ &\\ |\\ or name\\ glued")),
+            b'\\' => return Err(lex_err(line, "stray '\\': scans are +\\ -\\ *\\ /\\ &\\ |\\ #\\ or name\\ glued")),
             _ => return Err(lex_err(line, format!("unknown byte 0x{:02X}", c))),
         }
     }
@@ -731,6 +742,9 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     /* scans (prefix, op payload) */
     ("累和", t(TokKind::ScanOp), false, "+"),
     ("累積", t(TokKind::ScanOp), false, "*"),
+    ("累数", t(TokKind::ScanOp), false, "#"),
+    ("累小", t(TokKind::ScanOp), false, "min"),
+    ("累平均", t(TokKind::ScanOp), false, "avg"),
     ("累大", t(TokKind::ScanOp), false, "max"),
     ("累皆", t(TokKind::ScanOp), false, "&"),
     ("累或", t(TokKind::ScanOp), false, "|"),
@@ -757,7 +771,6 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("格付", t(TokKind::Grade), false, ""),
     ("縮約", t(TokKind::FoldKw), false, ""),
     ("走査", t(TokKind::ScanKw), false, ""),
-    ("二重走査", t(TokKind::Scan2), false, ""),
     ("交差", t(TokKind::Cross), false, ""),
     ("展開", t(TokKind::Expand), false, ""),
     /* ASCII structural glyphs, usable directly in JA source */
@@ -1475,5 +1488,139 @@ mod tests {
         assert!(!lex_reserved_fold("Gold"));
         let long = "A".repeat(256);
         assert!(!lex_reserved_fold(&long));
+    }
+}
+
+
+#[cfg(test)]
+mod semantic_tests {
+    use super::*;
+
+    #[test]
+    fn count_scan_is_native() {
+        let mut interner = Interner::new();
+        let tokens = lex(b"#\\ Value", false, &mut interner).unwrap();
+        assert_eq!(tokens.kind[0], TokKind::ScanOp);
+        assert_eq!(interner.resolve(tokens.name[0]), "#");
+    }
+
+    #[test]
+    fn japanese_reducer_scans_are_native() {
+        for (word, op) in [("累数", "#"), ("累小", "min"), ("累平均", "avg")] {
+            let mut interner = Interner::new();
+            let source = format!("{} 値", word);
+            let tokens = lex(source.as_bytes(), true, &mut interner).unwrap();
+            assert_eq!(tokens.kind[0], TokKind::ScanOp);
+            assert_eq!(interner.resolve(tokens.name[0]), op);
+        }
+    }
+
+    #[test]
+    fn retired_scan2_is_only_an_identifier() {
+        let mut interner = Interner::new();
+        let tokens = lex(b"scan2", false, &mut interner).unwrap();
+        assert_eq!(tokens.kind[0], TokKind::Name);
+        let mut japanese = Interner::new();
+        let tokens = lex("二重走査".as_bytes(), true, &mut japanese).unwrap();
+        assert_eq!(tokens.kind[0], TokKind::Name);
+    }
+
+    // Inputs: source, skin. Output: (kinds, resolved names) — the surface pins read both.
+    fn lexed(src: &[u8], ja: bool) -> (Vec<TokKind>, Vec<String>) {
+        let mut it = Interner::new();
+        let toks = lex(src, ja, &mut it).unwrap();
+        let kinds = toks.kind.clone();
+        let names = (0..kinds.len()).map(|i| it.resolve(toks.name[i]).to_string()).collect();
+        (kinds, names)
+    }
+
+    #[test]
+    fn caret_lexes_dynamic_alias_request() {
+        let (kinds, names) = lexed(b"^Whiterun , +Tagged", false);
+        assert_eq!(&kinds[..4], &[TokKind::Alias, TokKind::Comma, TokKind::Plus, TokKind::Name]);
+        assert_eq!(names[0], "Whiterun"); // stem interned bare; the request is the kind
+    }
+
+    #[test]
+    fn bang_caret_is_two_tokens() {
+        let (kinds, names) = lexed(b"Bandit & !^Dead", false);
+        assert_eq!(&kinds[..4], &[TokKind::Name, TokKind::Amp, TokKind::Bang, TokKind::Alias]);
+        assert_eq!(names[3], "Dead");
+    }
+
+    #[test]
+    fn lone_caret_refuses_ascii() {
+        for src in [&b"^"[..], b"^ x", b"^(x)", b"^1"] {
+            let mut it = Interner::new();
+            let d = lex(src, false, &mut it).unwrap_err();
+            assert_eq!(d.msg, "line 1: '^' begins only the ^alias sigil");
+        }
+    }
+
+    #[test]
+    fn lone_caret_refuses_japanese() {
+        let mut it = Interner::new();
+        let d = lex("^".as_bytes(), true, &mut it).unwrap_err();
+        assert_eq!(d.msg, "line 1: unknown word '^'"); // JA keeps its generic word refusal
+    }
+
+    #[test]
+    fn ja_caret_word_lexes_alias() {
+        let (kinds, names) = lexed("^世界".as_bytes(), true);
+        assert_eq!(kinds[0], TokKind::Alias);
+        assert_eq!(names[0], "世界");
+    }
+
+    #[test]
+    fn caret_after_name_is_juxtaposition() {
+        let (kinds, names) = lexed(b"a^b", false); // deliberate: ^ terminates an identifier
+        assert_eq!(&kinds[..2], &[TokKind::Name, TokKind::Alias]);
+        assert_eq!(names[0], "a");
+        assert_eq!(names[1], "b");
+    }
+
+    #[test]
+    fn subtraction_and_division_fuse_into_fold_and_scan() {
+        for (src, kind, name) in [
+            (&b"-/ x"[..], TokKind::Fold, "-"),
+            (&b"-\\ x"[..], TokKind::ScanOp, "-"),
+            (&b"/\\ x"[..], TokKind::ScanOp, "/"),
+        ] {
+            let (kinds, names) = lexed(src, false);
+            assert_eq!(kinds[0], kind, "{}", String::from_utf8_lossy(src));
+            assert_eq!(names[0], name, "{}", String::from_utf8_lossy(src));
+            assert_eq!(kinds[1], TokKind::Name);
+        }
+    }
+
+    #[test]
+    fn minus_and_slash_keep_their_bare_and_compound_readings() {
+        let (kinds, _) = lexed(b"a - b / c -= 1 /= 2", false);
+        assert_eq!(
+            &kinds[..9],
+            &[
+                TokKind::Name, TokKind::Minus, TokKind::Name, TokKind::Slash, TokKind::Name,
+                TokKind::MinusEq, TokKind::Num, TokKind::SlashEq, TokKind::Num,
+            ]
+        );
+        let (kinds, _) = lexed(b"a // b", false); // '//' is two slashes, never a fold of '/'
+        assert_eq!(&kinds[..4], &[TokKind::Name, TokKind::Slash, TokKind::Slash, TokKind::Name]);
+    }
+
+    #[test]
+    fn bare_hash_still_refuses() {
+        for src in [&b"#"[..], b"# /", b"a # b"] {
+            let mut it = Interner::new();
+            let d = lex(src, false, &mut it).unwrap_err();
+            assert_eq!(d.msg, "line 1: '#' begins only '#/' or '#\\'");
+        }
+    }
+
+    #[test]
+    fn bang_never_joins_identifiers() {
+        let (kinds, _) = lexed(b"a!b", false);
+        assert_eq!(&kinds[..3], &[TokKind::Name, TokKind::Bang, TokKind::Name]);
+        let (kinds, _) = lexed(b"a != b", false);
+        assert_eq!(&kinds[..3], &[TokKind::Name, TokKind::Ne, TokKind::Name]);
     }
 }

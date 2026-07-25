@@ -1,0 +1,7 @@
+# expect: default mentor: relationship target 1.5 is not an exact row index
+# The default is the spawn fill: a malformed default would introduce the bad target on the
+# next spawn, so the sealing covers it at the same boundary as the stored column.
+n 3
+col hp num 1 2 3
+rel mentor 0 1 1
+default mentor 1.5

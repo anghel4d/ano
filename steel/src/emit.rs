@@ -2,7 +2,9 @@
 // barrier. Installed rules share one pre-state and commit set per synthetic tick.
 // Continuations reuse anoSel. --emit remains differential-tested against the C oracle.
 
+use crate::alias::LookupMode;
 use crate::num::{fmt_g, int_fast};
+use crate::reducer;
 use crate::registry::{names_eq, reg_find, reg_role};
 use crate::{
     ArithOp, AssignOp, BindKind, CmpOp, ColType, Diag, Directives, Expect, Interner, Node,
@@ -10,6 +12,21 @@ use crate::{
 };
 
 type R<T> = Result<T, Diag>;
+
+// Inputs: the stem the source requested, the resolver request it made. Output: the spelling to
+// print in a lookup refusal — `^name` keeps its sigil, so `^Nope` never reads back as `Nope`.
+fn spelled(req: &str, lm: LookupMode) -> String {
+    match lm {
+        LookupMode::Bare => req.to_string(),
+        LookupMode::DynamicAliasThenBare => format!("^{}", req),
+    }
+}
+
+// Inputs: the resolved lookup name, the requested stem, the resolver request. Output: true when
+// the overlay moved the lookup off the source spelling, so a refusal must name both.
+fn moved(n: &str, req: &str, lm: LookupMode) -> bool {
+    lm == LookupMode::DynamicAliasThenBare && n != req
+}
 
 /* ---------- types ---------- */
 
@@ -48,10 +65,14 @@ enum Mode {
 
 // C EV: v the expr (already in mode), g the WORLD-SPACE guard (None = total), pair/unit/sym
 // value shape, along the scan-along order expr, rel_ent the rel whose VALUES v holds.
+// gv marks g as a VALIDITY guard — an identityless fold over nothing has no result row, so the
+// query path must consume it before binding, labelling, comparing, or displaying. Relationship
+// foundness guards stay untagged and keep their existing behavior.
 #[derive(Clone, Default)]
 struct Ev {
     v: String,
     g: Option<String>,
+    gv: bool,
     pair: bool,
     unit: bool,
     sym: bool,
@@ -123,6 +144,11 @@ struct Em<'a> {
     tmp: i32,
     out_idx: usize,
     stmt: i32,
+    // trace identity: plan collects one record per staged runtime crossing; in_effect is the
+    // phase (false during the discarded guard probe); site_kind is the s/q/c block letter.
+    plan: crate::trace::TracePlan,
+    in_effect: bool,
+    site_kind: char,
 }
 
 /* ---------- free helpers ---------- */
@@ -195,22 +221,21 @@ fn g_and(a: Option<String>, b: Option<String>) -> Option<String> {
     }
 }
 
-// The fold glyph table; None for #, avg, named reducers.
-fn fold_gl(op: &str) -> Option<&'static str> {
-    match op {
-        "+" => Some("+´"),
-        "*" => Some("×´"),
-        "&" => Some("∧´"),
-        "|" => Some("∨´"),
-        "max" => Some("⌈´"),
-        "min" => Some("⌊´"),
-        _ => None,
-    }
+// Inputs: a CANONICAL head spelling (normalize already rebound it) and the form. Output: the
+// one descriptor the resolver checked. A miss is a registered name or an internal invariant
+// break, never a user diagnostic.
+fn desc_of(op: &str, form: reducer::Form) -> Option<reducer::OpDesc> {
+    reducer::canonical(op, form)
 }
 
-// Folds with identities: empty gathers need no guard.
+// The fold glyph; None for #, avg, named reducers.
+fn fold_gl(op: &str) -> Option<String> {
+    desc_of(op, reducer::Form::Fold).and_then(|d| d.fold_glyph())
+}
+
+// Folds whose descriptor registers an empty identity: empty gathers need no guard.
 fn fold_has_id(op: &str) -> bool {
-    matches!(op, "+" | "*" | "&" | "|" | "#")
+    desc_of(op, reducer::Form::Fold).is_some_and(|d| d.empty_identity().is_some())
 }
 
 // C bindKind strings for diagnostics.
@@ -271,7 +296,7 @@ fn def_body(d: &Node) -> &Node {
 // name of its N_NAME kid).
 fn fiber_sym(nd: &Node) -> Symbol {
     match &nd.kind {
-        NodeKind::Name(s) => *s,
+        NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => *s,
         NodeKind::SetHop { rel } => *rel,
         _ => Symbol::EMPTY,
     }
@@ -546,13 +571,7 @@ impl<'a> Em<'a> {
     }
 
     // Has-a-live-target guard for a bare rel.
-    fn rel_guard(&self, ri: usize) -> String {
-        let v = self.bqnv(ri);
-        match self.rel_key(ri) {
-            None => format!("(0≤{})", v),
-            Some(k) => format!("(({}⊐{})<≠{})", k, v, k),
-        }
-    }
+    fn rel_guard(&self, ri: usize) -> String { let v = self.bqnv(ri); let key = self.rel_key(ri); crate::relationship::bqn_found(&v, key.as_deref()) }
 
     // Trace origin ids: the idCol ladder with the iota fallback sized by the REL column.
     fn trace_ids(&self, rel_expr: &str) -> String {
@@ -571,19 +590,59 @@ impl<'a> Em<'a> {
         format!("(↕≠{})", rel_expr)
     }
 
-    // --trace dead-link hook: zero output without the flag; g (None = total) is the
-    // accumulated guard of earlier legs.
-    fn trace_dead(&mut self, name: &str, key: &str, rel: &str, g: Option<&str>) {
+    // A16: a predicate crossing reports over X, an effect crossing over S = the statement mask.
+    // Inputs: the emission mode. Output: true when trace_sel must be conjoined into the mask.
+    // The probe runs with in_effect false, so its discarded lines never narrow.
+    fn trace_scoped(&self, m: Mode) -> bool {
+        (m != Mode::World || self.in_effect) && !self.trace_sel.is_empty()
+    }
+
+    // Inputs: whether the statement mask was conjoined, the source line, the relation name.
+    // Output: the self-describing suffix the runtime line carries. One record per crossing,
+    // minted in staging order; domain can never disagree with the mask actually emitted.
+    fn record_use(&mut self, scoped: bool, line: i32, relation: &str) -> String {
+        let phase = if self.in_effect {
+            crate::trace::TracePhase::Effect
+        } else {
+            crate::trace::TracePhase::Predicate
+        };
+        let domain = if scoped {
+            crate::trace::TraceDomain::Selected
+        } else {
+            crate::trace::TraceDomain::Source
+        };
+        let site = format!("{}{}", self.site_kind, self.stmt);
+        let id = self.plan.record(phase, domain, site, line.max(0) as u32, relation);
+        format!("USE {} {} {}", id.0, phase.word(), domain.word())
+    }
+
+    // --trace dead-link hook: zero output without the flag; key None is the positional carrier,
+    // g (None = total) the accumulated guard of earlier legs, m the emission mode.  Exactly ¯1
+    // stays silent in both carriers.
+    fn trace_dead(&mut self, name: &str, key: Option<&str>, rel: &str, g: Option<&str>, m: Mode, line: i32) {
         if !self.dirs.trace {
             return;
         }
-        let dm = self.tv();
-        match g {
-            Some(g) => self.stage(format!("{} ← {}∧(0≤{})∧(≠{})≤{}⊐{}", dm, g, rel, key, key, rel)),
-            None => self.stage(format!("{} ← (0≤{})∧(≠{})≤{}⊐{}", dm, rel, key, key, rel)),
+        let dead = match key {
+            Some(key) => format!("(¯1≠{})∧(≠{})≤{}⊐{}", rel, key, key, rel),
+            None => format!("(¯1≠{})∧¬{}", rel, crate::relationship::bqn_found(rel, None)),
+        };
+        let mut mask = match g {
+            Some(g) => format!("{}∧{}", g, dead),
+            None => dead,
+        };
+        let scoped = self.trace_scoped(m);
+        if scoped {
+            mask = format!("{}∧{}", self.trace_sel, mask);
         }
+        let dm = self.tv();
+        self.stage(format!("{} ← {}", dm, mask));
+        let usage = self.record_use(scoped, line, name);
         let tids = self.trace_ids(rel);
-        self.stage(format!("AnoTraceDead ⟨\"{}\", {}/{}, {}/{}⟩", name, dm, tids, dm, rel));
+        self.stage(format!(
+            "AnoTraceDead ⟨\"{}\", {}/{}, {}/{}, \"{}\"⟩",
+            name, dm, tids, dm, rel, usage
+        ));
     }
 
     // Gather a world-space column expr into the requested mode.
@@ -621,7 +680,9 @@ impl<'a> Em<'a> {
     // The C nd->name view of a node (spelling fields; "" where C left name unset).
     fn node_name(&self, nd: &Node) -> &'a str {
         match &nd.kind {
-            NodeKind::Name(s) | NodeKind::Alias(s) | NodeKind::Sym(s) | NodeKind::Str(s) => self.rs(*s),
+            NodeKind::Name(s) | NodeKind::Alias { look: s, .. } | NodeKind::Sym(s) | NodeKind::Str(s) => {
+                self.rs(*s)
+            }
             NodeKind::SetHop { rel } => self.rs(*rel),
             NodeKind::Call { callee, .. } => self.rs(*callee),
             NodeKind::CmpAny { name } => self.rs(*name),
@@ -633,9 +694,11 @@ impl<'a> Em<'a> {
 /* ---------- names as values, masks, grades, pipes ---------- */
 
 impl<'a> Em<'a> {
-    // Inputs: a name spelling + line, mode. Output: EV. Handles index/x/y/char specials,
-    // defs, then registry entries by kind. Invariant: guard is world-space.
-    fn emit_name_val(&mut self, sym: Symbol, line: i32, m: Mode) -> R<Ev> {
+    // Inputs: a resolved lookup name + the stem the source requested + line, mode, the resolver
+    // request that produced it. Output: EV. Handles index/x/y/char specials, defs, then registry
+    // entries by kind. Invariant: guard is world-space; req/lm only spell the source request back
+    // in the unregistered refusal, so a moved `^name` never reads back as its target.
+    fn emit_name_val(&mut self, sym: Symbol, req: Symbol, line: i32, m: Mode, lm: LookupMode) -> R<Ev> {
         let n = self.rs(sym);
         let mut ev = Ev::default();
         if n == "index" {
@@ -667,7 +730,7 @@ impl<'a> Em<'a> {
             return self.emit_val(def_body(d), m);
         }
         let Some(ei) = self.find(n) else {
-            return Err(fail(line, format!("unregistered name '{}'", n)));
+            return Err(fail(line, format!("unregistered name '{}'", spelled(self.rs(req), lm))));
         };
         let e = self.ent(ei);
         match &e.kind {
@@ -686,7 +749,13 @@ impl<'a> Em<'a> {
                 Ok(ev)
             }
             RegEntryKind::Rel { .. } => {
-                ev.v = self.in_mode(self.bqnv(ei), m);
+                // A10: the bare rel evaluates the same foundness guard a hop does, so the
+                // guard evaluation is a crossing and owes its DEAD report.
+                let rel = self.bqnv(ei);
+                let key = self.rel_key(ei);
+                let rname = self.ent(ei).name.as_str();
+                self.trace_dead(rname, key.as_deref(), &rel, None, m, line);
+                ev.v = self.in_mode(rel, m);
                 ev.g = Some(self.rel_guard(ei));
                 ev.rel_ent = Some(ei);
                 Ok(ev)
@@ -735,14 +804,17 @@ impl<'a> Em<'a> {
         }
     }
 
-    // Bare name as a mask: bool col -> pres∧values; value col -> presence; alias/bind mask.
-    fn emit_name_mask(&mut self, sym: Symbol, line: i32) -> R<String> {
+    // A resolved name as a mask: bool col -> pres∧values; value col -> presence; static alias
+    // mask/bind mask.  req/lm spell the source request back in the refusals; when the overlay
+    // moved the lookup, a kind mismatch names both the request and the target it reached.
+    fn emit_name_mask(&mut self, sym: Symbol, req: Symbol, line: i32, lm: LookupMode) -> R<String> {
         let n = self.rs(sym);
+        let rq = self.rs(req);
         if let Some(d) = self.find_def(sym) {
             return self.emit_mask(def_body(d));
         }
         let Some(ei) = self.find(n) else {
-            return Err(fail(line, format!("unregistered mask name '{}'", n)));
+            return Err(fail(line, format!("unregistered mask name '{}'", spelled(rq, lm))));
         };
         let v = self.bqnv(ei);
         let e = self.ent(ei);
@@ -763,9 +835,28 @@ impl<'a> Em<'a> {
                 BindKind::Entity => {
                     Ok(format!("((↕anoN)={})", num_lit(vals.first().copied().unwrap_or(0.0))))
                 }
+                k if moved(n, rq, lm) => Err(fail(
+                    line,
+                    format!(
+                        "'^{}' resolves to binding '{}' ({}), not a mask",
+                        rq,
+                        n,
+                        bind_kind_str(*k)
+                    ),
+                )),
                 k => Err(fail(line, format!("binding '{}' ({}) as mask", n, bind_kind_str(*k)))),
             },
-            RegEntryKind::Rel { .. } => Ok(self.rel_guard(ei)),
+            RegEntryKind::Rel { .. } => {
+                // mask position is a predicate crossing over X
+                let key = self.rel_key(ei);
+                let rname = self.ent(ei).name.as_str();
+                self.trace_dead(rname, key.as_deref(), &v, None, Mode::World, line);
+                Ok(self.rel_guard(ei))
+            }
+            _ if moved(n, rq, lm) => Err(fail(
+                line,
+                format!("'^{}' resolves to '{}', which cannot be a mask", rq, n),
+            )),
             _ => Err(fail(line, format!("'{}' cannot be a mask", n))),
         }
     }
@@ -863,18 +954,23 @@ impl<'a> Em<'a> {
 
 impl<'a> Em<'a> {
     // The set-hop fiber expression for a rel name: srel var, or a key-valued CT_NUM column's
-    // inverse image over the stable-id column (staged).
-    fn fiber_var(&mut self, sym: Symbol, line: i32) -> R<String> {
+    // inverse image over the stable-id column (staged).  Output: the iteration variable and a
+    // DURABLE self-contained spelling of the same fibers — a guard may name only durable
+    // variables, since the assignment probe discards every staged line.
+    fn fiber_var(&mut self, sym: Symbol, line: i32) -> R<(String, String)> {
         let n = self.rs(sym);
         if let Some(ei) = self.find(n) {
             match &self.ent(ei).kind {
-                RegEntryKind::SRel { .. } => return Ok(self.bqnv(ei)),
+                RegEntryKind::SRel { .. } => {
+                    let v = self.bqnv(ei);
+                    return Ok((v.clone(), v));
+                }
                 RegEntryKind::Col { ty: ColType::Num | ColType::Nat | ColType::Int, .. } => {
                     let t = self.tv();
                     let idc = self.id_col();
                     let v = self.bqnv(ei);
                     self.stage(format!("{} ← {{/{}=𝕩}}¨{}", t, v, idc));
-                    return Ok(t);
+                    return Ok((t, format!("({{/{}=𝕩}}¨{})", v, idc)));
                 }
                 _ => {}
             }
@@ -882,30 +978,45 @@ impl<'a> Em<'a> {
         Err(fail(line, format!("'{}' is not a set-valued relationship or a key column", n)))
     }
 
+    // The key space stored fibers resolve through; None when they already hold row indices.
+    fn fiber_key(&self, sym: Symbol) -> Option<String> {
+        let ei = self.find(self.rs(sym))?;
+        let RegEntryKind::SRel { fib: fibers, key_of: ko, .. } = &self.ent(ei).kind else {
+            return None;
+        };
+        if fibers.len() != self.reg.n as usize {
+            return None;
+        }
+        match ko {
+            Some(k) => self.find(k).map(|kc| self.bqnv(kc)),
+            None if self.world_shifted => Some(self.id_col()),
+            None => None,
+        }
+    }
+
     // Translate stored srel fibers to CURRENT row indices when the key space can disagree:
     // declared key always, the idx key once shifted; else pass through untouched.
-    fn fiber_rows(&mut self, sym: Symbol, fib: &mut String) {
+    fn fiber_rows(&mut self, sym: Symbol, fib: &mut String, m: Mode, line: i32) {
         let Some(ei) = self.find(self.rs(sym)) else { return };
-        let e = self.ent(ei);
-        let RegEntryKind::SRel { fib: fibers, key_of: ko, .. } = &e.kind else { return };
-        if fibers.len() != self.reg.n as usize {
-            return;
-        }
-        let mut key: Option<String> = None;
-        if let Some(k) = ko {
-            if let Some(kc) = self.find(k) {
-                key = Some(self.bqnv(kc));
-            }
-        } else if self.world_shifted {
-            key = Some(self.id_col());
-        }
-        let Some(key) = key else { return };
-        // --trace: a dead member is a dead link crossed inside the fiber
+        let Some(key) = self.fiber_key(sym) else { return };
+        let name = self.ent(ei).name.as_str();
+        // --trace: a dead member is a dead link crossed inside the fiber; an effect crossing
+        // reports only over the statement mask
         if self.dirs.trace {
+            let scoped = self.trace_scoped(m);
+            let usage = self.record_use(scoped, line, name);
             let tids = self.trace_ids(fib);
+            let (ids, src) = if scoped {
+                (
+                    format!("({}/{})", self.trace_sel, tids),
+                    format!("({}/{})", self.trace_sel, fib),
+                )
+            } else {
+                (tids, fib.clone())
+            };
             self.stage(format!(
-                "{} {{m←(≠{})≤{}⊐𝕩 ⋄ AnoTraceDead ⟨\"{}\", (+´m)⥊𝕨, m/𝕩⟩}}¨ {}",
-                tids, key, key, e.name, fib
+                "{} {{m←(≠{})≤{}⊐𝕩 ⋄ AnoTraceDead ⟨\"{}\", (+´m)⥊𝕨, m/𝕩, \"{}\"⟩}}¨ {}",
+                ids, key, key, name, usage, src
             ));
         }
         let t = self.tv();
@@ -913,13 +1024,30 @@ impl<'a> Em<'a> {
         *fib = t;
     }
 
-    // --trace empty-fiber failure mask: effect position scopes to the pre-refinement
-    // selection; a predicate stays whole-column.
-    fn trace_empty_mask(&self, fib: &str, m: Mode) -> String {
-        if m != Mode::World && !self.trace_sel.is_empty() {
-            return format!("({}∧0=≠¨{})", self.trace_sel, fib);
+    // --trace empty-fiber hook: effect position scopes to the statement mask, a predicate
+    // stays whole-column.
+    fn trace_empty(&mut self, name: &str, fib: &str, m: Mode, line: i32) {
+        if !self.dirs.trace {
+            return;
         }
-        format!("(0=≠¨{})", fib)
+        let scoped = self.trace_scoped(m);
+        let mask = if scoped {
+            format!("({}∧0=≠¨{})", self.trace_sel, fib)
+        } else {
+            format!("(0=≠¨{})", fib)
+        };
+        let usage = self.record_use(scoped, line, name);
+        let tids = self.trace_ids(fib);
+        self.stage(format!("AnoTraceEmpty ⟨\"{}\", {}/{}, \"{}\"⟩", name, mask, tids, usage));
+    }
+
+    // The nonempty-fiber guard, spelled against DURABLE variables only: a keyed fiber counts
+    // its found members, an unkeyed one its raw length.
+    fn fiber_nonempty(&self, sym: Symbol, raw: &str) -> String {
+        match self.fiber_key(sym) {
+            Some(key) => format!("(0<{{+´(≠{})>{}⊐𝕩}}¨{})", key, key, raw),
+            None => format!("(0<≠¨{})", raw),
+        }
     }
 
     // Gamma fold: fold/ rel'.Comp | fold/ (rel' & pred) | fold/ rel' -> per-source column + guard.
@@ -928,8 +1056,8 @@ impl<'a> Em<'a> {
         match &operand.kind {
             NodeKind::SetHop { rel } => {
                 // #/ attackers'
-                let mut fib = self.fiber_var(*rel, operand.line)?;
-                self.fiber_rows(*rel, &mut fib);
+                let (mut fib, _raw) = self.fiber_var(*rel, operand.line)?;
+                self.fiber_rows(*rel, &mut fib, m, operand.line);
                 let body = format!("≠¨{}", fib);
                 if op != "#" {
                     // other folds over bare fiber make no sense
@@ -941,20 +1069,18 @@ impl<'a> Em<'a> {
             NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => {
                 // fold/ rel'.Comp
                 let rel = fiber_sym(l);
-                let mut fib = self.fiber_var(rel, l.line)?;
-                self.fiber_rows(rel, &mut fib);
+                let (mut fib, raw) = self.fiber_var(rel, l.line)?;
+                self.fiber_rows(rel, &mut fib, m, l.line);
                 let fb_name = self.rs(rel);
+                let nonempty = self.fiber_nonempty(rel, &raw);
                 let cv = self.emit_val(r, Mode::World)?;
                 let gl = fold_gl(op);
                 let t = self.tv();
                 if op == "avg" {
-                    if self.dirs.trace {
-                        let tem = self.trace_empty_mask(&fib, m);
-                        let tids = self.trace_ids(&fib);
-                        self.stage(format!("AnoTraceEmpty ⟨\"{}\", {}/{}⟩", fb_name, tem, tids));
-                    }
+                    self.trace_empty(fb_name, &fib, m, l.line);
                     self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; AnoAvg 𝕩⊏{}}}¨{}", t, cv.v, fib));
-                    ev.g = Some(format!("(0<≠¨{})", fib));
+                    ev.g = Some(nonempty);
+                    ev.gv = true;
                 } else if op == "#" {
                     self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, cv.v, fib));
                 } else if let Some(gl) = gl {
@@ -962,13 +1088,10 @@ impl<'a> Em<'a> {
                         self.stage(format!("{} ← {{{}𝕩⊏{}}}¨{}", t, gl, cv.v, fib));
                     } else {
                         // max/min: no identity, guard empties
-                        if self.dirs.trace {
-                            let tem = self.trace_empty_mask(&fib, m);
-                            let tids = self.trace_ids(&fib);
-                            self.stage(format!("AnoTraceEmpty ⟨\"{}\", {}/{}⟩", fb_name, tem, tids));
-                        }
+                        self.trace_empty(fb_name, &fib, m, l.line);
                         self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}𝕩⊏{}}}¨{}", t, gl, cv.v, fib));
-                        ev.g = Some(format!("(0<≠¨{})", fib));
+                        ev.g = Some(nonempty);
+                        ev.gv = true;
                     }
                 } else {
                     if let Some(ei) = self.find(op) {
@@ -987,8 +1110,8 @@ impl<'a> Em<'a> {
             NodeKind::And(l, r) if matches!(l.kind, NodeKind::SetHop { .. }) => {
                 // fold/ (rel' & pred)
                 let rel = fiber_sym(l);
-                let mut fib = self.fiber_var(rel, l.line)?;
-                self.fiber_rows(rel, &mut fib);
+                let (mut fib, _raw) = self.fiber_var(rel, l.line)?;
+                self.fiber_rows(rel, &mut fib, m, l.line);
                 let pm = self.emit_mask(r)?;
                 let tp = self.tv();
                 self.stage(format!("{} ← {}", tp, pm));
@@ -1015,8 +1138,8 @@ impl<'a> Em<'a> {
         if let NodeKind::Scope { l, r, .. } = &operand.kind {
             if matches!(&r.kind, NodeKind::Name(s) if self.rs(*s) == "row") && self.find("row").is_none() {
                 let fs = fiber_sym(l);
-                let mut fib = self.fiber_var(fs, l.line)?;
-                self.fiber_rows(fs, &mut fib);
+                let (mut fib, _raw) = self.fiber_var(fs, l.line)?;
+                self.fiber_rows(fs, &mut fib, m, l.line);
                 let Some(gl) = fold_gl(op) else {
                     return Err(fail(line, format!("fold {}/ @row", op)));
                 };
@@ -1090,6 +1213,7 @@ impl<'a> Em<'a> {
             self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; AnoAvg 𝕩}} {}", t, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
+            ev.gv = true;
             return Ok(ev);
         }
         let Some(gl) = fold_gl(op) else {
@@ -1103,6 +1227,7 @@ impl<'a> Em<'a> {
             self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}´ 𝕩}} {}", t, fv, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
+            ev.gv = true;
             return Ok(ev);
         };
         if !fold_has_id(op) {
@@ -1110,6 +1235,7 @@ impl<'a> Em<'a> {
             self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}𝕩}} {}", t, gl, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
+            ev.gv = true;
             return Ok(ev);
         }
         ev.v = format!("({}{})", gl, gathered);
@@ -1117,23 +1243,31 @@ impl<'a> Em<'a> {
     }
 
     // Scans: result is an ordered column over the scan's scope, returned as a flat value.
-    fn emit_scan(&mut self, op_sym: Symbol, operand: &Node, scan2: bool, line: i32) -> R<Ev> {
+    fn emit_scan(&mut self, op_sym: Symbol, operand: &Node, line: i32) -> R<Ev> {
         let op = self.rs(op_sym);
         let mut ev = Ev::default();
+        // a per-fiber scan needs a ragged result representation that does not exist yet; the
+        // count machine's presence wrapper and an @scope do not change what the operand IS
+        let mut core = operand;
+        if let NodeKind::Scope { l, .. } = &core.kind {
+            core = l;
+        }
+        while let NodeKind::Not(inner) = &core.kind {
+            core = inner;
+        }
+        if is_gamma_operand(core) {
+            return Err(fail(line, "scan over fibers is not yet supported"));
+        }
         let (x, scope): (&Node, Option<&Node>) =
             if let NodeKind::Scope { l, r, .. } = &operand.kind { (l, Some(r)) } else { (operand, None) };
-        let gl: String = match op {
-            "+" => "+`".to_string(),
-            "*" => "×`".to_string(),
-            "max" => "⌈`".to_string(),
-            "&" => "∧`".to_string(),
-            "|" => "∨`".to_string(),
-            _ => {
+        let gl: String = match desc_of(op, reducer::Form::Scan).and_then(|d| d.scan_glyph()) {
+            Some(gl) => gl,
+            None => {
                 // named reducer scan: registry fn accumulates pairwise; the empty scope
                 // yields the empty column — a scan is length-preserving, no identity consulted
                 let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
                 let Some(fe) = fe else {
-                    return Err(fail(line, format!("unknown scan op '{}'", op)));
+                    return Err(fail(line, format!("internal: no scan descriptor for '{}'", op)));
                 };
                 format!("{}`", self.fnv(fe))
             }
@@ -1143,11 +1277,7 @@ impl<'a> Em<'a> {
             if let NodeKind::Shape(dims) = &sc.kind {
                 let w = dims.first().map(num_of).unwrap_or(0.0) as i32;
                 let h = if dims.len() > 1 { num_of(&dims[1]) as i32 } else { 1 };
-                ev.v = if scan2 {
-                    format!("(⥊{}˘{}({}‿{}⥊{}))", gl, gl, h, w, xv.v)
-                } else {
-                    format!("(⥊{}({}‿{}⥊{}))", gl, h, w, xv.v)
-                };
+                ev.v = format!("(⥊{}({}‿{}⥊{}))", gl, h, w, xv.v);
                 return Ok(ev);
             }
             if matches!(sc.kind, NodeKind::Pipe { .. }) {
@@ -1162,7 +1292,7 @@ impl<'a> Em<'a> {
             // mask scope -> compress; id-list scope (iota arithmetic / vec bind) -> index
             let mut idlist = contains_iota(sc);
             if !idlist {
-                if let NodeKind::Name(s) = &sc.kind {
+                if let NodeKind::Name(s) | NodeKind::Alias { look: s, .. } = &sc.kind {
                     if let Some(ei) = self.find(self.rs(*s)) {
                         if matches!(self.ent(ei).kind, RegEntryKind::Bind { kind: BindKind::Vec, .. }) {
                             idlist = true;
@@ -1208,6 +1338,7 @@ impl<'a> Em<'a> {
             1 => {
                 let a = self.emit_val(&args[0], m)?;
                 ev.g = a.g;
+                ev.gv = a.gv;
                 ev.unit = a.unit;
                 ev.v = format!("({}¨{})", fnn, a.v);
                 Ok(ev)
@@ -1216,6 +1347,7 @@ impl<'a> Em<'a> {
                 let a = self.emit_val(&args[0], m)?;
                 let b = self.emit_val(&args[1], m)?;
                 ev.g = g_and(a.g, b.g);
+                ev.gv = a.gv || b.gv;
                 ev.unit = a.unit && b.unit;
                 ev.v = format!("({} {}¨{})", a.v, fnn, b.v);
                 Ok(ev)
@@ -1285,7 +1417,11 @@ impl<'a> Em<'a> {
         if let NodeKind::Name(fs) = &field.kind {
             let fname = self.rs(*fs);
             if fname == "x" || fname == "y" {
-                let e = if let NodeKind::Name(bs) = &base.kind { self.find(self.rs(*bs)) } else { None };
+                let e = if let NodeKind::Name(bs) | NodeKind::Alias { look: bs, .. } = &base.kind {
+                    self.find(self.rs(*bs))
+                } else {
+                    None
+                };
                 if let Some(ei) = e {
                     if self.is_pair[ei] {
                         let i = (fname.as_bytes()[0] == b'y') as i32;
@@ -1295,8 +1431,8 @@ impl<'a> Em<'a> {
                 }
             }
         }
-        // singleton roots: bindings and aliases mirror-read one row
-        if let NodeKind::Name(bs) | NodeKind::Alias(bs) = &base.kind {
+        // singleton roots: bindings and static alias masks mirror-read one row
+        if let NodeKind::Name(bs) | NodeKind::Alias { look: bs, .. } = &base.kind {
             let be = self.find(self.rs(*bs));
             let fe = if let NodeKind::Name(fs) = &field.kind { self.find(self.rs(*fs)) } else { None };
             if let Some(bi) = be {
@@ -1340,22 +1476,26 @@ impl<'a> Em<'a> {
                         let is_tag = matches!(fe_ent.kind, RegEntryKind::Tag { .. });
                         let comp = if is_tag { self.tag_mask(fi, nd.line)? } else { self.bqnv(fi) };
                         let w;
-                        if let Some(key) = self.rel_key(bi) {
-                            // every piece stays a self-contained expression: an assignment
-                            // probe reuses the guard after discarding the staging buffer
-                            let bname = self.ent(bi).name.as_str();
-                            self.trace_dead(bname, &key, &rel, None);
+                        // every piece stays a self-contained expression: an assignment probe
+                        // reuses the guard after discarding the staging buffer
+                        let bname = self.ent(bi).name.as_str();
+                        let key = self.rel_key(bi);
+                        self.trace_dead(bname, key.as_deref(), &rel, None, m, nd.line);
+                        if let Some(key) = key {
                             let ix = format!("((≠{})|{}⊐{})", key, key, rel);
                             w = format!("({}⊏{})", ix, comp);
-                            ev.g = Some(format!("(({}⊐{})<≠{})", key, rel, key));
+                            ev.g = Some(crate::relationship::bqn_found(&rel, Some(&key)));
                             if !is_tag && has_pres(fe_ent) {
                                 ev.g = g_and(ev.g, Some(format!("({}⊏{})", ix, self.presv(fi))));
                             }
                         } else {
-                            w = format!("((0⌈{})⊏{})", rel, comp);
-                            ev.g = Some(format!("(0≤{})", rel));
+                            // bound the gather like the keyed shape: a sealed-valid but
+                            // out-of-range target must report DEAD, not crash the gather
+                            let ix = format!("((≠{})|0⌈{})", comp, rel);
+                            w = format!("({}⊏{})", ix, comp);
+                            ev.g = Some(crate::relationship::bqn_found(&rel, None));
                             if !is_tag && has_pres(fe_ent) {
-                                ev.g = g_and(ev.g, Some(format!("((0⌈{})⊏{})", rel, self.presv(fi))));
+                                ev.g = g_and(ev.g, Some(format!("({}⊏{})", ix, self.presv(fi))));
                             }
                         }
                         ev.sym = !is_tag && col_ty(fe_ent) == Some(ColType::Sym);
@@ -1390,18 +1530,19 @@ impl<'a> Em<'a> {
                 }
             };
             let w;
+            // self-contained expressions only (the assignment-probe rule above)
+            if let Some(ri) = bv.rel_ent {
+                let rname = self.ent(ri).name.as_str();
+                self.trace_dead(rname, key.as_deref(), &bv.v, bv.g.as_deref(), m, nd.line);
+            }
             if let Some(key) = key {
-                // self-contained expressions only (the assignment-probe rule above)
-                if let Some(ri) = bv.rel_ent {
-                    let rname = self.ent(ri).name.as_str();
-                    self.trace_dead(rname, &key, &bv.v, bv.g.as_deref());
-                }
                 let ix = format!("((≠{})|{}⊐{})", key, key, bv.v);
                 w = format!("({}⊏{})", ix, comp);
-                ev.g = g_and(bv.g.clone(), Some(format!("(({}⊐{})<≠{})", key, bv.v, key)));
+                ev.g = g_and(bv.g.clone(), Some(crate::relationship::bqn_found(&bv.v, Some(&key))));
             } else {
-                w = format!("((0⌈{})⊏{})", bv.v, comp);
-                ev.g = g_and(bv.g.clone(), Some(format!("(0≤{})", bv.v)));
+                let ix = format!("((≠{})|0⌈{})", comp, bv.v);
+                w = format!("({}⊏{})", ix, comp);
+                ev.g = g_and(bv.g.clone(), Some(crate::relationship::bqn_found(&bv.v, None)));
             }
             ev.sym = !is_tag && col_ty(fe_ent) == Some(ColType::Sym);
             if matches!(fe_ent.kind, RegEntryKind::Rel { .. }) {
@@ -1442,29 +1583,33 @@ impl<'a> Em<'a> {
                 ev.unit = true;
                 Ok(ev)
             }
-            NodeKind::Name(s) => self.emit_name_val(*s, nd.line, m),
-            NodeKind::Alias(s) => {
-                let n = self.rs(*s);
-                let Some(i) = self.find(n) else {
-                    return Err(fail(nd.line, format!("unregistered alias '^{}'", n)));
-                };
-                ev.v = self.in_mode(self.bqnv(i), m);
-                Ok(ev)
+            NodeKind::Name(s) => self.emit_name_val(*s, *s, nd.line, m, LookupMode::Bare),
+            // Post-normalize Alias is a resolved dynamic-alias request; on the A4 bare fallback
+            // `look` is still the requested stem, so defs and the index/x/y/char frame specials
+            // are reachable exactly as they are for a bare name.
+            NodeKind::Alias { look, req } => {
+                self.emit_name_val(*look, *req, nd.line, m, LookupMode::DynamicAliasThenBare)
             }
             NodeKind::Arith { op, l, r } => {
                 let a = self.emit_val(l, m)?;
                 let b = self.emit_val(r, m)?;
                 ev.g = g_and(a.g.clone(), b.g.clone());
+                ev.gv = a.gv || b.gv;
                 ev.pair = a.pair || b.pair;
                 ev.unit = a.unit && b.unit;
                 // a scan-along value keeps its order through scalar arithmetic; against another
-                // column the two orders disagree and no alignment exists
+                // column the two orders disagree and no alignment exists. Two operands along the
+                // SAME order are one order over one domain — the avg-along desugaring is exactly
+                // that pair — so they compose and propagate it.
                 if a.along.is_some() || b.along.is_some() {
-                    if a.along.is_some() && !b.unit {
-                        return Err(fail(nd.line, "scan-along composed against a differently-ordered operand"));
-                    }
-                    if b.along.is_some() && !a.unit {
-                        return Err(fail(nd.line, "scan-along composed against a differently-ordered operand"));
+                    let same = matches!((&a.along, &b.along), (Some(x), Some(y)) if x == y);
+                    if !same {
+                        if a.along.is_some() && !b.unit {
+                            return Err(fail(nd.line, "scan-along composed against a differently-ordered operand"));
+                        }
+                        if b.along.is_some() && !a.unit {
+                            return Err(fail(nd.line, "scan-along composed against a differently-ordered operand"));
+                        }
                     }
                     ev.along = a.along.clone().or_else(|| b.along.clone());
                 }
@@ -1487,6 +1632,7 @@ impl<'a> Em<'a> {
                 let a = self.emit_val(l, m)?;
                 let b = self.emit_val(r, m)?;
                 ev.g = g_and(a.g, b.g);
+                ev.gv = a.gv || b.gv;
                 let sym = a.sym || b.sym;
                 if sym && matches!(op, CmpOp::Eq | CmpOp::Ne) {
                     ev.v = format!("({}{}≡¨{})", if *op == CmpOp::Ne { "¬" } else { "" }, a.v, b.v);
@@ -1517,17 +1663,25 @@ impl<'a> Em<'a> {
             NodeKind::Hop { .. } => self.emit_hop(nd, m),
             NodeKind::Call { callee, args } => self.emit_call(*callee, args, nd.line, m),
             NodeKind::Fold { op, operand } => self.emit_fold(*op, operand, nd.line, m),
-            NodeKind::ScanExpr { op, operand, scan2 } => self.emit_scan(*op, operand, *scan2, nd.line),
+            NodeKind::ScanExpr { op, operand } => self.emit_scan(*op, operand, nd.line),
             NodeKind::ScanAlong { op, col, order } => {
                 let xv = self.emit_val(col, Mode::World)?;
                 let ov = self.emit_val(order, Mode::World)?;
                 let opn = self.rs(*op);
-                let gl = match opn {
-                    "+" => "+`",
-                    "*" => "×`",
-                    "max" => "⌈`",
-                    "min" => "⌊`",
-                    _ => return Err(fail(nd.line, format!("scan({}): no registered scan step", opn))),
+                let gl = match desc_of(opn, reducer::Form::ScanAlong).and_then(|d| d.scan_glyph()) {
+                    Some(gl) => gl,
+                    None => {
+                        let fe = self
+                            .find(opn)
+                            .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                        let Some(fe) = fe else {
+                            return Err(fail(
+                                nd.line,
+                                format!("internal: no scan descriptor for '{}'", opn),
+                            ));
+                        };
+                        format!("{}`", self.fnv(fe))
+                    }
                 };
                 ev.v = format!("({}({})⊏{})", gl, ov.v, xv.v);
                 ev.along = Some(ov.v);
@@ -1546,6 +1700,7 @@ impl<'a> Em<'a> {
                 let b = self.emit_val(&kids[1], m)?;
                 ev.pair = true;
                 ev.g = g_and(a.g, b.g);
+                ev.gv = a.gv || b.gv;
                 if a.unit && b.unit {
                     ev.unit = true;
                     ev.v = format!("(<{}‿{})", a.v, b.v);
@@ -1660,13 +1815,9 @@ impl<'a> Em<'a> {
     // Mask emission: full frame-length boolean vector, all guards folded in.
     fn emit_mask(&mut self, nd: &Node) -> R<String> {
         match &nd.kind {
-            NodeKind::Name(s) => self.emit_name_mask(*s, nd.line),
-            NodeKind::Alias(s) => {
-                let n = self.rs(*s);
-                let Some(i) = self.find(n) else {
-                    return Err(fail(nd.line, format!("unregistered alias '^{}'", n)));
-                };
-                Ok(self.bqnv(i))
+            NodeKind::Name(s) => self.emit_name_mask(*s, *s, nd.line, LookupMode::Bare),
+            NodeKind::Alias { look, req } => {
+                self.emit_name_mask(*look, *req, nd.line, LookupMode::DynamicAliasThenBare)
             }
             NodeKind::And(a, b) | NodeKind::Or(a, b) => {
                 let am = self.emit_mask(a)?;
@@ -1674,8 +1825,9 @@ impl<'a> Em<'a> {
                 Ok(format!("({}{}{})", am, if matches!(nd.kind, NodeKind::And(..)) { "∧" } else { "∨" }, bm))
             }
             NodeKind::Not(k) => {
-                // absent-component reading for sparse value columns
-                if let NodeKind::Name(s) = &k.kind {
+                // absent-component reading for sparse value columns; a fallback ^name takes the
+                // same (¬presv) path as the bare spelling, so the two emit byte-identical BQN
+                if let NodeKind::Name(s) | NodeKind::Alias { look: s, .. } = &k.kind {
                     if let Some(ei) = self.find(self.rs(*s)) {
                         let e = self.ent(ei);
                         if matches!(e.kind, RegEntryKind::Col { .. })
@@ -1767,7 +1919,7 @@ impl<'a> Em<'a> {
                 // id; a keyed srel's fibers hold keys, so membership runs against its own key column
                 let src = self.emit_mask(l)?;
                 let rel = fiber_sym(r);
-                let fib = self.fiber_var(rel, r.line)?;
+                let (fib, _raw) = self.fiber_var(rel, r.line)?;
                 let se = self.find(self.rs(rel));
                 let mut ids: Option<String> = None;
                 if let Some(si) = se {
@@ -1788,10 +1940,17 @@ impl<'a> Em<'a> {
                         if let RegEntryKind::SRel { fib: fibers, .. } = &self.ent(si).kind {
                             if fibers.len() == self.reg.n as usize {
                                 let sname = self.ent(si).name.as_str();
+                                let scoped = self.trace_scoped(Mode::World);
+                                let usage = self.record_use(scoped, nd.line, sname);
                                 let tids = self.trace_ids(&fib);
+                                let sel = if scoped {
+                                    format!("({}∧{})", self.trace_sel, src)
+                                } else {
+                                    src.clone()
+                                };
                                 self.stage(format!(
-                                    "({}/{}) {{m←(≠{})≤{}⊐𝕩 ⋄ AnoTraceDead ⟨\"{}\", (+´m)⥊𝕨, m/𝕩⟩}}¨ ({}/{})",
-                                    src, tids, mcol, mcol, sname, src, fib
+                                    "({}/{}) {{m←(≠{})≤{}⊐𝕩 ⋄ AnoTraceDead ⟨\"{}\", (+´m)⥊𝕨, m/𝕩, \"{}\"⟩}}¨ ({}/{})",
+                                    sel, tids, mcol, mcol, sname, usage, sel, fib
                                 ));
                             }
                         }
@@ -1926,7 +2085,17 @@ impl<'a> Em<'a> {
     }
 
     // The effect dispatch (C emitEffect). Effects read pre-state; commits land at the end.
+    // The phase flag rides the whole dispatch: every crossing staged here is an EFFECT
+    // crossing over S, and only the discarded guard probe steps back out of it.
     fn emit_effect(&mut self, ef: &Node, fx: &mut Fx) -> R<()> {
+        let saved = self.in_effect;
+        self.in_effect = true;
+        let out = self.emit_effect_inner(ef, fx);
+        self.in_effect = saved;
+        out
+    }
+
+    fn emit_effect_inner(&mut self, ef: &Node, fx: &mut Fx) -> R<()> {
         match &ef.kind {
             NodeKind::EAssign { op, target, rhs } => {
                 let (coln, field): (&Node, Option<&'a str>) = if let NodeKind::Hop { l, r } = &target.kind {
@@ -1954,8 +2123,13 @@ impl<'a> Em<'a> {
                 // guards must refine the mask before gathering: pre-scan via world-mode guard
                 // probe — the probe's staged lines are DISCARDED but its temps stay burned
                 let saved_pre = std::mem::take(&mut self.pre);
+                let saved_uses = self.plan.len();
+                let saved_effect = self.in_effect;
+                self.in_effect = false;
                 let probe_res = self.emit_val(rhs, Mode::World);
                 self.pre = saved_pre;
+                self.plan.truncate(saved_uses);
+                self.in_effect = saved_effect;
                 let probe = probe_res?;
                 let old_sel = self.sel_var.clone();
                 let sel_e = if let Some(g) = &probe.g {
@@ -2490,6 +2664,7 @@ impl<'a> Em<'a> {
             return Ok(());
         };
         self.stmt += 1;
+        self.site_kind = 's';
         self.out.push_str(&format!("\n# s{}\n", self.stmt));
         self.pre.clear();
         self.pipe_expand.clear();
@@ -2548,7 +2723,7 @@ impl<'a> Em<'a> {
                 self.guard_lits(Some(b), pos, neg);
             }
             NodeKind::Scope { l, .. } => self.guard_lits(Some(l), pos, neg),
-            NodeKind::Name(s) => {
+            NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => {
                 if let Some(d) = self.find_def(*s) {
                     self.guard_lits(Some(def_body(d)), pos, neg);
                     return;
@@ -2560,7 +2735,7 @@ impl<'a> Em<'a> {
                 }
             }
             NodeKind::Not(k) => {
-                if let NodeKind::Name(s) = &k.kind {
+                if let NodeKind::Name(s) | NodeKind::Alias { look: s, .. } = &k.kind {
                     if self.find_def(*s).is_some() {
                         return;
                     }
@@ -2585,6 +2760,7 @@ impl<'a> Em<'a> {
             return Err(fail(rules[0].line, "rule tick: more than 32 rules"));
         }
         self.stmt += 1;
+        self.site_kind = 's';
         self.out.push_str(&format!("\n# s{}: {} rules, one shared barrier\n", self.stmt, rules.len()));
         self.pre.clear();
         self.pipe_expand.clear();
@@ -2663,22 +2839,56 @@ impl<'a> Em<'a> {
     }
 
     // Queries: q<N> value, --label 0x1D tag, the next --! out pin, else the plain display.
+    // An identityless fold over nothing has no result row (A12): a validity-tagged guard is
+    // consumed BEFORE the label, the expectation, and the display.  A unit result stages the
+    // guard as q<N>v and every observation runs under it; a grouped result compresses its rows
+    // away, exactly as the assignment path already drops them from the scatter mask.  A query
+    // with no validity guard stages byte-identically to an unguarded one.
     fn emit_query(&mut self, st: &Node) -> R<()> {
         let NodeKind::Query(inner) = &st.kind else {
             return Ok(());
         };
         self.stmt += 1;
+        self.site_kind = 'q';
         self.pre.clear();
+        // a query is a Predicate-phase crossing over X: no statement mask is in scope, and
+        // the previous statement's must not leak in
+        self.trace_sel.clear();
         self.out.push_str(&format!("\n# q{}\n", self.stmt));
         self.set_frame(Some(inner));
         let v = self.emit_val(inner, Mode::World)?;
         let qv = format!("q{}", self.stmt);
-        self.stage(format!("{} ← {}", qv, v.v));
+        let validity = match (&v.g, v.gv) {
+            (Some(g), true) if v.unit => {
+                let vv = format!("q{}v", self.stmt);
+                self.stage(format!("{} ← {}", qv, v.v));
+                self.stage(format!("{} ← {}", vv, g));
+                Some(vv)
+            }
+            (Some(g), true) => {
+                // per-row validity: an empty fiber produces no result row
+                self.stage(format!("{} ← ({})/{}", qv, g, v.v));
+                None
+            }
+            _ => {
+                self.stage(format!("{} ← {}", qv, v.v));
+                None
+            }
+        };
         // --label: a 0x1D tag line names the query and its source line, then the display —
-        // for every query, pinned or not, before any assertion
+        // for every query, pinned or not, before any assertion.  Under a false guard Kore
+        // receives no QRec at all, so neither tag nor value may escape the conditional.
         if self.dirs.label {
-            self.stage(format!("•Out (@+29)∾\"q{}@{}\"", self.stmt, st.line));
-            self.stage(format!("•Show {}", qv));
+            match &validity {
+                Some(vv) => self.stage(format!(
+                    "{{•Out (@+29)∾\"q{}@{}\" ⋄ •Show 𝕩}}⍟{} {}",
+                    self.stmt, st.line, vv, qv
+                )),
+                None => {
+                    self.stage(format!("•Out (@+29)∾\"q{}@{}\"", self.stmt, st.line));
+                    self.stage(format!("•Show {}", qv));
+                }
+            }
         }
         // match against the next --! out expectation
         let mut oi: Option<usize> = None;
@@ -2713,18 +2923,27 @@ impl<'a> Em<'a> {
                 lst.push_str(&piece);
             }
             lst.push('⟩');
+            // the comparator sees the guarded ravel, never the backend placeholder: a false
+            // guard makes `--! out` (empty) pass and `--! out 0` fail
+            let ravel = match &validity {
+                Some(vv) => format!("{}/⥊{}", vv, qv),
+                None => format!("⥊{}", qv),
+            };
             // numeric outs compare within 1e-9: pinned doubles come from a sibling BQN
             // evaluation whose association order may differ in the last bits
             if all_num {
                 self.stage(format!(
-                    "\"out q{}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩}} ⥊{}",
-                    self.stmt, lst, qv
+                    "\"out q{}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩}} {}",
+                    self.stmt, lst, ravel
                 ));
             } else {
-                self.stage(format!("\"out q{}\" ! {} ≡ ⥊{}", self.stmt, lst, qv));
+                self.stage(format!("\"out q{}\" ! {} ≡ {}", self.stmt, lst, ravel));
             }
         } else if !self.dirs.label {
-            self.stage(format!("•Show {}", qv));
+            match &validity {
+                Some(vv) => self.stage(format!("•Show⍟{} {}", vv, qv)),
+                None => self.stage(format!("•Show {}", qv)),
+            }
         }
         let pre = std::mem::take(&mut self.pre);
         self.out.push_str(&pre);
@@ -2737,6 +2956,7 @@ impl<'a> Em<'a> {
             return Ok(());
         };
         self.stmt += 1;
+        self.site_kind = 'c';
         self.pre.clear();
         self.out.push_str(&format!("\n# c{}\n", self.stmt));
         self.fr.kind = FrameKind::Ent;
@@ -2988,8 +3208,9 @@ impl<'a> Em<'a> {
             self.out.push_str("\n# trace (--trace): 0x1F-prefixed diagnostic lines\n");
             self.out.push_str("anoTraceSep ← @+31\n");
             self.out.push_str("AnoTraceNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
-            self.out.push_str("AnoTraceDead ← {n‿o‿s: o {•Out anoTraceSep∾\"RELATION \"∾n∾\" \"∾(AnoTraceNum 𝕨)∾\" -> \"∾(AnoTraceNum 𝕩)∾\" IS DEAD !\"}¨ s}\n");
-            self.out.push_str("AnoTraceEmpty ← {n‿o: {•Out anoTraceSep∾\"FIBER \"∾n∾\" \"∾(AnoTraceNum 𝕩)∾\" IS EMPTY !\"}¨ o}\n");
+            // u is the use suffix: one crossing, many rows, all sharing one USE id
+            self.out.push_str("AnoTraceDead ← {n‿o‿s‿u: o {•Out anoTraceSep∾\"RELATION \"∾n∾\" \"∾(AnoTraceNum 𝕨)∾\" -> \"∾(AnoTraceNum 𝕩)∾\" IS DEAD ! \"∾u}¨ s}\n");
+            self.out.push_str("AnoTraceEmpty ← {n‿o‿u: {•Out anoTraceSep∾\"FIBER \"∾n∾\" \"∾(AnoTraceNum 𝕩)∾\" IS EMPTY ! \"∾u}¨ o}\n");
         }
     }
 
@@ -3135,7 +3356,7 @@ impl<'a> Em<'a> {
             return false;
         }
         match &nd.kind {
-            NodeKind::Name(s) => return self.scan_idx_name(*s, has_id, depth),
+            NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => return self.scan_idx_name(*s, has_id, depth),
             NodeKind::SetHop { rel } => {
                 if !has_id {
                     if let Some(ei) = self.find(self.rs(*rel)) {
@@ -3228,7 +3449,13 @@ impl<'a> Em<'a> {
 // never repair (dead uc fallback, duplicated grade split, stripFrame fallthrough, line-0
 // despawn diagnostic, emitCompr l/g -> ≠, MAXLITS 16 silent drop, board-frame rule-tick
 // duplicate brd lines).
-pub fn emit(prog: &Node, reg: &Registry, dirs: &Directives, it: &Interner) -> Result<String, Diag> {
+fn emit_lowered(
+    prog: &Node,
+    reg: &Registry,
+    dirs: &Directives,
+    it: &Interner,
+    plan: crate::trace::TracePlan,
+) -> Result<(String, crate::trace::TracePlan), Diag> {
     let mut em = Em {
         reg,
         dirs,
@@ -3252,6 +3479,9 @@ pub fn emit(prog: &Node, reg: &Registry, dirs: &Directives, it: &Interner) -> Re
         tmp: 0,
         out_idx: 0,
         stmt: 0,
+        plan,
+        in_effect: false,
+        site_kind: 's',
     };
     let empty: [Node; 0] = [];
     let kids: &[Node] = if let NodeKind::Program(v) = &prog.kind { v } else { &empty };
@@ -3305,7 +3535,7 @@ pub fn emit(prog: &Node, reg: &Registry, dirs: &Directives, it: &Interner) -> Re
     if dirs.save {
         em.emit_save();
     }
-    Ok(em.out)
+    Ok((em.out, em.plan))
 }
 
 #[cfg(test)]
@@ -3365,4 +3595,1488 @@ mod tests {
             "\n# fixture\nanoN ← 0\nanoSel ← ⟨⟩\n\n# q1\nq1 ← (<\"Foo\")\n\"out q1\" ! ⟨\"Foo\"⟩ ≡ ⥊q1\n\n# expectations\n\n\"ok\"\n"
         );
     }
+}
+
+// A16/A17 at the emission boundary: which domain a staged dead-link mask crosses, and the
+// per-crossing record that names it.  These need no BQN — they read the emitted text.
+#[cfg(test)]
+mod trace_domains {
+    use super::*;
+
+    // Four rows keyed by Id; mentor dangles on row 0, links live on 1, and links dead on 2/3.
+    fn registry() -> Registry {
+        let col = |name: &str, ty: ColType, uniq: bool, nums: Vec<f64>| RegEntry {
+            name: name.to_string(),
+            defval: 0.0,
+            kind: RegEntryKind::Col { ty, uniq, nums, syms: Vec::new(), pres: None, rng: None },
+        };
+        Registry {
+            n: 4,
+            ents: vec![
+                col("Id", ColType::Num, true, vec![1.0, 2.0, 3.0, 4.0]),
+                col("Flag", ColType::Bool, false, vec![1.0, 0.0, 1.0, 0.0]),
+                col("Gold", ColType::Num, false, vec![0.0, 0.0, 0.0, 0.0]),
+                RegEntry {
+                    name: "mentor".to_string(),
+                    defval: 0.0,
+                    kind: RegEntryKind::Rel {
+                        targets: vec![-1.0, 2.0, 98.0, 99.0],
+                        key_of: Some("Id".to_string()),
+                    },
+                },
+            ],
+            ..Registry::default()
+        }
+    }
+
+    // Unkeyed twin: mentor holds row indices, one of them beyond the world.
+    fn unkeyed_registry() -> Registry {
+        let mut reg = registry();
+        reg.ents.retain(|e| e.name != "Id" && e.name != "mentor");
+        reg.ents.push(RegEntry {
+            name: "mentor".to_string(),
+            defval: 0.0,
+            kind: RegEntryKind::Rel { targets: vec![-1.0, 1.0, 9.0, 0.0], key_of: None },
+        });
+        reg
+    }
+
+    fn traced(source: &str, reg: &Registry) -> String {
+        let mut it = Interner::new();
+        let toks = crate::lex::lex(source.as_bytes(), false, &mut it).expect("lex");
+        let prog = crate::parse::parse(&toks, &mut it).expect("parse");
+        let mut dirs = Directives::default();
+        dirs.trace = true;
+        emit(&prog, reg, &dirs, &it).expect("emit")
+    }
+
+    fn quiet(source: &str, reg: &Registry) -> String {
+        let mut it = Interner::new();
+        let toks = crate::lex::lex(source.as_bytes(), false, &mut it).expect("lex");
+        let prog = crate::parse::parse(&toks, &mut it).expect("parse");
+        emit(&prog, reg, &Directives::default(), &it).expect("emit")
+    }
+
+    // The mask expression each staged AnoTraceDead actually reports over, in staging order.
+    fn dead_masks(bqn: &str) -> Vec<String> {
+        let mut binds: Vec<(String, String)> = Vec::new();
+        let mut out = Vec::new();
+        for line in bqn.lines() {
+            let text = line.trim_start();
+            if let Some((name, mask)) = text.split_once(" ← ") {
+                binds.push((name.to_string(), mask.to_string()));
+            }
+            if let Some(rest) = text.strip_prefix("AnoTraceDead ⟨") {
+                let dm = rest
+                    .split(", ")
+                    .nth(1)
+                    .and_then(|piece| piece.split('/').next())
+                    .unwrap_or_default();
+                if let Some((_, mask)) = binds.iter().find(|(name, _)| name == dm) {
+                    out.push(mask.clone());
+                }
+            }
+        }
+        out
+    }
+
+    fn use_lines(bqn: &str) -> Vec<String> {
+        bqn.lines()
+            .filter_map(|l| l.find("TRACE-USE ").map(|i| l[i..].trim_end_matches('"').to_string()))
+            .collect()
+    }
+
+    // A predicate crossing reports over X even beside a false sibling, and the report does not
+    // move when the conjuncts swap.
+    #[test]
+    fn predicate_crossing_stays_unconjoined() {
+        let reg = registry();
+        let a = traced("mentor.Gold = 0 & Flag , Gold += 1\n", &reg);
+        let b = traced("Flag & mentor.Gold = 0 , Gold += 1\n", &reg);
+        for bqn in [&a, &b] {
+            let masks = dead_masks(bqn);
+            assert_eq!(masks.len(), 1, "{}", bqn);
+            assert!(!masks[0].contains("s1m"), "{}", masks[0]);
+        }
+        assert_eq!(use_lines(&a), use_lines(&b));
+        assert_eq!(use_lines(&a), vec!["TRACE-USE 0 s1:1 PREDICATE SOURCE mentor"]);
+    }
+
+    // An effect crossing conjoins the STATEMENT mask, never the guard-refined one.
+    #[test]
+    fn effect_crossing_scopes_to_the_statement_mask() {
+        let reg = registry();
+        let bqn = traced("Flag , Gold = mentor.Gold\n", &reg);
+        let masks = dead_masks(&bqn);
+        assert_eq!(masks.len(), 1, "{}", bqn);
+        assert!(masks[0].starts_with("s1m∧"), "{}", masks[0]);
+        assert_eq!(use_lines(&bqn), vec!["TRACE-USE 0 s1:1 EFFECT SELECTED mentor"]);
+    }
+
+    // One relation crossed in both phases records twice, with distinct ids and domains.
+    #[test]
+    fn both_phases_record_separately() {
+        let reg = registry();
+        let bqn = traced("mentor.Gold = 0 & Flag , Gold = mentor.Gold\n", &reg);
+        assert_eq!(
+            use_lines(&bqn),
+            vec![
+                "TRACE-USE 0 s1:1 PREDICATE SOURCE mentor",
+                "TRACE-USE 1 s1:1 EFFECT SELECTED mentor",
+            ]
+        );
+        // the suffix each staged line carries matches its record
+        assert!(bqn.contains("\"USE 0 PREDICATE SOURCE\""), "{}", bqn);
+        assert!(bqn.contains("\"USE 1 EFFECT SELECTED\""), "{}", bqn);
+    }
+
+    // Two textual crossings in one phase are two uses: a def re-expands per use site, and the
+    // site names the statement while the line keeps pointing at the spelling.
+    #[test]
+    fn every_textual_crossing_is_its_own_use() {
+        let reg = registry();
+        let bqn = traced(
+            "def linked = mentor.Gold = 0\nlinked , Gold += 1\nlinked , Gold += 2\n",
+            &reg,
+        );
+        assert_eq!(
+            use_lines(&bqn),
+            vec![
+                "TRACE-USE 0 s1:1 PREDICATE SOURCE mentor",
+                "TRACE-USE 1 s2:1 PREDICATE SOURCE mentor",
+            ]
+        );
+    }
+
+    // A query is a Predicate crossing over X: the previous statement's mask must not leak in.
+    #[test]
+    fn a_query_after_an_effect_stays_whole_column() {
+        let reg = registry();
+        let bqn = traced("Flag , Gold = mentor.Gold\nmentor.Gold\n", &reg);
+        let masks = dead_masks(&bqn);
+        assert_eq!(masks.len(), 2, "{}", bqn);
+        assert!(masks[0].starts_with("s1m∧"), "{}", masks[0]);
+        assert!(!masks[1].contains("s1m"), "{}", masks[1]);
+        assert_eq!(
+            use_lines(&bqn),
+            vec![
+                "TRACE-USE 0 s1:1 EFFECT SELECTED mentor",
+                "TRACE-USE 1 q2:2 PREDICATE SOURCE mentor",
+            ]
+        );
+    }
+
+    // An unkeyed hop bounds its gather and guards foundness against the world length.
+    #[test]
+    fn unkeyed_hop_bounds_its_gather() {
+        let reg = unkeyed_registry();
+        let bqn = traced("Flag , Gold = mentor.Gold\n", &reg);
+        assert!(bqn.contains("((≠gold)|0⌈mentor)⊏gold"), "{}", bqn);
+        assert!(bqn.contains("((¯1≠mentor)∧(0≤mentor)∧(mentor<anoN))"), "{}", bqn);
+        assert_eq!(use_lines(&bqn), vec!["TRACE-USE 0 s1:1 EFFECT SELECTED mentor"]);
+    }
+
+    // The flag gates whole blocks: with it off no trace text is emitted at all.
+    #[test]
+    fn the_flag_gates_every_trace_line() {
+        let reg = registry();
+        let bqn = quiet("mentor.Gold = 0 & Flag , Gold = mentor.Gold\n", &reg);
+        assert!(!bqn.contains("AnoTraceDead"), "{}", bqn);
+        assert!(!bqn.contains("AnoTraceEmpty"), "{}", bqn);
+        assert!(!bqn.contains("TRACE-USE"), "{}", bqn);
+    }
+
+    // Ids are minted in staging order, so repeated emission is byte-identical.
+    #[test]
+    fn repeat_emission_is_byte_identical() {
+        let reg = registry();
+        let source = "mentor.Gold = 0 & Flag , Gold = mentor.Gold\nmentor.Gold\n";
+        assert_eq!(traced(source, &reg), traced(source, &reg));
+    }
+}
+
+mod normalize {
+    use super::emit_lowered;
+    use crate::alias::{AliasSnapshot, AliasTarget, ResolvedAlias};
+    use crate::reducer::{self, Carrier, Form, MachineKind, OpDesc};
+    use crate::registry::{names_eq, reg_find};
+    use crate::trace::{TracePhase, TracePlan};
+    use crate::{
+        ArithOp, BindKind, ColType, Diag, Directives, Interner, Node, NodeKind, RegEntry,
+        RegEntryKind, Registry, Symbol,
+    };
+    use std::collections::BTreeSet;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Context {
+        Neutral,
+        Value,
+        Mask,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum SemanticCarrier {
+        Mask,
+        Number,
+        Other,
+    }
+
+    // Inputs: the consulted target and the synthetic name a materialized result took. Output: the
+    // trace clause naming what answered the consultation; an absent target is the bare fallback.
+    fn provenance_of(target: Option<&AliasTarget>, materialized: Option<&str>) -> String {
+        target
+            .map(|target| target.provenance(materialized))
+            .unwrap_or_else(|| "bare fallback".to_string())
+    }
+
+    struct Normalizer {
+        /// Registry enriched with synthetic reducer/mask entries for the frozen backend.
+        reg: Registry,
+        /// Immutable registry used to validate aliases. Synthetic entries must not stale snapshots.
+        base_reg: Registry,
+        it: Interner,
+        aliases: AliasSnapshot,
+        /// Alias consultations recorded here; relationship crossings are minted by the lowerer.
+        trace: TracePlan,
+        greater: Option<Symbol>,
+        lesser: Option<Symbol>,
+        synthetic: u32,
+        /// Every registry name minted during this emission.  Source may not spell one.
+        generated: BTreeSet<String>,
+    }
+
+    impl Normalizer {
+        fn new(reg: &Registry, it: &Interner, aliases: AliasSnapshot) -> Self {
+            Self {
+                reg: reg.clone(),
+                base_reg: reg.clone(),
+                it: it.clone(),
+                aliases,
+                trace: TracePlan::default(),
+                greater: None,
+                lesser: None,
+                synthetic: 0,
+                generated: BTreeSet::new(),
+            }
+        }
+
+        fn spelling(&self, symbol: Symbol) -> &str {
+            self.it.resolve(symbol)
+        }
+
+        fn intern(&mut self, spelling: &str) -> Symbol {
+            self.it.intern(spelling)
+        }
+
+        // Inputs: a stem. Output: a registry name no existing entry answers to, recorded in
+        // `generated`.  Taken names are skipped, so a registry-declared AnoDynMask7 stays legal.
+        fn fresh_registry_name(&mut self, stem: &str) -> String {
+            loop {
+                let name = format!("{}{}", stem, self.synthetic);
+                self.synthetic = self.synthetic.wrapping_add(1);
+                if reg_find(&self.reg, &name).is_none() {
+                    self.generated.insert(name.clone());
+                    return name;
+                }
+            }
+        }
+
+        fn function(&mut self, greater: bool) -> Symbol {
+            let cached = if greater { self.greater } else { self.lesser };
+            if let Some(symbol) = cached {
+                return symbol;
+            }
+            let name = self.fresh_registry_name(if greater {
+                "AnoSemGreater"
+            } else {
+                "AnoSemLesser"
+            });
+            let body = if greater { "{𝕨⌈𝕩}" } else { "{𝕨⌊𝕩}" };
+            self.reg.ents.push(RegEntry {
+                name: name.clone(),
+                defval: 0.0,
+                kind: RegEntryKind::Fn { body: Some(body.to_string()) },
+            });
+            let symbol = self.intern(&name);
+            if greater {
+                self.greater = Some(symbol);
+            } else {
+                self.lesser = Some(symbol);
+            }
+            symbol
+        }
+
+        // Inputs: the stem of a `^name`, its line. Output: an Alias node whose `look` is the
+        // resolved lookup name and whose `req` is the requested stem. THE one dynamic-alias
+        // consultation point: the only caller of AliasSnapshot::resolve. The node kind stays
+        // Alias on every outcome, so the resolved plan distinguishes `name` from `^name` without
+        // re-reading source, and every refusal downstream can still spell `^req`.
+        fn resolve_alias_or_bare(&mut self, symbol: Symbol, line: i32) -> Result<Node, Diag> {
+            let spelling = self.spelling(symbol).to_string();
+            let target = self.aliases.target(&spelling).cloned();
+            let overlay = self.aliases.version;
+            let (look, clause) = match self.aliases.resolve(&self.base_reg, &spelling)? {
+                // explicit bare fallback (A4): no overlay entry; the lowerer performs the bare
+                // lookup on the requested stem
+                None => (symbol, "bare fallback".to_string()),
+                Some(ResolvedAlias::Entry(index)) => {
+                    let name = self.reg.ents[index].name.clone();
+                    let clause = provenance_of(target.as_ref(), None);
+                    (self.intern(&name), clause)
+                }
+                Some(ResolvedAlias::Mask(values)) => {
+                    // A dynamic mask has no registry declaration, so it materializes as a
+                    // RegEntryKind::AliasMask entry — the static alias-mask kind is its lowering
+                    // vehicle only, never a claim that the overlay entry became static.
+                    let name = self.fresh_registry_name("AnoDynMask");
+                    self.reg.ents.push(RegEntry {
+                        name: name.clone(),
+                        defval: 0.0,
+                        kind: RegEntryKind::AliasMask { mask: values },
+                    });
+                    let clause = provenance_of(target.as_ref(), Some(&name));
+                    (self.intern(&name), clause)
+                }
+                Some(ResolvedAlias::EntityRow(row)) => {
+                    // A resolver entity result likewise has no declaration: it materializes as a
+                    // synthetic Bind{Entity} entry, the same vehicle a host binding lowers through.
+                    let name = self.fresh_registry_name("AnoDynEnt");
+                    self.reg.ents.push(RegEntry {
+                        name: name.clone(),
+                        defval: 0.0,
+                        kind: RegEntryKind::Bind {
+                            kind: BindKind::Entity,
+                            vals: vec![row as f64],
+                        },
+                    });
+                    let clause = provenance_of(target.as_ref(), Some(&name));
+                    (self.intern(&name), clause)
+                }
+            };
+            self.trace
+                .record_alias(format!("^{} -> {}, overlay v{}", spelling, clause, overlay));
+            Ok(Node::new(NodeKind::Alias { look, req: symbol }, line))
+        }
+
+        fn carrier_of_entry(&self, index: usize) -> SemanticCarrier {
+            match &self.reg.ents[index].kind {
+                RegEntryKind::Col { ty: ColType::Bool, .. }
+                | RegEntryKind::Field { ty: ColType::Bool, .. }
+                | RegEntryKind::AliasMask { .. }
+                | RegEntryKind::Tag { .. }
+                | RegEntryKind::Bind { kind: BindKind::Mask, .. } => SemanticCarrier::Mask,
+                RegEntryKind::Col { ty: ColType::Num, .. }
+                | RegEntryKind::Col { ty: ColType::Nat, .. }
+                | RegEntryKind::Col { ty: ColType::Int, .. }
+                | RegEntryKind::Field { ty: ColType::Num, .. }
+                | RegEntryKind::Field { ty: ColType::Nat, .. }
+                | RegEntryKind::Field { ty: ColType::Int, .. }
+                | RegEntryKind::Rel { .. }
+                | RegEntryKind::Bind {
+                    kind: BindKind::Entity,
+                    ..
+                }
+                | RegEntryKind::Bind { kind: BindKind::Point, .. }
+                | RegEntryKind::Bind { kind: BindKind::Num, .. }
+                | RegEntryKind::Bind { kind: BindKind::Vec, .. } => SemanticCarrier::Number,
+                _ => SemanticCarrier::Other,
+            }
+        }
+
+        fn infer(&self, node: &Node) -> SemanticCarrier {
+            match &node.kind {
+                NodeKind::Num(..)
+                | NodeKind::Counter { .. }
+                | NodeKind::Arith { .. }
+                | NodeKind::IotaX(..)
+                | NodeKind::CrossV { .. }
+                | NodeKind::Tuple(..) => SemanticCarrier::Number,
+                NodeKind::Name(symbol) | NodeKind::Alias { look: symbol, .. } => {
+                    reg_find(&self.reg, self.spelling(*symbol))
+                        .map(|index| self.carrier_of_entry(index))
+                        .unwrap_or(SemanticCarrier::Other)
+                }
+                NodeKind::Cmp { .. }
+                | NodeKind::CmpAny { .. }
+                | NodeKind::Not(..) => SemanticCarrier::Mask,
+                NodeKind::And(left, right) | NodeKind::Or(left, right) => {
+                    if self.infer(left) == SemanticCarrier::Number
+                        && self.infer(right) == SemanticCarrier::Number
+                    {
+                        SemanticCarrier::Number
+                    } else {
+                        SemanticCarrier::Mask
+                    }
+                }
+                NodeKind::Fold { op, operand } | NodeKind::ScanExpr { op, operand } => {
+                    let spelling = self.spelling(*op);
+                    if spelling == "#" {
+                        SemanticCarrier::Number
+                    } else if matches!(spelling, "&" | "|")
+                        && self.infer(operand) == SemanticCarrier::Mask
+                    {
+                        SemanticCarrier::Mask
+                    } else {
+                        SemanticCarrier::Number
+                    }
+                }
+                NodeKind::ScanAlong { op, col, .. } => {
+                    let spelling = self.spelling(*op);
+                    if matches!(spelling, "&" | "|")
+                        && self.infer(col) == SemanticCarrier::Mask
+                    {
+                        SemanticCarrier::Mask
+                    } else {
+                        SemanticCarrier::Number
+                    }
+                }
+                NodeKind::Hop { r, .. } => self.infer(r),
+                NodeKind::Scope { l, .. } => self.infer(l),
+                NodeKind::Call { .. } => SemanticCarrier::Number,
+                _ => SemanticCarrier::Other,
+            }
+        }
+
+        // Inputs: the ORIGINAL source program (never the normalized one — normalizer-created
+        // Greater/Lesser Call nodes and materialized Alias nodes legitimately spell generated
+        // names). Output: Ok, or a refusal naming the first source symbol that collides with a
+        // name minted this emission. Invariant: order-independent, and only names actually
+        // generated here are reserved, so a registry-declared AnoDynMask7 stays usable.
+        fn refuse_reserved(&self, prog: &Node) -> Result<(), Diag> {
+            if self.generated.is_empty() {
+                return Ok(());
+            }
+            self.walk_reserved(prog)
+        }
+
+        fn walk_reserved(&self, node: &Node) -> Result<(), Diag> {
+            let mut symbols: Vec<Symbol> = Vec::new();
+            match &node.kind {
+                NodeKind::Name(s)
+                | NodeKind::Alias { look: s, .. }
+                | NodeKind::Call { callee: s, .. }
+                | NodeKind::CmpAny { name: s }
+                | NodeKind::SetHop { rel: s }
+                | NodeKind::EAdd(s)
+                | NodeKind::EDel(s)
+                | NodeKind::EVerb { name: s, .. }
+                | NodeKind::EVia { f: s, .. }
+                | NodeKind::Fold { op: s, .. }
+                | NodeKind::ScanExpr { op: s, .. }
+                | NodeKind::ScanAlong { op: s, .. }
+                | NodeKind::Binder { name: s, .. }
+                | NodeKind::DefStmt { name: s, .. } => symbols.push(*s),
+                _ => {}
+            }
+            for symbol in symbols {
+                let spelling = self.spelling(symbol);
+                if self.generated.iter().any(|name| names_eq(name, spelling)) {
+                    return Err(super::fail(
+                        node.line,
+                        format!("reserved synthetic name '{}'", spelling),
+                    ));
+                }
+            }
+            for kid in super::children(node) {
+                self.walk_reserved(kid)?;
+            }
+            Ok(())
+        }
+
+        fn presence(node: Node) -> Node {
+            let line = node.line;
+            Node::new(
+                NodeKind::Not(Box::new(Node::new(NodeKind::Not(Box::new(node)), line))),
+                line,
+            )
+        }
+
+        // The count machine consumes the selection-presence stream of the fold/scan DOMAIN, not
+        // of the whole operand: wrapping inside the scope keeps emit_scan's scope split intact,
+        // so `#\ x @ s` and `+\ x @ s` compress the same rows.
+        fn scoped_presence(node: Node) -> Node {
+            let line = node.line;
+            match node.kind {
+                NodeKind::Scope { l, r, origin } => Node::new(
+                    NodeKind::Scope { l: Box::new(Self::presence(*l)), r, origin },
+                    line,
+                ),
+                _ => Self::presence(node),
+            }
+        }
+
+        // Inputs: a head spelling. Output: true when the registry answers it with a fn — the ONLY
+        // admission route for a name (an arity that happens to be two admits nothing).
+        fn registered_fn(&self, spelling: &str) -> bool {
+            reg_find(&self.reg, spelling)
+                .is_some_and(|index| matches!(self.reg.ents[index].kind, RegEntryKind::Fn { .. }))
+        }
+
+        // Inputs: the head spelling and its already-normalized operand. Output: the carrier the
+        // head is resolved against. Count consumes presence whatever the operand's payload is.
+        fn head_carrier(&self, spelling: &str, operand: &Node) -> Carrier {
+            if spelling == "#" {
+                return Carrier::Presence;
+            }
+            if self.infer(operand) == SemanticCarrier::Mask {
+                Carrier::Mask
+            } else {
+                Carrier::Number
+            }
+        }
+
+        // THE fold/scan head resolution point. Inputs: spelling, form, operand, line. Output: the
+        // checked descriptor whose canonical spelling the emitters retrieve by.
+        fn resolve_head(
+            &self,
+            spelling: &str,
+            form: Form,
+            operand: &Node,
+            line: i32,
+        ) -> Result<OpDesc, Diag> {
+            reducer::resolve_head(
+                spelling,
+                form,
+                self.head_carrier(spelling, operand),
+                self.registered_fn(spelling),
+            )
+            .map_err(|message| super::fail(line, message))
+        }
+
+        fn normalize(
+            &mut self,
+            node: &Node,
+            context: Context,
+            phase: TracePhase,
+        ) -> Result<Node, Diag> {
+            let line = node.line;
+            let kind = match &node.kind {
+                NodeKind::Num(value) => NodeKind::Num(*value),
+                NodeKind::Counter { val, unit } => NodeKind::Counter { val: *val, unit: *unit },
+                NodeKind::Sym(symbol) => NodeKind::Sym(*symbol),
+                NodeKind::Str(symbol) => NodeKind::Str(*symbol),
+                // bare lookup never touches the dynamic-alias overlay
+                NodeKind::Name(symbol) => NodeKind::Name(*symbol),
+                NodeKind::Alias { look: symbol, .. } => return self.resolve_alias_or_bare(*symbol, line),
+                NodeKind::Wild => NodeKind::Wild,
+                NodeKind::Not(inner) => {
+                    NodeKind::Not(Box::new(self.normalize(inner, Context::Mask, phase)?))
+                }
+                NodeKind::And(left, right) | NodeKind::Or(left, right) => {
+                    if context == Context::Mask {
+                        let left = Box::new(self.normalize(left, Context::Mask, phase)?);
+                        let right = Box::new(self.normalize(right, Context::Mask, phase)?);
+                        if matches!(&node.kind, NodeKind::And(..)) {
+                            NodeKind::And(left, right)
+                        } else {
+                            NodeKind::Or(left, right)
+                        }
+                    } else {
+                        let left = self.normalize(left, Context::Neutral, phase)?;
+                        let right = self.normalize(right, Context::Neutral, phase)?;
+                        let greater = matches!(&node.kind, NodeKind::Or(..));
+                        let numeric = |carrier| carrier == SemanticCarrier::Number;
+                        let (l, r) = (numeric(self.infer(&left)), numeric(self.infer(&right)));
+                        if l && r {
+                            let spelling = if greater { "|" } else { "&" };
+                            self.resolve_head(spelling, Form::Direct, &left, line)?;
+                            let callee = self.function(greater);
+                            NodeKind::Call { callee, args: vec![left, right] }
+                        } else if l != r && context == Context::Value {
+                            // Greater/Lesser is carrier-directed; there is no coercion between
+                            // the mask and numeric instances, so a mixture has no reading. Only
+                            // a genuine value position refuses: at the neutral top of a query or
+                            // an effect the operands keep their selection/presence reading.
+                            return Err(super::fail(
+                                line,
+                                format!(
+                                    "'{}' mixes mask and number operands; there is no carrier coercion",
+                                    if greater { "|" } else { "&" }
+                                ),
+                            ));
+                        } else if matches!(&node.kind, NodeKind::And(..)) {
+                            NodeKind::And(Box::new(left), Box::new(right))
+                        } else {
+                            NodeKind::Or(Box::new(left), Box::new(right))
+                        }
+                    }
+                }
+                NodeKind::Cmp { op, l, r } => NodeKind::Cmp {
+                    op: *op,
+                    l: Box::new(self.normalize(l, Context::Value, phase)?),
+                    r: Box::new(self.normalize(r, Context::Value, phase)?),
+                },
+                NodeKind::CmpAny { name } => NodeKind::CmpAny { name: *name },
+                NodeKind::Arith { op, l, r } => NodeKind::Arith {
+                    op: *op,
+                    l: Box::new(self.normalize(l, Context::Value, phase)?),
+                    r: Box::new(self.normalize(r, Context::Value, phase)?),
+                },
+                NodeKind::Scope { l, r, origin } => NodeKind::Scope {
+                    l: Box::new(self.normalize(l, context, phase)?),
+                    r: Box::new(self.normalize(r, Context::Neutral, phase)?),
+                    origin: match origin {
+                        Some(origin) => Some(Box::new(self.normalize(origin, Context::Neutral, phase)?)),
+                        None => None,
+                    },
+                },
+                NodeKind::Hop { l, r } => NodeKind::Hop {
+                    l: Box::new(self.normalize(l, Context::Value, phase)?),
+                    r: Box::new(self.normalize(r, Context::Neutral, phase)?),
+                },
+                NodeKind::SetHop { rel } => NodeKind::SetHop { rel: *rel },
+                NodeKind::Call { callee, args } => NodeKind::Call {
+                    callee: *callee,
+                    args: args
+                        .iter()
+                        .map(|arg| self.normalize(arg, Context::Value, phase))
+                        .collect::<Result<Vec<_>, _>>()?,
+                },
+                // The three head arms below share ONE resolver and ONE descriptor table. The
+                // descriptor's canonical spelling is bound back into the node, so every emitter
+                // retrieves the object that was checked here and can hold no second table.
+                NodeKind::Fold { op, operand } => {
+                    let spelling = self.spelling(*op).to_string();
+                    let operand_context = if spelling == "#" { Context::Mask } else { Context::Value };
+                    let operand = self.normalize(operand, operand_context, phase)?;
+                    let desc = self.resolve_head(&spelling, Form::Fold, &operand, line)?;
+                    let op = self.intern(desc.spelling());
+                    NodeKind::Fold { op, operand: Box::new(operand) }
+                }
+                NodeKind::ScanExpr { op, operand } => {
+                    let spelling = self.spelling(*op).to_string();
+                    let operand_context = if spelling == "#" { Context::Mask } else { Context::Value };
+                    let operand = self.normalize(operand, operand_context, phase)?;
+                    let desc = self.resolve_head(&spelling, Form::Scan, &operand, line)?;
+                    let plus = self.intern("+");
+                    match desc.machine().map(|machine| machine.kind) {
+                        // running cardinality over the checked presence stream
+                        Some(MachineKind::Count) => NodeKind::ScanExpr {
+                            op: plus,
+                            operand: Box::new(Self::scoped_presence(operand)),
+                        },
+                        // state (sum,count) projected per prefix, never a homogeneous scanl1
+                        Some(MachineKind::Average) => {
+                            let numerator = Node::new(
+                                NodeKind::ScanExpr {
+                                    op: plus,
+                                    operand: Box::new(operand.clone()),
+                                },
+                                line,
+                            );
+                            let denominator = Node::new(
+                                NodeKind::ScanExpr {
+                                    op: plus,
+                                    operand: Box::new(Self::scoped_presence(operand)),
+                                },
+                                line,
+                            );
+                            NodeKind::Arith {
+                                op: ArithOp::Div,
+                                l: Box::new(numerator),
+                                r: Box::new(denominator),
+                            }
+                        }
+                        None => NodeKind::ScanExpr {
+                            op: self.intern(desc.spelling()),
+                            operand: Box::new(operand),
+                        },
+                    }
+                }
+                NodeKind::ScanAlong { op, col, order } => {
+                    let spelling = self.spelling(*op).to_string();
+                    let col_context = if spelling == "#" { Context::Mask } else { Context::Value };
+                    let col = self.normalize(col, col_context, phase)?;
+                    let order = self.normalize(order, Context::Value, phase)?;
+                    let desc = self.resolve_head(&spelling, Form::ScanAlong, &col, line)?;
+                    let plus = self.intern("+");
+                    match desc.machine().map(|machine| machine.kind) {
+                        Some(MachineKind::Count) => NodeKind::ScanAlong {
+                            op: plus,
+                            col: Box::new(Self::scoped_presence(col)),
+                            order: Box::new(order),
+                        },
+                        Some(MachineKind::Average) => {
+                            let numerator = Node::new(
+                                NodeKind::ScanAlong {
+                                    op: plus,
+                                    col: Box::new(col.clone()),
+                                    order: Box::new(order.clone()),
+                                },
+                                line,
+                            );
+                            let denominator = Node::new(
+                                NodeKind::ScanAlong {
+                                    op: plus,
+                                    col: Box::new(Self::scoped_presence(col)),
+                                    order: Box::new(order),
+                                },
+                                line,
+                            );
+                            NodeKind::Arith {
+                                op: ArithOp::Div,
+                                l: Box::new(numerator),
+                                r: Box::new(denominator),
+                            }
+                        }
+                        None => NodeKind::ScanAlong {
+                            op: self.intern(desc.spelling()),
+                            col: Box::new(col),
+                            order: Box::new(order),
+                        },
+                    }
+                }
+                NodeKind::IotaX(inner) => {
+                    NodeKind::IotaX(Box::new(self.normalize(inner, Context::Value, phase)?))
+                }
+                NodeKind::Shape(items) => NodeKind::Shape(
+                    items
+                        .iter()
+                        .map(|item| self.normalize(item, Context::Value, phase))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                NodeKind::Tuple(items) => NodeKind::Tuple(
+                    items
+                        .iter()
+                        .map(|item| self.normalize(item, Context::Value, phase))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                NodeKind::To { shape, poured } => NodeKind::To {
+                    shape: Box::new(self.normalize(shape, Context::Value, phase)?),
+                    poured: match poured {
+                        Some(poured) => Some(Box::new(self.normalize(poured, Context::Value, phase)?)),
+                        None => None,
+                    },
+                },
+                NodeKind::Grade { key, desc } => NodeKind::Grade {
+                    key: Box::new(self.normalize(key, Context::Value, phase)?),
+                    desc: *desc,
+                },
+                NodeKind::Top { k, inner } => NodeKind::Top {
+                    k: *k,
+                    inner: Box::new(self.normalize(inner, Context::Neutral, phase)?),
+                },
+                NodeKind::Pipe { src, stages } => NodeKind::Pipe {
+                    src: Box::new(self.normalize(src, Context::Neutral, phase)?),
+                    stages: stages
+                        .iter()
+                        .map(|stage| self.normalize(stage, Context::Neutral, phase))
+                        .collect::<Result<Vec<_>, _>>()?,
+                },
+                NodeKind::OrderBy { key, desc } => NodeKind::OrderBy {
+                    key: Box::new(self.normalize(key, Context::Value, phase)?),
+                    desc: *desc,
+                },
+                NodeKind::Take { k } => NodeKind::Take { k: *k },
+                NodeKind::Expand(inner) => {
+                    NodeKind::Expand(Box::new(self.normalize(inner, Context::Value, phase)?))
+                }
+                NodeKind::CrossV { f, a, b } => NodeKind::CrossV {
+                    f: *f,
+                    a: Box::new(self.normalize(a, Context::Value, phase)?),
+                    b: Box::new(self.normalize(b, Context::Value, phase)?),
+                },
+                NodeKind::Binder { name, source } => NodeKind::Binder {
+                    name: *name,
+                    source: Box::new(self.normalize(source, Context::Value, phase)?),
+                },
+                NodeKind::EAssign { op, target, rhs } => NodeKind::EAssign {
+                    op: *op,
+                    target: Box::new(self.normalize(target, Context::Neutral, TracePhase::Effect)?),
+                    rhs: Box::new(self.normalize(rhs, Context::Value, TracePhase::Effect)?),
+                },
+                NodeKind::EAdd(symbol) => NodeKind::EAdd(*symbol),
+                NodeKind::EDel(symbol) => NodeKind::EDel(*symbol),
+                NodeKind::EDespawn => NodeKind::EDespawn,
+                NodeKind::ESpawn { what, count, at } => NodeKind::ESpawn {
+                    what: Box::new(self.normalize(what, Context::Value, TracePhase::Effect)?),
+                    count: match count {
+                        Some(count) => Some(Box::new(self.normalize(
+                            count,
+                            Context::Value,
+                            TracePhase::Effect,
+                        )?)),
+                        None => None,
+                    },
+                    at: match at {
+                        Some(at) => Some(Box::new(self.normalize(
+                            at,
+                            Context::Value,
+                            TracePhase::Effect,
+                        )?)),
+                        None => None,
+                    },
+                },
+                NodeKind::EVerb { name, args } => NodeKind::EVerb {
+                    name: *name,
+                    args: args
+                        .iter()
+                        .map(|arg| self.normalize(arg, Context::Value, TracePhase::Effect))
+                        .collect::<Result<Vec<_>, _>>()?,
+                },
+                NodeKind::EVia { f, col } => NodeKind::EVia {
+                    f: *f,
+                    col: Box::new(self.normalize(col, Context::Value, TracePhase::Effect)?),
+                },
+                NodeKind::Stmt { sel, effects, rule, cont, elided } => NodeKind::Stmt {
+                    sel: match sel {
+                        Some(sel) => Some(Box::new(self.normalize(
+                            sel,
+                            Context::Mask,
+                            TracePhase::Predicate,
+                        )?)),
+                        None => None,
+                    },
+                    effects: effects
+                        .iter()
+                        .map(|effect| self.normalize(effect, Context::Neutral, TracePhase::Effect))
+                        .collect::<Result<Vec<_>, _>>()?,
+                    rule: *rule,
+                    cont: *cont,
+                    elided: *elided,
+                },
+                NodeKind::DefStmt { name, body } => NodeKind::DefStmt {
+                    name: *name,
+                    body: Box::new(self.normalize(body, Context::Neutral, phase)?),
+                },
+                NodeKind::Query(inner) => NodeKind::Query(Box::new(self.normalize(
+                    inner,
+                    Context::Neutral,
+                    TracePhase::Predicate,
+                )?)),
+                NodeKind::Compr { sel, effect, rest } => NodeKind::Compr {
+                    sel: Box::new(self.normalize(sel, Context::Mask, TracePhase::Predicate)?),
+                    effect: Box::new(self.normalize(effect, Context::Neutral, TracePhase::Effect)?),
+                    rest: rest
+                        .iter()
+                        .map(|item| {
+                            let context = if matches!(&item.kind, NodeKind::Binder { .. }) {
+                                Context::Value
+                            } else {
+                                Context::Mask
+                            };
+                            self.normalize(item, context, TracePhase::Predicate)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                },
+                NodeKind::Program(items) => NodeKind::Program(
+                    items
+                        .iter()
+                        .map(|item| self.normalize(item, Context::Neutral, TracePhase::Predicate))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+            };
+            Ok(Node::new(kind, line))
+        }
+    }
+
+    fn bqn_legal(name: &str) -> bool {
+        let bytes = name.as_bytes();
+        !bytes.is_empty()
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1..]
+                .iter()
+                .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+    }
+
+    fn bqn_var(reg: &Registry, index: usize) -> String {
+        let name = &reg.ents[index].name;
+        if !bqn_legal(name) {
+            return format!("jp{}", index);
+        }
+        let mut chars = name.chars();
+        let Some(first) = chars.next() else { return String::new() };
+        let mut value = String::with_capacity(name.len());
+        value.push(first.to_ascii_lowercase());
+        value.push_str(chars.as_str());
+        value
+    }
+
+    // Foundness itself is no longer sealed here: every hop and bare-rel guard emits
+    // relationship::bqn_found at source, so a respelling can never silently disarm the
+    // exact-¯1 sentinel rule.  What remains is the write boundary.
+    fn seal_relationship_writes(bqn: String, reg: &Registry) -> Result<String, Diag> {
+        // A computed relationship update is stage -> validate -> publish.  The original update
+        // never executes when the assertion refuses, so the world remains at its pre-statement
+        // value.  Fixture `←` bindings were already sealed by registry::reg_load.
+        let mut serial = 0usize;
+        let mut output = String::with_capacity(bqn.len() + 512);
+        'line: for line in bqn.lines() {
+            let trimmed = line.trim_start();
+            for (index, entry) in reg.ents.iter().enumerate() {
+                let (carrier, functional) = match &entry.kind {
+                    RegEntryKind::Rel { key_of, .. } => (
+                        crate::relationship::carrier_for(reg, key_of.as_deref())?,
+                        true,
+                    ),
+                    RegEntryKind::SRel { key_of, inv_of, .. } if inv_of.is_none() => (
+                        crate::relationship::carrier_for(reg, key_of.as_deref())?,
+                        false,
+                    ),
+                    _ => continue,
+                };
+                let variable = bqn_var(reg, index);
+                let prefix = format!("{} ↩ ", variable);
+                let Some(rhs) = trimmed.strip_prefix(&prefix) else { continue };
+                // subject role: BQN reads an uppercase initial as a Function, so the staged
+                // commit binding must be lowercase like every other generated name
+                let stage = format!("anoRelStage{}", serial);
+                serial += 1;
+                output.push_str(&format!("{} ← {}\n", stage, rhs));
+                let expression = if functional { stage.clone() } else { format!("∾{}", stage) };
+                let predicate = crate::relationship::bqn_validity(&expression, carrier, functional);
+                output.push_str(&format!(
+                    "\"relationship {}\" ! ∧˜´⌽(1∾({}))\n",
+                    entry.name, predicate
+                ));
+                output.push_str(&format!("{} ↩ {}\n", variable, stage));
+                continue 'line;
+            }
+            output.push_str(line);
+            output.push('\n');
+        }
+        Ok(output)
+    }
+
+    fn emit_trace_uses(mut bqn: String, plan: &TracePlan, enabled: bool) -> String {
+        if !enabled || (plan.uses().is_empty() && plan.alias_lines().is_empty()) {
+            return bqn;
+        }
+        let marker = "\n# expectations\n";
+        let mut block = String::from("\n# semantic relationship-use domains\n");
+        for use_ in plan.uses() {
+            block.push_str(&format!(
+                "•Out anoTraceSep∾\"TRACE-USE {} {}:{} {} {} {}\"\n",
+                use_.id.0,
+                use_.site,
+                use_.line,
+                use_.phase.word(),
+                use_.domain.word(),
+                use_.relation
+            ));
+        }
+        // one line per `^name` consultation: which mechanism answered, and at which versions
+        for line in plan.alias_lines() {
+            block.push_str(&format!("•Out anoTraceSep∾\"TRACE-ALIAS {}\"\n", line));
+        }
+        if let Some(position) = bqn.find(marker) {
+            bqn.insert_str(position, &block);
+        } else {
+            bqn.push_str(&block);
+        }
+        bqn
+    }
+
+    fn ordered_mean(mut bqn: String) -> String {
+        if !bqn.contains("AnoAvg") {
+            return bqn;
+        }
+        bqn = bqn.replace("AnoAvg", "AnoSemAverage");
+        let declaration = "AnoSemAverage ← {(+´𝕩)÷≠𝕩}\n";
+        let marker = "anoSel ← ⟨⟩\n";
+        if let Some(position) = bqn.find(marker) {
+            bqn.insert_str(position + marker.len(), declaration);
+        } else {
+            bqn.insert_str(0, declaration);
+        }
+        bqn
+    }
+
+
+    pub(super) fn emit(
+        prog: &Node,
+        reg: &Registry,
+        dirs: &Directives,
+        it: &Interner,
+        aliases: AliasSnapshot,
+    ) -> Result<String, Diag> {
+        crate::relationship::validate_registry(reg)?;
+        aliases.validate(reg)?;
+        let mut normalizer = Normalizer::new(reg, it, aliases);
+        let program = normalizer.normalize(prog, Context::Neutral, TracePhase::Predicate)?;
+        normalizer.refuse_reserved(prog)?;
+        // the alias plan crosses into the lowerer, which mints one record per staged crossing
+        let plan = std::mem::take(&mut normalizer.trace);
+        let (mut bqn, plan) = emit_lowered(&program, &normalizer.reg, dirs, &normalizer.it, plan)?;
+        bqn = ordered_mean(bqn);
+        bqn = reducer::left_fold_glyphs(bqn);
+        bqn = seal_relationship_writes(bqn, &normalizer.reg)?;
+        bqn = emit_trace_uses(bqn, &plan, dirs.trace);
+        Ok(bqn)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::alias::AliasEnvironment;
+
+        // Two Num columns over three rows; Silver is the effect target everywhere.
+        fn registry() -> Registry {
+            let col = |name: &str, nums: Vec<f64>| RegEntry {
+                name: name.to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Col {
+                    ty: ColType::Num,
+                    uniq: false,
+                    nums,
+                    syms: Vec::new(),
+                    pres: None,
+                    rng: None,
+                },
+            };
+            Registry {
+                n: 3,
+                ents: vec![col("Gold", vec![1.0, 2.0, 3.0]), col("Silver", vec![0.0, 0.0, 0.0])],
+                ..Registry::default()
+            }
+        }
+
+        // Inputs: Ano source. Outputs: the parsed program and the interner that holds its symbols.
+        fn program(source: &str) -> (Node, Interner) {
+            let mut it = Interner::new();
+            let toks = crate::lex::lex(source.as_bytes(), false, &mut it).expect("lex");
+            let prog = crate::parse::parse(&toks, &mut it).expect("parse");
+            (prog, it)
+        }
+
+        fn nodes(node: &Node, out: &mut Vec<Node>) {
+            out.push(node.clone());
+            for kid in super::super::children(node) {
+                nodes(kid, out);
+            }
+        }
+
+        // The stems of every Alias node in a tree, in traversal order.
+        fn alias_stems(normalizer: &Normalizer, node: &Node) -> Vec<String> {
+            let mut all = Vec::new();
+            nodes(node, &mut all);
+            all.iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Alias { look: symbol, .. } => Some(normalizer.spelling(*symbol).to_string()),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        fn name_stems(normalizer: &Normalizer, node: &Node) -> Vec<String> {
+            let mut all = Vec::new();
+            nodes(node, &mut all);
+            all.iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Name(symbol) => Some(normalizer.spelling(*symbol).to_string()),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        fn normalized(source: &str, environment: &AliasEnvironment, reg: &Registry) -> (Normalizer, Node) {
+            let (prog, it) = program(source);
+            let mut normalizer = Normalizer::new(reg, &it, environment.snapshot(reg).expect("snapshot"));
+            let out = normalizer
+                .normalize(&prog, Context::Neutral, TracePhase::Predicate)
+                .expect("normalize");
+            (normalizer, out)
+        }
+
+        /* ---------- folds, scans, and the validity channel ---------- */
+
+        // Gold/Silver numeric, Burning/Path masks, threat a registered reducer.
+        fn fixture() -> Registry {
+            let mut reg = registry();
+            let mask = |name: &str, nums: Vec<f64>| RegEntry {
+                name: name.to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Col {
+                    ty: ColType::Bool,
+                    uniq: false,
+                    nums,
+                    syms: Vec::new(),
+                    pres: None,
+                    rng: None,
+                },
+            };
+            reg.ents.push(mask("Burning", vec![1.0, 0.0, 1.0]));
+            reg.ents.push(mask("Path", vec![1.0, 1.0, 0.0]));
+            reg.ents.push(RegEntry {
+                name: "threat".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Fn { body: Some("{𝕨⌈𝕩}".to_string()) },
+            });
+            reg
+        }
+
+        fn emitted_with(source: &str, reg: &Registry, dirs: &Directives) -> String {
+            let (prog, it) = program(source);
+            let environment = AliasEnvironment::for_registry(reg);
+            emit(&prog, reg, dirs, &it, environment.snapshot(reg).expect("snapshot")).expect("emit")
+        }
+
+        fn emitted(source: &str) -> String {
+            emitted_with(source, &fixture(), &Directives::default())
+        }
+
+        fn refused(source: &str) -> String {
+            let reg = fixture();
+            let (prog, it) = program(source);
+            let dirs = Directives::default();
+            let environment = AliasEnvironment::for_registry(&reg);
+            emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
+                .expect_err("must refuse")
+                .msg
+        }
+
+        // The statement body of an emission: the prelude and the fixture are not under test.
+        fn body(bqn: &str) -> String {
+            let start = bqn.find("\n# q1\n").expect("query");
+            let end = bqn.find("\n# expectations\n").expect("expectations");
+            bqn[start..end].to_string()
+        }
+
+        // The missing glyph bridge: `min\` lowers, and the numeric `&\` instance is the SAME
+        // operation, so the two spellings emit one byte-identical program.
+        #[test]
+        fn numeric_lesser_scan_lowers_through_one_descriptor() {
+            let long = emitted("min\\ Gold\n");
+            assert_eq!(body(&long), "\n# q1\nq1 ← (⌊`gold)\n•Show q1\n");
+            assert_eq!(emitted("&\\ Gold\n"), long);
+            assert_eq!(emitted("max\\ Gold\n"), emitted("|\\ Gold\n"));
+            // no seed and no manufactured infinity for the extrema
+            assert!(!long.contains('∞') && !long.contains("0∾") && !long.contains("1∾"));
+        }
+
+        // The mask instances keep their own scan glyphs; the carrier picks the operation.
+        #[test]
+        fn mask_scans_keep_the_boolean_instance() {
+            assert!(emitted("|\\ Burning\n").contains("q1 ← (∨`burning)"));
+            assert!(emitted("&\\ Burning\n").contains("q1 ← (∧`burning)"));
+        }
+
+        // The count machine consumes the presence stream of the SCOPE, so a scoped running
+        // count and a scoped running sum compress exactly the same rows.
+        #[test]
+        fn scoped_machines_scan_the_scoped_domain() {
+            assert!(emitted("#\\ Gold @ Path\n").contains("q1 ← (+`path/(¬(¬(1¨gold))))"));
+            // the mean's two prefix sums sit under one compression, so they align by construction
+            assert!(emitted("avg\\ Gold @ Path\n")
+                .contains("q1 ← ((+`path/gold)÷(+`path/(¬(¬(1¨gold)))))"));
+            // a numeric operand is the all-true membership stream: zeros do not skip
+            assert!(emitted("#\\ Gold\n").contains("q1 ← (+`(¬(¬(1¨gold))))"));
+        }
+
+        // scan(f) col along ord resolves through the same table: the mean desugaring's two
+        // operands carry one and the same order, so composing them is one domain.
+        #[test]
+        fn scan_along_resolves_through_the_same_table() {
+            assert!(emitted("scan(avg) Gold along Silver\n")
+                .contains("q1 ← ((+`(silver)⊏gold)÷(+`(silver)⊏(¬(¬(1¨gold)))))"));
+            assert!(emitted("scan(&) Burning along Silver\n").contains("∧`"));
+            assert!(emitted("scan(threat) Gold along Silver\n").contains("Fn_threat`"));
+        }
+
+        // One carrier gate for every form: the fold path's refusal now covers scan and along.
+        #[test]
+        fn carrier_gates_agree_across_forms() {
+            for source in ["+\\ Burning\n", "*\\ Burning\n", "avg\\ Burning\n", "+/ Burning\n"] {
+                let message = refused(source);
+                assert!(
+                    message.contains("is not defined on Mask"),
+                    "{}: {}",
+                    source,
+                    message
+                );
+            }
+            assert!(refused("max/ Burning\n").contains("reducer 'max' is not defined on Mask"));
+            assert!(refused("threat\\ Burning\n").contains("reducer 'threat' is not defined on Mask"));
+            // a name is admitted by the registry, never by being a name
+            assert!(refused("nope/ Gold\n").contains("unknown reducer 'nope'"));
+            assert!(refused("nope\\ Gold\n").contains("unknown reducer 'nope'"));
+        }
+
+        // Greater/Lesser is carrier-directed with no coercion; a value position refuses mixtures.
+        #[test]
+        fn mixed_carrier_greater_lesser_refuses_in_value_position() {
+            let message = refused("Silver = (Gold | Burning)\n");
+            assert!(
+                message.contains("'|' mixes mask and number operands; there is no carrier coercion"),
+                "{}",
+                message
+            );
+            assert!(refused("Silver = (Gold & Burning)\n").contains("'&' mixes mask and number"));
+            // selection position keeps the presence reading — that is selection, not Greater
+            assert!(emitted("Burning & Gold , +Path\n").contains("burning∧"));
+        }
+
+        // A per-fiber scan needs a ragged result representation that does not exist yet.
+        #[test]
+        fn scan_over_fibers_refuses_precisely() {
+            let mut reg = fixture();
+            reg.ents.push(RegEntry {
+                name: "r".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::SRel {
+                    fib: vec![vec![0.0], vec![], vec![1.0, 2.0]],
+                    key_of: None,
+                    inv_of: None,
+                },
+            });
+            let (prog, it) = program("+\\ r'.Gold\n");
+            let environment = AliasEnvironment::for_registry(&reg);
+            let message = emit(
+                &prog,
+                &reg,
+                &Directives::default(),
+                &it,
+                environment.snapshot(&reg).expect("snapshot"),
+            )
+            .expect_err("must refuse")
+            .msg;
+            assert!(message.contains("scan over fibers is not yet supported"), "{}", message);
+        }
+
+        // A12 at the only layer that can express runtime skipping: the guard is staged once and
+        // every observation runs under it.  Bare, labelled, and pinned paths all consume it.
+        #[test]
+        fn identityless_empty_fold_cannot_expose_its_placeholder() {
+            let bare = emitted("max/ Gold @ Burning\n");
+            assert!(bare.contains("q1v ← (0<(AnoLeftSum burning))"), "{}", bare);
+            assert!(bare.contains("•Show⍟q1v q1"), "{}", bare);
+
+            let mut dirs = Directives::default();
+            dirs.label = true;
+            let labelled = emitted_with("max/ Gold @ Burning\n", &fixture(), &dirs);
+            // one conditional carries BOTH the 0x1D tag and the value: a false guard emits neither
+            assert!(
+                labelled.contains("{•Out (@+29)∾\"q1@1\" ⋄ •Show 𝕩}⍟q1v q1"),
+                "{}",
+                labelled
+            );
+            assert!(!labelled.contains("\n•Out (@+29)∾\"q1@1\"\n"), "{}", labelled);
+
+            let mut pinned = Directives::default();
+            pinned.expects.push(crate::Expect::Out { vals: Vec::new() });
+            let compared = emitted_with("max/ Gold @ Burning\n", &fixture(), &pinned);
+            // the comparator sees the guarded ravel, so the placeholder is unpinnable
+            assert!(compared.contains("q1v/⥊q1"), "{}", compared);
+            assert!(!compared.contains("} ⥊q1"), "{}", compared);
+        }
+
+        // Identity-bearing folds keep their real scalar results and stage no guard at all.
+        #[test]
+        fn identity_bearing_folds_stay_unguarded() {
+            for source in ["+/ Gold @ Burning\n", "*/ Gold @ Burning\n", "#/ Gold @ Burning\n"] {
+                let bqn = emitted(source);
+                assert!(!bqn.contains("q1v"), "{}: {}", source, bqn);
+                assert!(bqn.contains("•Show q1"), "{}: {}", source, bqn);
+            }
+        }
+
+        // The master invariant: a query with no validity guard stages exactly as it always did.
+        // This is the 038 control, pinned as a string.
+        #[test]
+        fn unguarded_mask_scan_emits_byte_identically() {
+            assert_eq!(body(&emitted("|\\ Burning @ Path\n")), "\n# q1\nq1 ← (∨`path/burning)\n•Show q1\n");
+            assert_eq!(body(&emitted("|/ Burning @ Path\n")), "\n# q1\nq1 ← (AnoLeftOr (path/burning))\n•Show q1\n");
+            assert_eq!(body(&emitted("&/ Burning @ Path\n")), "\n# q1\nq1 ← (AnoLeftAnd (path/burning))\n•Show q1\n");
+        }
+
+        // An overlay miss keeps the sigiled request as an Alias node; the bare spelling never
+        // becomes one.  This is completion gate 1: node kind, not source text.
+        #[test]
+        fn normalizer_keeps_fallback_alias_distinct() {
+            let reg = registry();
+            let environment = AliasEnvironment::for_registry(&reg);
+            let (normalizer, out) = normalized("Gold > ^Nope , Silver = 0\n", &environment, &reg);
+            assert_eq!(alias_stems(&normalizer, &out), vec!["Nope".to_string()]);
+
+            let (normalizer, out) = normalized("Gold > Nope , Silver = 0\n", &environment, &reg);
+            assert!(alias_stems(&normalizer, &out).is_empty());
+            assert!(name_stems(&normalizer, &out).iter().any(|n| n == "Nope"));
+        }
+
+        // A binding entry moves the lookup name to the target and keeps the Alias kind.
+        #[test]
+        fn dynamic_alias_entry_resolves_to_target_symbol() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_binding(&reg, "focus", "Gold").expect("install");
+            let (normalizer, out) = normalized("^focus , Silver = 0\n", &environment, &reg);
+            assert_eq!(alias_stems(&normalizer, &out), vec!["Gold".to_string()]);
+        }
+
+        // A mask entry materializes one synthetic AliasMask entry and records its reserved name.
+        #[test]
+        fn dynamic_alias_mask_materializes_reserved_entry() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).expect("install");
+            let (normalizer, out) = normalized("^hot , Silver = 0\n", &environment, &reg);
+            assert_eq!(alias_stems(&normalizer, &out), vec!["AnoDynMask0".to_string()]);
+            assert!(normalizer.generated.contains("AnoDynMask0"));
+            let entry = normalizer
+                .reg
+                .ents
+                .iter()
+                .find(|e| e.name == "AnoDynMask0")
+                .expect("materialized entry");
+            assert!(matches!(&entry.kind, RegEntryKind::AliasMask { mask } if mask == &[1.0, 0.0, 1.0]));
+        }
+
+        // An overlay entry spelled like a column is invisible to the bare spelling (work 3).
+        #[test]
+        fn bare_name_never_consults_overlay() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_binding(&reg, "gold", "Silver").expect("install");
+            let (normalizer, out) = normalized("Gold , Silver = 0\n", &environment, &reg);
+            assert!(alias_stems(&normalizer, &out).is_empty());
+            assert!(name_stems(&normalizer, &out).iter().any(|n| n == "Gold"));
+        }
+
+        // The requested stems of every Alias node in a tree, in traversal order.
+        fn alias_reqs(normalizer: &Normalizer, node: &Node) -> Vec<String> {
+            let mut all = Vec::new();
+            nodes(node, &mut all);
+            all.iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Alias { req, .. } => Some(normalizer.spelling(*req).to_string()),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        // Completion gate: the overlay moves the lookup, never the source request.  A refusal
+        // reached through a moved `^focus` spells the sigiled stem and names the target it hit.
+        #[test]
+        fn resolved_alias_refusal_keeps_the_sigiled_request() {
+            let mut reg = registry();
+            reg.ents.push(RegEntry {
+                name: "spot".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Bind { kind: BindKind::Point, vals: vec![1.0, 2.0] },
+            });
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_binding(&reg, "focus", "spot").expect("install");
+
+            let (normalizer, out) = normalized("!^focus , Silver = 0\n", &environment, &reg);
+            assert_eq!(alias_stems(&normalizer, &out), vec!["spot".to_string()]);
+            assert_eq!(alias_reqs(&normalizer, &out), vec!["focus".to_string()]);
+
+            let (prog, it) = program("!^focus , Silver = 0\n");
+            let dirs = Directives::default();
+            let error = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
+                .expect_err("must refuse");
+            assert!(
+                error.msg.contains("'^focus' resolves to binding 'spot' (point), not a mask"),
+                "unexpected diagnostic: {}",
+                error.msg
+            );
+        }
+
+        // A resolver entity result materializes one synthetic Bind{Entity} entry; the node's
+        // requested stem still reads back as the source spelling.
+        #[test]
+        fn resolver_entity_materializes_reserved_bind_entry() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment
+                .install_resolver(
+                    &reg,
+                    "focus",
+                    "input.entity",
+                    &[("entity".to_string(), "1".to_string())],
+                )
+                .expect("install");
+            let (normalizer, out) = normalized("^focus , Silver = 0\n", &environment, &reg);
+            assert_eq!(alias_stems(&normalizer, &out), vec!["AnoDynEnt0".to_string()]);
+            assert_eq!(alias_reqs(&normalizer, &out), vec!["focus".to_string()]);
+            assert!(normalizer.generated.contains("AnoDynEnt0"));
+            let entry = normalizer
+                .reg
+                .ents
+                .iter()
+                .find(|e| e.name == "AnoDynEnt0")
+                .expect("materialized entry");
+            assert!(matches!(
+                &entry.kind,
+                RegEntryKind::Bind { kind: BindKind::Entity, vals } if vals == &[1.0]
+            ));
+        }
+
+        // One trace line per consultation naming the mechanism and the overlay version, and the
+        // master invariant: with the channel off the plan is byte-identical to the flagless one,
+        // so the block is purely appended.
+        #[test]
+        fn alias_trace_provenance_is_gated() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_binding(&reg, "focus", "Gold").expect("install");
+            let (prog, it) = program("^focus > 1 & ^Silver < 2 , Silver = 0\n");
+
+            let mut dirs = Directives::default();
+            let quiet = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
+                .expect("emit");
+            dirs.trace = true;
+            let traced = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
+                .expect("emit");
+
+            assert!(!quiet.contains("TRACE-ALIAS"), "{}", quiet);
+            let block = concat!(
+                "\n# semantic relationship-use domains\n",
+                "•Out anoTraceSep∾\"TRACE-ALIAS ^focus -> binding 'Gold', overlay v1\"\n",
+                "•Out anoTraceSep∾\"TRACE-ALIAS ^Silver -> bare fallback, overlay v1\"\n",
+            );
+            assert!(traced.contains(block), "{}", traced);
+            // the flag gates whole appended blocks; the lowered statement body is untouched
+            let body = |bqn: &str| {
+                let start = bqn.find("\n# s1\n").expect("statement");
+                bqn[start..bqn.find("\n# expectations\n").expect("expectations")].to_string()
+            };
+            assert_eq!(body(&traced.replace(block, "")), body(&quiet));
+        }
+
+        // Source may not spell a name this emission minted: the synthetic overlay content must
+        // not leak into bare lookup.
+        #[test]
+        fn reserved_synthetic_name_refuses() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).expect("install");
+            let (prog, it) = program("AnoDynMask0 & ^hot , Silver = 0\n");
+            let dirs = Directives::default();
+            let error = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
+                .expect_err("must refuse");
+            assert!(
+                error.msg.contains("reserved synthetic name 'AnoDynMask0'"),
+                "unexpected diagnostic: {}",
+                error.msg
+            );
+        }
+    }
+}
+
+/// Emit against an immutable dynamic-alias snapshot.  This is the host boundary used by Kore.
+pub fn emit_with_aliases(
+    prog: &Node,
+    reg: &Registry,
+    dirs: &Directives,
+    it: &Interner,
+    aliases: crate::alias::AliasSnapshot,
+) -> Result<String, Diag> {
+    normalize::emit(prog, reg, dirs, it, aliases)
+}
+
+/// Canonical public emission path.  Alias state is loaded once and frozen before any lowering.
+pub fn emit(
+    prog: &Node,
+    reg: &Registry,
+    dirs: &Directives,
+    it: &Interner,
+) -> Result<String, Diag> {
+    crate::relationship::validate_registry(reg)?;
+    let aliases = if dirs.aliases.is_empty() {
+        crate::alias::AliasEnvironment::for_registry(reg)
+    } else {
+        crate::alias::AliasEnvironment::load(&dirs.aliases, reg)?
+    };
+    emit_with_aliases(prog, reg, dirs, it, aliases.snapshot(reg)?)
 }

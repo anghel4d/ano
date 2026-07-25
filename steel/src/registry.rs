@@ -96,7 +96,7 @@ fn wname(w: &str, dstsz: usize, ln: i32) -> Result<String, Diag> {
     Ok(w.to_string())
 }
 
-// Inputs: an entry name or alias source word. Output: refusal when the lexer owns the word
+// Inputs: an entry name or spelling-alias source word. Output: refusal when the lexer owns the word
 // on either surface under the fold — the name is the address.
 fn wfree(w: &str, ln: i32) -> Result<(), Diag> {
     if lex::lex_reserved_fold(w) {
@@ -124,8 +124,8 @@ fn wuniq(reg: &Registry, name: &str, ln: i32) -> Result<(), Diag> {
     Ok(())
 }
 
-// Inputs: registry, alias source word. Output: refusal when an already declared alias
-// source folds equal — same rule as wuniq, per name kind.
+// Inputs: registry, spelling-alias source word. Output: refusal when an already declared
+// spelling-alias source folds equal — same rule as wuniq, per name kind.
 fn wuniq_alias(reg: &Registry, w: &str, ln: i32) -> Result<(), Diag> {
     for a in &reg.aliases {
         if names_eq(&a.from, w) {
@@ -206,8 +206,8 @@ fn seal_ty(kw: &str, name: &str, ty: ColType, nums: &[f64], ln: i32) -> Result<(
     Ok(())
 }
 
-// Inputs: registry, alias-table words, line, ja flag. Output: one alias row pushed — the
-// pure name alias, one hop, target unvalidated free text.
+// Inputs: registry, spelling-alias-table words, line, ja flag. Output: one AliasRow pushed —
+// the pure spelling alias, one hop, target unvalidated free text.
 fn push_alias(reg: &mut Registry, words: &[(usize, &str)], ln: i32, ja: bool) -> Result<(), Diag> {
     wfree(words[1].1, ln)?;
     wuniq_alias(reg, words[1].1, ln)?;
@@ -651,7 +651,7 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Fn { body } });
             }
 
-            // the name alias: one hop, no transitivity, outranked by real entries; `ja` and
+            // the spelling alias: one hop, no transitivity, outranked by real entries; `ja` and
             // 2-arity `as` fill one table — the ja spelling documents the JA surface
             "ja" => {
                 if nw != 3 {
@@ -814,6 +814,7 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
             _ => return Err(rerr(ln, format!("unknown kind '{}'", k))),
         }
     }
+    crate::relationship::validate_registry(&reg)?;
     Ok(reg)
 }
 
@@ -828,8 +829,8 @@ pub fn names_eq(a: &str, b: &str) -> bool {
 }
 
 // Inputs: registry, surface word. Output: entry INDEX — entry names first (declaration
-// order), then the alias table (one hop, no transitivity; a dangling target is None), both
-// under names_eq. Indices replace C's entry pointers everywhere downstream.
+// order), then the spelling-alias table (one hop, no transitivity; a dangling target is None),
+// both under names_eq. Indices replace C's entry pointers everywhere downstream.
 pub fn reg_find(reg: &Registry, name: &str) -> Option<usize> {
     if let Some(i) = find_ent(reg, name) {
         return Some(i);
@@ -906,6 +907,7 @@ fn dump_column(b: &mut String, kw: &str, name: &str, ty: ColType, nums: &[f64], 
 // Emits n, lattice, reap, entries, roles, then aliases in declaration order. Inverse fibers
 // recompute on load. fs_write_commit performs the staged replacement.
 pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
+    crate::relationship::validate_registry(reg)?;
     let mut b = String::new();
     let _ = writeln!(b, "n {}", reg.n);
     if reg.lat_w != 0 || reg.lat_h != 0 {

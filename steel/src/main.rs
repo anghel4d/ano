@@ -10,7 +10,7 @@ use std::process::ExitCode;
 
 use steel::{
     ANO_NAMESZ, BindKind, ColType, Diag, Directives, Expect, Interner, RegEntryKind, Registry,
-    TokKind, Toks, emit, fs, lex, num, parse, registry,
+    TokKind, Toks, alias, emit, fs, lex, num, parse, registry,
 };
 
 const MAXEXPECT: usize = 64;
@@ -40,6 +40,7 @@ fn run() -> i32 {
     let (mut label_flag, mut trace_flag) = (false, false);
     let mut rt_flag: Option<String> = None;
     let mut reg_flag: Option<String> = None;
+    let mut alias_flag: Option<String> = None;
     let mut dump_flag: Option<String> = None;
     let mut save_flag: Option<String> = None;
     let mut path: Option<String> = None;
@@ -80,6 +81,13 @@ fn run() -> i32 {
                 }
                 reg_flag = Some(args[i].clone());
             }
+            "--aliases" => {
+                i += 1;
+                if i >= args.len() {
+                    return usage();
+                }
+                alias_flag = Some(args[i].clone());
+            }
             s => {
                 let b = s.as_bytes();
                 if b.len() > 1 && b[0] == b'-' {
@@ -117,6 +125,13 @@ fn run() -> i32 {
         eprintln!("{}: {}", path, d.msg);
         return 2;
     }
+    if let Some(alias_path) = alias_flag {
+        dirs.aliases = alias_path;
+    } else if let Ok(alias_path) = std::env::var("ANO_ALIAS_FILE") {
+        if !alias_path.is_empty() {
+            dirs.aliases = alias_path;
+        }
+    }
 
     // registry: flag wins over directive. A '/'-bearing or .reg-suffixed spec is a literal
     // path against the source file's dir; a bare name resolves as <dir>/<name>.reg.
@@ -137,6 +152,9 @@ fn run() -> i32 {
             eprintln!("{}: registry path too long: {}", path, rspec);
             return 2;
         };
+        if dirs.aliases.is_empty() {
+            dirs.aliases = alias::sidecar_path(&regp.s).to_string_lossy().into_owned();
+        }
         reg = match registry::reg_load(&regp.s) {
             Ok(r) => r,
             Err(d) => {
@@ -276,10 +294,10 @@ fn run() -> i32 {
 }
 
 // Output: prints the usage line to stderr (trailing newline), returns 2. Byte-exact:
-// usage: steel [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano
+// usage: steel [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] [--aliases <path>] file.ano
 fn usage() -> i32 {
     eprintln!(
-        "usage: steel [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] file.ano"
+        "usage: steel [--tokens] [--emit] [--run] [--label] [--trace] [--dump <path>] [--save <path>] [--rt <path>] [--registry <path-or-name>] [--aliases <path>] file.ano"
     );
     2
 }
@@ -464,8 +482,9 @@ fn print_toks(w: &mut dyn std::io::Write, toks: &Toks, it: &Interner) -> std::io
 
 // Inputs: file stream, directive stream, registry, interner. Output: true when equal.
 // Invariants: both cursors skip Nl and Eof; kinds match exactly, nums compare ==; names
-// strcmp-equal pass, else ONLY Name/Alias kinds get the resolver — registry::reg_find on
-// both spellings must yield the same entry INDEX (values never fold).
+// strcmp-equal pass, else ONLY Name/Alias kinds get the spelling-alias resolver (the registry
+// `as`/`ja` table) — registry::reg_find on both spellings must yield the same entry INDEX
+// (values never fold); kinds match first, so a dynamic ^x never equals a bare x.
 fn same_stream(a: &Toks, b: &Toks, reg: &Registry, it: &Interner) -> bool {
     let (mut i, mut j) = (0usize, 0usize);
     loop {
@@ -482,8 +501,9 @@ fn same_stream(a: &Toks, b: &Toks, reg: &Registry, it: &Interner) -> bool {
             return false;
         }
         if a.name[i] != b.name[j] {
-            // only NAME/ALIAS payloads compare through the resolver — sym, string, and
-            // counter payloads are values, and values never fold (the case contract)
+            // only NAME/ALIAS payloads compare through the spelling-alias resolver — sym,
+            // string, and counter payloads are values, and values never fold (the case
+            // contract); the kind check above already keeps ^x distinct from x
             if a.kind[i] != TokKind::Name && a.kind[i] != TokKind::Alias {
                 return false;
             }

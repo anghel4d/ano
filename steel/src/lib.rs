@@ -3,12 +3,16 @@
 // skins) -> parse.rs (Pratt, 14 levels) -> emit.rs (BQN codegen); fs.rs serves main and registry;
 // num.rs owns numeric parsing and spelling.
 
+pub mod alias;
 pub mod emit;
 pub mod fs;
 pub mod lex;
 pub mod num;
 pub mod parse;
+pub mod reducer;
 pub mod registry;
+pub mod relationship;
+pub mod trace;
 
 pub const ANO_NAMESZ: usize = 256;
 
@@ -52,7 +56,7 @@ impl Symbol {
 
 // Dedup pool: one canonical copy per distinct spelling, stable for the pool's lifetime.
 // Iteration order never leaks into output (all observable orders are encounter order in Vecs).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Interner {
     map: std::collections::HashMap<String, u32>,
     spellings: Vec<String>,
@@ -158,8 +162,7 @@ pub enum TokKind {
     Grade,
     FoldKw, // fold
     ScanKw, // scan
-    Scan2,
-    Cross,
+Cross,
     Expand,
 }
 
@@ -226,7 +229,6 @@ impl TokKind {
             TokKind::Grade => "T_GRADE",
             TokKind::FoldKw => "T_FOLDKW",
             TokKind::ScanKw => "T_SCANKW",
-            TokKind::Scan2 => "T_SCAN2",
             TokKind::Cross => "T_CROSS",
             TokKind::Expand => "T_EXPAND",
         }
@@ -316,7 +318,7 @@ impl Node {
 
 // The one AST — full ADT of ano.h's NodeKind. C's nullable kid slots are Options; the char
 // op codes are the enums above; flag bits are named bools scoped to their variants
-// (F_DESC on Grade/OrderBy, F_SCAN2 on ScanExpr, F_RULE/F_CONT/F_ELIDED on Stmt).
+// (F_DESC on Grade/OrderBy and F_RULE/F_CONT/F_ELIDED on Stmt).
 // name payloads are Symbols (interned surface spellings; resolution happens at emit).
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
@@ -326,7 +328,10 @@ pub enum NodeKind {
     Sym(Symbol),                        // :Name, sigil stripped by lexer
     Str(Symbol),                        // body, no escapes
     Name(Symbol),                       // surface spelling, resolved at emit
-    Alias(Symbol),                      // ^name, sigil stripped
+    // ^name dynamic-alias request, sigil stripped. `look` is the name lowering resolves (the
+    // stem on bare fallback, the target on an overlay hit); `req` is always the requested stem,
+    // so a refusal can still spell `^req` after the overlay moved the lookup elsewhere.
+    Alias { look: Symbol, req: Symbol },
     Wild,                               // _
     // expressions
     Not(Box<Node>),
@@ -339,8 +344,11 @@ pub enum NodeKind {
     Hop { l: Box<Node>, r: Box<Node> }, // l . r; r is Name, SetHop (tick rewrite), or the chain nests in l
     SetHop { rel: Symbol },             // name'; C kids[0] was the same N_NAME — the Symbol carries it
     Call { callee: Symbol, args: Vec<Node> },
-    Fold { op: Symbol, operand: Box<Node> }, // op spelling "+","*","&","|","#","max","min","avg", or a reducer name; @scope binds INSIDE operand as Scope
-    ScanExpr { op: Symbol, operand: Box<Node>, scan2: bool },
+    // op carries the SURFACE spelling until normalize resolves the head against the operand
+    // carrier and rebinds it to the descriptor's canonical spelling (reducer::resolve_head);
+    // @scope binds INSIDE operand as Scope. Count and average leave as prefix-machine rewrites.
+    Fold { op: Symbol, operand: Box<Node> },
+    ScanExpr { op: Symbol, operand: Box<Node> },
     ScanAlong { op: Symbol, col: Box<Node>, order: Box<Node> },
     IotaX(Box<Node>),  // til expr
     Shape(Vec<Node>),  // 1-2 dims, each Num or Wild
@@ -380,7 +388,7 @@ impl NodeKind {
             NodeKind::Sym(..) => 2,
             NodeKind::Str(..) => 3,
             NodeKind::Name(..) => 4,
-            NodeKind::Alias(..) => 5,
+            NodeKind::Alias { .. } => 5,
             NodeKind::Wild => 6,
             NodeKind::Not(..) => 7,
             NodeKind::And(..) => 8,
@@ -486,7 +494,8 @@ pub enum RegEntryKind {
     // Set-valued rel: fibers as written (count NOT checked against n). inv_of = the rel word
     // as written when this is an inverse read (fibers recomputed at load, never dumped).
     SRel { fib: Vec<Vec<f64>>, inv_of: Option<String>, key_of: Option<String> },
-    // A stored mask VALUE (the `alias` line) — not a name alias (that table is Registry.aliases).
+    // A static alias mask: a stored mask VALUE (the `alias` line) — not a spelling alias (that
+    // table is Registry.aliases) and not the dynamic ^name overlay.
     AliasMask { mask: Vec<f64> },
     // Named binding: entity/num 1 value, point 2, mask n, vec any count.
     Bind { kind: BindKind, vals: Vec<f64> },
@@ -508,7 +517,7 @@ pub struct RegEntry {
     pub kind: RegEntryKind,
 }
 
-// One row of the name-alias table (`as`/`ja` two-word lines): surface word -> entry name,
+// One row of the spelling-alias table (`as`/`ja` two-word lines): surface word -> entry name,
 // target unvalidated free text; ja keeps the declared spelling so dumps round-trip.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AliasRow {
@@ -526,7 +535,7 @@ pub struct Registry {
     pub lat_w: i32,
     pub lat_h: i32,
     pub ents: Vec<RegEntry>,
-    pub aliases: Vec<AliasRow>,
+    pub aliases: Vec<AliasRow>, // the spelling-alias table (`as`/`ja`), not the dynamic ^name overlay
     pub roles: Vec<(String, String)>, // (role word, col word) as written
     pub reap: Option<Reap>,
 }
@@ -549,6 +558,7 @@ pub enum Expect {
 #[derive(Debug, Clone)]
 pub struct Directives {
     pub registry: String,
+    pub aliases: String, // --aliases: the dynamic-alias overlay sidecar path ("" = none)
     pub expects: Vec<Expect>,
     pub expect_n: i32,
     pub ja: bool,
@@ -562,6 +572,7 @@ impl Default for Directives {
     fn default() -> Directives {
         Directives {
             registry: String::new(),
+            aliases: String::new(),
             expects: Vec::new(),
             expect_n: -1,
             ja: false,

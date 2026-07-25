@@ -1,0 +1,7 @@
+-- Refused relationship commit, the fractional face: an unkeyed target is a row index, so 3/2
+-- names no row. Same staged assertion as the negative face, a different carrier clause.
+-- expect: Error: relationship mentor
+-- expect-exit: 1
+--! registry save-rel-fraction-world
+
+Marked , mentor = 3 / 2

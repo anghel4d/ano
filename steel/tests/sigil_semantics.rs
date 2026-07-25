@@ -1,0 +1,472 @@
+// Emitted-plan integration tests for todo/01 sigil semantics: `name` versus `^name`.
+// Everything runs in process through the public boundary (lex -> parse -> emit_with_aliases)
+// with an in-memory AliasEnvironment; no sidecar files, no demo fixtures, no .reg files.
+
+use steel::alias::AliasEnvironment;
+use steel::emit::emit_with_aliases;
+use steel::lex::lex;
+use steel::parse::parse;
+use steel::{
+    AliasRow, BindKind, ColType, Diag, Directives, Interner, RegEntry, RegEntryKind, Registry,
+};
+
+// The shared world: three rows, one column of each mask-interpretation kind (boolean, sparse,
+// total), three bindings (two entity, one point), one STATIC alias-mask fixture, one
+// spelling-alias row.
+fn registry() -> Registry {
+    Registry {
+        n: 3,
+        ents: vec![
+            RegEntry {
+                name: "Flag".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Col {
+                    ty: ColType::Bool,
+                    uniq: false,
+                    nums: vec![1.0, 0.0, 1.0],
+                    syms: Vec::new(),
+                    pres: None,
+                    rng: None,
+                },
+            },
+            RegEntry {
+                name: "Sca".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Col {
+                    ty: ColType::Num,
+                    uniq: false,
+                    nums: vec![1.0, 2.0, 3.0],
+                    syms: Vec::new(),
+                    pres: Some(vec![1.0, 0.0, 1.0]),
+                    rng: None,
+                },
+            },
+            RegEntry {
+                name: "Gold".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Col {
+                    ty: ColType::Num,
+                    uniq: false,
+                    nums: vec![1.0, 2.0, 3.0],
+                    syms: Vec::new(),
+                    pres: None,
+                    rng: None,
+                },
+            },
+            RegEntry {
+                name: "Silver".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Col {
+                    ty: ColType::Num,
+                    uniq: false,
+                    nums: vec![4.0, 5.0, 6.0],
+                    syms: Vec::new(),
+                    pres: None,
+                    rng: None,
+                },
+            },
+            RegEntry {
+                name: "anchor".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Bind { kind: BindKind::Entity, vals: vec![1.0] },
+            },
+            RegEntry {
+                name: "beacon".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Bind { kind: BindKind::Entity, vals: vec![2.0] },
+            },
+            RegEntry {
+                name: "spot".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Bind { kind: BindKind::Point, vals: vec![1.0, 2.0] },
+            },
+            RegEntry {
+                name: "cursor".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::AliasMask { mask: vec![1.0, 0.0, 1.0] },
+            },
+        ],
+        aliases: vec![AliasRow { from: "X".to_string(), to: "Gold".to_string(), ja: false }],
+        ..Registry::default()
+    }
+}
+
+// Inputs: source, a registry, a live overlay, the emission directives. Output: the emitted BQN,
+// or the refusal. One emission per call: a fresh interner and a snapshot frozen at the boundary.
+fn plan_with(
+    src: &str,
+    reg: &Registry,
+    env: &AliasEnvironment,
+    dirs: &Directives,
+) -> Result<String, Diag> {
+    let mut it = Interner::new();
+    let toks = lex(src.as_bytes(), false, &mut it)?;
+    let prog = parse(&toks, &mut it)?;
+    let snap = env.snapshot(reg)?;
+    emit_with_aliases(&prog, reg, dirs, &it, snap)
+}
+
+fn plan(src: &str, reg: &Registry, env: &AliasEnvironment) -> Result<String, Diag> {
+    plan_with(src, reg, env, &Directives::default())
+}
+
+fn ok(src: &str, reg: &Registry, env: &AliasEnvironment) -> String {
+    match plan(src, reg, env) {
+        Ok(text) => text,
+        Err(d) => panic!("{}: {}", src, d.msg),
+    }
+}
+
+fn err(src: &str, reg: &Registry, env: &AliasEnvironment) -> String {
+    match plan(src, reg, env) {
+        Ok(_) => panic!("{}: expected a refusal", src),
+        Err(d) => d.msg,
+    }
+}
+
+// Gate 4: with an empty overlay `^name` is the bare lookup, so the backend text is identical.
+#[test]
+fn fallback_plans_are_byte_identical() {
+    let reg = registry();
+    let env = AliasEnvironment::for_registry(&reg);
+    let pairs = [
+        // mask position, one pair per mask interpretation: boolean, sparse, total
+        ("Flag , Silver = 0", "^Flag , Silver = 0"),
+        ("!Flag , Silver = 0", "!^Flag , Silver = 0"),
+        ("Sca , Silver = 0", "^Sca , Silver = 0"),
+        ("!Sca , Silver = 0", "!^Sca , Silver = 0"),
+        ("Gold , Silver = 0", "^Gold , Silver = 0"),
+        ("!Gold , Silver = 0", "!^Gold , Silver = 0"),
+        // value position
+        ("Silver > Gold", "Silver > ^Gold"),
+        // fold operand
+        ("+/ Gold", "+/ ^Gold"),
+        // mirror-read hop base
+        ("anchor.Gold", "^anchor.Gold"),
+    ];
+    for (bare, sigil) in pairs {
+        assert_eq!(ok(bare, &reg, &env), ok(sigil, &reg, &env), "{} vs {}", bare, sigil);
+    }
+}
+
+// Gate 2: the mask-context interpretation table is unchanged, and `^name` inherits it.
+#[test]
+fn mask_interpretation_pins() {
+    let reg = registry();
+    let env = AliasEnvironment::for_registry(&reg);
+
+    // the selection mask of statement 1 — pinned as the whole binding, not a fixture substring
+    let sel = |src: &str| {
+        let text = ok(src, &reg, &env);
+        assert!(text.contains("\ns1m ← "), "{}", text);
+        text
+    };
+
+    // boolean column: the values are the mask; no presence, no all-present fill
+    let boolean = sel("Flag , Silver = 0");
+    assert!(boolean.contains("\ns1m ← flag\n"), "{}", boolean);
+
+    // sparse value column: presence is the mask
+    let sparse = sel("Sca , Silver = 0");
+    assert!(sparse.contains("\ns1m ← pres_Sca\n"), "{}", sparse);
+
+    // ! on a sparse value column: the absent-component fast path
+    let negated = sel("!Sca , Silver = 0");
+    assert!(negated.contains("\ns1m ← (¬pres_Sca)\n"), "{}", negated);
+
+    // total value column: all present
+    let total = sel("Gold , Silver = 0");
+    assert!(total.contains("\ns1m ← (1¨gold)\n"), "{}", total);
+
+    // and the sigiled spellings read the same table
+    assert!(sel("^Flag , Silver = 0").contains("\ns1m ← flag\n"));
+    assert!(sel("^Sca , Silver = 0").contains("\ns1m ← pres_Sca\n"));
+    assert!(sel("!^Sca , Silver = 0").contains("\ns1m ← (¬pres_Sca)\n"));
+    assert!(sel("^Gold , Silver = 0").contains("\ns1m ← (1¨gold)\n"));
+}
+
+// An unresolved `^name` says which resolver request the source made.
+#[test]
+fn unresolved_alias_diagnostic_keeps_the_sigil() {
+    let reg = registry();
+    let env = AliasEnvironment::for_registry(&reg);
+
+    assert!(
+        err("^Nope , Silver = 0", &reg, &env).contains("unregistered mask name '^Nope'"),
+        "{}",
+        err("^Nope , Silver = 0", &reg, &env)
+    );
+    assert!(
+        err("Silver > ^Nope", &reg, &env).contains("unregistered name '^Nope'"),
+        "{}",
+        err("Silver > ^Nope", &reg, &env)
+    );
+
+    let bare_mask = err("Nope , Silver = 0", &reg, &env);
+    assert!(bare_mask.contains("'Nope'"), "{}", bare_mask);
+    assert!(!bare_mask.contains("^Nope"), "{}", bare_mask);
+    let bare_val = err("Silver > Nope", &reg, &env);
+    assert!(bare_val.contains("'Nope'"), "{}", bare_val);
+    assert!(!bare_val.contains("^Nope"), "{}", bare_val);
+}
+
+// A4: the overlay is consulted only for `^name`; the bare spelling never sees it.
+#[test]
+fn overlay_moves_only_the_sigiled_spelling() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "focus", "Silver").unwrap();
+
+    assert_eq!(ok("Gold > ^focus", &reg, &env), ok("Gold > Silver", &reg, &empty));
+    assert!(err("Gold > focus", &reg, &env).contains("unregistered name 'focus'"));
+}
+
+// The dynamic-alias name fold is the registry fold: ASCII A-Z only.
+#[test]
+fn dynamic_alias_case_folds_ascii() {
+    let reg = registry();
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "focus", "Silver").unwrap();
+    assert_eq!(ok("Gold > ^FOCUS", &reg, &env), ok("Gold > ^focus", &reg, &env));
+}
+
+// Gate 3: a static alias-mask fixture and a dynamic overlay mask of the same name stay split.
+#[test]
+fn static_alias_mask_fixture_stays_static() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let base = ok("cursor , Silver = 0", &reg, &empty);
+    // fallback reaches the static fixture
+    assert_eq!(ok("^cursor , Silver = 0", &reg, &empty), base);
+
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_mask(&reg, "cursor", &[0.0, 1.0, 0.0]).unwrap();
+    assert_eq!(ok("cursor , Silver = 0", &reg, &env), base);
+    assert_ne!(ok("^cursor , Silver = 0", &reg, &env), base);
+}
+
+// The `^X` fallback routes through bare lookup, which applies the spelling-alias table.
+// Pins today's behavior; the overlay/spelling-table asymmetry is not decided here.
+#[test]
+fn spelling_alias_control() {
+    let reg = registry();
+    let env = AliasEnvironment::for_registry(&reg);
+    assert_eq!(ok("X , Silver = 0", &reg, &env), ok("^X , Silver = 0", &reg, &env));
+}
+
+// The synthetic materialization names are reserved for the emission that generates them.
+#[test]
+fn reserved_synthetic_name_refuses_end_to_end() {
+    let reg = registry();
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).unwrap();
+    assert!(
+        err("AnoDynMask0 & ^hot , Silver = 0", &reg, &env)
+            .contains("reserved synthetic name 'AnoDynMask0'"),
+        "{}",
+        err("AnoDynMask0 & ^hot , Silver = 0", &reg, &env)
+    );
+
+    let empty = AliasEnvironment::for_registry(&reg);
+    assert!(
+        err("AnoDynMask0 , Silver = 0", &reg, &empty)
+            .contains("unregistered mask name 'AnoDynMask0'"),
+        "{}",
+        err("AnoDynMask0 , Silver = 0", &reg, &empty)
+    );
+}
+
+// An operand that cannot denote a mask refuses, identically under either spelling.
+#[test]
+fn non_mask_operand_refuses_both_spellings() {
+    let reg = registry();
+    let env = AliasEnvironment::for_registry(&reg);
+    for src in ["!spot , Silver = 0", "!^spot , Silver = 0"] {
+        assert!(err(src, &reg, &env).contains("binding 'spot' (point) as mask"), "{}", src);
+    }
+}
+
+// An overlay entry spelled like a registry column: the two spellings denote different things in
+// one world, and the sigiled one denotes exactly what the bare target denotes.  Equality is the
+// correct assertion — `fallback_plans_are_byte_identical` already proves Alias-node lowering is
+// Name-node lowering for one symbol, so a moved lookup can only differ in which symbol it names.
+#[test]
+fn shadowed_and_bare_diverge_in_one_world() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "gold", "Silver").unwrap();
+
+    let sigiled = ok("^Gold , Silver = 0", &reg, &env);
+    assert_eq!(sigiled, ok("Silver , Silver = 0", &reg, &empty));
+    assert_ne!(sigiled, ok("Gold , Silver = 0", &reg, &empty));
+    // the bare half of the same world is untouched by the overlay
+    assert_eq!(ok("Gold , Silver = 0", &reg, &env), ok("Gold , Silver = 0", &reg, &empty));
+
+    // both halves in ONE emission: the bare operand stays Gold, the sigiled one is Silver
+    let both = ok("Gold > ^Gold , Silver = 0", &reg, &env);
+    assert_eq!(both, ok("Gold > Silver , Silver = 0", &reg, &empty));
+    assert_ne!(both, ok("Gold > Gold , Silver = 0", &reg, &empty));
+}
+
+// The stem of a Bind entry is shadowable too: `^anchor` reaches the overlay target while the
+// bare hop base still reads the registry binding it always read.
+#[test]
+fn bind_shadowing() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let bare_before = ok("anchor.Gold", &reg, &empty);
+
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "anchor", "beacon").unwrap();
+    assert_eq!(ok("^anchor.Gold", &reg, &env), ok("beacon.Gold", &reg, &empty));
+    assert_ne!(ok("^anchor.Gold", &reg, &env), bare_before);
+    assert_eq!(ok("anchor.Gold", &reg, &env), bare_before);
+}
+
+// Bullet 5: `!` reads the resolved operand, during an overlay entry's life and after its death.
+#[test]
+fn negation_during_and_after() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+
+    // (a) a materialized dynamic mask negates as a mask, by the mask-interpretation table
+    let mut masked = AliasEnvironment::for_registry(&reg);
+    masked.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).unwrap();
+    let plain = ok("^hot , Silver = 0", &reg, &masked);
+    assert!(plain.contains("\ns1m ← anoDynMask0\n"), "{}", plain);
+    let negated = ok("!^hot , Silver = 0", &reg, &masked);
+    assert!(negated.contains("\ns1m ← (¬anoDynMask0)\n"), "{}", negated);
+
+    // (b) a binding alias negates as its target, not as its stem
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "Flag", "Sca").unwrap();
+    let during = ok("!^Flag , Silver = 0", &reg, &env);
+    assert_eq!(during, ok("!Sca , Silver = 0", &reg, &empty));
+    assert_ne!(during, ok("!Flag , Silver = 0", &reg, &empty));
+
+    // (c) after the delete the sigiled spelling is the bare spelling again
+    assert!(env.delete("flag"));
+    assert_eq!(ok("!^Flag , Silver = 0", &reg, &env), ok("!Flag , Silver = 0", &reg, &empty));
+}
+
+// The dynamic-alias name fold is the registry fold: non-ASCII bytes are exact, so a stem outside
+// A-Z round-trips end to end and a Greek case pair is two distinct stems.
+// Behavior-pin for the ASCII-only fold; see docs/ano-keywords.md:589.
+#[test]
+fn nonascii_alias_end_to_end() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+
+    let mut wide = AliasEnvironment::for_registry(&reg);
+    wide.install_mask(&reg, "世界", &[0.0, 1.0, 0.0]).unwrap();
+    let resolved = ok("^世界 , Silver = 0", &reg, &wide);
+    assert!(resolved.contains("\nanoDynMask0 ← ⟨0, 1, 0⟩\n"), "{}", resolved);
+    assert!(resolved.contains("\ns1m ← anoDynMask0\n"), "{}", resolved);
+    assert!(err("^世界 , Silver = 0", &reg, &empty).contains("'^世界'"));
+
+    // `Σ` does not fold to `σ`, so the overlay misses and the bare fallback refuses — spelling
+    // the sigiled request back, uppercase intact.
+    let mut greek = AliasEnvironment::for_registry(&reg);
+    greek.install_binding(&reg, "σ", "Gold").unwrap();
+    let refusal = err("^Σ , Silver = 0", &reg, &greek);
+    assert!(refusal.contains("unregistered mask name '^Σ'"), "{}", refusal);
+    assert_eq!(ok("^σ , Silver = 0", &reg, &greek), ok("Gold , Silver = 0", &reg, &empty));
+}
+
+// Behavior-pin, not a ruling: the overlay is keyed by the written stem, while the bare fallback
+// additionally applies the registry spelling table.  So an entry installed under a column's own
+// name is invisible to that column's `as`/`ja` spelling, and one installed under the spelling is
+// visible only to it.  Q20 is OPEN — see todo/00-open-rulings.md:53.
+#[test]
+fn q20_spelling_boundary_pin() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+
+    let mut under_target = AliasEnvironment::for_registry(&reg);
+    under_target.install_binding(&reg, "gold", "Silver").unwrap();
+    assert_eq!(ok("^X , Silver = 0", &reg, &under_target), ok("X , Silver = 0", &reg, &empty));
+
+    let mut under_spelling = AliasEnvironment::for_registry(&reg);
+    under_spelling.install_binding(&reg, "x", "Silver").unwrap();
+    assert_eq!(
+        ok("^X , Silver = 0", &reg, &under_spelling),
+        ok("Silver , Silver = 0", &reg, &empty)
+    );
+    assert_ne!(ok("^X , Silver = 0", &reg, &under_spelling), ok("X , Silver = 0", &reg, &empty));
+}
+
+// Bullet 11: the spelling table, a static alias-mask fixture, and the dynamic overlay are three
+// mechanisms, not one.  All three answer to `X`/`cursor` at once; only the sigiled spellings move.
+// Behavior-pin on the spelling half — Q20 is OPEN, see todo/00-open-rulings.md:53.
+#[test]
+fn triple_coexistence() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let bare_spelling = ok("X , Silver = 0", &reg, &empty);
+    let bare_static = ok("cursor , Silver = 0", &reg, &empty);
+
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "x", "Silver").unwrap();
+    env.install_mask(&reg, "cursor", &[0.0, 1.0, 0.0]).unwrap();
+
+    // unmoved: the spelling table still routes bare X to Gold, the fixture is still the fixture
+    assert_eq!(ok("X , Silver = 0", &reg, &env), bare_spelling);
+    assert_eq!(ok("cursor , Silver = 0", &reg, &env), bare_static);
+    // moved: both sigiled spellings read the overlay
+    assert_ne!(ok("^X , Silver = 0", &reg, &env), bare_spelling);
+    assert_ne!(ok("^cursor , Silver = 0", &reg, &env), bare_static);
+    assert_eq!(ok("^X , Silver = 0", &reg, &env), ok("Silver , Silver = 0", &reg, &empty));
+}
+
+// Completion gate (todo/02:103): a refusal reached through a moved lookup spells the sigiled
+// source request AND names the target it reached.  The bare-path pin above stays untouched.
+#[test]
+fn provenance_diagnostic_spells_request() {
+    let reg = registry();
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "focus", "spot").unwrap();
+    let refusal = err("!^focus , Silver = 0", &reg, &env);
+    assert!(refusal.contains("^focus"), "{}", refusal);
+    assert!(refusal.contains("spot"), "{}", refusal);
+}
+
+// todo/02:77: with the trace channel enabled each consultation names the mechanism that answered
+// it and the overlay version.  The flagless emission of the same program is unchanged — the
+// master invariant at steel/src/lib.rs:550, here against the plan the overlay target denotes.
+#[test]
+fn trace_provenance_line() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "focus", "Gold").unwrap();
+
+    let flagless = ok("^focus , Silver = 0", &reg, &env);
+    assert_eq!(flagless, ok("Gold , Silver = 0", &reg, &empty));
+
+    let traced = match plan_with(
+        "^focus , Silver = 0",
+        &reg,
+        &env,
+        &Directives { trace: true, ..Directives::default() },
+    ) {
+        Ok(text) => text,
+        Err(d) => panic!("{}", d.msg),
+    };
+    assert!(traced.contains("TRACE-ALIAS ^focus"), "{}", traced);
+    assert!(traced.contains("overlay v1"), "{}", traced);
+    assert!(traced.contains("binding 'Gold'"), "{}", traced);
+    assert_ne!(traced, flagless);
+    // and the bare fallback names itself
+    let fallback = match plan_with(
+        "^Gold , Silver = 0",
+        &reg,
+        &empty,
+        &Directives { trace: true, ..Directives::default() },
+    ) {
+        Ok(text) => text,
+        Err(d) => panic!("{}", d.msg),
+    };
+    assert!(fallback.contains("TRACE-ALIAS ^Gold -> bare fallback"), "{}", fallback);
+}

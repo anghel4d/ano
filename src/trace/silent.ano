@@ -1,0 +1,8 @@
+-- Only the sentinel: -1 crosses in a predicate, again in an effect and again in a query, and
+-- reports nothing at any of the three. The use records still appear — a crossing happened.
+--! registry silent-world
+--! expect gold = 5 9 3 7
+
+Nord & mentor.Dead , Gold += 1
+Nord , Gold = mentor.Gold
+mentor.Dead

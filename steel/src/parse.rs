@@ -250,7 +250,9 @@ impl P<'_, '_> {
                 Ok(n)
             }
             TokKind::Alias => {
-                let n = Node::new(NodeKind::Alias(self.tname()), line);
+                // parse-time look and req coincide; normalization moves look, never req
+                let stem = self.tname();
+                let n = Node::new(NodeKind::Alias { look: stem, req: stem }, line);
                 self.adv();
                 Ok(n)
             }
@@ -321,12 +323,12 @@ impl P<'_, '_> {
         }
     }
 
-    // Input: cursor inside scan/scan2 parens. Output: op spelling or reducer name.
+    // Input: cursor inside fold/scan parens. Output: op spelling or reducer name.
     fn parse_opname(&mut self) -> Result<Symbol, Diag> {
         let op = match self.pk() {
             TokKind::Plus => self.it.intern("+"),
             TokKind::Minus => self.it.intern("-"),
-            TokKind::Star => self.it.intern("*"),
+            TokKind::Star => self.it.intern("*"), TokKind::Slash => self.it.intern("/"),
             TokKind::Amp => self.it.intern("&"),
             TokKind::Bar => self.it.intern("|"),
             TokKind::Name => self.tname(),
@@ -337,7 +339,7 @@ impl P<'_, '_> {
     }
 
     // Inputs: min level. Output: prefix construct (! at 7; fold/scan/grade/top/fold(f)/
-    // scan-along/scan2/cross at 9; order-by head at 3) or an atom. Fold-family operands
+    // scan-along/cross at 9; order-by head at 3) or an atom. Fold-family operands
     // parse at min 10 so @ (12) and . (13) fall inside the operand.
     fn parse_prefix(&mut self, min: i32) -> Result<Node, Diag> {
         let line = self.tline();
@@ -356,7 +358,7 @@ impl P<'_, '_> {
                     let kind = if k == TokKind::Fold {
                         NodeKind::Fold { op, operand: Box::new(x) }
                     } else {
-                        NodeKind::ScanExpr { op, operand: Box::new(x), scan2: false }
+                        NodeKind::ScanExpr { op, operand: Box::new(x) }
                     };
                     return Ok(Node::new(kind, line));
                 }
@@ -384,11 +386,7 @@ impl P<'_, '_> {
                     // fold(f): the long form of f/ — one node, Fold
                     self.adv();
                     self.expect(TokKind::Lp, "'(' after 'fold'")?;
-                    if self.pk() != TokKind::Name {
-                        return Err(perr(self.tline(), "expected reducer name"));
-                    }
-                    let op = self.tname();
-                    self.adv();
+                    let op = self.parse_opname()?;
                     self.expect(TokKind::Rp, "')' after reducer")?;
                     let x = self.parse_expr(10)?;
                     return Ok(Node::new(NodeKind::Fold { op, operand: Box::new(x) }, line));
@@ -399,21 +397,17 @@ impl P<'_, '_> {
                     let op = self.parse_opname()?;
                     self.expect(TokKind::Rp, "')' after scan operator")?;
                     let col = self.parse_expr(10)?;
-                    self.expect(TokKind::Along, "'along' in scan")?;
+                    if self.pk() != TokKind::Along {
+                        // scan(f) col: the long form of f\, no declared order clause
+                        return Ok(Node::new(
+                            NodeKind::ScanExpr { op, operand: Box::new(col) },
+                            line,
+                        ));
+                    }
+                    self.adv();
                     let ord = self.parse_expr(10)?;
                     return Ok(Node::new(
                         NodeKind::ScanAlong { op, col: Box::new(col), order: Box::new(ord) },
-                        line,
-                    ));
-                }
-                TokKind::Scan2 => {
-                    self.adv();
-                    self.expect(TokKind::Lp, "'(' after 'scan2'")?;
-                    let op = self.parse_opname()?;
-                    self.expect(TokKind::Rp, "')' after scan2 operator")?;
-                    let x = self.parse_expr(10)?;
-                    return Ok(Node::new(
-                        NodeKind::ScanExpr { op, operand: Box::new(x), scan2: true },
                         line,
                     ));
                 }
@@ -1004,8 +998,8 @@ mod tests {
             Name(s) => {
                 let _ = write!(b, "(NAME {})", it.resolve(*s));
             }
-            Alias(s) => {
-                let _ = write!(b, "(ALIAS {})", it.resolve(*s));
+            Alias { look, .. } => {
+                let _ = write!(b, "(ALIAS {})", it.resolve(*look));
             }
             Wild => b.push_str("(WILD)"),
             Not(x) => {
@@ -1076,9 +1070,8 @@ mod tests {
                 sx(b, operand, it);
                 b.push(')');
             }
-            ScanExpr { op, operand, scan2 } => {
-                let f = if *scan2 { ":SCAN2" } else { "" };
-                let _ = write!(b, "(SCANEXPR{f} {} ", it.resolve(*op));
+            ScanExpr { op, operand } => {
+                let _ = write!(b, "(SCANEXPR {} ", it.resolve(*op));
                 sx(b, operand, it);
                 b.push(')');
             }
@@ -1445,6 +1438,65 @@ mod tests {
         );
     }
 
+    // Inputs: label, case rows, expected refusal message. Asserts parse refuses with it.
+    fn run_refuse(label: &str, rows: &[(TokKind, &str, f64)], want: &str) {
+        let mut it = Interner::new();
+        let toks = toks_of(rows, &mut it);
+        match parse(&toks, &mut it) {
+            Ok(_) => panic!("FAIL {label}: parsed, expected refusal {want:?}"),
+            Err(d) => assert!(d.msg.contains(want), "case {label}: got {:?}", d.msg),
+        }
+    }
+
+    // The ^name sigil is a leaf through parsing: Alias survives, never rewritten to Name.
+    #[test]
+    fn sigil_corpus() {
+        // ^cursor , +Tagged
+        run_case(
+            "alias-stmt",
+            &[tkn!(Alias, "cursor"), tk!(Comma), tk!(Plus), tn!("Tagged"), tk!(Eof)],
+            "(PROGRAM (STMT (ALIAS cursor) (EADD Tagged)))",
+        );
+        // Bandit & !^Dead , +X   — !^name is structurally Not(Alias)
+        run_case(
+            "not-alias",
+            &[tn!("Bandit"), tk!(Amp), tk!(Bang), tkn!(Alias, "Dead"), tk!(Comma), tk!(Plus), tn!("X"), tk!(Eof)],
+            "(PROGRAM (STMT (AND (NAME Bandit) (NOT (ALIAS Dead))) (EADD X)))",
+        );
+        // ^cursor.Gold > 100 , +Rich
+        run_case(
+            "alias-hop",
+            &[tkn!(Alias, "cursor"), tk!(Dot), tn!("Gold"), tk!(Gt), tv!(100), tk!(Comma), tk!(Plus), tn!("Rich"), tk!(Eof)],
+            "(PROGRAM (STMT (CMP > (HOP (ALIAS cursor) (NAME Gold)) (NUM 100)) (EADD Rich)))",
+        );
+        // Gold > ^focus
+        run_case(
+            "alias-value",
+            &[tn!("Gold"), tk!(Gt), tkn!(Alias, "focus"), tk!(Eof)],
+            "(PROGRAM (QUERY (CMP > (NAME Gold) (ALIAS focus))))",
+        );
+    }
+
+    // The forms that stay invalid until separately ruled.
+    #[test]
+    fn sigil_refusals() {
+        run_refuse(
+            "alias-call-refuses",
+            &[tkn!(Alias, "f"), tk!(Lp), tv!(1), tk!(Rp), tk!(Eof)],
+            "unexpected token after selection",
+        );
+        run_refuse(
+            "alias-effect-refuses",
+            &[tn!("Unit"), tk!(Comma), tkn!(Alias, "Gold"), tk!(Eq), tv!(5), tk!(Eof)],
+            "expected effect",
+        );
+        run_refuse(
+            "def-alias-refuses",
+            &[tk!(Def), tkn!(Alias, "x"), tk!(Eq), tv!(1), tk!(Eof)],
+            "expected name after 'def'",
+        );
+    }
+
     // Def statements exercise the reserved-name gate separately.
     #[test]
     fn parse_corpus_defs() {
@@ -1463,3 +1515,92 @@ mod tests {
     }
 }
 
+
+
+#[cfg(test)]
+mod semantic_tests {
+    use super::*;
+    use crate::lex;
+
+    #[test]
+    fn fused_count_scan_has_no_compatibility_flag() {
+        let mut interner = Interner::new();
+        let tokens = lex::lex(b"#\\ Values", false, &mut interner).unwrap();
+        let program = parse(&tokens, &mut interner).unwrap();
+        let NodeKind::Program(items) = program.kind else { panic!("program") };
+        let NodeKind::Query(value) = &items[0].kind else { panic!("query") };
+        let NodeKind::ScanExpr { op, .. } = value.kind else { panic!("scan") };
+        assert_eq!(interner.resolve(op), "#");
+    }
+
+    #[test]
+    fn long_fold_accepts_glyph_operators() {
+        let mut interner = Interner::new();
+        let tokens = lex::lex(b"fold(-) Values", false, &mut interner).unwrap();
+        let program = parse(&tokens, &mut interner).unwrap();
+        let NodeKind::Program(items) = program.kind else { panic!("program") };
+        let NodeKind::Query(value) = &items[0].kind else { panic!("query") };
+        let NodeKind::Fold { op, .. } = value.kind else { panic!("fold") };
+        assert_eq!(interner.resolve(op), "-");
+    }
+
+    // Inputs: source. Output: the single query node of a one-statement program.
+    fn query_of(src: &[u8], it: &mut Interner) -> NodeKind {
+        let tokens = lex::lex(src, false, it).unwrap();
+        let program = parse(&tokens, it).unwrap();
+        let NodeKind::Program(items) = program.kind else { panic!("program") };
+        let NodeKind::Query(value) = &items[0].kind else { panic!("query") };
+        value.kind.clone()
+    }
+
+    #[test]
+    fn long_scan_without_along_is_a_plain_scan() {
+        let mut it = Interner::new();
+        let NodeKind::ScanExpr { op, operand } = query_of(b"scan(+) Damage", &mut it) else {
+            panic!("scan")
+        };
+        assert_eq!(it.resolve(op), "+");
+        let NodeKind::Name(col) = operand.kind else { panic!("operand") };
+        assert_eq!(it.resolve(col), "Damage");
+    }
+
+    #[test]
+    fn long_scan_with_along_still_carries_the_order() {
+        let mut it = Interner::new();
+        let NodeKind::ScanAlong { op, col, order } = query_of(b"scan(+) Damage along Gold", &mut it)
+        else {
+            panic!("scan-along")
+        };
+        assert_eq!(it.resolve(op), "+");
+        let NodeKind::Name(c) = col.kind else { panic!("col") };
+        let NodeKind::Name(o) = order.kind else { panic!("order") };
+        assert_eq!((it.resolve(c), it.resolve(o)), ("Damage", "Gold"));
+    }
+
+    #[test]
+    fn long_scan_accepts_subtraction_and_division() {
+        for (src, want) in [(&b"scan(-) Damage"[..], "-"), (&b"scan(/) Damage"[..], "/")] {
+            let mut it = Interner::new();
+            let NodeKind::ScanExpr { op, .. } = query_of(src, &mut it) else { panic!("scan") };
+            assert_eq!(it.resolve(op), want);
+        }
+    }
+
+    #[test]
+    fn fused_subtraction_scan_parses() {
+        let mut it = Interner::new();
+        let NodeKind::ScanExpr { op, .. } = query_of(b"-\\ Damage", &mut it) else { panic!("scan") };
+        assert_eq!(it.resolve(op), "-");
+        let mut it = Interner::new();
+        let NodeKind::Fold { op, .. } = query_of(b"-/ Damage", &mut it) else { panic!("fold") };
+        assert_eq!(it.resolve(op), "-");
+    }
+
+    #[test]
+    fn comparison_never_folds() {
+        let mut it = Interner::new();
+        let tokens = lex::lex(b">/ x", false, &mut it).unwrap();
+        let d = parse(&tokens, &mut it).unwrap_err();
+        assert!(d.msg.contains("unexpected token in expression"), "got {:?}", d.msg);
+    }
+}

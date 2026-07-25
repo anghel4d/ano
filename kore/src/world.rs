@@ -8,6 +8,7 @@ use crate::sys;
 use crate::term::{Rect, Term, C_AT, C_CASELO, C_CASEUP};
 use crate::text;
 use std::io::Write;
+use steel::alias::{sidecar_path, AliasEnvironment};
 
 pub const KMAXENT: usize = 512; // data lines past the cap parse to no Ent but stay in lines[]
 
@@ -23,7 +24,7 @@ pub enum EKind {
     Pres,
     Rel,
     Srel,
-    Alias,
+    Alias, // a static alias mask: a stored mask VALUE, not a spelling alias and not the dynamic ^name overlay
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -313,6 +314,7 @@ fn world_check_unique(w: &World) -> Result<(), String> {
 // (keyed when the third word is non-numeric and not `|`),
 // srel/inv, and role pos/glyph/proto; everything else remains in lines[].
 pub fn world_load(path: &str) -> Result<World, String> {
+    crate::registry_tx::validate(path)?;
     let raw = match std::fs::File::open(path) {
         Ok(mut f) => {
             use std::io::Read;
@@ -441,7 +443,7 @@ pub fn world_load(path: &str) -> Result<World, String> {
             }
             w.ents.push(e);
         } else if (k == b"rel" || k == b"alias") && nw >= 2 && can {
-            // an alias is a stored mask VALUE — data, so it displays and edits like a rel;
+            // a static alias mask is a stored mask VALUE — data, so it displays and edits like a rel;
             // a keyed rel (`rel id mentor …`) carries its key column as one extra name
             let isr = k[0] == b'r';
             let keyed = isr && nw >= 3 && wnum(&words[2]).is_none() && words[2] != b"|";
@@ -830,27 +832,23 @@ pub fn world_splice(app: &mut App, line: usize, off: usize, len: usize, repl: &[
     if line >= app.world.lines.len() {
         return Err(format!("splice: no line {}", line));
     }
-    let ol = app.world.lines[line].len();
-    if off.checked_add(len).map(|e| e > ol).unwrap_or(true) {
+    let old_len = app.world.lines[line].len();
+    if off.checked_add(len).map(|end| end > old_len).unwrap_or(true) {
         return Err("splice: bad span".to_string());
     }
-    app.world.lines[line].splice(off..off + len, repl.iter().copied());
-    let mut b: Vec<u8> = Vec::new();
-    for ln in &app.world.lines {
-        b.extend_from_slice(ln);
-        b.push(b'\n');
+    let mut lines = app.world.lines.clone();
+    lines[line].splice(off..off + len, repl.iter().copied());
+    let mut bytes = Vec::new();
+    for source_line in &lines {
+        bytes.extend_from_slice(source_line);
+        bytes.push(b'\n');
     }
     let path = app.world.path.clone();
-    if !write_commit(&path, &b) {
-        return Err(format!("cannot write {}: {}", trunc_str(&path, 180), sys::errno_str()));
-    }
-    match world_load(&path) {
-        Ok(w) => {
-            app.world = w;
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
+    crate::registry_tx::publish(&path, &bytes)
+        .map_err(|error| format!("cannot write {}: {}", trunc_str(&path, 180), error))?;
+    let next = world_load(&path)?;
+    app.world = next;
+    Ok(())
 }
 
 // Guards in order: repl exactly 1 byte in 0x20..0x7E (`char cell wants one printable ASCII
@@ -1196,6 +1194,7 @@ pub fn world_guard(app: &mut App) -> bool {
         app.sayerr(&format!("cannot copy world to {}", dst));
         return false;
     }
+    copy_sidecar(&app.world.path, &dst); // the overlay follows the file the world reads
     let msg = format!("world copied to {} — the corpus stays immutable\n", dst);
     app.log(msg.as_bytes());
     app.world_orig = app.world.path.clone(); // >reset restores this
@@ -1241,8 +1240,11 @@ pub fn code_guard(app: &mut App) -> bool {
 // session_rehydrate. kore.c play_adopt.
 pub fn play_adopt(app: &mut App, dst: &str, copy_first: bool) -> Result<(), String> {
     play_mkdir(dst);
-    if copy_first && !copy_file(&app.pristine, dst) {
-        return Err(format!("cannot copy {} to {}", trunc_str(&app.pristine, 100), trunc_str(dst, 100)));
+    if copy_first {
+        if !copy_file(&app.pristine, dst) {
+            return Err(format!("cannot copy {} to {}", trunc_str(&app.pristine, 100), trunc_str(dst, 100)));
+        }
+        copy_sidecar(&app.pristine, dst); // the overlay follows the file the world reads
     }
     app.world = world_load(dst)?;
     if !app.world_is_copy {
@@ -1255,6 +1257,12 @@ pub fn play_adopt(app: &mut App, dst: &str, copy_first: bool) -> Result<(), Stri
 }
 
 // ---------- the undo ring (files under .kore/undo/, surviving the process) ----------
+//
+// The ring versions the world file alone. The dynamic-alias overlay deliberately does NOT ride
+// undo or the w snapshot: A_t is host session state orthogonal to world time (todo/02:27), and
+// entangling it with world time would invent semantics nobody ruled. Consequence: after a `u`
+// that changes n, materialized mask and resolver entries go stale and emission refuses until a
+// host transition or `kore alias <reg> clear`.
 
 // app.undo_seq = highest existing seq matching `<tag>-` (atoi suffix), 0 when none.
 pub fn undo_scan(app: &mut App) {
@@ -1425,11 +1433,15 @@ pub fn reset_all(app: &mut App) {
     ));
 }
 
-// The prompt's `>` verb router; only `reset` exists. Arms confirm_reset with the verdict
+// The prompt's `>` verb router: `reset` and `alias`. Arms confirm_reset with the verdict
 // (error hue) or says `nothing to reset — no play copies exist` / `unknown command >%.60s
-// — commands: >reset`. kore.c kore_command.
+// — commands: >reset >alias`. kore.c kore_command.
 pub fn kore_command(app: &mut App, cmd: &str) {
     let cmd = cmd.trim_start_matches(' ');
+    if cmd == "alias" {
+        alias_show(app);
+        return;
+    }
     if cmd == "reset" {
         let n = play_count();
         if n == 0 {
@@ -1444,7 +1456,7 @@ pub fn kore_command(app: &mut App, cmd: &str) {
         ));
         return;
     }
-    app.sayerr(&format!("unknown command >{} — commands: >reset", trunc_str(cmd, 60)));
+    app.sayerr(&format!("unknown command >{} — commands: >reset >alias", trunc_str(cmd, 60)));
 }
 
 // ---------- the session log ----------
@@ -1567,6 +1579,145 @@ pub fn session_rehydrate(app: &mut App) {
     }
 }
 
+// ---------- the dynamic-alias overlay: host session state ----------
+
+// Inputs: a source and a destination world path. Output: none — the destination's sidecar mirrors
+// the source's, copied when there is one and REMOVED when there is not. The overlay follows the
+// live world file, so `kore alias` and every emission always edit the same environment.
+fn copy_sidecar(src: &str, dst: &str) {
+    let from = sidecar_path(src).to_string_lossy().into_owned();
+    let to = sidecar_path(dst).to_string_lossy().into_owned();
+    if sys::access_f(&from) {
+        let _ = copy_file(&from, &to);
+    } else {
+        let _ = std::fs::remove_file(&to);
+    }
+}
+
+// The stem of an observation line: everything before the tab, sigil included.
+fn alias_stem(line: &str) -> &str {
+    match line.find('\t') {
+        Some(i) => &line[..i],
+        None => line,
+    }
+}
+
+// The description of an observation line: everything after the tab.
+fn alias_told(line: &str) -> &str {
+    match line.find('\t') {
+        Some(i) => &line[i + 1..],
+        None => "",
+    }
+}
+
+// Inputs: the live world path. Output: the environment version and its `^name<TAB>describe` lines,
+// or None when the registry or its sidecar cannot be read — an observation never refuses a tick.
+pub fn alias_observe(world_path: &str) -> Option<(u64, Vec<String>)> {
+    let reg = steel::registry::reg_load(world_path).ok()?;
+    let env = AliasEnvironment::load(sidecar_path(world_path), &reg).ok()?;
+    let lines = env.iter().map(|(name, t)| format!("^{}\t{}", name, t.describe())).collect();
+    Some((env.version(), lines))
+}
+
+// Inputs: the previous and current observation lines, the version they moved to, the barrier index.
+// Output: the session records — the environment line, one line per installed or rebound entry, one
+// per deleted. Pure; the diff keys on the stem, and every record carries its own newline.
+pub fn alias_records(prev: &[String], next: &[String], version: u64, barrier: u32) -> Vec<String> {
+    let mut out = vec![format!("-- alias@{}: environment v{}\n", barrier, version)];
+    for line in next {
+        if !prev.iter().any(|old| old == line) {
+            out.push(format!("-- alias@{}: {} = {}\n", barrier, alias_stem(line), alias_told(line)));
+        }
+    }
+    for line in prev {
+        if !next.iter().any(|new| alias_stem(new) == alias_stem(line)) {
+            out.push(format!("-- alias@{}: {} deleted\n", barrier, alias_stem(line)));
+        }
+    }
+    out
+}
+
+// The live sidecar copied to `<session dir>/session-alias-v<version>.aliases` — the artifact a
+// replay of this segment loads. No sidecar is nothing to freeze; the base copy answers for it.
+fn alias_freeze(app: &App, version: u64) {
+    let src = sidecar_path(&app.world.path).to_string_lossy().into_owned();
+    if !sys::access_f(&src) {
+        return;
+    }
+    let sess = session_path(app);
+    let dir = match sess.rfind('/') {
+        Some(i) => &sess[..i],
+        None => ".",
+    };
+    let _ = copy_file(&src, &format!("{}/session-alias-v{}.aliases", dir, version));
+}
+
+// The session's starting observation, taken once: a transition is a move AWAY from this, never
+// this. A resumed log primes here too, so its opening version still gets a frozen artifact.
+fn alias_prime(app: &mut App) {
+    if app.alias_ver.is_some() {
+        return;
+    }
+    let path = app.world.path.clone();
+    let Some((version, listing)) = alias_observe(&path) else { return };
+    alias_freeze(app, version);
+    app.alias_ver = Some(version);
+    app.alias_list = listing;
+}
+
+// One process barrier crossed (a successful submission): count it, observe the overlay, and when
+// the host moved it since the last barrier append the transition records to session.ano and freeze
+// the sidecar under its version. In Kore the barrier IS the submission boundary — each submission
+// spawns one steel process that re-reads the sidecar, so a host transition becomes visible exactly
+// at the next spawn and never mid-statement.
+fn alias_barrier(app: &mut App) {
+    app.sess_barrier = app.sess_barrier.wrapping_add(1);
+    let path = app.world.path.clone();
+    let Some((version, listing)) = alias_observe(&path) else { return };
+    if app.alias_ver == Some(version) && app.alias_list == listing {
+        return;
+    }
+    for line in alias_records(&app.alias_list, &listing, version, app.sess_barrier) {
+        session_seam(app, &line);
+    }
+    alias_freeze(app, version);
+    app.alias_ver = Some(version);
+    app.alias_list = listing;
+}
+
+// >alias: the live sidecar path (the play-scratch path-identity trap is diagnosed by reading it),
+// the environment version, and one line per entry marked `(shadows <entry>)` when the stem also
+// resolves in the bare namespace. Host state only — nothing enters dcols/vrows, so the overlay
+// never renders as a column declaration.
+fn alias_show(app: &mut App) {
+    let path = app.world.path.clone();
+    let side = sidecar_path(&path).to_string_lossy().into_owned();
+    let Some((version, listing)) = alias_observe(&path) else {
+        app.sayerr(&format!(
+            "alias sidecar stale or unreadable — kore alias {} clear recovers",
+            trunc_str(&path, 60)
+        ));
+        return;
+    };
+    let reg = steel::registry::reg_load(&path).ok();
+    let mut text = format!("alias {}\nenvironment v{}\n", side, version);
+    if listing.is_empty() {
+        text.push_str("no dynamic aliases\n");
+    }
+    for line in &listing {
+        text.push_str(line);
+        let stem = alias_stem(line).trim_start_matches('^');
+        if let Some(r) = reg.as_ref() {
+            if let Some(index) = steel::registry::reg_find(r, stem) {
+                text.push_str(&format!("\t(shadows {})", r.ents[index].name));
+            }
+        }
+        text.push('\n');
+    }
+    app.log(text.as_bytes());
+    app.say(&format!("alias environment v{} — {} entries", version, listing.len()));
+}
+
 // ---------- the ticks ----------
 
 // One prompt submission = one program against the current world (kore.c repl_submit):
@@ -1608,8 +1759,11 @@ pub fn repl_submit(app: &mut App) {
     let sess = session_path(app);
     if !sys::access_f(&sess) {
         let base = format!("{}-base.reg", &sess[..sess.len() - 4]);
-        let _ = copy_file(&app.world.path.clone(), &base);
+        let world = app.world.path.clone();
+        let _ = copy_file(&world, &base);
+        copy_sidecar(&world, &base); // the overlay the first statement runs under
     }
+    alias_prime(app);
     mkdirs(".kore");
     // one submission, one program — with the session's defs prepended (same surface,
     // any resubmitted head excluded); the body may hold several lines: one program
@@ -1648,6 +1802,7 @@ pub fn repl_submit(app: &mut App) {
     crate::cap_split(app, &cap, code, seq);
     if code == 0 {
         session_log(app, body, ja);
+        alias_barrier(app); // one submission, one barrier: the host transition records land here
         // every def line of the submission joins the session, exactly as rehydrate reads it
         for l in body.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
             let Some(dh) = def_head(l, ja) else { continue };
@@ -2396,5 +2551,164 @@ mod cdiff {
         let some = regs().into_iter().next().unwrap();
         let dotted = some.replace("/demos/", "/./demos/");
         assert_eq!(tag_of(&some), tag_of(&dotted));
+    }
+}
+
+// The dynamic-alias overlay as Kore's host boundary sees it: the sidecar following the world file,
+// the transition records, and the barrier at which a host transition becomes visible. Everything
+// runs in process — kore is bin-only, so these call kore's own functions, never a spawned binary.
+#[cfg(test)]
+mod alias_session {
+    use super::*;
+    use steel::Registry;
+
+    // Two total number columns over three rows: the stem `gold` shadows the column `Gold`.
+    const FIXTURE: &str = "n 3\ncol Gold num 1 2 3\ncol Silver num 4 5 6\n";
+    // Mask position under the sigiled spelling: the one place the overlay can move a lookup.
+    const SRC: &str = "^Gold , Silver = 0";
+
+    fn scratch(tag: &str) -> String {
+        let d = std::env::temp_dir().join(format!("ano-kore-sess-{}-{}", std::process::id(), tag));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d.to_string_lossy().into_owned()
+    }
+
+    fn world_at(dir: &str) -> String {
+        let path = format!("{}/world.reg", dir);
+        std::fs::write(&path, FIXTURE).unwrap();
+        path
+    }
+
+    fn argv(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| word.to_string()).collect()
+    }
+
+    // One emission: a fresh interner and a snapshot frozen at the boundary, the shape
+    // steel/tests/sigil_semantics.rs drives through the same public API.
+    fn plan_with_env(reg: &Registry, env: &AliasEnvironment, src: &str) -> String {
+        let mut it = steel::Interner::new();
+        let toks = steel::lex::lex(src.as_bytes(), false, &mut it).unwrap();
+        let prog = steel::parse::parse(&toks, &mut it).unwrap();
+        let snap = env.snapshot(reg).unwrap();
+        let dirs = steel::Directives::default();
+        match steel::emit::emit_with_aliases(&prog, reg, &dirs, &it, snap) {
+            Ok(text) => text,
+            Err(d) => panic!("{}: {}", src, d.msg),
+        }
+    }
+
+    // One emission against the LIVE world file, sidecar and all — the pair a spawned steel reads.
+    fn plan_at(world: &str, src: &str) -> String {
+        let reg = steel::registry::reg_load(world).unwrap();
+        let env = AliasEnvironment::load(sidecar_path(world), &reg).unwrap();
+        plan_with_env(&reg, &env, src)
+    }
+
+    // The environment a recorded segment ran under, from persisted artifacts alone: the version's
+    // frozen sidecar when one exists, else the session base's.
+    fn replay_env(dir: &str, base_reg: &Registry, version: u64) -> AliasEnvironment {
+        let versioned = format!("{}/session-alias-v{}.aliases", dir, version);
+        let path = if sys::access_f(&versioned) {
+            versioned
+        } else {
+            format!("{}/session-base.reg.aliases", dir)
+        };
+        AliasEnvironment::load(&path, base_reg).unwrap()
+    }
+
+    #[test]
+    fn alias_records_report_installs_rebinds_and_deletes() {
+        let prev = vec!["^focus\tGold (number)".to_string(), "^hot\tmask [1 0 1]".to_string()];
+        let next = vec!["^focus\tSilver (number)".to_string(), "^new\tGold (number)".to_string()];
+        let recs = alias_records(&prev, &next, 7, 3);
+        assert_eq!(recs[0], "-- alias@3: environment v7\n");
+        assert!(recs.contains(&"-- alias@3: ^focus = Silver (number)\n".to_string()), "{:?}", recs);
+        assert!(recs.contains(&"-- alias@3: ^new = Gold (number)\n".to_string()), "{:?}", recs);
+        assert!(recs.contains(&"-- alias@3: ^hot deleted\n".to_string()), "{:?}", recs);
+        assert_eq!(recs.len(), 4);
+        // an unmoved listing records the environment line alone
+        assert_eq!(alias_records(&prev, &prev, 7, 3), vec!["-- alias@3: environment v7\n"]);
+        // an emptied overlay deletes every stem
+        assert_eq!(alias_records(&prev, &[], 8, 1).len(), 3);
+    }
+
+    #[test]
+    fn sidecar_follows_the_world_copy() {
+        let dir = scratch("follow");
+        let src = format!("{}/src.reg", dir);
+        let dst = format!("{}/dst.reg", dir);
+        std::fs::write(&src, FIXTURE).unwrap();
+        std::fs::write(sidecar_path(&src), "overlay\n").unwrap();
+        copy_sidecar(&src, &dst);
+        assert_eq!(std::fs::read_to_string(sidecar_path(&dst)).unwrap(), "overlay\n");
+        // a source without one clears the destination's stale overlay rather than leaving it live
+        std::fs::remove_file(sidecar_path(&src)).unwrap();
+        copy_sidecar(&src, &dst);
+        assert!(!sidecar_path(&dst).exists());
+    }
+
+    // The Kore half of the barrier ruling: a host transition becomes visible exactly at the next
+    // process spawn. Each emission re-reads the sidecar, so the same source takes the bare fallback
+    // before the transition and the overlay target after it — and never changes mid-emission.
+    #[test]
+    fn alias_visibility_is_the_process_barrier() {
+        let dir = scratch("barrier");
+        let world = world_at(&dir);
+        let before = plan_at(&world, SRC);
+        assert_eq!(before, plan_at(&world, "Gold , Silver = 0"));
+
+        assert_eq!(crate::aliases::run(&argv(&["alias", &world, "set", "^gold", "Silver"])), 0);
+
+        let after = plan_at(&world, SRC);
+        assert_eq!(after, plan_at(&world, "Silver , Silver = 0"));
+        assert_ne!(before, after);
+        // the bare half of the world is where it was
+        assert_eq!(plan_at(&world, "Gold , Silver = 0"), before);
+    }
+
+    // Replay is segment-wise: each statement segment runs against session-base.reg plus the
+    // recorded version's sidecar. Building the artifacts exactly as the protocol writes them, a
+    // replay from those files alone reproduces both the environment versions and the plans.
+    #[test]
+    fn alias_segment_replay_reproduces_versions_and_plans() {
+        let dir = scratch("replay");
+        let world = world_at(&dir);
+        let sess = format!("{}/session.ano", dir);
+        let base = format!("{}/session-base.reg", dir);
+
+        // barrier 0: the session's opening observation, with the base pre-state beside it
+        let (v0, list0) = alias_observe(&world).unwrap();
+        assert_eq!(v0, 0);
+        assert!(copy_file(&world, &base));
+        copy_sidecar(&world, &base);
+        let segment0 = plan_at(&world, SRC);
+
+        // the host transition between barriers, then barrier 1
+        assert_eq!(crate::aliases::run(&argv(&["alias", &world, "set", "^gold", "Silver"])), 0);
+        let (v1, list1) = alias_observe(&world).unwrap();
+        assert_eq!(v1, 1);
+        let records = alias_records(&list0, &list1, v1, 1);
+        std::fs::write(&sess, records.concat()).unwrap();
+        let frozen = format!("{}/session-alias-v{}.aliases", dir, v1);
+        assert!(copy_file(&sidecar_path(&world).to_string_lossy(), &frozen));
+        let segment1 = plan_at(&world, SRC);
+        assert_ne!(segment0, segment1);
+
+        // the recorded version comes out of the session log, never out of memory
+        let logged = std::fs::read_to_string(&sess).unwrap();
+        assert!(logged.contains("-- alias@1: ^gold = Silver (number)\n"), "{}", logged);
+        let marker = "-- alias@1: environment v";
+        let line = logged.lines().find(|l| l.starts_with(marker)).unwrap();
+        let recorded: u64 = line[marker.len()..].parse().unwrap();
+        assert_eq!(recorded, v1);
+
+        // replay from the persisted artifacts alone
+        let base_reg = steel::registry::reg_load(&base).unwrap();
+        for (version, expected) in [(v0, &segment0), (recorded, &segment1)] {
+            let env = replay_env(&dir, &base_reg, version);
+            assert_eq!(env.version(), version);
+            assert_eq!(&plan_with_env(&base_reg, &env, SRC), expected);
+        }
     }
 }

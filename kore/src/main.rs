@@ -1,7 +1,9 @@
 // Crate root and CLI: event loop, Steel discovery, child invocation, and 0x1D/0x1F stdout
 // demux. 0x1E does not reach kore because --save advances the world file.
 
+mod aliases;
 mod app;
+mod registry_tx;
 mod sys;
 mod tables;
 mod term;
@@ -28,6 +30,9 @@ fn main() {
 // unconditionally every pass; term_leave on the way out.
 fn kore_main() -> i32 {
     let args: Vec<String> = std::env::args_os().map(|a| a.to_string_lossy().into_owned()).collect();
+    if args.get(1).map(String::as_str) == Some("alias") {
+        return aliases::run(&args[1..]);
+    }
     let mut app = App::new();
     if args.len() >= 3 && args[1] == "--check" {
         let mut rc = 0;
@@ -45,7 +50,8 @@ fn kore_main() -> i32 {
             eprint!(
                 "usage: kore [file.reg | file.ano]                    (bare: the demos rail)\n\
                  \x20      kore --check file.reg …                       (headless load+render report)\n\
-                 \x20      kore --edit file.reg seg row col value        (headless cell splice)\n"
+                 \x20      kore --edit file.reg seg row col value        (headless cell splice)\n\
+                 \x20      kore alias file.reg list|set|mask|resolve|delete|clear (dynamic-alias admin)\n"
             );
             return 2;
         }
@@ -161,8 +167,18 @@ fn find_steel_probe() -> String {
 
 // One steel run, stdout+stderr merged (sys::run_capture): (capture, exit code).
 pub fn run_steel(argv: &[&str]) -> (Vec<u8>, i32) {
+    let mut owned: Vec<String> = argv.iter().map(|arg| (*arg).to_string()).collect();
+    if !owned.iter().any(|arg| arg == "--aliases") {
+        if let Some(index) = owned.iter().position(|arg| arg == "--registry") {
+            if let Some(registry) = owned.get(index + 1).cloned() {
+                owned.push("--aliases".to_string());
+                owned.push(steel::alias::sidecar_path(&registry).to_string_lossy().into_owned());
+            }
+        }
+    }
+    let borrowed: Vec<&str> = owned.iter().map(String::as_str).collect();
     let mut cap = Vec::new();
-    let code = sys::run_capture(argv, &mut cap);
+    let code = sys::run_capture(&borrowed, &mut cap);
     (cap, code)
 }
 
@@ -363,6 +379,32 @@ mod demux_tests {
         c.run_lines_set(b"  \tstmt\n");
         cap_split(&mut c, b"\x1Dq 1@ 1\nv\n", 0, 1);
         assert_eq!(c.qgroups[0].recs[0].label, b"stmt"); // ltrimmed by run_line
+    }
+
+    // A12 through the demux: an identityless fold over nothing emits neither its 0x1D tag nor
+    // its value, so a suppressed query contributes no QRec and Kore shows no OUTPUTS row. Steel
+    // stages tag and value inside ONE conditional precisely so this stream is what arrives.
+    #[test]
+    fn suppressed_labels_yield_no_output_rows() {
+        // a run whose every query is suppressed: no tag line, so no group at all
+        let mut a = App::new();
+        a.run_lines_set(b"max/ Gold @ Burning\nmin/ Gold @ Burning\n");
+        cap_split(&mut a, b"", 0, 4);
+        assert!(a.qgroups.is_empty());
+        // history still flows; a record-less run leaves no seam behind it
+        let mut b = App::new();
+        b.run_lines_set(b"max/ Gold @ Burning\n");
+        cap_split(&mut b, b"\x1Fnote\n", 0, 4);
+        assert!(b.qgroups.is_empty());
+        assert_eq!(b.out_log, b"note\n");
+        // and one suppressed query beside one live one yields exactly one row, the live one
+        let mut c = App::new();
+        c.run_lines_set(b"max/ Gold @ Burning\n+/ Gold\n");
+        cap_split(&mut c, b"\x1Dq2@2\n10\n", 0, 4);
+        assert_eq!(c.qgroups.len(), 1);
+        assert_eq!(c.qgroups[0].recs.len(), 1);
+        assert_eq!(c.qgroups[0].recs[0].label, b"+/ Gold");
+        assert_eq!(c.qgroups[0].recs[0].value, b"10");
     }
 
     #[test]

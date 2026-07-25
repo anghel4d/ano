@@ -1,0 +1,8 @@
+# Four keyed rows whose mentor is nothing but the sentinel: every crossing is silent by
+# construction, in every phase and every domain.
+n 4
+unique id nat 7 11 13 17
+rel id mentor -1 -1 -1 -1
+col nord bool 1 1 1 1
+col dead bool 0 1 0 1
+col gold num 5 9 3 7

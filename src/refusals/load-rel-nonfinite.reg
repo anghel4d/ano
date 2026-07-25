@@ -1,0 +1,6 @@
+# expect: registry line 6: bad number 'inf'
+# A nonfinite target names nothing. The boundary refuses at the number itself, before the
+# carrier check, so no nonfinite target can ever sit at rest.
+n 3
+col hp num 1 2 3
+rel mentor 0 inf 1
