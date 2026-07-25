@@ -1,4 +1,10 @@
-# 00 — open rulings: the residue, Q/A
+# 00 — historical rulings: Q/A from the previous review round.
+
+DO NOT, UNDER ANY CIRCUMSTANCES, ALTER ANY PART OF THIS FILE.
+
+THIS IS A Q&A CONCERNING *FINISHED AND DONE RULINGS*. ALL A ITEMS ARE BY THE USER AND SHOULD BE CONSIDERED DEFINITIVE AND AUTHORITATIVE.
+
+<<READONLY>>
 
 This file is the decision ledger. Entries remain after they are answered so later implementation work can recover the question, the ruling, and whether code still owes anything. The author may clear closed entries manually.
 
@@ -43,3 +49,6 @@ A16. Diagnostic scope follows semantic domain. Let `X` be the source domain, `p 
 Q17. Surfaced by 10's landing: `-1` stays silent while a set-but-never-existed key screams DEAD. Licensed by the task wording ("a link whose target no longer exists" — -1 is no link at all), and 02's guard treats both alike semantically ("not-found is dangling is dead"). Should the diagnostic distinguish never-linked from died, or is the current split (sentinel silent, everything else loud) the contract?
 
 A17. Keep it simple. `-1` means no link and stays silent. Any actual link whose target fails the found-guard is DEAD. MISSING and NOT FOUND add states that mean the same thing. Steel already implements the silent sentinel and DEAD diagnostic; no core implementation work remains.
+
+
+<<READONLY>>

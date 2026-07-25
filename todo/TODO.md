@@ -1,13 +1,36 @@
 # TODO
 
-Live items only. Anything unresolved that the suites surfaced lives in `ISSUES.md`; unsettled design lives in the spec's "Open Questions, Next Steps".
+Live items only. `00-historical-rulings.md` is the definitive decision ledger; derive consequences from its answers instead of reopening them. Implement the semantic tasks in this order; do not begin a later task by silently baking in an unfinished earlier one.
 
-1. **Complete the spatial formalization.** Make every observable positive, refusal, save/reload, and repeated-tick outcome in `todo/12-spatial-formalization.md` true in Steel and Kore, using `todo/13-spatial-formalization.md` as the proof-derived typed implementation handoff. The briefs fix outcomes, semantic certificates, migration order, and acceptance gates while leaving implementation and unresolved surface spelling open; the Lean proof does not close the Steel/Kore work.
-2. **Measure one native kernel after spatial closure.** Verify one masked update against the completed habitat and lineage semantics, then record allocations, throughput, and compile amortization across world sizes before choosing a native backend. See `docs/ano_jit.md`.
-3. **Finish the registry taxonomy after the habitat spelling ruling.** Carry `.anoreg`, registry-resident arrays, callable signatures and footprints, registered I/O, declared enum value sets, and checked constructors. The border contract lives in `todo/14-registry-border.md`; the candidate spatial spelling in `todo/15-spatial-surface.md`. Do not build without the author's explicit go.
-4. **Derive Kore's palette from the shell theme.** Query OSC 10/11 at startup, adapt the accents, and fall back to the forced dark canvas where the terminal will not answer.
-7. **Build the ruled-but-unbuilt scans and long-form parity; delete `scan2`.** `todo/12-unbuilt-scans.md`: build the `min\` bridge, running mean, and running count. Make `fold(f)` and `scan(f)` accept every semantically admitted operator or registered reducer head instead of maintaining separate syntactic whitelists. Remove the fixed-rank `scan2` keyword, lowering, documentation, and superseded demos; two-axis prefix scans are compositions along registry-declared axes.
-9. **Repair spatial views after formalization.** Add viewport panning, a ground-layer toggle, and the inline-edit overlay to map and bitmap views. The observable requirement is that views use declared spatial meaning rather than infer a 2D ground from buffer length. Positions are fractional, so kore's paint-at-truncated-x but edit-by-exact-double mismatch is this task's bug to fix. Kore must render and edit through the registry-declared position role and spatial axes. The edit-mode cursor fix is in `todo/11-next-steps.md` — the park mechanism exists at `kore/src/term.rs:391`.
-10. **Implement the dynamic alias overlay.** `todo/16-dynamic-alias-overlay.md`: make `^name` resolve a live alias first and fall through to bare `name`, with host-side install, rebind, and delete between statement steps. Bare bindings must survive alias lifecycle unchanged. Implementation and tests are pending.
-11. **Implement q's Greater and Lesser family.** `todo/17-greater-lesser.md`: make `|` OR on masks and maximum on numbers, with `&` as AND and minimum. Carry the same dyads through folds and scans. Keep `max/`, `max\`, `min/`, and `min\` as numeric bridges. Steel/Kore implementation and tests are pending.
-12. **Remove the identityless-fold query placeholder.** `todo/18-empty-result-output.md`: make a guarded identityless fold over nothing produce the same empty result as an unmatched selection. Bare queries must print nothing, not `0`. Steel/Kore implementation and tests are pending.
+1. **Preserve sigil semantics through resolution.** `01-sigil-semantics.md` keeps `!` as mask negation, keeps `^name` distinct from bare `name` through the resolved IR, and separates spelling aliases, static alias masks, and dynamic aliases.
+2. **Implement the live dynamic alias overlay.** `02-dynamic-alias-overlay.md` adds overlay-first `^name` lookup with bare fallback, validated binding/mask/deictic-resolver targets, host-side install/rebind/delete at statement barriers, one frozen world/overlay/host-input snapshot per statement, deterministic replay, and independent bare-binding lifetime. Landed: the overlay runtime, the resolver framework, the host boundary, persist-environment replay, and Kore's `>alias` display. Remaining: wiring the ruled `^cursor` cold default (alias-first with bare fallback) and the concrete deictic resolvers alongside `99`'s host services, plus the alias demo rewrites below.
+3. **Unify folds and scans.** `03-folds-and-scans.md` implements A13's unseeded left recurrence; implements running mean/count through state-plus-projection descriptors in the planner; implements q-style carrier-directed `|`/`&`; converges glyph/long/grouped/along forms; adds `min\`, `avg\`, and `#\`; deletes `scan2`; and makes identityless empty queries produce no row rather than a placeholder.
+4. **Repair diagnostic domains and seal relationship targets.** `04-diagnostic-domains.md` keeps predicate reports on source domain `X`, restricts effect reports to selected domain `S`, preserves distinct crossings, makes `-1` the sole silent functional no-link sentinel, refuses malformed endpoint-carrier values atomically, and reports every evaluated valid dead link.
+5. **Finish non-spatial registry/runtime follow-ups.** `05-registry-and-runtime-followups.md` supplies the atomic pre-spatial `Σ → Σ′` framework and typed extension boundary, gates the general registry taxonomy, keeps registry and Ano grammar separate, and derives Kore's palette safely from OSC 10/11.
+6. **Verify and implement the spatial lattice last.** `99-spatial-lattice.md` replaces all overlapping spatial notes. It begins from the actual singleton-2-D Rust boundary and the narrower Lean trust boundary, then requires nominal habitats, declared lattice/axis/boundary capabilities, typed domains and lineage, positions/placements/services, spatial extension of the migration framework, exact-51 atomic spawn, persistence, dense lowering, Kore view/edit repair, proof verification, total demo rewrites, and only then the checked native-kernel measurement.
+
+## Demo evidence quarantine
+
+Exactly 64 demo numbers are decommissioned until rewritten from first principles:
+
+```text
+005, 019, 028–037, 044, 046–047, 050–053, 055–078,
+089–091, 093, 099, 101–110, 114–119
+```
+
+Primary ownership avoids double counting:
+
+| task | numbers | count |
+|---|---|---:|
+| `02` dynamic aliases | `005`, `019`, `028`, `071`, `093`, `103` | 6 |
+| `03` folds/scans | `029–033` | 5 |
+| `99` spatial lattice | `034–037`, `044`, `046–047`, `050–053`, `055–070`, `072–078`, `089–091`, `099`, `101–102`, `104–110`, `114–119` | 53 |
+| **total** |  | **64** |
+
+A number is the unit of quarantine: Ano, Nihongo, BQN, registry, expected output, README/test claims, and manifest entries leave or return together. Cross-task dependencies remain explicit: `028` also needs `03`; `033` also needs `99`; `071` and `093` also need `99`; diagnostic-domain obligations are especially relevant to `105–109` and `114–115` but add no new demolition number.
+
+Do not expand the list merely because a still-correct demo uses `&`, `|`, a relationship, a fold, or a scan. Controls `011`, `012`, `038`, and `039` remain valid mask fold/scan witnesses; `040` remains a valid registered-reducer spelling witness; `008`, `015`, `026`, `027`, and `087` remain valid foundness/dead-link result witnesses.
+
+## Landing rule
+
+A task is complete only when code, Ano/Nihongo grammar/docs, Steel behavior, Kore behavior where applicable, exact refusals, persistence/replay implications, and active demonstrations all agree. No backend output, raw buffer coincidence, stale status line, or unchecked metadata counts as semantic evidence.
