@@ -111,7 +111,7 @@ Sub-word vocabularies, filling the second slot of a directive and equally closed
 | roles | `keys` `id` `parent` `proto` `pos` | `role` role slot |
 | reap policies | `seal` `host` | `reap` policy slot |
 
-The refined numeric carriers: `nat` is ℕ ∩ [0, 2⁵³], `int` is ℤ ∩ [−2⁵³, 2⁵³], `bool` is {0,1}, `num` is any finite double. Out-of-carrier rest data refuses at load; it does not repair.
+The refined numeric carriers: `nat` is ℕ ∩ [0, 2⁵³], `int` is ℤ ∩ [−2⁵³, 2⁵³], and `bool` is {0,1}. Steel currently admits finite doubles for `num`; admission of `±∞` and NaN remains open. Out-of-carrier rest data refuses at load; it does not repair.
 
 ## How the two vocabularies intersect
 
@@ -517,7 +517,7 @@ Target , Hits += #/ attackers'         -- in-degree: count per target
 
 ### `max/`  `max\` — maximum, running peak
 
-`max/` and `max\` remain numeric bridges for `|/` and `|\`. An empty scope drops the row because finite float64 has no maximum identity.
+`max/` and `max\` remain numeric bridges for `|/` and `|\`. Numeric maximum is currently registered without an empty identity, so an empty scope drops the row.
 
 ```haskell
 max/ Height @ Ray            -- the tallest along the ray
@@ -526,7 +526,7 @@ max\ Height @ Ray            -- the running skyline up the sightline
 
 ### `min/`  `min\` — minimum, running floor
 
-`min/` and `min\` remain numeric bridges for `&/` and `&\`, and `scan(min) X along order` is the same operation under a named order. An empty scope drops the row because finite float64 has no minimum identity, so no seed is ever prepended and no infinity is manufactured.
+`min/` and `min\` remain numeric bridges for `&/` and `&\`, and `scan(min) X along order` is the same operation under a named order. Numeric minimum is currently registered without an empty identity, so an empty scope drops the row; the current descriptor prepends no seed and manufactures no infinity.
 
 ```haskell
 Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 10

@@ -234,7 +234,8 @@ fn push_alias(reg: &mut Registry, words: &[(usize, &str)], ln: i32, ja: bool) ->
 // word); name gate order wfree -> wname -> wuniq selects which diagnostic fires; wuniq also
 // refuses the twelve reserved emitter identifiers and the anoRelStage<n> family under the fold;
 // forward-only references (n before cols, lattice before fields, rel before inv); the value
-// domain is the finite doubles at the single wnum choke point; char/fn payloads are the RAW
+// currently admitted numeric domain is the finite doubles at the single wnum choke point;
+// char/fn payloads are the RAW
 // stripped line tail from the word's byte offset (interior spaces kept); keyed rel/srel store
 // the key column's CANONICAL spelling; inv fibers compute here (ascending sources, key-space
 // values); the `default` line parses its number BEFORE the entry lookup; empty = zero registry.

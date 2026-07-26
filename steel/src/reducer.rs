@@ -264,7 +264,7 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
         ),
         "|" => homogeneous("∨", "", Carrier::Mask, mask("0"), LawStatus::Holds, LawStatus::Holds),
         "&" => homogeneous("∧", "", Carrier::Mask, mask("1"), LawStatus::Holds, LawStatus::Holds),
-        // finite float64: the numeric extrema carry no identity, never ±∞
+        // The current numeric extrema descriptor declares no empty identity and never invents ±∞.
         "max" => homogeneous("⌈", "", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
         "min" => homogeneous("⌊", "", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
         // A9 over the char carrier: `⌈` and `⌊` refuse characters, so the step steps through code

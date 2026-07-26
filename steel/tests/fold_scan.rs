@@ -232,8 +232,8 @@ fn bridge_spellings_emit_one_program() {
     assert_eq!(ok("scan(min) Gold along Silver\n"), ok("scan(&) Gold along Silver\n"));
 }
 
-// Ano's numeric carrier is finite float64 (todo/03:87): the extrema carry no identity, so no
-// seed is prepended and no infinity is ever manufactured.
+// The current numeric extrema descriptors carry no empty identity, so no seed is prepended and
+// no infinity is manufactured merely to answer emptiness.
 #[test]
 fn extrema_never_seed_and_never_manufacture_infinity() {
     for source in
@@ -298,10 +298,9 @@ fn char_extrema_declare_no_identity() {
     assert!(guarded.contains("•Show⍟q1v q1"), "{}", guarded);
 }
 
-// A9 adopts q's Greater/Lesser CONVENTION over Ano's carriers, not q's promotions: q lifts the
-// int to a char in `98 | "a"` and returns `"b"`, the higher of the two types, and Ano refuses
-// the mixture.  A glyph has no selection reading to fall back on, so a char mixture refuses in
-// every position, not only in a value one.
+// A9 adopts q's Greater/Lesser convention over Ano's carriers.  Pending Ano's coercion table,
+// Steel refuses q's mixed `98 | "a"` case.  A glyph has no selection reading to fall back on,
+// so the current char gate applies in every position, not only in a value one.
 #[test]
 fn mixed_char_carriers_refuse() {
     for (source, message) in [
@@ -533,8 +532,8 @@ fn unknown_reducer_refuses_identically_in_every_form() {
     }
 }
 
-// Greater/Lesser is carrier-directed with no coercion, so a mixture has no reading.  Only a
-// genuine value position refuses: a bare column in selection position keeps presence semantics.
+// Greater/Lesser is carrier-directed.  Pending the coercion table, a mixture has no reading.
+// Only a genuine value position refuses: a bare column in selection position keeps presence semantics.
 #[test]
 fn mixed_direct_carriers_refuse() {
     assert!(err("Silver = (Gold | Burning)\n")

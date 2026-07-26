@@ -190,7 +190,7 @@ threat/ Damage @ Enemies     -- named registered reducer: the slash attaches to 
 fold(threat) Damage @ Enemies    -- the long form, same fold
 ```
 
-Two honesty rules. A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. An identity is needed only to produce a value on empty input. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` have no identity in Ano's finite float64 carrier, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel consumes the validity guard before binding, labeling, comparison, and display, so the backend placeholder behind a false guard is unobservable.
+Two honesty rules. A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. An identity is needed only to produce a value on empty input. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` are currently registered without an empty identity, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel consumes the validity guard before binding, labeling, comparison, and display, so the backend placeholder behind a false guard is unobservable.
 
 A scan accumulates and returns a column of equal length, which means it needs an order, and an abstract selection has none. Either the source view carries one, or you name one.
 
@@ -199,7 +199,7 @@ A scan accumulates and returns a column of equal length, which means it needs an
 scan(+) Weight along pathCells       -- the order named explicitly
 ```
 
-The whole family fits one table. Ano adopts q's Greater and Lesser operations directly. `|` is OR on masks and pointwise maximum on numbers. `&` is AND on masks and pointwise minimum on numbers. A mask and number never coerce. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
+The whole family fits one table. Ano adopts q's Greater and Lesser operations directly. `|` is OR on masks and pointwise maximum on numbers. `&` is AND on masks and pointwise minimum on numbers. Steel currently refuses mixed carriers pending Ano's operator-specific coercion table. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
 
 | f | `f/` fold | `f\` scan | empty-scope identity |
 |---|---|---|---|
@@ -328,6 +328,6 @@ One honest note about running rules here, since Steel reads a file top to bottom
 ## Where the edges are
 
 
-Ano numbers are IEEE 754 float64. Integers are contiguous through 2^53. Above that, small additions may be absorbed by the local spacing. Overflow and non-finite values are refused at load or save, and a failed save leaves the world file untouched. The registry's value domain is exactly the finite doubles, and load ∘ save is the identity on it, negative zero included. `src/refusals/` pins the refusal boundary. Host float replay needs recorded input bits or an explicit quantization rule; the host binding is unbuilt.
+Ano numbers use IEEE 754 float64 storage. Integers are contiguous through 2^53. Above that, small additions may be absorbed by the local spacing. Steel's current registry-load and save boundaries refuse overflow and non-finite values, and a failed save leaves the world file untouched. Load ∘ save is the identity on the admitted finite domain, negative zero included. `src/refusals/` pins that implemented boundary; admission of `±∞` and NaN remains open and is separate from absence. Host float replay needs recorded input bits or an explicit quantization rule; the host binding is unbuilt.
 
 Where to go next: `ano-language.md` is the spec this manual has been quoting. `spatialmaths.md` derives habitats, fields, lineage, lattices, placement, boundaries. `proofs/foundations.md` states the active obligations, `ano_nihongo.md` carries the Japanese surface, and `demos/` holds the executable witnesses. Go address something by description.

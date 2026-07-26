@@ -4550,14 +4550,14 @@ mod normalize {
                         let (lc, rc) = (self.infer(&left), self.infer(&right));
                         let numeric = |carrier| carrier == SemanticCarrier::Number;
                         let chars = |carrier| carrier == SemanticCarrier::Char;
-                        // Greater/Lesser is carrier-directed; A9 adopts q's convention over Ano's
-                        // carriers, not q's promotions, so a mixture has no reading.  A genuine
+                        // Greater/Lesser is carrier-directed; pending Ano's coercion table, the
+                        // current gate gives a mixture no reading.  A genuine
                         // value position refuses a mask/number mixture, while at the neutral top
                         // of a query or an effect the operands keep their selection/presence
                         // reading.  A char operand refuses wherever it is mixed: a glyph has no
                         // selection reading to fall back on, and the lift q performs there —
                         // `98 | "a"` returning the char `"b"`, the higher of the two types — is
-                        // exactly the coercion Ano declines.
+                        // not yet represented.
                         let mixed_value = context == Context::Value && numeric(lc) != numeric(rc);
                         let mixed_char = chars(lc) != chars(rc)
                             && lc.reducer_carrier().is_some()
@@ -5094,7 +5094,7 @@ mod normalize {
             assert!(refused("nope\\ Gold\n").contains("unknown reducer 'nope'"));
         }
 
-        // Greater/Lesser is carrier-directed with no coercion; a value position refuses mixtures.
+        // Greater/Lesser is carrier-directed; pending the coercion table, value mixtures refuse.
         #[test]
         fn mixed_carrier_greater_lesser_refuses_in_value_position() {
             let message = refused("Silver = (Gold | Burning)\n");
