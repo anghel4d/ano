@@ -638,15 +638,14 @@ impl<'a> Em<'a> {
 
     // --trace dead-link hook: zero output without the flag; key None is the positional carrier,
     // g (None = total) the accumulated guard of earlier legs, m the emission mode.  Exactly ¯1
-    // stays silent in both carriers.
+    // stays silent in both carriers.  DEAD is spelled as the non-sentinel complement of the hop's
+    // own guard rather than derived a second time, so the two cannot partition the targets
+    // differently (A17).
     fn trace_dead(&mut self, name: &str, key: Option<&str>, rel: &str, g: Option<&str>, m: Mode, line: i32) {
         if !self.dirs.trace {
             return;
         }
-        let dead = match key {
-            Some(key) => format!("(¯1≠{})∧(≠{})≤{}⊐{}", rel, key, key, rel),
-            None => format!("(¯1≠{})∧¬{}", rel, crate::relationship::bqn_found(rel, None)),
-        };
+        let dead = format!("(¯1≠{})∧¬{}", rel, crate::relationship::bqn_found(rel, key));
         let mut mask = match g {
             Some(g) => format!("{}∧{}", g, dead),
             None => dead,

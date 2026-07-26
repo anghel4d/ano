@@ -2,6 +2,10 @@
 
 Status: phase-domain reporting, the trace harness, and endpoint-carrier sealing have landed in Steel; the full acceptance matrix and Kore parity remain. The result semantics for foundness and the sentinel are ruled: `-1` is the sole silent no-link sentinel, and every other target is ordinary carrier data judged by the found guard.
 
+Foundness, the phase domains, and the dead-link report are implemented and their tests pass. `DEAD` is spelled as the non-sentinel complement of the hop's own found guard rather than derived separately, so the two cannot partition the targets differently — which is the defect that produced the sign bug, where a resolving negative key was neither found nor reported dead and the row simply vanished. The load boundary refuses a target only for leaving its declared carrier, never for its sign.
+
+Still open: the write boundary is a stub, so a computed relationship write is not yet staged and validated before it publishes; and the `FIBER` reports are unobserved because the fiber fixture folds and fold rendering is a stub. Marks below that name a write commit or a fiber report read as the contract this file sets, not as current behavior.
+
 ## Semantic domains
 
 Let `X` be a statement's source row domain, let `p : X → Bool` be its final predicate, and let:

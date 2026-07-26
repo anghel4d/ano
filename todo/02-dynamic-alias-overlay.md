@@ -2,6 +2,8 @@
 
 Status: the core overlay, the resolver framework (`input.entity` and `input.mask`, a frozen `HostInput`, service versions), the host boundary, replay (persist-environment with barrier-stamped `-- alias@<barrier>` records and per-version sidecar snapshots), and Kore's display are landed in Steel and Kore. Remaining: wiring the ruled `^cursor` cold default—alias-first with bare fallback, per the documented contract—and the concrete deictic resolvers alongside `99`'s host services; and the alias demo rewrites, owned by the demo campaign task.
 
+The overlay itself is untouched by the fold and foundness work in flight, and every marked item below holds, with one exception: the end-to-end CLI sidecar test cannot run, because its fixture folds and fold rendering is a stub. That is a fixture dependency, not a gap in the overlay.
+
 ## Ruling
 
 Let `Γ` be the validated registry and ordinary bare-binding environment, and let `A_t` be the live alias overlay observed by statement step `t`.

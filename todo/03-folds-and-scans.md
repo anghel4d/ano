@@ -2,6 +2,8 @@
 
 Status: consolidated implementation task. This replaces the separate scan-parity, Greater/Lesser, and empty-output files because all three depend on one carrier-directed accumulator contract and one validity path.
 
+The scan half, the direct carrier-directed dyads, head resolution, the strategy check, and `scan2`'s removal are implemented, and every `[X] DONE` below that names one of them holds. The fold half is not: fold rendering is a stub, so `fold(+)`, the glyph folds, the ordered non-associative steps, the grouped folds, and every empty-identityless-fold observation are specified here but absent from the compiler. Marks below that name a fold read as the contract this file sets, not as current behavior, until fold rendering is lowered from the descriptor.
+
 ## Semantic core: the ruled unseeded left accumulation
 
 For a nonempty ordered source `x₀,…,xₙ` and a homogeneous step `f : A × A → A`:
@@ -223,9 +225,9 @@ Still-correct controls `011`, `012`, `038`, `039`, and `040` remain active. Do n
 ## Completion gate
 
 - [X] DONE — One semantic descriptor table governs direct dyads, glyph folds/scans, long forms, grouped forms, and along forms.
-- [X] DONE — Ordered semantics exactly match the recurrence in this file.
+- Ordered semantics exactly match the recurrence in this file. Held by every scan; awaiting fold rendering for every fold.
 - [X] DONE — Running mean and count are represented honestly as stateful prefix machines.
 - [X] DONE — `|` and `&` have carrier-directed q-style behavior without coercion.
-- [X] DONE — Empty identityless queries cannot expose a placeholder.
+- Empty identityless queries cannot expose a placeholder. The validity channel that guarantees it is staged; the folds it guards are not yet rendered.
 - [X] DONE — `scan2` no longer exists in code, grammar, docs, or active demos.
 - Steel, Kore, Ano, Nihongo, and explanatory BQN witnesses agree on all positive and refusal cases.

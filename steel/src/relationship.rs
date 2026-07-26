@@ -228,18 +228,22 @@ pub fn bqn_validity(value: &str, carrier: TargetCarrier, functional: bool) -> St
     }
 }
 
-/// Foundness guard for a functional relationship value.  Inputs: a BQN expression naming the
-/// stored target, and the BQN expression naming the key column the relationship resolves
-/// through when it is keyed.  Output: a BQN boolean expression, true exactly where the stored
-/// target resolves to a live row of the current world.
+/// Foundness guard for a functional relationship value.  Inputs: a self-contained BQN expression
+/// naming the stored target, and the BQN expression naming the key column it resolves through,
+/// `None` for the positional carrier.  Output: one parenthesized BQN boolean operand, true
+/// exactly where the stored target resolves to a live row of the current world, which callers
+/// negate for the dead-link mask and conjoin into larger guards.
 ///
-/// `¯1` is the no-link sentinel and never satisfies the guard.  An unkeyed target is a row
-/// index, found while it lies inside the world's row count.  A keyed target is found while it
-/// appears in the key column, whatever its sign, because that column's declared carrier alone
-/// governs which values live there.  A valid target that does not resolve is a dead link the
-/// diagnostic path reports; it is neither malformed nor silent.
-pub fn bqn_found(_value: &str, _key: Option<&str>) -> String {
-    todo!()
+/// `¯1` never satisfies the guard.  An unkeyed target indexes rows directly, so the world bounds
+/// it at both ends.  A keyed target is found while it appears in the key column, whatever its
+/// sign, because that column's declared carrier alone governs which values live there (A11).
+pub fn bqn_found(value: &str, key: Option<&str>) -> String {
+    match key {
+        // a row index addresses a row only inside the world, so the bound is two-sided
+        None => format!("((¯1≠{})∧(0≤{})∧({}<anoN))", value, value, value),
+        // sign is the key carrier's business (A11); only the lookup landing inside it is ours
+        Some(key) => format!("((¯1≠{})∧(({}⊐{})<≠{}))", value, key, value, key),
+    }
 }
 
 #[cfg(test)]
@@ -288,6 +292,35 @@ mod tests {
         assert!(validate_target(21.0, ranged, "k").is_err());
         // the no-link sentinel is never range-checked
         assert!(validate_target(-1.0, ranged, "k").is_ok());
+    }
+
+    // Shape only: a string cannot witness resolution, and no fixture yet keys a relationship
+    // through a column holding negative keys.
+    #[test]
+    fn found_guard_bounds_each_carrier_on_its_own_terms() {
+        // the defect was a nonnegativity conjunct here, refusing keys the carrier admits
+        let keyed = bqn_found("mentor", Some("Slot"));
+        assert!(!keyed.contains("0≤"), "{}", keyed);
+        assert!(keyed.contains("(Slot⊐mentor)<≠Slot"), "{}", keyed);
+        // an unkeyed target indexes rows, so the world bounds it below and above
+        let unkeyed = bqn_found("mentor", None);
+        assert!(unkeyed.contains("(0≤mentor)"), "{}", unkeyed);
+        assert!(unkeyed.contains("(mentor<anoN)"), "{}", unkeyed);
+    }
+
+    #[test]
+    fn found_guard_excludes_the_sentinel_in_both_carriers() {
+        for text in [bqn_found("mentor", None), bqn_found("mentor", Some("Slot"))] {
+            assert!(text.contains("(¯1≠mentor)"), "{}", text);
+        }
+    }
+
+    #[test]
+    fn found_template_parenthesizes_each_arm() {
+        // the dead-link mask negates this text and guards conjoin it, so an arm is one operand
+        for text in [bqn_found("mentor", None), bqn_found("mentor", Some("Slot"))] {
+            assert!(text.starts_with('(') && text.ends_with(')'), "{}", text);
+        }
     }
 
     #[test]

@@ -651,7 +651,7 @@ field moisture num 1 2 3 4 5 6 7 8 9
 
 ### `unique` — injective key column
 
-`unique <name> [num|nat|int] <values…>`, a numeric column under a declared injectivity constraint: every element pairwise-distinct, checked at load, a repeat named with both rows. An optional kind word refines the carrier by set intersection — `unique id nat` is injectivity ∩ ℕ, `unique slot int` lets negative keys live. `spawn` mints `1+max`; effect writes to it are refused; `pres`, `default`, and proto fields all reject on it, since a key column is total and minted, never defaulted.
+`unique <name> [num|nat|int] <values…>`, a numeric column under a declared injectivity constraint: every element pairwise-distinct, checked at load, a repeat named with both rows. An optional kind word refines the carrier by set intersection — `unique id nat` is injectivity ∩ ℕ, `unique slot int` lets negative keys live. `spawn` mints `1+max` seeded at `-1`, so a minted key is never negative; effect writes to it are refused; `pres`, `default`, and proto fields all reject on it, since a key column is total and minted, never defaulted.
 
 ```
 unique id nat 3 5        -- distinct naturals; spawn mints 6, then 7
@@ -687,7 +687,7 @@ range health 0 8         -- writes clamp into 0..8
 
 ### `rel` — functional relationship
 
-`rel <name> <n values>`, one target per source, `-1` the None sentinel, keyed to the row index. The keyed form `rel <keycol> <name> <n values>` names a `unique` key column first (negatives refused). Bare `rel` is the found mask, so it is true only when the stored target resolves in the current world. The hop uses the same index-of and found-guard. Any nonnegative target that fails it is DEAD, with no finer missing-state taxonomy. The `-1` sentinel stays silent.
+`rel <name> <n values>`, one target per source, `-1` the None sentinel, keyed to the row index. The keyed form `rel <keycol> <name> <n values>` names a `unique` key column first, whose declared carrier alone decides which values it admits. Bare `rel` is the found mask, so it is true only when the stored target resolves in the current world. The hop uses the same index-of and found-guard. Any non-sentinel target that fails it is DEAD, with no finer missing-state taxonomy. The `-1` sentinel stays silent. Since `-1` in target position means no link, a row whose key is `-1` is unreachable through a functional relationship.
 
 ```
 rel target 2 0 -1 4 1              -- entity 0 → 2, entity 2 → nobody
