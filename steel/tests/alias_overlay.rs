@@ -1,10 +1,10 @@
 // The overlay as an environment rather than as a spelling: snapshot barriers, resolver targets,
 // the install/rebind/delete lifecycle across emissions, and the sidecar as it reaches the CLI.
 //
-// Barrier model under test (ruling (b)): in batch Steel the statement barrier IS the emission
-// boundary — one frozen (registry, environment) pair captured before lowering, observed by every
-// statement of that emission.  Whether todo/02:60 additionally requires intra-emission barriers
-// is Q18 and stays OPEN; nothing here answers it.
+// Barrier model under test: one statement evaluates against one coherent world, overlay, and
+// host-input snapshot.  Batch Steel freezes one (registry, environment) pair per emission and
+// Kore's host boundary is the statement barrier; both are that one law seen from the two hosts
+// that run Ano.
 
 use steel::alias::{AliasEnvironment, AliasSnapshot};
 use steel::emit::emit_with_aliases;
@@ -95,10 +95,9 @@ fn multi_gather_one_snapshot() {
     assert_eq!(ok(src, &reg, frozen), under_frozen);
 }
 
-// Bullet 8, within the landed per-emission semantics: a resolver target is invoked against the
-// frozen (registry, input) pair recorded on it, so both gathers of one emission materialize the
-// same entity row.  "A later statement may observe a different entity" is the NEXT barrier —
-// here the next emission — per ruling (b); Q18 stays open.
+// Bullet 8: a resolver target is invoked against the frozen (registry, input) pair recorded on
+// it, so both gathers of one emission materialize the same entity row.  Changed host input
+// becomes visible at the next barrier, which in batch Steel is the next emission.
 #[test]
 fn resolver_frozen_snapshot_and_next_barrier() {
     let reg = registry();

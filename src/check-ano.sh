@@ -6,23 +6,15 @@ STEEL="${STEEL:-$(dirname "$0")/../target/release/steel}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
 fail=0
-while IFS= read -r f; do
-  if "$STEEL" --run "$f" >/dev/null 2>&1; then
-    echo "ok   $f"
-  else
-    echo "FAIL $f"
-    fail=1
-  fi
-done < <(find "$root/demos" -name '*.ano' | sort)
-while IFS= read -r f; do
-  twin="${f%-nihongo.ano}.ano"
-  [ -f "$twin" ] || continue
-  if cmp -s <("$STEEL" --emit "$f" 2>/dev/null) <("$STEEL" --emit "$twin" 2>/dev/null); then
-    echo "ok-emit   $f"
-  else
-    echo "FAIL-emit $f"
-    fail=1
-  fi
-done < <(find "$root/demos" -name '*-nihongo.ano' | sort)
-STEEL="$STEEL" bash "$here/check-refusals.sh" || fail=1
-exit $fail
+
+# The set of decommissioned demo numbers is read from the quarantine block in todo/TODO.md,
+# which is the single authority for it, and is shared by every harness rather than restated
+# per script. A demo whose leading three-digit number is decommissioned is skipped, in both
+# the run pass and the Japanese-twin emission comparison, and each skip is announced on its
+# own line, so an exclusion is always visible and never silent.
+# Every demo file is accounted for: each matches the three-digit naming convention and lands
+# in exactly one of active or decommissioned, and the harness fails if any file falls outside
+# that accounting. A decommissioned number carrying no file of a given kind is normal, not a gap.
+
+echo "src/check-ano.sh: quarantine-aware enumeration is not implemented" >&2
+exit 1

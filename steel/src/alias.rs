@@ -1205,10 +1205,10 @@ mod tests {
         assert!(note.is_none());
     }
 
-    // Defense in depth: AliasSnapshot::validate already refuses the whole emission when any entry
-    // is stale, so these per-name arms are unreachable through emit().  They are kept, and pinned
-    // here against a mutated registry clone, because the charter's per-lookup refusal is the
-    // weaker reading — see Q26 in todo/00-open-rulings.md.  A stale entry never falls back.
+    // An overlay entry that is present but stale, invalid, or incompatible with its context
+    // refuses at the lookup itself; bare fallback happens only when the canonical key is absent
+    // from the overlay entirely.  Pinned per name against a mutated registry clone, beneath
+    // AliasSnapshot::validate, which refuses the whole emission when any entry is stale.
     #[test]
     fn resolve_stale_arms_refuse_without_falling_back() {
         let reg = registry();

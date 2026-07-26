@@ -534,14 +534,8 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         return Err(rerr(ln, format!("rel {}: key '{}' is not a unique column", name, words[1].1)));
                     };
                     let kname = reg.ents[kc].name.clone();
-                    for &x in col_nums(&reg.ents[kc]).unwrap_or(&[]) {
-                        if x < 0.0 {
-                            return Err(rerr(
-                                ln,
-                                format!("rel {}: key column '{}' holds a negative value — -1 is the dangling sentinel", name, kname),
-                            ));
-                        }
-                    }
+                    // the key column's declared carrier governs which values it admits — nat excludes
+                    // negatives, int admits them; keying a rel through a column restricts nothing further
                     key_of = Some(kname);
                 }
                 let vals = wnums(&words, ni + 1, reg.n, ln)?;

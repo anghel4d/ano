@@ -9,4 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 steel = { path = "../steel" }
+
+[target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", default-features = false, features = ["fs", "ioctl", "poll", "process", "signal", "term"] }

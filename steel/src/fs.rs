@@ -4,7 +4,6 @@
 
 use std::io::{Error, Read, Write};
 
-use nix::errno::Errno;
 
 pub const ANO_PATHSZ: usize = 1024;
 
@@ -155,10 +154,10 @@ pub fn fs_read(path: &str) -> std::io::Result<Vec<u8>> {
     let md = f.metadata()?;
     let ft = md.file_type();
     if ft.is_dir() {
-        return Err(Error::from_raw_os_error(Errno::EISDIR as i32));
+        return Err(condition(FsCondition::IsADirectory));
     }
     if !ft.is_file() {
-        return Err(Error::from_raw_os_error(Errno::EINVAL as i32));
+        return Err(condition(FsCondition::NotAFile));
     }
     let mut buf = Vec::with_capacity(md.len() as usize + 1);
     // errno tells the story; a non-OS read failure is C's short-read EIO
@@ -172,7 +171,7 @@ pub fn fs_read(path: &str) -> std::io::Result<Vec<u8>> {
 pub fn fs_write_commit(path: &str, data: &[u8]) -> std::io::Result<()> {
     let staged = format!("{}.staged", path);
     if staged.len() >= ANO_PATHSZ {
-        return Err(Error::from_raw_os_error(Errno::ENAMETOOLONG as i32));
+        return Err(condition(FsCondition::NameTooLong));
     }
     let mut f = std::fs::File::create(&staged)?;
     if let Err(e) = f.write_all(data) {
@@ -194,27 +193,36 @@ pub fn fs_write_commit(path: &str, data: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-// Inputs: an io::Error. Output: the same error when it carries an OS errno; C's synthetic
-// EIO otherwise (fs.c: errno = ferror(f) ? errno : EIO).
-fn os_or_eio(e: Error) -> Error {
-    if e.raw_os_error().is_some() {
-        e
-    } else {
-        Error::from_raw_os_error(Errno::EIO as i32)
-    }
+// One filesystem condition the reader and the committer report.
+pub enum FsCondition {
+    // the path names a directory where a file is required
+    IsADirectory,
+    // the path names something that is not a usable file
+    NotAFile,
+    // the constructed name exceeds what the platform accepts
+    NameTooLong,
+    // an underlying operation failed without reporting a cause
+    Unattributed,
 }
 
-// Inputs: an io::Error. Output: the target-native strerror text from nix Errno —
-// never io::Error's own Display (it appends " (os error N)"). Unknown/unmapped
-// raw values fall back to "Unknown error %d".
-pub fn strerror(e: &std::io::Error) -> String {
-    let raw = e.raw_os_error().unwrap_or(0);
-    let errno = Errno::from_raw(raw);
-    if errno == Errno::UnknownErrno {
-        format!("Unknown error {}", raw)
-    } else {
-        errno.desc().to_string()
-    }
+// Inputs: one FsCondition. Output: an io::Error carrying the platform's own code for that
+// condition, so a diagnostic reads the same as any other tool on the platform reports it.
+fn condition(_which: FsCondition) -> Error {
+    todo!()
+}
+
+// Inputs: an io::Error. Output: the same error when it already carries an OS code, and the
+// unattributed-failure code otherwise.
+fn os_or_eio(_e: Error) -> Error {
+    todo!()
+}
+
+// Inputs: an io::Error. Output: the platform's native message text for it. The text is the
+// operating system's own wording and carries no Rust-added decoration such as a trailing
+// parenthesized code, so one diagnostic line matches what the platform reports everywhere
+// else. A code the platform does not name renders as "Unknown error <code>".
+pub fn strerror(_e: &std::io::Error) -> String {
+    todo!()
 }
 
 #[cfg(test)]
@@ -260,13 +268,5 @@ mod tests {
         assert_eq!(fs_join("d", "/abs").unwrap().s, "/abs");
         assert_eq!(fs_join("d", "").unwrap().s, "d/");
         assert!(fs_join(&"a".repeat(1000), &"b".repeat(100)).is_none());
-    }
-
-    #[test]
-    fn strerror_uses_target_native_errno() {
-        assert_eq!(strerror(&Error::from_raw_os_error(Errno::ENAMETOOLONG as i32)), Errno::ENAMETOOLONG.desc());
-        assert_eq!(strerror(&Error::from_raw_os_error(Errno::EAGAIN as i32)), Errno::EAGAIN.desc());
-        assert_eq!(strerror(&Error::from_raw_os_error(Errno::ENOLCK as i32)), Errno::ENOLCK.desc());
-        assert_eq!(strerror(&Error::from_raw_os_error(i32::MAX)), format!("Unknown error {}", i32::MAX));
     }
 }

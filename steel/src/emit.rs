@@ -228,11 +228,6 @@ fn desc_of(op: &str, form: reducer::Form) -> Option<reducer::OpDesc> {
     reducer::canonical(op, form)
 }
 
-// The fold glyph; None for #, avg, named reducers.
-fn fold_gl(op: &str) -> Option<String> {
-    desc_of(op, reducer::Form::Fold).and_then(|d| d.fold_glyph())
-}
-
 // Folds whose descriptor registers an empty identity: empty gathers need no guard.
 fn fold_has_id(op: &str) -> bool {
     desc_of(op, reducer::Form::Fold).is_some_and(|d| d.empty_identity().is_some())
@@ -569,6 +564,31 @@ impl<'a> Em<'a> {
         }
         None
     }
+
+    // Inputs: a fold head as written and the rendered BQN operand expression.  Output: the BQN
+    // text computing that fold over the operand, or None when the head names a registered
+    // reducer, whose rendering each fold site spells for its own position.
+    // The rendering realizes the unseeded left recurrence, so a non-associative head such as
+    // subtraction or division yields the exact ordered result.  The helper declaration the
+    // rendering depends on is registered in the prologue.  Reductions the emitter performs for
+    // its own bookkeeping are ordinary BQN reductions and never come through here; only a fold
+    // written in Ano carries this contract.
+    fn render_fold(&mut self, _op: &str, _operand: &str) -> Option<String> { todo!() }
+
+    // Inputs: one BQN helper declaration a rendering depends on.  Output: (); the declaration
+    // joins the prologue, which the final assembly flushes into the program preamble directly
+    // after the `anoSel ← ⟨⟩` line.  Entries deduplicate and hold insertion order, so one
+    // program's text is byte-identical across runs.
+    fn need_declaration(&mut self, _declaration: &str) { todo!() }
+
+    // Inputs: the registry index of a functional or set-valued relationship and the rendered
+    // right-hand side being written to it.  Output: the BQN that stages that value into a fresh
+    // binding, asserts its validity through crate::relationship::bqn_validity, and only then
+    // publishes it to the relationship's variable.
+    // Every write to a relationship passes through this path, so no relationship value reaches
+    // the world unvalidated.  A refused write leaves the exact pre-state.  The staged binding's
+    // name is lowercase, because BQN reads an uppercase initial as a function.
+    fn stage_relationship_write(&mut self, _ri: usize, _rhs: &str) -> Result<String, Diag> { todo!() }
 
     // Has-a-live-target guard for a bare rel.
     fn rel_guard(&self, ri: usize) -> String { let v = self.bqnv(ri); let key = self.rel_key(ri); crate::relationship::bqn_found(&v, key.as_deref()) }
@@ -1074,7 +1094,7 @@ impl<'a> Em<'a> {
                 let fb_name = self.rs(rel);
                 let nonempty = self.fiber_nonempty(rel, &raw);
                 let cv = self.emit_val(r, Mode::World)?;
-                let gl = fold_gl(op);
+                let call = self.render_fold(op, &format!("𝕩⊏{}", cv.v));
                 let t = self.tv();
                 if op == "avg" {
                     self.trace_empty(fb_name, &fib, m, l.line);
@@ -1083,13 +1103,13 @@ impl<'a> Em<'a> {
                     ev.gv = true;
                 } else if op == "#" {
                     self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, cv.v, fib));
-                } else if let Some(gl) = gl {
+                } else if let Some(call) = call {
                     if fold_has_id(op) {
-                        self.stage(format!("{} ← {{{}𝕩⊏{}}}¨{}", t, gl, cv.v, fib));
+                        self.stage(format!("{} ← {{{}}}¨{}", t, call, fib));
                     } else {
                         // max/min: no identity, guard empties
                         self.trace_empty(fb_name, &fib, m, l.line);
-                        self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}𝕩⊏{}}}¨{}", t, gl, cv.v, fib));
+                        self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}}¨{}", t, call, fib));
                         ev.g = Some(nonempty);
                         ev.gv = true;
                     }
@@ -1140,11 +1160,11 @@ impl<'a> Em<'a> {
                 let fs = fiber_sym(l);
                 let (mut fib, _raw) = self.fiber_var(fs, l.line)?;
                 self.fiber_rows(fs, &mut fib, m, l.line);
-                let Some(gl) = fold_gl(op) else {
+                let Some(call) = self.render_fold(op, "𝕩") else {
                     return Err(fail(line, format!("fold {}/ @row", op)));
                 };
                 ev.unit = false;
-                ev.v = self.in_mode(format!("({}¨{})", gl, fib), m);
+                ev.v = self.in_mode(format!("({{{}}}¨{})", call, fib), m);
                 return Ok(ev);
             }
         }
@@ -1216,7 +1236,7 @@ impl<'a> Em<'a> {
             ev.gv = true;
             return Ok(ev);
         }
-        let Some(gl) = fold_gl(op) else {
+        let Some(guarded) = self.render_fold(op, "𝕩") else {
             // named reducer: registry fn folds pairwise
             let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
             let Some(fe) = fe else {
@@ -1232,13 +1252,14 @@ impl<'a> Em<'a> {
         };
         if !fold_has_id(op) {
             let t = self.tv();
-            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}𝕩}} {}", t, gl, gathered));
+            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}} {}", t, guarded, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
             ev.gv = true;
             return Ok(ev);
         }
-        ev.v = format!("({}{})", gl, gathered);
+        let call = self.render_fold(op, &gathered).unwrap_or_default();
+        ev.v = format!("({})", call);
         Ok(ev)
     }
 
@@ -4492,52 +4513,6 @@ mod normalize {
         value
     }
 
-    // Foundness itself is no longer sealed here: every hop and bare-rel guard emits
-    // relationship::bqn_found at source, so a respelling can never silently disarm the
-    // exact-¯1 sentinel rule.  What remains is the write boundary.
-    fn seal_relationship_writes(bqn: String, reg: &Registry) -> Result<String, Diag> {
-        // A computed relationship update is stage -> validate -> publish.  The original update
-        // never executes when the assertion refuses, so the world remains at its pre-statement
-        // value.  Fixture `←` bindings were already sealed by registry::reg_load.
-        let mut serial = 0usize;
-        let mut output = String::with_capacity(bqn.len() + 512);
-        'line: for line in bqn.lines() {
-            let trimmed = line.trim_start();
-            for (index, entry) in reg.ents.iter().enumerate() {
-                let (carrier, functional) = match &entry.kind {
-                    RegEntryKind::Rel { key_of, .. } => (
-                        crate::relationship::carrier_for(reg, key_of.as_deref())?,
-                        true,
-                    ),
-                    RegEntryKind::SRel { key_of, inv_of, .. } if inv_of.is_none() => (
-                        crate::relationship::carrier_for(reg, key_of.as_deref())?,
-                        false,
-                    ),
-                    _ => continue,
-                };
-                let variable = bqn_var(reg, index);
-                let prefix = format!("{} ↩ ", variable);
-                let Some(rhs) = trimmed.strip_prefix(&prefix) else { continue };
-                // subject role: BQN reads an uppercase initial as a Function, so the staged
-                // commit binding must be lowercase like every other generated name
-                let stage = format!("anoRelStage{}", serial);
-                serial += 1;
-                output.push_str(&format!("{} ← {}\n", stage, rhs));
-                let expression = if functional { stage.clone() } else { format!("∾{}", stage) };
-                let predicate = crate::relationship::bqn_validity(&expression, carrier, functional);
-                output.push_str(&format!(
-                    "\"relationship {}\" ! ∧˜´⌽(1∾({}))\n",
-                    entry.name, predicate
-                ));
-                output.push_str(&format!("{} ↩ {}\n", variable, stage));
-                continue 'line;
-            }
-            output.push_str(line);
-            output.push('\n');
-        }
-        Ok(output)
-    }
-
     fn emit_trace_uses(mut bqn: String, plan: &TracePlan, enabled: bool) -> String {
         if !enabled || (plan.uses().is_empty() && plan.alias_lines().is_empty()) {
             return bqn;
@@ -4599,8 +4574,6 @@ mod normalize {
         let plan = std::mem::take(&mut normalizer.trace);
         let (mut bqn, plan) = emit_lowered(&program, &normalizer.reg, dirs, &normalizer.it, plan)?;
         bqn = ordered_mean(bqn);
-        bqn = reducer::left_fold_glyphs(bqn);
-        bqn = seal_relationship_writes(bqn, &normalizer.reg)?;
         bqn = emit_trace_uses(bqn, &plan, dirs.trace);
         Ok(bqn)
     }

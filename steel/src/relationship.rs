@@ -228,16 +228,18 @@ pub fn bqn_validity(value: &str, carrier: TargetCarrier, functional: bool) -> St
     }
 }
 
-/// Foundness guard for a functional relationship value.  Valid but absent targets remain
-/// visible to the diagnostic path as DEAD rather than becoming malformed or silent.
-pub fn bqn_found(value: &str, key: Option<&str>) -> String {
-    match key {
-        None => format!("((¯1≠{})∧(0≤{})∧({}<anoN))", value, value, value),
-        Some(key) => format!(
-            "((¯1≠{})∧(0≤{})∧(({}⊐{})<≠{}))",
-            value, value, key, value, key
-        ),
-    }
+/// Foundness guard for a functional relationship value.  Inputs: a BQN expression naming the
+/// stored target, and the BQN expression naming the key column the relationship resolves
+/// through when it is keyed.  Output: a BQN boolean expression, true exactly where the stored
+/// target resolves to a live row of the current world.
+///
+/// `¯1` is the no-link sentinel and never satisfies the guard.  An unkeyed target is a row
+/// index, found while it lies inside the world's row count.  A keyed target is found while it
+/// appears in the key column, whatever its sign, because that column's declared carrier alone
+/// governs which values live there.  A valid target that does not resolve is a dead link the
+/// diagnostic path reports; it is neither malformed nor silent.
+pub fn bqn_found(_value: &str, _key: Option<&str>) -> String {
+    todo!()
 }
 
 #[cfg(test)]

@@ -11,4 +11,3 @@ name = "steel"
 path = "src/main.rs"
 
 [dependencies]
-nix = { version = "0.31", default-features = false }

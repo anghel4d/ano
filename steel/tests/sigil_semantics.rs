@@ -375,12 +375,12 @@ fn nonascii_alias_end_to_end() {
     assert_eq!(ok("^σ , Silver = 0", &reg, &greek), ok("Gold , Silver = 0", &reg, &empty));
 }
 
-// Behavior-pin, not a ruling: the overlay is keyed by the written stem, while the bare fallback
-// additionally applies the registry spelling table.  So an entry installed under a column's own
-// name is invisible to that column's `as`/`ja` spelling, and one installed under the spelling is
-// visible only to it.  Q20 is OPEN — see todo/00-open-rulings.md:53.
+// The overlay is keyed by the written stem and only the bare fallback goes on to apply the
+// registry spelling table, so the overlay key is read before that table applies.  An entry
+// installed under a column's own name and one installed under that column's accepted `as`/`ja`
+// spelling are two distinct entries.
 #[test]
-fn q20_spelling_boundary_pin() {
+fn overlay_keys_before_the_spelling_table() {
     let reg = registry();
     let empty = AliasEnvironment::for_registry(&reg);
 
@@ -398,8 +398,8 @@ fn q20_spelling_boundary_pin() {
 }
 
 // Bullet 11: the spelling table, a static alias-mask fixture, and the dynamic overlay are three
-// mechanisms, not one.  All three answer to `X`/`cursor` at once; only the sigiled spellings move.
-// Behavior-pin on the spelling half — Q20 is OPEN, see todo/00-open-rulings.md:53.
+// mechanisms sharing one word, each keeping its own lifecycle.  All three answer to `X`/`cursor`
+// at once; only the sigiled spellings move.
 #[test]
 fn triple_coexistence() {
     let reg = registry();

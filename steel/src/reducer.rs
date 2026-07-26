@@ -325,68 +325,19 @@ pub fn validate_strategy(desc: &OpDesc, strategy: Strategy) -> Result<(), String
     Ok(())
 }
 
-/// Convert every backend fold to the ordered left recurrence.  Reducers with a lawful
-/// identity are seeded, so empty sums/products/boolean folds retain their language result;
-/// extrema remain unseeded and are guarded by the emitter's validity channel.
-pub fn left_fold_glyphs(mut bqn: String) -> String {
-    let replacements = [
-        ("+´", "AnoLeftSum ", "AnoLeftSum ← {+˜´⌽(0∾𝕩)}\n"),
-        ("-´", "AnoLeftSubtract ", "AnoLeftSubtract ← {-˜´⌽𝕩}\n"),
-        ("×´", "AnoLeftProduct ", "AnoLeftProduct ← {×˜´⌽(1∾𝕩)}\n"),
-        ("÷´", "AnoLeftDivide ", "AnoLeftDivide ← {÷˜´⌽𝕩}\n"),
-        ("∧´", "AnoLeftAnd ", "AnoLeftAnd ← {∧˜´⌽(1∾𝕩)}\n"),
-        ("∨´", "AnoLeftOr ", "AnoLeftOr ← {∨˜´⌽(0∾𝕩)}\n"),
-        ("⌈´", "AnoLeftMaximum ", "AnoLeftMaximum ← {⌈˜´⌽𝕩}\n"),
-        ("⌊´", "AnoLeftMinimum ", "AnoLeftMinimum ← {⌊˜´⌽𝕩}\n"),
-    ];
-    let mut declarations = String::new();
-    for (from, to, declaration) in replacements {
-        if bqn.contains(from) {
-            bqn = bqn.replace(from, to);
-            declarations.push_str(declaration);
-        }
-    }
-    bqn = left_fold_named(bqn);
-    if declarations.is_empty() {
-        return bqn;
-    }
-    let marker = "anoSel ← ⟨⟩\n";
-    if let Some(position) = bqn.find(marker) {
-        bqn.insert_str(position + marker.len(), &declarations);
-    } else {
-        bqn.insert_str(0, &declarations);
-    }
-    bqn
-}
-
-fn left_fold_named(input: String) -> String {
-    let chars: Vec<char> = input.chars().collect();
-    let mut output = String::with_capacity(input.len() + 32);
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] == 'F' && i + 3 < chars.len() && chars[i + 1] == 'n' && chars[i + 2] == '_' {
-            let start = i;
-            i += 3;
-            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
-                i += 1;
-            }
-            if i < chars.len() && chars[i] == '´' {
-                for c in &chars[start..i] {
-                    output.push(*c);
-                }
-                output.push_str("˜´⌽");
-                i += 1;
-                continue;
-            }
-            for c in &chars[start..i] {
-                output.push(*c);
-            }
-            continue;
-        }
-        output.push(chars[i]);
-        i += 1;
-    }
-    output
+/// Render one fold at the point it is lowered.  Inputs: the checked descriptor of the fold head
+/// and the already-rendered BQN operand expression.  Output: the BQN call text, paired with the
+/// helper declaration that call depends on so the emitter can place it in the program prologue;
+/// a rendering that needs no helper carries `None`.
+///
+/// An Ano fold is the unseeded left recurrence: the first value of the operand starts the
+/// accumulator and the rest apply left to right, so the rendering never rests on BQN's
+/// right-to-left reduction order.  A descriptor carrying a lawful identity is seeded with it, and
+/// an empty operand then yields that identity.  A descriptor with no identity stays unseeded, and
+/// its empty case is answered by the emitter's validity channel, never by a manufactured value.
+/// A registered reducer folds through its own generated function name under the same recurrence.
+pub fn render_fold(_desc: &OpDesc, _operand: &str) -> (String, Option<String>) {
+    todo!()
 }
 
 #[cfg(test)]
@@ -437,17 +388,6 @@ mod tests {
                 resolve_head("&", form, Carrier::Number, false)
             );
         }
-    }
-
-    #[test]
-    fn folds_are_reassociated_to_left_order() {
-        assert_eq!(
-            left_fold_glyphs("x ← -´v\ny ← Fn_sub´ v\n".to_string()),
-            "AnoLeftSubtract ← {-˜´⌽𝕩}\nx ← AnoLeftSubtract v\ny ← Fn_sub˜´⌽ v\n"
-        );
-        let sum = left_fold_glyphs("anoSel ← ⟨⟩\nx ← +´v\n".to_string());
-        assert!(sum.contains("AnoLeftSum ← {+˜´⌽(0∾𝕩)}"));
-        assert!(sum.contains("x ← AnoLeftSum v"));
     }
 
     #[test]
