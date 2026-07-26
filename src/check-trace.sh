@@ -4,11 +4,17 @@
 # identity, and that enabling the trace changes no denotation. One "ok" line per leg.
 #
 # Fixtures live in src/trace/ (see src/trace/trace.md). The witness demos are READ-ONLY inputs:
-# nothing here edits demos/. STEEL overrides target/release/steel.
+# nothing here edits demos/. STEEL overrides the binary; without it a fresh release build is
+# made every run, so a stale binary is never tested.
 set -u
-STEEL="${STEEL:-$(dirname "$0")/../target/release/steel}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
+if [ -z "${STEEL:-}" ]; then
+  tdir="${CARGO_TARGET_DIR:-$root/target}"
+  case "$tdir" in /*) ;; *) tdir="$root/$tdir" ;; esac
+  ( cd "$root" && cargo build --release -p steel ) || exit 1
+  STEEL="$tdir/release/steel"
+fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/ano-trace-XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 sep="$(printf '\037')"

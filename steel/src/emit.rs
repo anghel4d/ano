@@ -4555,7 +4555,8 @@ mod normalize {
                         // value position refuses a mask/number mixture, while at the neutral top
                         // of a query or an effect the operands keep their selection/presence
                         // reading.  A char operand refuses wherever it is mixed: a glyph has no
-                        // selection reading to fall back on, and q's char-to-int promotion is
+                        // selection reading to fall back on, and the lift q performs there —
+                        // `98 | "a"` returning the char `"b"`, the higher of the two types — is
                         // exactly the coercion Ano declines.
                         let mixed_value = context == Context::Value && numeric(lc) != numeric(rc);
                         let mixed_char = chars(lc) != chars(rc)

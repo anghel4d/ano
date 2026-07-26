@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Runs every demo, compares each Japanese twin's emitted BQN with its ASCII twin, then runs
-# the refusal battery. STEEL overrides target/release/steel. Exits nonzero on any failure.
+# the refusal battery. STEEL overrides the binary; without it a fresh release build is made
+# every run, so a stale binary is never tested. Exits nonzero on any failure.
 set -u
-STEEL="${STEEL:-$(dirname "$0")/../target/release/steel}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
+if [ -z "${STEEL:-}" ]; then
+  tdir="${CARGO_TARGET_DIR:-$root/target}"
+  case "$tdir" in /*) ;; *) tdir="$root/$tdir" ;; esac
+  ( cd "$root" && cargo build --release -p steel ) || exit 1
+  STEEL="$tdir/release/steel"
+fi
 fail=0
 
 # The set of decommissioned demo numbers is read from the quarantine block in todo/TODO.md,

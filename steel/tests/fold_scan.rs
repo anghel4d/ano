@@ -298,9 +298,10 @@ fn char_extrema_declare_no_identity() {
     assert!(guarded.contains("•Show⍟q1v q1"), "{}", guarded);
 }
 
-// A9 adopts q's Greater/Lesser CONVENTION over Ano's carriers, not q's promotions: q lifts a
-// char to an int in `98 | "a"` and Ano refuses it.  A glyph has no selection reading to fall
-// back on, so a char mixture refuses in every position, not only in a value one.
+// A9 adopts q's Greater/Lesser CONVENTION over Ano's carriers, not q's promotions: q lifts the
+// int to a char in `98 | "a"` and returns `"b"`, the higher of the two types, and Ano refuses
+// the mixture.  A glyph has no selection reading to fall back on, so a char mixture refuses in
+// every position, not only in a value one.
 #[test]
 fn mixed_char_carriers_refuse() {
     for (source, message) in [
