@@ -9,6 +9,7 @@
 pub enum Carrier {
     Mask,
     Number,
+    Char,
     Presence,
 }
 
@@ -78,13 +79,17 @@ impl EmptyFold {
 }
 
 /// A homogeneous unseeded reducer: `A × A → A` under the exact left recurrence.  `step` is the
-/// BQN dyad; it is empty exactly when a registered function supplies the step.
+/// BQN dyadic function — a primitive, or the name of a declared one — and it is empty exactly
+/// when a registered function supplies the step.  `step_body` is the dfn a named step stands for
+/// and is empty for a primitive: the char instances need one because BQN's `⌈` and `⌊` refuse
+/// characters outright, so the char step travels through code points.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReducerDesc {
     pub spelling: String,
     pub input: Carrier,
     pub output: Carrier,
     pub step: &'static str,
+    pub step_body: &'static str,
     pub identity: Option<TypedIdentity>,
     pub associativity: LawStatus,
     pub commutativity: LawStatus,
@@ -111,6 +116,27 @@ pub enum OpDesc {
 impl ReducerDesc {
     pub fn direct_step(&self) -> Option<&'static str> {
         if self.step.is_empty() { None } else { Some(self.step) }
+    }
+
+    /// The declaration `step` names, for the emitter's prologue.  `None` when the step is a BQN
+    /// primitive and so needs none.
+    pub fn step_declaration(&self) -> Option<String> {
+        if self.step_body.is_empty() {
+            None
+        } else {
+            Some(format!("{} ← {}", self.step, self.step_body))
+        }
+    }
+
+    /// The dfn the direct dyadic instance is spelled by: the step's own body where it has one,
+    /// and otherwise the primitive lifted into a dfn.  One table answers `a|b` and `|/a` alike.
+    pub fn direct_body(&self) -> Option<String> {
+        let step = self.direct_step()?;
+        Some(if self.step_body.is_empty() {
+            format!("{{𝕨{}𝕩}}", step)
+        } else {
+            self.step_body.to_string()
+        })
     }
 
     /// The BQN fold spelling.  `None` when the registry supplies the step.
@@ -166,6 +192,14 @@ impl OpDesc {
     pub fn scan_glyph(&self) -> Option<String> {
         self.reducer().and_then(ReducerDesc::scan_glyph)
     }
+
+    pub fn step_declaration(&self) -> Option<String> {
+        self.reducer().and_then(ReducerDesc::step_declaration)
+    }
+
+    pub fn direct_body(&self) -> Option<String> {
+        self.reducer().and_then(ReducerDesc::direct_body)
+    }
 }
 
 fn is_builtin(spelling: &str) -> bool {
@@ -187,12 +221,13 @@ fn admits(desc: &OpDesc, form: Form) -> bool {
 pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
     let number = |bqn| Some(TypedIdentity { carrier: Carrier::Number, bqn });
     let mask = |bqn| Some(TypedIdentity { carrier: Carrier::Mask, bqn });
-    let homogeneous = |step, carrier, identity, associativity, commutativity| {
+    let homogeneous = |step, body, carrier, identity, associativity, commutativity| {
         OpDesc::Reducer(ReducerDesc {
             spelling: spelling.to_string(),
             input: carrier,
             output: carrier,
             step,
+            step_body: body,
             identity,
             associativity,
             commutativity,
@@ -209,27 +244,49 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
         })
     };
     let desc = match spelling {
-        "+" => homogeneous("+", Carrier::Number, number("0"), LawStatus::Holds, LawStatus::Holds),
+        "+" => homogeneous("+", "", Carrier::Number, number("0"), LawStatus::Holds, LawStatus::Holds),
         "-" => homogeneous(
             "-",
+            "",
             Carrier::Number,
             None,
             LawStatus::DoesNotHold,
             LawStatus::DoesNotHold,
         ),
-        "*" => homogeneous("×", Carrier::Number, number("1"), LawStatus::Holds, LawStatus::Holds),
+        "*" => homogeneous("×", "", Carrier::Number, number("1"), LawStatus::Holds, LawStatus::Holds),
         "/" => homogeneous(
             "÷",
+            "",
             Carrier::Number,
             None,
             LawStatus::DoesNotHold,
             LawStatus::DoesNotHold,
         ),
-        "|" => homogeneous("∨", Carrier::Mask, mask("0"), LawStatus::Holds, LawStatus::Holds),
-        "&" => homogeneous("∧", Carrier::Mask, mask("1"), LawStatus::Holds, LawStatus::Holds),
+        "|" => homogeneous("∨", "", Carrier::Mask, mask("0"), LawStatus::Holds, LawStatus::Holds),
+        "&" => homogeneous("∧", "", Carrier::Mask, mask("1"), LawStatus::Holds, LawStatus::Holds),
         // finite float64: the numeric extrema carry no identity, never ±∞
-        "max" => homogeneous("⌈", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
-        "min" => homogeneous("⌊", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
+        "max" => homogeneous("⌈", "", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
+        "min" => homogeneous("⌊", "", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
+        // A9 over the char carrier: `⌈` and `⌊` refuse characters, so the step steps through code
+        // points.  `@` is the null character, `c-@` its code point and `@+n` the character at one.
+        // The order is the code-point order, and it has no identity either — there is no greatest
+        // or least character to seed an empty fold with, and none is invented.
+        "charmax" => homogeneous(
+            "AnoCharGreater",
+            "{@+(𝕨-@)⌈𝕩-@}",
+            Carrier::Char,
+            None,
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
+        "charmin" => homogeneous(
+            "AnoCharLesser",
+            "{@+(𝕨-@)⌊𝕩-@}",
+            Carrier::Char,
+            None,
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
         "#" => machine(
             MachineKind::Count,
             Carrier::Presence,
@@ -251,6 +308,7 @@ fn registered(spelling: &str) -> OpDesc {
         input: Carrier::Number,
         output: Carrier::Number,
         step: "",
+        step_body: "",
         identity: None,
         associativity: LawStatus::Undeclared,
         commutativity: LawStatus::Undeclared,
@@ -279,6 +337,9 @@ pub fn resolve_head(
         // q/kdb+ Greater and Lesser over the numeric carrier; the bridge names resolve here too
         ("|", Carrier::Number) | ("max", Carrier::Number) => "max",
         ("&", Carrier::Number) | ("min", Carrier::Number) => "min",
+        // and over the char carrier, by the same A9 derivation and the same bridge names
+        ("|", Carrier::Char) | ("max", Carrier::Char) => "charmax",
+        ("&", Carrier::Char) | ("min", Carrier::Char) => "charmin",
         (name, Carrier::Number) if registered_fn => name,
         (name, _) if registered_fn || is_builtin(name) => {
             return Err(format!("reducer '{}' is not defined on {:?}", name, carrier));
@@ -325,10 +386,31 @@ pub fn validate_strategy(desc: &OpDesc, strategy: Strategy) -> Result<(), String
     Ok(())
 }
 
+/// The BQN name of the helper that folds one step left.  Keyed on the step and not on the
+/// spelling, so the bridge spellings cannot mint two helpers for one operation.  A step with no
+/// name here has no fold rendering at all, which refuses at the fold site rather than answering.
+fn helper_name(step: &str) -> Option<&'static str> {
+    Some(match step {
+        "+" => "AnoLeftSum",
+        "-" => "AnoLeftSubtract",
+        "×" => "AnoLeftProduct",
+        "÷" => "AnoLeftDivide",
+        "∨" => "AnoLeftOr",
+        "∧" => "AnoLeftAnd",
+        "⌈" => "AnoLeftMaximum",
+        "⌊" => "AnoLeftMinimum",
+        "AnoCharGreater" => "AnoLeftCharMaximum",
+        "AnoCharLesser" => "AnoLeftCharMinimum",
+        _ => return None,
+    })
+}
+
 /// Render one fold at the point it is lowered.  Inputs: the checked descriptor of the fold head
 /// and the already-rendered BQN operand expression.  Output: the BQN call text, paired with the
-/// helper declaration that call depends on so the emitter can place it in the program prologue;
-/// a rendering that needs no helper carries `None`.
+/// declarations that call depends on, in dependency order, so the emitter can place them in the
+/// program prologue.  `None` for the whole pair when the descriptor supplies no step of its own:
+/// a prefix machine, or a registered reducer, whose recurrence `render_named_fold` spells because
+/// only the emitter knows the generated name.
 ///
 /// An Ano fold is the unseeded left recurrence: the first value of the operand starts the
 /// accumulator and the rest apply left to right, so the rendering never rests on BQN's
@@ -336,8 +418,46 @@ pub fn validate_strategy(desc: &OpDesc, strategy: Strategy) -> Result<(), String
 /// an empty operand then yields that identity.  A descriptor with no identity stays unseeded, and
 /// its empty case is answered by the emitter's validity channel, never by a manufactured value.
 /// A registered reducer folds through its own generated function name under the same recurrence.
-pub fn render_fold(_desc: &OpDesc, _operand: &str) -> (String, Option<String>) {
-    todo!()
+pub fn render_fold(desc: &OpDesc, operand: &str) -> Option<(String, Vec<String>)> {
+    let reducer = desc.reducer()?;
+    let step = reducer.direct_step()?;
+    let name = helper_name(step)?;
+    // `F˜´⌽x` is the left recurrence: reversing the operand and swapping the step's arguments
+    // turns BQN's right fold into it.  The identity seeds the reversed operand's tail.
+    let body = match reducer.empty_identity() {
+        Some(identity) => format!("{{{}˜´⌽({}∾𝕩)}}", step, identity),
+        None => format!("{{{}˜´⌽𝕩}}", step),
+    };
+    let mut declarations: Vec<String> = reducer.step_declaration().into_iter().collect();
+    declarations.push(format!("{} ← {}", name, body));
+    Some((format!("{} {}", name, operand), declarations))
+}
+
+/// Fold a registered step under the same left recurrence.  Inputs: the BQN function name the
+/// emitter generated for that step and the already-rendered operand.  Output: the BQN call text.
+/// No helper declaration: the registered function is declared with the world fixture, and an
+/// unseeded registered step has no identity to seed with.
+pub fn render_named_fold(function: &str, operand: &str) -> String {
+    format!("{}˜´⌽{}", function, operand)
+}
+
+/// The BQN name of the mean machine's finish.
+const MEAN: &str = "AnoSemAverage";
+
+/// Render the mean machine's finish.  Inputs: none.  Output: the BQN name the emitter applies to
+/// a nonempty prefix, paired with the declarations that name depends on in dependency order, for
+/// the emitter's prologue.
+///
+/// The machine's state is `(sum,count)` and it consumes its input in one direction, so the finish
+/// is the state after the last element: the same left recurrence every prefix of `avg\` runs.
+/// Summing the payload in BQN's own order instead would make `avg/` disagree with the last element
+/// of `avg\` over a float column, which is the disagreement A13 exists to remove.  The count is a
+/// length, so it carries no order of its own.
+pub fn render_mean() -> (&'static str, Vec<String>) {
+    let sum = canonical("+", Form::Fold).expect("the numeric sum is a table entry");
+    let (call, mut declarations) = render_fold(&sum, "𝕩").expect("the numeric sum renders a fold");
+    declarations.push(format!("{} ← {{({})÷≠𝕩}}", MEAN, call));
+    (MEAN, declarations)
 }
 
 #[cfg(test)]
@@ -354,6 +474,53 @@ mod tests {
         assert_eq!(head("|", Carrier::Number).reducer().unwrap().direct_step(), Some("⌈"));
         assert_eq!(head("&", Carrier::Mask).empty_identity(), Some("1"));
         assert_eq!(head("&", Carrier::Number).empty_identity(), None);
+        // A9 over the char carrier is a derivation, not a fourth glyph: one more instance of the
+        // same two spellings, with the same two bridges and no identity of its own
+        assert_eq!(
+            head("|", Carrier::Char).reducer().unwrap().direct_step(),
+            Some("AnoCharGreater")
+        );
+        assert_eq!(
+            head("&", Carrier::Char).reducer().unwrap().direct_step(),
+            Some("AnoCharLesser")
+        );
+        assert_eq!(head("|", Carrier::Char).empty_identity(), None);
+        assert_eq!(head("&", Carrier::Char).empty_identity(), None);
+        assert_eq!(head("max", Carrier::Char), head("|", Carrier::Char));
+        assert_eq!(head("min", Carrier::Char), head("&", Carrier::Char));
+    }
+
+    // The char step is a declared function because BQN's `⌈`/`⌊` refuse characters; the direct
+    // dyad, the fold and the scan all spell that one step, so they cannot diverge.
+    #[test]
+    fn the_char_step_travels_through_code_points() {
+        let greater = head("|", Carrier::Char);
+        assert_eq!(
+            greater.step_declaration().unwrap(),
+            "AnoCharGreater ← {@+(𝕨-@)⌈𝕩-@}"
+        );
+        assert_eq!(greater.direct_body().unwrap(), "{@+(𝕨-@)⌈𝕩-@}");
+        assert_eq!(
+            canonical("charmax", Form::Scan).unwrap().scan_glyph(),
+            Some("AnoCharGreater`".to_string())
+        );
+        assert_eq!(
+            canonical("charmin", Form::Scan).unwrap().scan_glyph(),
+            Some("AnoCharLesser`".to_string())
+        );
+        let (call, declarations) = render_fold(&greater, "glyph").unwrap();
+        assert_eq!(call, "AnoLeftCharMaximum glyph");
+        assert_eq!(
+            declarations,
+            vec![
+                "AnoCharGreater ← {@+(𝕨-@)⌈𝕩-@}".to_string(),
+                "AnoLeftCharMaximum ← {AnoCharGreater˜´⌽𝕩}".to_string(),
+            ]
+        );
+        // a primitive step needs no declaration of its own, and lifts into the same dyad shape
+        assert_eq!(head("|", Carrier::Number).step_declaration(), None);
+        assert_eq!(head("|", Carrier::Number).direct_body().unwrap(), "{𝕨⌈𝕩}");
+        assert_eq!(head("&", Carrier::Mask).direct_body().unwrap(), "{𝕨∧𝕩}");
     }
 
     // Identities are typed: the mask instances carry mask values, the numeric extrema carry none.
@@ -390,6 +557,58 @@ mod tests {
         }
     }
 
+    // The ruled recurrence at the point of rendering: reversal and argument swap, seeded only
+    // where a lawful identity exists.  `-´1‿2‿3` is 2 in BQN and ¯4 in Ano; this is the seam.
+    #[test]
+    fn folds_render_the_ordered_left_recurrence() {
+        let (call, declarations) = render_fold(&head("-", Carrier::Number), "gold").unwrap();
+        assert_eq!(call, "AnoLeftSubtract gold");
+        assert_eq!(declarations, vec!["AnoLeftSubtract ← {-˜´⌽𝕩}".to_string()]);
+        let (call, declarations) = render_fold(&head("+", Carrier::Number), "(path/gold)").unwrap();
+        assert_eq!(call, "AnoLeftSum (path/gold)");
+        assert_eq!(declarations, vec!["AnoLeftSum ← {+˜´⌽(0∾𝕩)}".to_string()]);
+        // the numeric extrema declare no identity, so nothing is seeded and no ∞ is minted
+        let (_, declarations) = render_fold(&head("max", Carrier::Number), "gold").unwrap();
+        assert_eq!(declarations, vec!["AnoLeftMaximum ← {⌈˜´⌽𝕩}".to_string()]);
+        // one descriptor, one helper: the bridge spellings cannot render two
+        assert_eq!(
+            render_fold(&head("|", Carrier::Number), "gold"),
+            render_fold(&head("max", Carrier::Number), "gold")
+        );
+        // a prefix machine and a registered step supply no step of their own
+        assert!(render_fold(&head("#", Carrier::Presence), "gold").is_none());
+        let named = resolve_head("threat", Form::Fold, Carrier::Number, true).unwrap();
+        assert!(render_fold(&named, "gold").is_none());
+        assert_eq!(render_named_fold("Fn_threat", "𝕩"), "Fn_threat˜´⌽𝕩");
+    }
+
+    // Every step the table carries renders a fold, so the helper names cannot drift out from
+    // under the descriptors that key them.
+    #[test]
+    fn every_direct_step_renders_a_fold() {
+        for spelling in ["+", "-", "*", "/", "|", "&", "max", "min"] {
+            for carrier in [Carrier::Number, Carrier::Mask, Carrier::Char] {
+                let Ok(desc) = resolve_head(spelling, Form::Fold, carrier, false) else { continue };
+                assert!(render_fold(&desc, "x").is_some(), "{} over {:?}", spelling, carrier);
+            }
+        }
+    }
+
+    // The mean's finish accumulates in the machine's order, not BQN's: it is the last prefix of
+    // `avg\`, and over 1‿1e100‿¯1e100 the two orders answer 0 and 1.
+    #[test]
+    fn the_mean_finishes_on_its_own_ordered_sum() {
+        let (name, declarations) = render_mean();
+        assert_eq!(name, "AnoSemAverage");
+        assert_eq!(
+            declarations,
+            vec![
+                "AnoLeftSum ← {+˜´⌽(0∾𝕩)}".to_string(),
+                "AnoSemAverage ← {(AnoLeftSum 𝕩)÷≠𝕩}".to_string(),
+            ]
+        );
+    }
+
     #[test]
     fn count_and_average_are_prefix_machines() {
         assert_eq!(head("#", Carrier::Presence).machine().unwrap().kind, MachineKind::Count);
@@ -415,10 +634,24 @@ mod tests {
                 resolve_head("+", form, Carrier::Mask, false).unwrap_err(),
                 "reducer '+' is not defined on Mask"
             );
+            // the char carrier admits Greater/Lesser and their bridges, and nothing else
+            for spelling in ["+", "-", "*", "/", "avg", "threat"] {
+                assert_eq!(
+                    resolve_head(spelling, form, Carrier::Char, spelling == "threat").unwrap_err(),
+                    format!("reducer '{}' is not defined on Char", spelling)
+                );
+            }
             assert_eq!(
                 resolve_head("nope", form, Carrier::Number, false).unwrap_err(),
                 "unknown reducer 'nope'"
             );
+            // the canonical char spellings are not a surface: nothing admits them as written
+            for spelling in ["charmax", "charmin"] {
+                assert_eq!(
+                    resolve_head(spelling, form, Carrier::Char, false).unwrap_err(),
+                    format!("unknown reducer '{}'", spelling)
+                );
+            }
         }
     }
 

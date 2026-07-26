@@ -19,8 +19,25 @@ fn col(name: &str, ty: ColType, nums: Vec<f64>) -> RegEntry {
     }
 }
 
-// Four rows: two numeric columns, two masks, one registered reducer, one set-valued relation
-// with an empty fiber (row 1), and the two Nihongo spellings the parity group needs.
+// A char column stores its whole glyph run as one sym; the loader spells it as a BQN string.
+fn glyphs(name: &str, run: &str) -> RegEntry {
+    RegEntry {
+        name: name.to_string(),
+        defval: 0.0,
+        kind: RegEntryKind::Col {
+            ty: ColType::Char,
+            uniq: false,
+            nums: Vec::new(),
+            syms: vec![run.to_string()],
+            pres: None,
+            rng: None,
+        },
+    }
+}
+
+// Four rows: two numeric columns, two masks, one glyph run, one registered reducer, one
+// set-valued relation with an empty fiber (row 1), and the two Nihongo spellings the parity
+// group needs.
 fn registry() -> Registry {
     Registry {
         n: 4,
@@ -29,6 +46,7 @@ fn registry() -> Registry {
             col("Silver", ColType::Num, vec![4.0, 3.0, 2.0, 1.0]),
             col("Burning", ColType::Bool, vec![1.0, 0.0, 1.0, 1.0]),
             col("Path", ColType::Bool, vec![1.0, 1.0, 0.0, 0.0]),
+            glyphs("Rune", "gene"),
             RegEntry {
                 name: "threat".to_string(),
                 defval: 0.0,
@@ -47,6 +65,7 @@ fn registry() -> Registry {
         aliases: vec![
             AliasRow { from: "金".to_string(), to: "Gold".to_string(), ja: true },
             AliasRow { from: "燃".to_string(), to: "Burning".to_string(), ja: true },
+            AliasRow { from: "印".to_string(), to: "Rune".to_string(), ja: true },
         ],
         ..Registry::default()
     }
@@ -153,7 +172,7 @@ fn long_forms_and_ordered_steps_lower_left() {
     assert_eq!(body(&ok("-\\ Gold\n")), "\n# q1\nq1 ← (-`gold)\n•Show q1\n");
     assert_eq!(body(&ok("/\\ Gold\n")), "\n# q1\nq1 ← (÷`gold)\n•Show q1\n");
     // a registered name folds pairwise left and scans through the same fn
-    assert!(ok("fold(threat) Gold\n").contains("Fn_threat˜´⌽ 𝕩"));
+    assert!(ok("fold(threat) Gold\n").contains("Fn_threat˜´⌽𝕩"));
     assert_eq!(body(&ok("threat\\ Gold\n")), "\n# q1\nq1 ← (Fn_threat`gold)\n•Show q1\n");
 }
 
@@ -186,8 +205,15 @@ fn count_and_average_lower_as_prefix_machines() {
     assert!(ok("#\\ Gold @ Path\n").contains("q1 ← (+`path/(¬(¬(1¨gold))))"));
     assert!(ok("avg\\ Gold\n").contains("q1 ← ((+`gold)÷(+`(¬(¬(1¨gold)))))"));
     assert!(ok("avg\\ Gold @ Path\n").contains("q1 ← ((+`path/gold)÷(+`path/(¬(¬(1¨gold)))))"));
-    // the fold direction: cardinality, and the machine's registered empty law needs no guard
-    assert!(ok("#/ Gold @ Burning\n").contains("q1 ← (AnoLeftSum burning)"));
+    // the mean's finish accumulates in the machine's order, so avg/ is the last prefix of avg\
+    let mean = ok("avg/ Gold\n");
+    assert!(mean.contains("AnoSemAverage ← {(AnoLeftSum 𝕩)÷≠𝕩}"), "{}", mean);
+    assert!(mean.contains("AnoLeftSum ← {+˜´⌽(0∾𝕩)}"), "{}", mean);
+    assert!(mean.contains("t0 ← {0=≠𝕩 ? 0 ; AnoSemAverage 𝕩} gold"), "{}", mean);
+    // the fold direction: cardinality, and the machine's registered empty law needs no guard.
+    // A 0/1 mask sums to the same value in either order, so the count's finish carries no
+    // reversal — the operand buys that, not the machine.
+    assert!(ok("#/ Gold @ Burning\n").contains("q1 ← (+´burning)"));
     assert!(ok("#/ near'\n").contains("q1 ← (≠¨near)"));
 }
 
@@ -227,6 +253,94 @@ fn extrema_never_seed_and_never_manufacture_infinity() {
     assert!(ok("|/ Burning\n").contains("AnoLeftOr ← {∨˜´⌽(0∾𝕩)}"));
 }
 
+/* ---------- 2b. the char carrier ---------- */
+
+// A9 adopts q's Greater and Lesser over the carriers Ano admits, and Ano admits char, so the
+// char instances are a derivation and not a new ruling.  BQN's ⌈ and ⌊ refuse characters, so the
+// step travels through code points; one declared step serves the dyad, the fold and the scan.
+#[test]
+fn char_greater_and_lesser_step_through_code_points() {
+    let greater = ok("max/ Rune\n");
+    assert!(greater.contains("AnoCharGreater ← {@+(𝕨-@)⌈𝕩-@}"), "{}", greater);
+    assert!(greater.contains("AnoLeftCharMaximum ← {AnoCharGreater˜´⌽𝕩}"), "{}", greater);
+    let lesser = ok("min/ Rune\n");
+    assert!(lesser.contains("AnoCharLesser ← {@+(𝕨-@)⌊𝕩-@}"), "{}", lesser);
+    assert!(lesser.contains("AnoLeftCharMinimum ← {AnoCharLesser˜´⌽𝕩}"), "{}", lesser);
+    // the bridges are the same operation, so they are the same program
+    assert_eq!(ok("|/ Rune\n"), greater);
+    assert_eq!(ok("&/ Rune\n"), lesser);
+    // BQN's scan is already the left recurrence, so a scan owes only the step's declaration
+    assert!(body(&ok("|\\ Rune\n")).contains("q1 ← (AnoCharGreater`rune)"), "{}", ok("|\\ Rune\n"));
+    assert!(body(&ok("&\\ Rune\n")).contains("q1 ← (AnoCharLesser`rune)"), "{}", ok("&\\ Rune\n"));
+    assert_eq!(ok("max\\ Rune\n"), ok("|\\ Rune\n"));
+    assert_eq!(ok("min\\ Rune\n"), ok("&\\ Rune\n"));
+    // and the direct dyad materializes ONE registry fn carrying that same body
+    let direct = ok("Rune | Rune\n");
+    assert!(direct.contains("Fn_AnoSemCharGreater0 ← {@+(𝕨-@)⌈𝕩-@}"), "{}", direct);
+    assert!(body(&direct).contains("(rune Fn_AnoSemCharGreater0¨rune)"), "{}", direct);
+    assert!(ok("Rune & Rune\n").contains("Fn_AnoSemCharLesser0 ← {@+(𝕨-@)⌊𝕩-@}"));
+    // a string literal is a glyph run and reads on the same carrier
+    assert!(ok("\"sat\" | \"cow\"\n").contains("Fn_AnoSemCharGreater0 ← {@+(𝕨-@)⌈𝕩-@}"));
+}
+
+// The char order has no greatest or least rune, so it declares no identity: nothing is seeded,
+// the empty scope reaches the validity channel, and no code-point zero is ever manufactured.
+#[test]
+fn char_extrema_declare_no_identity() {
+    for source in ["max/ Rune\n", "min/ Rune\n", "max/ Rune @ Path\n", "|\\ Rune\n"] {
+        let text = ok(source);
+        assert!(!text.contains("⌽(@"), "{}: {}", source, text);
+        assert!(!text.contains('∞'), "{}: {}", source, text);
+    }
+    let guarded = ok("max/ Rune @ Path\n");
+    assert!(guarded.contains("{0=≠𝕩 ? 0 ; AnoLeftCharMaximum 𝕩} (path/rune)"), "{}", guarded);
+    assert!(guarded.contains("q1v ← (0<(+´path))"), "{}", guarded);
+    assert!(guarded.contains("•Show⍟q1v q1"), "{}", guarded);
+}
+
+// A9 adopts q's Greater/Lesser CONVENTION over Ano's carriers, not q's promotions: q lifts a
+// char to an int in `98 | "a"` and Ano refuses it.  A glyph has no selection reading to fall
+// back on, so a char mixture refuses in every position, not only in a value one.
+#[test]
+fn mixed_char_carriers_refuse() {
+    for (source, message) in [
+        ("98 | \"a\"\n", "'|' mixes number and char operands; there is no carrier coercion"),
+        ("Rune | Gold\n", "'|' mixes number and char operands; there is no carrier coercion"),
+        ("Rune & Burning\n", "'&' mixes mask and char operands; there is no carrier coercion"),
+        ("Silver = (Gold | Rune)\n", "'|' mixes number and char operands; there is no carrier coercion"),
+    ] {
+        assert_eq!(err(source), format!("emit: line 1: {}", message), "{}", source);
+    }
+    // and the mask/number rule is unchanged, named in the same fixed carrier order
+    assert_eq!(
+        err("Silver = (Gold | Burning)\n"),
+        "emit: line 1: '|' mixes mask and number operands; there is no carrier coercion"
+    );
+    // a predicate is selection, not Greater: the mask reading survives untouched
+    assert!(ok("Rune & Burning , +Path\n").contains("burning"));
+}
+
+// The char carrier admits Greater, Lesser and their two bridges, and nothing else.
+#[test]
+fn char_admits_only_greater_and_lesser() {
+    for (source, message) in [
+        ("+/ Rune\n", "reducer '+' is not defined on Char"),
+        ("*/ Rune\n", "reducer '*' is not defined on Char"),
+        ("-/ Rune\n", "reducer '-' is not defined on Char"),
+        ("avg/ Rune\n", "reducer 'avg' is not defined on Char"),
+        ("avg\\ Rune\n", "reducer 'avg' is not defined on Char"),
+        ("threat/ Rune\n", "reducer 'threat' is not defined on Char"),
+        ("scan(+) Rune along Gold\n", "reducer '+' is not defined on Char"),
+    ] {
+        assert_eq!(err(source), format!("emit: line 1: {}", message), "{}", source);
+    }
+    // the canonical char spellings are internal: no surface admits them as written
+    assert_eq!(err("charmax/ Rune\n"), "emit: line 1: unknown reducer 'charmax'");
+    assert_eq!(err("charmin/ Gold\n"), "emit: line 1: unknown reducer 'charmin'");
+    // count consumes presence whatever the payload is, so it counts glyphs
+    assert!(body(&ok("#/ Rune\n")).contains("q1 ← (+´(1¨rune))"), "{}", ok("#/ Rune\n"));
+}
+
 /* ---------- 3. empty results ---------- */
 
 // Forms with a declared empty result stay real scalars: no guard, no conditional display.
@@ -250,7 +364,8 @@ fn identity_folds_stay_unguarded_scalars() {
 #[test]
 fn identityless_empty_fold_cannot_expose_its_placeholder() {
     let bare = ok("max/ Gold @ Burning\n");
-    assert!(bare.contains("q1v ← (0<(AnoLeftSum burning))"), "{}", bare);
+    // the guard counts the rows the scope admits: the emitter's own reduction, in BQN's order
+    assert!(bare.contains("q1v ← (0<(+´burning))"), "{}", bare);
     assert!(bare.contains("•Show⍟q1v q1"), "{}", bare);
     assert!(!bare.contains("\n•Show q1\n"), "{}", bare);
 
@@ -301,13 +416,52 @@ fn grouped_query_compresses_empty_fibers() {
     }
 }
 
+// The per-row fold over a fiber column owes the same channel: it applies its helper once per
+// row, so without a guard an empty fiber aborts the whole program on BQN's missing identity
+// rather than dropping one row.  A12 rules the answer is no result row.
+#[test]
+fn row_fold_without_an_identity_drops_its_empty_rows() {
+    for (source, helper) in
+        [("max/ near@row\n", "AnoLeftMaximum"), ("min/ near@row\n", "AnoLeftMinimum")]
+    {
+        let text = ok(source);
+        assert!(text.contains(&format!("{{0=≠𝕩 ? 0 ; {} 𝕩}}¨near", helper)), "{}: {}", source, text);
+        assert!(text.contains("q1 ← ((0<≠¨near))/t0"), "{}: {}", source, text);
+        assert!(text.contains("\n•Show q1\n"), "{}: {}", source, text);
+    }
+    // an identity answers the empty fiber itself, so that form stays unguarded and total
+    let seeded = ok("+/ near@row\n");
+    assert!(seeded.contains("q1 ← ({AnoLeftSum 𝕩}¨near)"), "{}", seeded);
+    assert!(!seeded.contains("0=≠𝕩 ?"), "{}", seeded);
+    // and the assignment path drops the same rows from the scatter mask
+    let written = ok("Burning , Gold = max/ near@row\n");
+    assert!(written.contains("(0<≠¨near)"), "{}", written);
+}
+
+// Count consumes selection presence, never a numeric payload: `#/ rel'.Comp` is the cardinality
+// of the fiber's admitted elements, as q's count and Haskell's length are.  The normalizer wraps
+// the hopped component in the presence reading, exactly as it does for the scan forms.
+#[test]
+fn count_over_a_fiber_hop_counts_rather_than_sums() {
+    let counted = body(&ok("#/ near'.Silver\n"));
+    assert!(counted.contains("t0 ← {+´𝕩⊏(¬(¬(1¨silver)))}¨near"), "{}", counted);
+    // the payload itself never reaches the reduction
+    assert!(!counted.contains("+´𝕩⊏silver"), "{}", counted);
+    // a bare fiber counts its members, and the hop through a total column agrees with it
+    assert!(body(&ok("#/ near'\n")).contains("(≠¨"), "{}", ok("#/ near'\n"));
+    // over a mask the machine advances on the true rows, which is the same presence stream
+    assert!(body(&ok("#/ near'.Burning\n")).contains("{+´𝕩⊏(¬(¬burning))}¨near"));
+    // the sum is still the sum: only count was ever meant to consume presence
+    assert!(body(&ok("+/ near'.Silver\n")).contains("{AnoLeftSum 𝕩⊏silver}¨near"));
+}
+
 // Assignment: the guard refines the selection before the gather, so a false guard writes
 // nothing.  The emit_effect probe stages the ∧-guard and the scatter mask reads it.
 #[test]
 fn guarded_assignment_refines_the_scatter_mask() {
     let text = ok("Burning , Gold = max/ Silver @ Path\n");
-    assert!(text.contains("t1 ← s1m∧(0<(AnoLeftSum path))"), "{}", text);
-    assert!(text.contains("t3 ← t1‿((AnoLeftSum t1)⥊t2) AnoScat gold"), "{}", text);
+    assert!(text.contains("t1 ← s1m∧(0<(+´path))"), "{}", text);
+    assert!(text.contains("t3 ← t1‿((+´t1)⥊t2) AnoScat gold"), "{}", text);
     // an unguarded right-hand side stages no probe conjunction at all
     let plain = ok("Burning , Gold = +/ Silver @ Path\n");
     assert!(!plain.contains("s1m∧"), "{}", plain);
@@ -675,6 +829,22 @@ fn nihongo_words_emit_their_ascii_twins() {
     for (ja, ascii) in masked {
         assert_eq!(ok_ja(ja), ok(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
     }
+    // and the char carrier, which admits Greater, Lesser and their two bridges
+    let runes = [
+        ("最大 印\n", "max/ Rune\n"),
+        ("最小 印\n", "min/ Rune\n"),
+        ("或 印\n", "|/ Rune\n"),
+        ("皆 印\n", "&/ Rune\n"),
+        ("累大 印\n", "max\\ Rune\n"),
+        ("累小 印\n", "min\\ Rune\n"),
+        ("累或 印\n", "|\\ Rune\n"),
+        ("累皆 印\n", "&\\ Rune\n"),
+        ("印 か 印\n", "Rune | Rune\n"),
+        ("印 と 印\n", "Rune & Rune\n"),
+    ];
+    for (ja, ascii) in runes {
+        assert_eq!(ok_ja(ja), ok(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+    }
 }
 
 // Parity is refusal parity too: the same carrier gate, spelled identically on both surfaces.
@@ -696,4 +866,11 @@ fn nihongo_refusals_match_their_ascii_twins() {
         assert_eq!(err_ja(ja), err(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
     }
     assert_eq!(err_ja("累大 燃\n"), "emit: line 1: reducer 'max' is not defined on Mask");
+    // the char gate and the carrier mixture refuse identically on both surfaces
+    for (ja, ascii) in
+        [("総和 印\n", "+/ Rune\n"), ("平均 印\n", "avg/ Rune\n"), ("印 か 金\n", "Rune | Gold\n")]
+    {
+        assert_eq!(err_ja(ja), err(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+    }
+    assert_eq!(err_ja("累平均 印\n"), "emit: line 1: reducer 'avg' is not defined on Char");
 }

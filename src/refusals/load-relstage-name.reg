@@ -1,0 +1,6 @@
+# expect: registry line 6: 'anoRelStage0' collides with the emitter's reserved 'anoRelStage<n>' names under the case fold
+# The relationship-write staging variables are a generated family, not one fixed name. A column
+# that mangles onto a member of that family would overwrite a staged write, so the stem is
+# reserved the way the twelve fixed emitter identifiers are.
+n 2
+col anoRelStage0 num 1 2

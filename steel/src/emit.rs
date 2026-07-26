@@ -144,6 +144,12 @@ struct Em<'a> {
     tmp: i32,
     out_idx: usize,
     stmt: i32,
+    // the program prologue: helper declarations in the order the lowering asked for them, and
+    // the byte offset the fixture reserved for them. rel_seals counts the relationship writes
+    // this lowering staged, which the final assembly reconciles against the emitted text.
+    decls: Vec<String>,
+    decl_at: usize,
+    rel_seals: usize,
     // trace identity: plan collects one record per staged runtime crossing; in_effect is the
     // phase (false during the discarded guard probe); site_kind is the s/q/c block letter.
     plan: crate::trace::TracePlan,
@@ -567,19 +573,98 @@ impl<'a> Em<'a> {
 
     // Inputs: a fold head as written and the rendered BQN operand expression.  Output: the BQN
     // text computing that fold over the operand, or None when the head names a registered
-    // reducer, whose rendering each fold site spells for its own position.
+    // reducer or a prefix machine, whose rendering each fold site spells for its own position.
     // The rendering realizes the unseeded left recurrence, so a non-associative head such as
     // subtraction or division yields the exact ordered result.  The helper declaration the
     // rendering depends on is registered in the prologue.  Reductions the emitter performs for
     // its own bookkeeping are ordinary BQN reductions and never come through here; only a fold
     // written in Ano carries this contract.
-    fn render_fold(&mut self, _op: &str, _operand: &str) -> Option<String> { todo!() }
+    fn render_fold(&mut self, op: &str, operand: &str) -> Option<String> {
+        let desc = desc_of(op, reducer::Form::Fold)?;
+        let (call, declarations) = reducer::render_fold(&desc, operand)?;
+        for declaration in declarations {
+            self.need_declaration(&declaration);
+        }
+        Some(call)
+    }
+
+    // Inputs: a CANONICAL head spelling and the scan form it was resolved against.  Output: the
+    // BQN scan expression for that head, with the step's own declaration registered in the
+    // prologue; None when the registry supplies the step.  BQN's scan modifier is already the
+    // left recurrence, so the only thing a scan owes beyond the glyph is that declaration — the
+    // char instances scan through a declared step because `⌈` and `⌊` refuse characters.
+    fn render_scan(&mut self, op: &str, form: reducer::Form) -> Option<String> {
+        let desc = desc_of(op, form)?;
+        let glyph = desc.scan_glyph()?;
+        if let Some(declaration) = desc.step_declaration() {
+            self.need_declaration(&declaration);
+        }
+        Some(glyph)
+    }
+
+    // Inputs: none.  Output: the BQN name of the mean machine's finish, with the declarations it
+    // depends on registered in the prologue.  The finish sums its payload in the machine's own
+    // order, so `avg/` is the last prefix of `avg\` rather than BQN's right-folded mean.
+    fn render_mean(&mut self) -> &'static str {
+        let (name, declarations) = reducer::render_mean();
+        for declaration in declarations {
+            self.need_declaration(&declaration);
+        }
+        name
+    }
 
     // Inputs: one BQN helper declaration a rendering depends on.  Output: (); the declaration
     // joins the prologue, which the final assembly flushes into the program preamble directly
     // after the `anoSel ← ⟨⟩` line.  Entries deduplicate and hold insertion order, so one
     // program's text is byte-identical across runs.
-    fn need_declaration(&mut self, _declaration: &str) { todo!() }
+    fn need_declaration(&mut self, declaration: &str) {
+        if !self.decls.iter().any(|held| held == declaration) {
+            self.decls.push(declaration.to_string());
+        }
+    }
+
+    // The prologue flush, run once by the final assembly: every declaration a rendering asked
+    // for, newline-terminated, spliced at the offset the fixture reserved for it.
+    fn flush_declarations(&mut self) {
+        let decls = std::mem::take(&mut self.decls);
+        let mut block = String::new();
+        for declaration in decls {
+            block.push_str(&declaration);
+            block.push('\n');
+        }
+        self.out.insert_str(self.decl_at, &block);
+    }
+
+    // Inputs: a registry entry index. Output: the endpoint's target carrier and whether it is
+    // functional, or None when the entry is not a relationship surface a write must seal —
+    // exactly the surfaces relationship::validate_registry seals in a fixture.
+    fn seal_policy(&self, ri: usize) -> R<Option<(crate::relationship::TargetCarrier, bool)>> {
+        Ok(match &self.ent(ri).kind {
+            RegEntryKind::Rel { key_of, .. } => {
+                Some((crate::relationship::carrier_for(self.reg, key_of.as_deref())?, true))
+            }
+            // an inverse fiber is derived from the endpoint that was already sealed on write
+            RegEntryKind::SRel { key_of, inv_of: None, .. } => {
+                Some((crate::relationship::carrier_for(self.reg, key_of.as_deref())?, false))
+            }
+            _ => None,
+        })
+    }
+
+    // Inputs: a registry entry index and the rendered value being committed to it. Output: ();
+    // the value is published to that entry's variable, through the validity seal when the entry
+    // is a relationship. Every commit to a world variable is published here, so a relationship
+    // value cannot reach the world unstaged.
+    fn publish(&mut self, ri: usize, value: String) -> R<()> {
+        if self.seal_policy(ri)?.is_some() {
+            // the seal owns its publication: staging, assertion, and commit are one unit
+            self.stage_relationship_write(ri, &value)?;
+            return Ok(());
+        }
+        let var = self.bqnv(ri);
+        self.stage(format!("{} ↩ {}", var, value));
+        Ok(())
+    }
 
     // Inputs: the registry index of a functional or set-valued relationship and the rendered
     // right-hand side being written to it.  Output: the BQN that stages that value into a fresh
@@ -588,7 +673,23 @@ impl<'a> Em<'a> {
     // Every write to a relationship passes through this path, so no relationship value reaches
     // the world unvalidated.  A refused write leaves the exact pre-state.  The staged binding's
     // name is lowercase, because BQN reads an uppercase initial as a function.
-    fn stage_relationship_write(&mut self, _ri: usize, _rhs: &str) -> Result<String, Diag> { todo!() }
+    fn stage_relationship_write(&mut self, ri: usize, rhs: &str) -> Result<String, Diag> {
+        let Some((carrier, functional)) = self.seal_policy(ri)? else {
+            return Err(fail(0, format!("'{}' is not a sealed relationship", self.ent(ri).name)));
+        };
+        let name = self.ent(ri).name.clone();
+        let var = self.bqnv(ri);
+        let stage = format!("anoRelStage{}", self.rel_seals);
+        self.rel_seals += 1;
+        self.stage(format!("{} ← {}", stage, rhs));
+        // a set endpoint validates its members, so the fibers join before the elementwise test
+        let value = if functional { stage.clone() } else { format!("∾{}", stage) };
+        let predicate = crate::relationship::bqn_validity(&value, carrier, functional);
+        // the assertion refuses before the publication runs, so the world keeps its pre-state
+        self.stage(format!("\"relationship {}\" ! ∧´1∾({})", name, predicate));
+        self.stage(format!("{} ↩ {}", var, stage));
+        Ok(stage)
+    }
 
     // Has-a-live-target guard for a bare rel.
     fn rel_guard(&self, ri: usize) -> String { let v = self.bqnv(ri); let key = self.rel_key(ri); crate::relationship::bqn_found(&v, key.as_deref()) }
@@ -1093,14 +1194,19 @@ impl<'a> Em<'a> {
                 let fb_name = self.rs(rel);
                 let nonempty = self.fiber_nonempty(rel, &raw);
                 let cv = self.emit_val(r, Mode::World)?;
+                // a machine and a registered head render nothing here, and register nothing
                 let call = self.render_fold(op, &format!("𝕩⊏{}", cv.v));
                 let t = self.tv();
                 if op == "avg" {
                     self.trace_empty(fb_name, &fib, m, l.line);
-                    self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; AnoAvg 𝕩⊏{}}}¨{}", t, cv.v, fib));
+                    let mean = self.render_mean();
+                    self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {} 𝕩⊏{}}}¨{}", t, mean, cv.v, fib));
                     ev.g = Some(nonempty);
                     ev.gv = true;
                 } else if op == "#" {
+                    // the count machine's finish over the presence stream the normalizer wrapped
+                    // onto the component: a 0/1 mask sums exactly in either order, so this
+                    // reduction needs no reversal
                     self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, cv.v, fib));
                 } else if let Some(call) = call {
                     if fold_has_id(op) {
@@ -1136,9 +1242,16 @@ impl<'a> Em<'a> {
                 self.stage(format!("{} ← {}", tp, pm));
                 let t = self.tv();
                 match op {
+                    // the count machine's finish: a 0/1 mask sums exactly in either order, so this
+                    // reduction needs no reversal — the operand is what makes it free, not the
+                    // machine, whose payload accumulations do carry the ordered recurrence
                     "#" => self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, tp, fib)),
-                    "|" => self.stage(format!("{} ← {{∨´𝕩⊏{}}}¨{}", t, tp, fib)),
-                    "&" => self.stage(format!("{} ← {{∧´𝕩⊏{}}}¨{}", t, tp, fib)),
+                    "|" | "&" => {
+                        let Some(call) = self.render_fold(op, &format!("𝕩⊏{}", tp)) else {
+                            return Err(fail(operand.line, format!("fold {}/ over filtered fiber", op)));
+                        };
+                        self.stage(format!("{} ← {{{}}}¨{}", t, call, fib));
+                    }
                     _ => return Err(fail(operand.line, format!("fold {}/ over filtered fiber", op))),
                 }
                 ev.v = self.in_mode(t, m);
@@ -1157,13 +1270,26 @@ impl<'a> Em<'a> {
         if let NodeKind::Scope { l, r, .. } = &operand.kind {
             if matches!(&r.kind, NodeKind::Name(s) if self.rs(*s) == "row") && self.find("row").is_none() {
                 let fs = fiber_sym(l);
-                let (mut fib, _raw) = self.fiber_var(fs, l.line)?;
+                let (mut fib, raw) = self.fiber_var(fs, l.line)?;
+                let nonempty = self.fiber_nonempty(fs, &raw);
+                let fb_name = self.rs(fs);
                 self.fiber_rows(fs, &mut fib, m, l.line);
                 let Some(call) = self.render_fold(op, "𝕩") else {
                     return Err(fail(line, format!("fold {}/ @row", op)));
                 };
                 ev.unit = false;
-                ev.v = self.in_mode(format!("({{{}}}¨{})", call, fib), m);
+                if fold_has_id(op) {
+                    ev.v = self.in_mode(format!("({{{}}}¨{})", call, fib), m);
+                    return Ok(ev);
+                }
+                // no identity: an empty row has no answer (A12), so the row drops through the
+                // validity channel instead of aborting on BQN's missing fold identity
+                self.trace_empty(fb_name, &fib, m, l.line);
+                let t = self.tv();
+                self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}}¨{}", t, call, fib));
+                ev.g = Some(nonempty);
+                ev.gv = true;
+                ev.v = self.in_mode(t, m);
                 return Ok(ev);
             }
         }
@@ -1229,35 +1355,40 @@ impl<'a> Em<'a> {
         }
         if op == "avg" {
             let t = self.tv();
-            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; AnoAvg 𝕩}} {}", t, gathered));
+            let mean = self.render_mean();
+            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {} 𝕩}} {}", t, mean, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
             ev.gv = true;
             return Ok(ev);
         }
-        let Some(guarded) = self.render_fold(op, "𝕩") else {
-            // named reducer: registry fn folds pairwise
+        // an identity answers the empty gather itself; without one the gather is guarded, and
+        // the fold then sees only the nonempty case
+        let identity = fold_has_id(op);
+        let operand = if identity { gathered.as_str() } else { "𝕩" };
+        let Some(call) = self.render_fold(op, operand) else {
+            // named reducer: the registry fn steps the same left recurrence
             let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
             let Some(fe) = fe else {
                 return Err(fail(line, format!("unknown reducer '{}'", op)));
             };
             let t = self.tv();
             let fv = self.fnv(fe);
-            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}´ 𝕩}} {}", t, fv, gathered));
+            let call = reducer::render_named_fold(&fv, "𝕩");
+            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}} {}", t, call, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
             ev.gv = true;
             return Ok(ev);
         };
-        if !fold_has_id(op) {
+        if !identity {
             let t = self.tv();
-            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}} {}", t, guarded, gathered));
+            self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}} {}", t, call, gathered));
             ev.v = t;
             ev.g = Some(format!("(0<{})", cnt));
             ev.gv = true;
             return Ok(ev);
         }
-        let call = self.render_fold(op, &gathered).unwrap_or_default();
         ev.v = format!("({})", call);
         Ok(ev)
     }
@@ -1280,7 +1411,7 @@ impl<'a> Em<'a> {
         }
         let (x, scope): (&Node, Option<&Node>) =
             if let NodeKind::Scope { l, r, .. } = &operand.kind { (l, Some(r)) } else { (operand, None) };
-        let gl: String = match desc_of(op, reducer::Form::Scan).and_then(|d| d.scan_glyph()) {
+        let gl: String = match self.render_scan(op, reducer::Form::Scan) {
             Some(gl) => gl,
             None => {
                 // named reducer scan: registry fn accumulates pairwise; the empty scope
@@ -1688,7 +1819,7 @@ impl<'a> Em<'a> {
                 let xv = self.emit_val(col, Mode::World)?;
                 let ov = self.emit_val(order, Mode::World)?;
                 let opn = self.rs(*op);
-                let gl = match desc_of(opn, reducer::Form::ScanAlong).and_then(|d| d.scan_glyph()) {
+                let gl = match self.render_scan(opn, reducer::Form::ScanAlong) {
                     Some(gl) => gl,
                     None => {
                         let fe = self
@@ -2523,7 +2654,7 @@ impl<'a> Em<'a> {
             if is_field {
                 // lattice fields: value commits only, never row structure
                 if committed {
-                    self.stage(format!("{} ↩ {}", cur, base));
+                    self.publish(i, base)?;
                 }
                 continue;
             }
@@ -2585,12 +2716,13 @@ impl<'a> Em<'a> {
                     Some(k) => format!("({}/{})", k, base),
                     None => base.clone(),
                 };
-                match &app {
-                    Some(a) => self.stage(format!("{} ↩ {}∾{}", cur, kept, a)),
-                    None => self.stage(format!("{} ↩ {}", cur, kept)),
-                }
+                let value = match &app {
+                    Some(a) => format!("{}∾{}", kept, a),
+                    None => kept,
+                };
+                self.publish(i, value)?;
             } else if committed {
-                self.stage(format!("{} ↩ {}", cur, base));
+                self.publish(i, base)?;
             }
             if has_pres(e) && structural {
                 let p = self.presv(i);
@@ -2928,10 +3060,12 @@ impl<'a> Em<'a> {
                 return Ok(());
             };
             let mut all_num = true;
+            let mut all_str = true;
             let mut lst = String::from("⟨");
             for (k, w) in vals.iter().enumerate() {
                 let b0 = w.as_bytes().first().copied().unwrap_or(0);
                 let piece = if b0.is_ascii_digit() || b0 == b'-' || b0 == b'.' {
+                    all_str = false;
                     if b0 == b'-' { format!("¯{}", &w[1..]) } else { w.clone() }
                 } else {
                     all_num = false;
@@ -2954,6 +3088,14 @@ impl<'a> Em<'a> {
             if all_num {
                 self.stage(format!(
                     "\"out q{}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩}} {}",
+                    self.stmt, lst, ravel
+                ));
+            } else if all_str {
+                // a wholly textual pin reads either as the list of words a sym result answers
+                // with or as the glyph run a char result is, exactly as `--! expect` already
+                // reads a char column; joining decides which without a second directive
+                self.stage(format!(
+                    "\"out q{}\" ! {} {{(𝕨≡𝕩)∨(∾𝕨)≡𝕩}} {}",
                     self.stmt, lst, ravel
                 ));
             } else {
@@ -3154,6 +3296,8 @@ impl<'a> Em<'a> {
         self.out.push_str("\n# fixture\n");
         self.out.push_str(&format!("anoN ← {}\n", r.n));
         self.out.push_str("anoSel ← ⟨⟩\n");
+        // the prologue's place, reserved before any statement can ask for a declaration
+        self.decl_at = self.out.len();
         // the hidden idx key: the row iota materialized ONCE, then carried through every
         // structural commit — never reminted at use
         if self.need_idx {
@@ -3499,6 +3643,9 @@ fn emit_lowered(
         tmp: 0,
         out_idx: 0,
         stmt: 0,
+        decls: Vec::new(),
+        decl_at: 0,
+        rel_seals: 0,
         plan,
         in_effect: false,
         site_kind: 's',
@@ -3555,12 +3702,136 @@ fn emit_lowered(
     if dirs.save {
         em.emit_save();
     }
+    em.flush_declarations();
+    audit_relationship_writes(&em.out, reg, em.rel_seals)?;
     Ok((em.out, em.plan))
+}
+
+// Inputs: the text right after a publication's `↩ `. Output: the serial of the staged binding it
+// publishes, or None for anything else — including a longer name that merely starts that way.
+fn staged_serial(rhs: &str) -> Option<usize> {
+    let digits = rhs.strip_prefix("anoRelStage")?;
+    let end = digits.find(|c: char| !c.is_ascii_digit()).unwrap_or(digits.len());
+    if end == 0 || digits[end..].starts_with(ident_char) {
+        return None;
+    }
+    digits[..end].parse().ok()
+}
+
+// A BQN identifier character: the boundary a bare name must sit inside.
+fn ident_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+// Inputs: the assembled program, the registry, and the number of relationship writes the
+// lowering staged. Output: () when every `↩` to a relationship variable in the text publishes a
+// distinct one of those staged bindings; a refusal naming the relation otherwise.
+// The scan reads the artifact rather than the lowering's own bookkeeping, and it shares none of
+// the staging path's assumptions: it finds a publication wherever it sits — its own line, nested
+// in a lambda, sequenced after another expression — so a write spelled some other way has no
+// stage to publish and is refused instead of quietly skipping the seal. Serials reconcile by
+// identity, so a doubled publication cannot pay for a dropped one.
+fn audit_relationship_writes(bqn: &str, reg: &Registry, staged: usize) -> R<()> {
+    let mut published = vec![false; staged];
+    for (i, e) in reg.ents.iter().enumerate() {
+        let watched = match &e.kind {
+            RegEntryKind::Rel { .. } => true,
+            RegEntryKind::SRel { inv_of, .. } => inv_of.is_none(),
+            _ => false,
+        };
+        if !watched {
+            continue;
+        }
+        let var = if bqnlegal(&e.name) { lc(&e.name) } else { format!("jp{}", i) };
+        let write = format!("{} ↩ ", var);
+        let mut at = 0usize;
+        while let Some(hit) = bqn[at..].find(&write) {
+            let hit = at + hit;
+            at = hit + write.len();
+            // pres_mentor is not mentor: the match must start at a name boundary
+            if bqn[..hit].ends_with(ident_char) {
+                continue;
+            }
+            match staged_serial(&bqn[at..]).filter(|n| *n < staged) {
+                // one staged binding publishes once; a repeat is a second write past the seal
+                Some(n) if !std::mem::replace(&mut published[n], true) => {}
+                _ => {
+                    return Err(Diag::refuse(format!(
+                        "emit: relationship '{}' is written outside the validity seal",
+                        e.name
+                    )));
+                }
+            }
+        }
+    }
+    let reached = published.iter().filter(|p| **p).count();
+    if reached != staged {
+        return Err(Diag::refuse(format!(
+            "emit: {} relationship writes were staged but {} reached the world",
+            staged, reached
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The write reconciliation, read on text: a publication that is not a staged binding is
+    // refused, and a staged binding that never reached its variable is refused from the other
+    // side.  This is what makes a missed write loud instead of silent.
+    #[test]
+    fn relationship_writes_reconcile_against_the_emitted_text() {
+        let reg = Registry {
+            n: 1,
+            ents: vec![RegEntry {
+                name: "Mentor".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Rel { targets: vec![0.0], key_of: None },
+            }],
+            ..Registry::default()
+        };
+        let sealed = "anoRelStage0 ← t0\n\"relationship Mentor\" ! 1\nmentor ↩ anoRelStage0\n";
+        assert!(audit_relationship_writes(sealed, &reg, 1).is_ok());
+        let bare = "mentor ↩ t0\n";
+        let refusal = audit_relationship_writes(bare, &reg, 0).expect_err("bare write").msg;
+        assert!(refusal.contains("'Mentor' is written outside the validity seal"), "{}", refusal);
+        let unpublished = audit_relationship_writes("anoRelStage0 ← t0\n", &reg, 1)
+            .expect_err("unpublished stage")
+            .msg;
+        assert!(unpublished.contains("1 relationship writes were staged"), "{}", unpublished);
+    }
+
+    // The shapes a write could hide in.  A publication is a publication wherever it sits, one
+    // staged binding publishes once, and a longer name that merely contains the variable is not
+    // a write to it.
+    #[test]
+    fn a_write_cannot_hide_from_the_reconciliation() {
+        let reg = Registry {
+            n: 1,
+            ents: vec![RegEntry {
+                name: "Mentor".to_string(),
+                defval: 0.0,
+                kind: RegEntryKind::Rel { targets: vec![0.0], key_of: None },
+            }],
+            ..Registry::default()
+        };
+        let nested = "t0 ← {mentor ↩ 𝕩}¨fib\n";
+        let refusal = audit_relationship_writes(nested, &reg, 0).expect_err("write in a lambda").msg;
+        assert!(refusal.contains("'Mentor' is written outside the validity seal"), "{}", refusal);
+        let sequenced = "t0 ← ⟨⟩ ⋄ mentor ↩ t1\n";
+        assert!(audit_relationship_writes(sequenced, &reg, 0).is_err(), "sequenced write");
+        // one stage, published twice: the second publication is a write the seal never covered
+        let doubled = "anoRelStage0 ← t0\nmentor ↩ anoRelStage0\nmentor ↩ anoRelStage0\n";
+        assert!(audit_relationship_writes(doubled, &reg, 2).is_err(), "doubled publication");
+        // a staged binding whose name only starts like one is not that binding
+        let lookalike = "mentor ↩ anoRelStage0b\n";
+        assert!(audit_relationship_writes(lookalike, &reg, 1).is_err(), "lookalike stage");
+        // and a wider name that ends in the variable is not the variable
+        let other = "anoRelStage0 ← t0\nmentor ↩ anoRelStage0\npres_mentor ↩ t1\namentor ↩ t2\n";
+        assert!(audit_relationship_writes(other, &reg, 1).is_ok(), "neighbouring names");
+    }
 
     // Oracle pin (src/anoc --emit on ":Foo" with the empty world): the emitted block after
     // the rt prelude, byte-exact. Sym queries touch no peer module, so this runs today.
@@ -3599,7 +3870,8 @@ mod tests {
         );
     }
 
-    // Oracle pin: an --! out sym expectation pins the query exactly (≡ against ⥊q1).
+    // Oracle pin: an --! out sym expectation pins the query exactly, reading the ravel either as
+    // the word list a sym result answers with or as the glyph run a char result is.
     #[test]
     fn out_pin_matches_oracle() {
         let mut it = Interner::new();
@@ -3612,7 +3884,7 @@ mod tests {
         let out = emit(&prog, &reg, &dirs, &it).expect("emit");
         assert_eq!(
             out,
-            "\n# fixture\nanoN ← 0\nanoSel ← ⟨⟩\n\n# q1\nq1 ← (<\"Foo\")\n\"out q1\" ! ⟨\"Foo\"⟩ ≡ ⥊q1\n\n# expectations\n\n\"ok\"\n"
+            "\n# fixture\nanoN ← 0\nanoSel ← ⟨⟩\n\n# q1\nq1 ← (<\"Foo\")\n\"out q1\" ! ⟨\"Foo\"⟩ {(𝕨≡𝕩)∨(∾𝕨)≡𝕩} ⥊q1\n\n# expectations\n\n\"ok\"\n"
         );
     }
 }
@@ -3838,7 +4110,41 @@ mod normalize {
     enum SemanticCarrier {
         Mask,
         Number,
+        Char,
         Other,
+    }
+
+    impl SemanticCarrier {
+        // Inputs: none.  Output: the reducer carrier this reading resolves a head against, or
+        // None for a reading A9 declares no Greater/Lesser instance over.
+        fn reducer_carrier(self) -> Option<Carrier> {
+            match self {
+                SemanticCarrier::Mask => Some(Carrier::Mask),
+                SemanticCarrier::Number => Some(Carrier::Number),
+                SemanticCarrier::Char => Some(Carrier::Char),
+                SemanticCarrier::Other => None,
+            }
+        }
+
+        fn name(self) -> &'static str {
+            match self {
+                SemanticCarrier::Mask => "mask",
+                SemanticCarrier::Number => "number",
+                SemanticCarrier::Char => "char",
+                SemanticCarrier::Other => "value",
+            }
+        }
+
+        // A refusal names the two carriers in this fixed order, never in operand order, so one
+        // mixture has one diagnostic however it was written.
+        fn rank(self) -> u8 {
+            match self {
+                SemanticCarrier::Mask => 0,
+                SemanticCarrier::Number => 1,
+                SemanticCarrier::Char => 2,
+                SemanticCarrier::Other => 3,
+            }
+        }
     }
 
     // Inputs: the consulted target and the synthetic name a materialized result took. Output: the
@@ -3858,8 +4164,12 @@ mod normalize {
         aliases: AliasSnapshot,
         /// Alias consultations recorded here; relationship crossings are minted by the lowerer.
         trace: TracePlan,
+        /// One materialized Greater/Lesser function per carrier: the char instances cannot share
+        /// the numeric ones, because their step is a different function.
         greater: Option<Symbol>,
         lesser: Option<Symbol>,
+        char_greater: Option<Symbol>,
+        char_lesser: Option<Symbol>,
         synthetic: u32,
         /// Every registry name minted during this emission.  Source may not spell one.
         generated: BTreeSet<String>,
@@ -3875,6 +4185,8 @@ mod normalize {
                 trace: TracePlan::default(),
                 greater: None,
                 lesser: None,
+                char_greater: None,
+                char_lesser: None,
                 synthetic: 0,
                 generated: BTreeSet::new(),
             }
@@ -3901,27 +4213,40 @@ mod normalize {
             }
         }
 
-        fn function(&mut self, greater: bool) -> Symbol {
-            let cached = if greater { self.greater } else { self.lesser };
+        // Inputs: the checked descriptor of the direct Greater/Lesser instance and which side it
+        // is. Output: the symbol of a materialized registry fn carrying that instance's dyad,
+        // minted once per (side, carrier) and cached.  Both the dyad and the carrier come from
+        // the descriptor, so the direct instance and the fold/scan instances cannot disagree.
+        fn function(&mut self, desc: &OpDesc, greater: bool) -> Symbol {
+            let chars = desc.reducer().map(|reducer| reducer.input) == Some(Carrier::Char);
+            let cached = match (greater, chars) {
+                (true, false) => self.greater,
+                (false, false) => self.lesser,
+                (true, true) => self.char_greater,
+                (false, true) => self.char_lesser,
+            };
             if let Some(symbol) = cached {
                 return symbol;
             }
-            let name = self.fresh_registry_name(if greater {
-                "AnoSemGreater"
-            } else {
-                "AnoSemLesser"
-            });
-            let body = if greater { "{𝕨⌈𝕩}" } else { "{𝕨⌊𝕩}" };
+            let stem = match (greater, chars) {
+                (true, false) => "AnoSemGreater",
+                (false, false) => "AnoSemLesser",
+                (true, true) => "AnoSemCharGreater",
+                (false, true) => "AnoSemCharLesser",
+            };
+            let name = self.fresh_registry_name(stem);
+            let body = desc.direct_body().unwrap_or_default();
             self.reg.ents.push(RegEntry {
                 name: name.clone(),
                 defval: 0.0,
-                kind: RegEntryKind::Fn { body: Some(body.to_string()) },
+                kind: RegEntryKind::Fn { body: Some(body) },
             });
             let symbol = self.intern(&name);
-            if greater {
-                self.greater = Some(symbol);
-            } else {
-                self.lesser = Some(symbol);
+            match (greater, chars) {
+                (true, false) => self.greater = Some(symbol),
+                (false, false) => self.lesser = Some(symbol),
+                (true, true) => self.char_greater = Some(symbol),
+                (false, true) => self.char_lesser = Some(symbol),
             }
             symbol
         }
@@ -3999,6 +4324,8 @@ mod normalize {
                 | RegEntryKind::Bind { kind: BindKind::Point, .. }
                 | RegEntryKind::Bind { kind: BindKind::Num, .. }
                 | RegEntryKind::Bind { kind: BindKind::Vec, .. } => SemanticCarrier::Number,
+                RegEntryKind::Col { ty: ColType::Char, .. }
+                | RegEntryKind::Field { ty: ColType::Char, .. } => SemanticCarrier::Char,
                 _ => SemanticCarrier::Other,
             }
         }
@@ -4019,19 +4346,23 @@ mod normalize {
                 NodeKind::Cmp { .. }
                 | NodeKind::CmpAny { .. }
                 | NodeKind::Not(..) => SemanticCarrier::Mask,
+                // a string literal is a run of glyphs, and reads on the char carrier
+                NodeKind::Str(..) => SemanticCarrier::Char,
                 NodeKind::And(left, right) | NodeKind::Or(left, right) => {
-                    if self.infer(left) == SemanticCarrier::Number
-                        && self.infer(right) == SemanticCarrier::Number
-                    {
-                        SemanticCarrier::Number
-                    } else {
-                        SemanticCarrier::Mask
+                    match (self.infer(left), self.infer(right)) {
+                        (SemanticCarrier::Number, SemanticCarrier::Number) => {
+                            SemanticCarrier::Number
+                        }
+                        (SemanticCarrier::Char, SemanticCarrier::Char) => SemanticCarrier::Char,
+                        _ => SemanticCarrier::Mask,
                     }
                 }
                 NodeKind::Fold { op, operand } | NodeKind::ScanExpr { op, operand } => {
                     let spelling = self.spelling(*op);
                     if spelling == "#" {
                         SemanticCarrier::Number
+                    } else if matches!(spelling, "charmax" | "charmin") {
+                        SemanticCarrier::Char
                     } else if matches!(spelling, "&" | "|")
                         && self.infer(operand) == SemanticCarrier::Mask
                     {
@@ -4042,7 +4373,9 @@ mod normalize {
                 }
                 NodeKind::ScanAlong { op, col, .. } => {
                     let spelling = self.spelling(*op);
-                    if matches!(spelling, "&" | "|")
+                    if matches!(spelling, "charmax" | "charmin") {
+                        SemanticCarrier::Char
+                    } else if matches!(spelling, "&" | "|")
                         && self.infer(col) == SemanticCarrier::Mask
                     {
                         SemanticCarrier::Mask
@@ -4052,7 +4385,14 @@ mod normalize {
                 }
                 NodeKind::Hop { r, .. } => self.infer(r),
                 NodeKind::Scope { l, .. } => self.infer(l),
-                NodeKind::Call { .. } => SemanticCarrier::Number,
+                // the Greater/Lesser call this normalizer minted keeps its operands' carrier
+                NodeKind::Call { callee, .. } => {
+                    if Some(*callee) == self.char_greater || Some(*callee) == self.char_lesser {
+                        SemanticCarrier::Char
+                    } else {
+                        SemanticCarrier::Number
+                    }
+                }
                 _ => SemanticCarrier::Other,
             }
         }
@@ -4125,6 +4465,21 @@ mod normalize {
             }
         }
 
+        // The same wrap for a fold, pushed onto the hopped component of a grouped operand so the
+        // fiber shape survives it.  `#/ rel'.Comp` is the cardinality of the fiber's admitted
+        // elements, never a sum of their payloads: count consumes presence, as q's `count` and
+        // Haskell's `length` do.  Every other `#/` operand already reaches the emitter through
+        // its mask reading, so only this one needs the wrap made explicit.
+        fn fiber_presence(node: Node) -> Node {
+            let line = node.line;
+            match node.kind {
+                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => {
+                    Node::new(NodeKind::Hop { l, r: Box::new(Self::presence(*r)) }, line)
+                }
+                kind => Node::new(kind, line),
+            }
+        }
+
         // Inputs: a head spelling. Output: true when the registry answers it with a fn — the ONLY
         // admission route for a name (an arity that happens to be two admits nothing).
         fn registered_fn(&self, spelling: &str) -> bool {
@@ -4138,11 +4493,7 @@ mod normalize {
             if spelling == "#" {
                 return Carrier::Presence;
             }
-            if self.infer(operand) == SemanticCarrier::Mask {
-                Carrier::Mask
-            } else {
-                Carrier::Number
-            }
+            self.infer(operand).reducer_carrier().unwrap_or(Carrier::Number)
         }
 
         // THE fold/scan head resolution point. Inputs: spelling, form, operand, line. Output: the
@@ -4195,25 +4546,38 @@ mod normalize {
                         let left = self.normalize(left, Context::Neutral, phase)?;
                         let right = self.normalize(right, Context::Neutral, phase)?;
                         let greater = matches!(&node.kind, NodeKind::Or(..));
+                        let spelling = if greater { "|" } else { "&" };
+                        let (lc, rc) = (self.infer(&left), self.infer(&right));
                         let numeric = |carrier| carrier == SemanticCarrier::Number;
-                        let (l, r) = (numeric(self.infer(&left)), numeric(self.infer(&right)));
-                        if l && r {
-                            let spelling = if greater { "|" } else { "&" };
-                            self.resolve_head(spelling, Form::Direct, &left, line)?;
-                            let callee = self.function(greater);
-                            NodeKind::Call { callee, args: vec![left, right] }
-                        } else if l != r && context == Context::Value {
-                            // Greater/Lesser is carrier-directed; there is no coercion between
-                            // the mask and numeric instances, so a mixture has no reading. Only
-                            // a genuine value position refuses: at the neutral top of a query or
-                            // an effect the operands keep their selection/presence reading.
+                        let chars = |carrier| carrier == SemanticCarrier::Char;
+                        // Greater/Lesser is carrier-directed; A9 adopts q's convention over Ano's
+                        // carriers, not q's promotions, so a mixture has no reading.  A genuine
+                        // value position refuses a mask/number mixture, while at the neutral top
+                        // of a query or an effect the operands keep their selection/presence
+                        // reading.  A char operand refuses wherever it is mixed: a glyph has no
+                        // selection reading to fall back on, and q's char-to-int promotion is
+                        // exactly the coercion Ano declines.
+                        let mixed_value = context == Context::Value && numeric(lc) != numeric(rc);
+                        let mixed_char = chars(lc) != chars(rc)
+                            && lc.reducer_carrier().is_some()
+                            && rc.reducer_carrier().is_some();
+                        if mixed_value || mixed_char {
+                            let (first, second) =
+                                if lc.rank() <= rc.rank() { (lc, rc) } else { (rc, lc) };
                             return Err(super::fail(
                                 line,
                                 format!(
-                                    "'{}' mixes mask and number operands; there is no carrier coercion",
-                                    if greater { "|" } else { "&" }
+                                    "'{}' mixes {} and {} operands; there is no carrier coercion",
+                                    spelling,
+                                    first.name(),
+                                    second.name()
                                 ),
                             ));
+                        }
+                        if (numeric(lc) && numeric(rc)) || (chars(lc) && chars(rc)) {
+                            let desc = self.resolve_head(spelling, Form::Direct, &left, line)?;
+                            let callee = self.function(&desc, greater);
+                            NodeKind::Call { callee, args: vec![left, right] }
                         } else if matches!(&node.kind, NodeKind::And(..)) {
                             NodeKind::And(Box::new(left), Box::new(right))
                         } else {
@@ -4260,6 +4624,10 @@ mod normalize {
                     let operand_context = if spelling == "#" { Context::Mask } else { Context::Value };
                     let operand = self.normalize(operand, operand_context, phase)?;
                     let desc = self.resolve_head(&spelling, Form::Fold, &operand, line)?;
+                    let operand = match desc.machine().map(|machine| machine.kind) {
+                        Some(MachineKind::Count) => Self::fiber_presence(operand),
+                        _ => operand,
+                    };
                     let op = self.intern(desc.spelling());
                     NodeKind::Fold { op, operand: Box::new(operand) }
                 }
@@ -4490,28 +4858,6 @@ mod normalize {
         }
     }
 
-    fn bqn_legal(name: &str) -> bool {
-        let bytes = name.as_bytes();
-        !bytes.is_empty()
-            && bytes[0].is_ascii_alphabetic()
-            && bytes[1..]
-                .iter()
-                .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
-    }
-
-    fn bqn_var(reg: &Registry, index: usize) -> String {
-        let name = &reg.ents[index].name;
-        if !bqn_legal(name) {
-            return format!("jp{}", index);
-        }
-        let mut chars = name.chars();
-        let Some(first) = chars.next() else { return String::new() };
-        let mut value = String::with_capacity(name.len());
-        value.push(first.to_ascii_lowercase());
-        value.push_str(chars.as_str());
-        value
-    }
-
     fn emit_trace_uses(mut bqn: String, plan: &TracePlan, enabled: bool) -> String {
         if !enabled || (plan.uses().is_empty() && plan.alias_lines().is_empty()) {
             return bqn;
@@ -4541,22 +4887,6 @@ mod normalize {
         bqn
     }
 
-    fn ordered_mean(mut bqn: String) -> String {
-        if !bqn.contains("AnoAvg") {
-            return bqn;
-        }
-        bqn = bqn.replace("AnoAvg", "AnoSemAverage");
-        let declaration = "AnoSemAverage ← {(+´𝕩)÷≠𝕩}\n";
-        let marker = "anoSel ← ⟨⟩\n";
-        if let Some(position) = bqn.find(marker) {
-            bqn.insert_str(position + marker.len(), declaration);
-        } else {
-            bqn.insert_str(0, declaration);
-        }
-        bqn
-    }
-
-
     pub(super) fn emit(
         prog: &Node,
         reg: &Registry,
@@ -4571,9 +4901,8 @@ mod normalize {
         normalizer.refuse_reserved(prog)?;
         // the alias plan crosses into the lowerer, which mints one record per staged crossing
         let plan = std::mem::take(&mut normalizer.trace);
-        let (mut bqn, plan) = emit_lowered(&program, &normalizer.reg, dirs, &normalizer.it, plan)?;
-        bqn = ordered_mean(bqn);
-        bqn = emit_trace_uses(bqn, &plan, dirs.trace);
+        let (bqn, plan) = emit_lowered(&program, &normalizer.reg, dirs, &normalizer.it, plan)?;
+        let bqn = emit_trace_uses(bqn, &plan, dirs.trace);
         Ok(bqn)
     }
 
@@ -4810,7 +5139,8 @@ mod normalize {
         #[test]
         fn identityless_empty_fold_cannot_expose_its_placeholder() {
             let bare = emitted("max/ Gold @ Burning\n");
-            assert!(bare.contains("q1v ← (0<(AnoLeftSum burning))"), "{}", bare);
+            // the guard counts the admitted rows: the emitter's own reduction, in BQN's order
+            assert!(bare.contains("q1v ← (0<(+´burning))"), "{}", bare);
             assert!(bare.contains("•Show⍟q1v q1"), "{}", bare);
 
             let mut dirs = Directives::default();

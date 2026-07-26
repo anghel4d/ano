@@ -300,7 +300,7 @@ The stage-4 rules stand inert until the data says otherwise. On advance, `stage3
 
 A column expression is a typed column over the current query domain. If the current view has row domain `X`, every expression has the form `Col X V`: one value of `V` per row, with an optional validity mask. `Gold` is one after the query has gathered it onto `X`; a scalar is the constant column on `X`. These operators build other columns, and a column expression appears anywhere a component name appears: in a predicate, a fold, an effect, an ordering. Equal length never establishes alignment. The view carries lineage maps from `X` to the stored habitats from which its columns were gathered.
 
-Ano's Greater/Lesser family is exactly q/kdb+'s convention over the carriers that Ano admits; this is not a claim of general q compatibility. `a | b` is OR on masks and pointwise maximum on numbers. `a & b` is AND on masks and pointwise minimum on numbers. Their folds and scans are the corresponding reductions and scans. A mask and a number never coerce into one another. Mixed application refuses. See KX's definitions of [Greater](https://code.kx.com/q/ref/greater/), [Lesser](https://code.kx.com/q/ref/lesser/), [max](https://code.kx.com/q/ref/max/), and [min](https://code.kx.com/q/ref/min/).
+Ano's Greater/Lesser family is exactly q/kdb+'s convention over the carriers that Ano admits; this is not a claim of general q compatibility. `a | b` is OR on masks, pointwise maximum on numbers, and the pointwise greater rune on glyphs. `a & b` is AND on masks, pointwise minimum on numbers, and the pointwise lesser rune on glyphs. The glyph order is the code-point order. Their folds and scans are the corresponding reductions and scans. No two carriers coerce into one another. Mixed application refuses, and that includes q's own char-to-int promotion: `98 | "a"` is a q expression and not an Ano one. See KX's definitions of [Greater](https://code.kx.com/q/ref/greater/), [Lesser](https://code.kx.com/q/ref/lesser/), [max](https://code.kx.com/q/ref/max/), and [min](https://code.kx.com/q/ref/min/).
 
 ### 12. Reduction (`/`)
 
@@ -829,8 +829,8 @@ Fourteen levels, loosest to tightest. Everything else in the document is a conse
 - 2 — `;`: effect batching within the statement's one barrier.
 - 3 — `|>`: pipeline stages (`order by`, `take`, `expand`).
 - 4 — effect verbs and assignment: `= += -= *= /=` (`=` assigns only in effect position; the equals glyph, below), `+Comp -Comp ~ spawn`, the locatives `at` and `to`, replicate `*` in `spawn X * n`.
-- 5 — `|`: Greater, OR on masks and maximum on numbers.
-- 6 — `&`: Lesser, AND on masks and minimum on numbers.
+- 5 — `|`: Greater, OR on masks, maximum on numbers, greatest rune on glyphs.
+- 6 — `&`: Lesser, AND on masks, minimum on numbers, least rune on glyphs.
 - 7 — `!`: mask not, prefix on one mask term.
 - 8 — comparison: `== != < <= > >=`, and `=` in selection position (the equals glyph, below).
 - 9 — fold and scan prefixes: `f/ f\` with f an operator or a registered reducer name, `fold(f)`, `scan(f) … along`, `grade`, `top k`.
@@ -850,20 +850,20 @@ One table governs the whole level-9 family. Ano's `|/` and `&/` are q's folds. T
 |---|---|---|---|
 | `+` | sum | running sum | 0 |
 | `*` | product | running product | 1 |
-| `&` | ALL on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none → row drops |
-| `\|` | ANY on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none → row drops |
+| `&` | ALL on masks, minimum on numbers, least rune on glyphs | still-all on masks, running minimum on numbers, running least rune on glyphs | mask true, number none, char none → row drops |
+| `\|` | ANY on masks, maximum on numbers, greatest rune on glyphs | ever-any on masks, running maximum on numbers, running greatest rune on glyphs | mask false, number none, char none → row drops |
 | `#` | count | running count | 0 |
-| `max` | numeric bridge for `\|/` | numeric bridge for `\|\` | none → row drops |
-| `min` | numeric bridge for `&/` | numeric bridge for `&\` | none → row drops |
+| `max` | numeric and char bridge for `\|/` | numeric and char bridge for `\|\` | none → row drops |
+| `min` | numeric and char bridge for `&/` | numeric and char bridge for `&\` | none → row drops |
 | `avg` | fold-and-finish mean | running mean | none → row drops |
 | `-` | ordered left subtraction; unordered refused | running subtraction | none → row drops |
 | `/` (divide) | `fold(/)` is ordered left division; unordered refused; `//` remains unlexable | `scan(/)` is running division | none → row drops |
 
 The identity column restates the §12/§13 law. A fold with an identity yields it on the empty scope. A fold without one fails the row, so an identityless scoped-global fold is an empty result and a bare query prints nothing. The γ column-form (`f/ rel'.Comp`) inherits the carrier-specific law per fiber. A named reducer (`threat/`) uses its registered identity or fails the empty scope. Its scan (`threat\`) is length-preserving, so empty input yields an empty column without consulting an identity. Steel stages the validity guard once and runs every observation under it, so a false guard prints nothing, emits no labeled row, writes nothing, and compares equal to the empty result; the backend placeholder is unobservable. A grouped identityless fold compresses by the same guard per row, so an empty fiber yields no result row.
 
-Ano adopts q's operations directly over its admitted carriers. `|` is OR on masks and maximum on numbers. `&` is AND on masks and minimum on numbers. Their folds and scans follow from the same dyads. Boolean OR stays `|`. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. `>` remains a comparison, so `>/` stays rejected.
+Ano adopts q's operations directly over its admitted carriers. `|` is OR on masks, maximum on numbers, and the greater rune on glyphs. `&` is AND on masks, minimum on numbers, and the lesser rune on glyphs. Their folds and scans follow from the same dyads. Boolean OR stays `|`. There is no `||`. `max/`, `max\`, `min/`, and `min\` bridge the numeric and glyph instances alike. `>` remains a comparison, so `>/` stays rejected.
 
-Steel implements the carrier overload. `|` and `&` resolve against the checked operand carrier in direct, fold, scan, and along position, and a mask-number mixture refuses in value position rather than coercing. `max/`, `max\`, `min/`, and `min\` resolve to the same descriptors as the numeric `|/`, `|\`, `&/`, and `&\`, so each bridge pair emits one program. `#\` and `avg\` are live as prefix machines. The γ column-form takes operator folds. A named reducer over fibers (`threat/ livestock'.Weight`) is still refused, and so is every per-fiber scan, because a ragged per-fiber result has no representation yet.
+Steel implements the carrier overload. `|` and `&` resolve against the checked operand carrier in direct, fold, scan, and along position, and a mixture refuses rather than coercing — a mask-number mixture in value position, and a glyph mixture anywhere, since a rune has no selection reading to fall back on. `max/`, `max\`, `min/`, and `min\` resolve to the same descriptors as `|/`, `|\`, `&/`, and `&\` on the carrier at hand, so each bridge pair emits one program. The glyph instances travel through code points, because the backend's own extrema refuse characters; one declared step serves the dyad, the fold and the scan, and the char order carries no identity, so an empty glyph scope yields no result row. `#\` and `avg\` are live as prefix machines. The γ column-form takes operator folds, and `#/ rel'.Comp` counts the fiber's admitted elements rather than summing their payload. A named reducer over fibers (`threat/ livestock'.Weight`) is still refused, and so is every per-fiber scan, because a ragged per-fiber result has no representation yet.
 The long-form head in `fold(f)` and `scan(f)` follows the LINQ accumulator model: it may be an operator or a registered reducer name, and the registry resolves the step, identity, finish, and laws. This is one callable-head policy, not a special case for `fold(+)`. A declared order admits any compatible step under exact left accumulation; unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. Steel resolves every head through one descriptor table, so `fold(+)`, `fold(-)`, `scan(/)`, and the registered names denote the same operations as their glyph spellings; ordered subtraction and division lower as exact left folds, and a strategy that would regroup or reorder refuses a step whose laws are not declared.
 
 ### Desugarings

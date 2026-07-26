@@ -1,0 +1,17 @@
+-- A per-row fold over a fiber column, where two of the four fibers are empty. +/ declares the identity 0 and answers every row; max/ declares none, so the empty rows have no result and drop out of the query and out of the write alike (A12).
+-- Neither q's negative infinity nor Haskell's exception on maximum of the empty list is available here: the ruling is that an identityless fold over nothing produces nothing.
+--! registry ../registries/143-row-fold-empty.reg
+--! expect total = 8 0 15 0
+--! expect peak = 5 -1 9 -1
+
+--! out 8 0 15 0
++/ Readings@row
+
+--! out 5 9
+max/ Readings@row
+
+--! out 3 2
+min/ Readings@row
+
+Bag , Total = +/ Readings@row
+Bag , Peak = max/ Readings@row

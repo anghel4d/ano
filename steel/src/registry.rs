@@ -21,6 +21,10 @@ const RESV: [&str; 12] = [
     "AnoAvg", "AnoNbrClamp", "AnoImage", "AnoInvFib",
 ];
 
+// The emitter's relationship-write staging variables are a generated family, anoRelStage<n>,
+// so the whole family is reserved by its stem rather than by any one name.
+const RESVPFX: [&str; 1] = ["anoRelStage"];
+
 // Inputs: full message. Output: the message clipped to ANO_ERRSZ-1 bytes (the C snprintf
 // bound), backed off to a char boundary.
 fn clip(mut s: String) -> String {
@@ -113,6 +117,14 @@ fn wuniq(reg: &Registry, name: &str, ln: i32) -> Result<(), Diag> {
             return Err(rerr(
                 ln,
                 format!("'{}' collides with the emitter's reserved '{}' under the case fold", name, r),
+            ));
+        }
+    }
+    for p in RESVPFX {
+        if name.get(..p.len()).is_some_and(|head| names_eq(head, p)) {
+            return Err(rerr(
+                ln,
+                format!("'{}' collides with the emitter's reserved '{}<n>' names under the case fold", name, p),
             ));
         }
     }
@@ -220,12 +232,12 @@ fn push_alias(reg: &mut Registry, words: &[(usize, &str)], ln: i32, ja: bool) ->
 // Inputs: .reg path. Output: the loaded world (entries in declaration order) or Diag.
 // Invariants: two passes (capacity count, then per-line dispatch on the EXACT-BYTE first
 // word); name gate order wfree -> wname -> wuniq selects which diagnostic fires; wuniq also
-// refuses the twelve reserved emitter identifiers under the fold; forward-only references
-// (n before cols, lattice before fields, rel before inv); the value domain is the finite
-// doubles at the single wnum choke point; char/fn payloads are the RAW stripped line tail
-// from the word's byte offset (interior spaces kept); keyed rel/srel store the key column's
-// CANONICAL spelling; inv fibers compute here (ascending sources, key-space values); the
-// `default` line parses its number BEFORE the entry lookup; empty file = zero registry.
+// refuses the twelve reserved emitter identifiers and the anoRelStage<n> family under the fold;
+// forward-only references (n before cols, lattice before fields, rel before inv); the value
+// domain is the finite doubles at the single wnum choke point; char/fn payloads are the RAW
+// stripped line tail from the word's byte offset (interior spaces kept); keyed rel/srel store
+// the key column's CANONICAL spelling; inv fibers compute here (ascending sources, key-space
+// values); the `default` line parses its number BEFORE the entry lookup; empty = zero registry.
 pub fn reg_load(path: &str) -> Result<Registry, Diag> {
     let mut reg = Registry::default();
     let bytes = match fs::fs_read(path) {

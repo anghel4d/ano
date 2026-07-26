@@ -46,7 +46,7 @@ Structural operators, glyphs and not keywords, for completeness. Each carries it
 | `=>` | なる | anonymous standing-rule hinge |
 | `;` | て | effect separator (all against one pre-state, one barrier) |
 | `\|>` | `\|>` | pipeline stage separator |
-| `&` `\|` | と か | Lesser and Greater over masks or numbers |
+| `&` `\|` | と か | Lesser and Greater over masks, numbers, or glyphs |
 | `!` | ない | mask NOT |
 | `@` | で | scope — fold scope, locative binding, frame fix (distinct from the `at` keyword) |
 | `.` | の | functional hop (`rel.Comp`) |
@@ -64,17 +64,17 @@ Fold and scan operators, the closed reducer family. Each is a fold under `/` and
 |---|---|---|---|---|
 | `+/` | `+\` | 総和 / 累和 | sum / running sum | 0 |
 | `*/` | `*\` | 総積 / 累積 | product / running product | 1 |
-| `&/` | `&\` | 皆 / 累皆 | all or minimum / still-all or running minimum | mask 1, number none |
-| `\|/` | `\|\` | 或 / 累或 | any or maximum / ever-any or running maximum | mask 0, number none |
+| `&/` | `&\` | 皆 / 累皆 | all, minimum, or least rune / their running forms | mask 1, number none, char none |
+| `\|/` | `\|\` | 或 / 累或 | any, maximum, or greatest rune / their running forms | mask 0, number none, char none |
 | `#/` | `#\` | 総数 / 累数 | count / running count | 0 |
-| `max/` | `max\` | 最大 / 累大 | numeric bridge for `\|/` / `\|\` | none — row drops |
-| `min/` | `min\` | 最小 / 累小 | numeric bridge for `&/` / `&\` | none — row drops |
+| `max/` | `max\` | 最大 / 累大 | numeric and char bridge for `\|/` / `\|\` | none — row drops |
+| `min/` | `min\` | 最小 / 累小 | numeric and char bridge for `&/` / `&\` | none — row drops |
 | `avg/` | `avg\` | 平均 / 累平均 | mean / running mean | none — row drops |
 | `-/` | `-\` | — | ordered left subtraction / running subtraction | none — row drops |
 | `fold(/)` | `/\` | — | ordered left division / running division | none — row drops |
 | `f/` | `f\` | `脅威/` / `脅威\` | named reducer / its scan | registered |
 
-Every scan in the table is live. `#\`, `min\`, and `avg\` landed with the rest, numeric `&\` and `|\` are the running minimum and maximum under the carrier overload, and `scan(min) X along order` is the same operation as `min\`. `-\` and `/\` carry no Japanese spelling. `//` stays unlexable, since `/` is already the fold marker and the replicate glyph. Full semantics live under the fold and scan markers below.
+Every scan in the table is live. `#\`, `min\`, and `avg\` landed with the rest, numeric `&\` and `|\` are the running minimum and maximum under the carrier overload, the char instances are the same overload over glyphs, and `scan(min) X along order` is the same operation as `min\`. `-\` and `/\` carry no Japanese spelling. `//` stays unlexable, since `/` is already the fold marker and the replicate glyph. Full semantics live under the fold and scan markers below.
 
 ## Atlas: registry keywords
 
@@ -487,7 +487,7 @@ Multiplication. `*/` multiplies the scope; `*\` returns the running product. Ide
 
 ### `&/`  `&\` — all and minimum, still-all and running minimum
 
-`&` is q's Lesser. On masks, `&/` is ALL and `&\` is the still-all latch. On numbers, `&/` is minimum and `&\` is running minimum. Empty mask input yields true. Empty numeric input has no identity and fails the row.
+`&` is q's Lesser. On masks, `&/` is ALL and `&\` is the still-all latch. On numbers, `&/` is minimum and `&\` is running minimum. On glyphs, `&/` is the least rune in code-point order and `&\` its running form. Empty mask input yields true. Empty numeric or glyph input has no identity and fails the row.
 
 ```haskell
 &/ Alive @ Party             -- is the whole party alive?
@@ -496,7 +496,7 @@ Multiplication. `*/` multiplies the scope; `*\` returns the running product. Ide
 
 ### `|/`  `|\` — any and maximum, ever-any and running maximum
 
-`|` is q's Greater. On masks, `|/` is ANY and `|\` is the ever-any latch. On numbers, `|/` is maximum and `|\` is running maximum. Empty mask input yields false. Empty numeric input has no identity and fails the row.
+`|` is q's Greater. On masks, `|/` is ANY and `|\` is the ever-any latch. On numbers, `|/` is maximum and `|\` is running maximum. On glyphs, `|/` is the greatest rune in code-point order and `|\` its running form. Empty mask input yields false. Empty numeric or glyph input has no identity and fails the row.
 
 ```haskell
 |/ Burning @ Forest          -- is anything burning?
