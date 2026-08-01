@@ -132,8 +132,8 @@ pub fn walk_demos(app: &mut App, dir: &str) {
 
 // Cached: $STEEL when executable; else steel beside kore's own binary via current_exe
 // (the cargo sibling in target/release or target/debug); else target/release/steel under
-// CWD; else "steel" (PATH via execvp). Kore speaks only to Steel — the C anoc is kore.c's
-// oracle business, never a rung here. kore.c find_anoc is the ladder's ancestor.
+// CWD; else "steel" from PATH. Kore invokes only Steel; no retired compiler participates
+// in discovery, execution, or validation.
 pub fn find_steel(app: &mut App) -> String {
     if let Some(p) = &app.steel_path {
         return p.clone();

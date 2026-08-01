@@ -1,6 +1,6 @@
 // Steel's BQN backend. Ordinary statements read pre-state, stage effects, then commit at the
 // barrier. Installed rules share one pre-state and commit set per synthetic tick.
-// Continuations reuse anoSel. --emit remains differential-tested against the C oracle.
+// Continuations reuse anoSel.
 
 use crate::alias::LookupMode;
 use crate::num::{fmt_g, int_fast};
@@ -3833,10 +3833,9 @@ mod tests {
         assert!(audit_relationship_writes(other, &reg, 1).is_ok(), "neighbouring names");
     }
 
-    // Oracle pin (src/anoc --emit on ":Foo" with the empty world): the emitted block after
-    // the rt prelude, byte-exact. Sym queries touch no peer module, so this runs today.
+    // Native byte-exact emission contract for a symbol query over the empty world.
     #[test]
-    fn sym_query_matches_oracle() {
+    fn sym_query_emits_the_native_contract() {
         let mut it = Interner::new();
         let foo = it.intern("Foo");
         let q = Node::new(
@@ -3853,9 +3852,9 @@ mod tests {
         );
     }
 
-    // Oracle pin: --label replaces the plain display with the 0x1D tag + •Show.
+    // --label replaces the plain display with the 0x1D tag plus •Show.
     #[test]
-    fn label_query_matches_oracle() {
+    fn label_query_emits_the_native_contract() {
         let mut it = Interner::new();
         let foo = it.intern("Foo");
         let q = Node::new(NodeKind::Query(Box::new(Node::new(NodeKind::Sym(foo), 1))), 1);
@@ -3870,10 +3869,10 @@ mod tests {
         );
     }
 
-    // Oracle pin: an --! out sym expectation pins the query exactly, reading the ravel either as
-    // the word list a sym result answers with or as the glyph run a char result is.
+    // An --! out sym expectation pins the query exactly, reading the ravel either as the word
+    // list a sym result answers with or as the glyph run a char result is.
     #[test]
-    fn out_pin_matches_oracle() {
+    fn out_pin_emits_the_native_contract() {
         let mut it = Interner::new();
         let foo = it.intern("Foo");
         let q = Node::new(NodeKind::Query(Box::new(Node::new(NodeKind::Sym(foo), 2))), 2);

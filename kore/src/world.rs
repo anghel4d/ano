@@ -1,6 +1,6 @@
 // World model and mutation: .reg loading, lookups, number spelling, splices, .kore scratch,
 // undo, snapshots, session logs, REPL/demo ticks, --check, and --edit. Guard diagnostics are
-// differential-tested against the C oracle. Child spawning and the 0x1D/0x1F demux live in main.rs
+// pinned by native Rust tests. Child spawning and the 0x1D/0x1F demux live in main.rs
 // (crate::find_steel, crate::cap_split); sys:: provides strtod_prefix/fmt_g for wnum/fmt_num.
 
 use crate::app::{App, DCol, Mode, SDef, KMAXHIST, KMAXSDEF};
@@ -877,8 +877,8 @@ pub fn char_splice(app: &mut App, ent: usize, cell: i32, rows: i32, repl: &[u8])
 // segment 0 dispatches by kind: sym one word, vec both pair words re-formatted via fmt_num,
 // num word 3 + keyw + row, pres/alias word 2 + row, rel `/`->-1 word
 // 2 + keyw + row, srel whole-fiber replace (inv refuses), default `cell not editable`.
-// Every error string is --edit differential surface. Ok(Some(_)) is the clamp warning: the
-// write landed, repaired onto the column's carrier set. kore.c cell_commit.
+// Every error string is part of the native --edit surface. Ok(Some(_)) is the clamp warning:
+// the write landed, repaired onto the column's carrier set.
 pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String> {
     let mut repl: Vec<u8> = text.iter().copied().take(511).collect();
     let mut warn: Option<String> = None;
@@ -2133,13 +2133,13 @@ pub fn open_demo(app: &mut App, path: &str) {
     app.say(path);
 }
 
-// ---------- headless surfaces (the differential contract) ----------
+// ---------- headless surfaces ----------
 
 // Load, table_cols, spell every table_cell, and when a space exists render map and bitmap
 // into a Term::headless(200, 400) with world_r = {0,0,399,199} (crate::ui::draw_space /
-// draw_bitmap — the same code paths as the TUI). stdout exactly
+// draw_bitmap — the same code paths as the TUI). stdout is
 // `ok %s n=%d lattice=%dx%d cols=%d fields=%d space=%s` (map+bitmap | table-only);
-// failures `FAIL %s: %s` on stderr. Returns 0/1. kore.c check_reg.
+// failures use `FAIL %s: %s` on stderr. Returns 0/1.
 pub fn check_reg(app: &mut App, path: &str) -> i32 {
     match world_load(path) {
         Err(e) => {
@@ -2179,9 +2179,9 @@ pub fn check_reg(app: &mut App, path: &str) -> i32 {
 }
 
 // kore --edit <reg> <seg> <row> <col> <value>: guard and undo bypassed; demos/ refusal
-// `FAIL %s: corpus file — point --edit at a copy`; atoi the triple; cell_commit; success
-// re-runs table_cols and prints `ok %s` with the touched post-splice line ("?" when the
-// entry cannot be re-found). Returns 0/1. kore.c edit_reg.
+// is `FAIL %s: corpus file — point --edit at a copy`; atoi parses the triple; cell_commit
+// performs the write; success re-runs table_cols and prints `ok %s` with the touched
+// post-splice line ("?" when the entry cannot be re-found). Returns 0/1.
 pub fn edit_reg(app: &mut App, args: &[String]) -> i32 {
     // the corpus is immutable under kore, headless included
     if in_demos(&args[0]) {
@@ -2231,326 +2231,21 @@ pub fn edit_reg(app: &mut App, args: &[String]) -> i32 {
     0
 }
 
-// Differential harness against the frozen C oracle (kore/kore, `make -C kore`): the whole
-// corpus through --check, the splice router through --edit — exit codes, ok/FAIL lines,
-// and post-splice file bytes compared byte-for-byte. Skips silently when the C binary is
-// not built; the render half of --check needs ui and is exercised by the binary harness.
 #[cfg(test)]
-mod cdiff {
+mod tests {
     use super::*;
-    use std::process::Command;
-
-    fn root() -> String {
-        format!("{}/..", env!("CARGO_MANIFEST_DIR"))
-    }
-
-    fn cbin() -> Option<String> {
-        let p = format!("{}/kore/kore", root());
-        if sys::access_x(&p) { Some(p) } else { None }
-    }
-
-    fn scratch() -> String {
-        let d = std::env::temp_dir().join("kore-cdiff");
-        let _ = std::fs::create_dir_all(&d);
-        d.to_string_lossy().into_owned()
-    }
-
-    fn regs() -> Vec<String> {
-        let mut v = Vec::new();
-        fn walk(dir: &str, v: &mut Vec<String>) {
-            if let Ok(rd) = std::fs::read_dir(dir) {
-                for de in rd.flatten() {
-                    let p = de.path();
-                    let s = p.to_string_lossy().into_owned();
-                    if p.is_dir() {
-                        walk(&s, v);
-                    } else if s.ends_with(".reg") {
-                        v.push(s);
-                    }
-                }
-            }
-        }
-        walk(&format!("{}/demos", root()), &mut v);
-        v.sort();
-        v
-    }
-
-    // My side of the --check line, render skipped (space= computed, not drawn).
-    fn my_check(path: &str) -> Result<String, String> {
-        let mut app = App::new();
-        app.world = world_load(path)?;
-        table_cols(&mut app);
-        for r in 0..app.world.n {
-            for c in 0..app.dcols.len() as i32 {
-                let _ = table_cell(&app, r, c);
-            }
-        }
-        let fields = app.world.ents.iter().filter(|e| e.kind == EKind::Field).count();
-        let space = app.world.lat_w > 0 || app.world.pos().is_some();
-        Ok(format!(
-            "ok {} n={} lattice={}x{} cols={} fields={} space={}",
-            path,
-            app.world.n,
-            app.world.lat_w,
-            app.world.lat_h,
-            app.dcols.len(),
-            fields,
-            if space { "map+bitmap" } else { "table-only" }
-        ))
-    }
-
-    // A world carrying the typed refinements (nat/int kinds, range riders, a kind word on
-    // a unique line) post-dates the C oracle, which reads those columns as pass-through
-    // schema or misaligned data: not compared.
-    fn typed_world(reg: &str) -> bool {
-        let Ok(b) = std::fs::read(reg) else { return false };
-        b.split(|&c| c == b'\n').any(|ln| {
-            let w = split_words(ln);
-            (w.len() > 2 && (w[0] == b"col" || w[0] == b"field") && (w[2] == b"nat" || w[2] == b"int"))
-                || (w.len() == 4 && w[0] == b"range")
-                || (w.len() > 2 && w[0] == b"unique" && wnum(&w[2]).is_none())
-        })
-    }
-
-    #[test]
-    fn check_differential() {
-        let Some(cbin) = cbin() else { return };
-        let mut bad = 0;
-        for reg in regs() {
-            if typed_world(&reg) {
-                continue;
-            }
-            let out = Command::new(&cbin).args(["--check", &reg]).output().unwrap();
-            let cok = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
-            let cerr = String::from_utf8_lossy(&out.stderr).trim_end().to_string();
-            match my_check(&reg) {
-                Ok(line) => {
-                    if out.status.code() != Some(0) || line != cok {
-                        eprintln!("MISMATCH {}\n  C : {} (exit {:?}) err {}\n  rs: {}", reg, cok, out.status.code(), cerr, line);
-                        bad += 1;
-                    }
-                }
-                Err(e) => {
-                    let mine = format!("FAIL {}: {}", reg, e);
-                    if out.status.code() != Some(1) || cerr != mine {
-                        eprintln!("MISMATCH {}\n  C : {} / {}\n  rs: {}", reg, cok, cerr, mine);
-                        bad += 1;
-                    }
-                }
-            }
-        }
-        assert_eq!(bad, 0, "{} check mismatches", bad);
-    }
-
-    #[test]
-    fn check_synthetic() {
-        let Some(cbin) = cbin() else { return };
-        let cases: &[(&str, &[u8])] = &[
-            ("empty.reg", b""),
-            ("crlf.reg", b"n 2\r\ncol hp num 3 4\r\n"),
-            ("nofinal.reg", b"n 2\ncol hp num 3 4"),
-            ("uniqdup.reg", b"n 3\nunique id 1 2 1\n"),
-            ("uniqdupg.reg", b"n 3\nunique id 0.5 2 0.5\n"),
-            ("keyed.reg", b"n 2\nrel id mentor 1 0\nrel a b\n"),
-            ("hexnum.reg", b"n 1\ncol hp num 0x10\n"),
-            ("comment.reg", b"n 2 # two\ncol hp num 3 4 # tail\ncol g char ab#c\n"),
-            ("srel.reg", b"n 3\nsrel kids 1 2 | | 3\ninv par kids\n"),
-            ("bignum.reg", b"n 1\ncol hp num 0.1 1e300 -9007199254740993\n"),
-        ];
-        let mut bad = 0;
-        for (name, body) in cases {
-            let p = format!("{}/{}", scratch(), name);
-            std::fs::write(&p, body).unwrap();
-            let out = Command::new(&cbin).args(["--check", &p]).output().unwrap();
-            let cok = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
-            let cerr = String::from_utf8_lossy(&out.stderr).trim_end().to_string();
-            let mine = match my_check(&p) {
-                Ok(l) => (0, l),
-                Err(e) => (1, format!("FAIL {}: {}", p, e)),
-            };
-            let cline = if out.status.code() == Some(0) { &cok } else { &cerr };
-            if out.status.code() != Some(mine.0) || *cline != mine.1 {
-                eprintln!("SYN MISMATCH {}\n  C : {:?} exit {:?}\n  rs: {:?} exit {}", name, cline, out.status.code(), mine.1, mine.0);
-                bad += 1;
-            }
-        }
-        assert_eq!(bad, 0);
-    }
-
-    // Run one --edit on a scratch copy through the C binary AND through my cell_commit,
-    // comparing exit, the ok/FAIL line, and the resulting file bytes.
-    fn edit_diff(cbin: &str, src: &[u8], seg: &str, row: &str, col: &str, val: &str) -> Option<String> {
-        use std::sync::atomic::{AtomicU32, Ordering};
-        static SEQ: AtomicU32 = AtomicU32::new(0);
-        let id = SEQ.fetch_add(1, Ordering::SeqCst);
-        let cpath = format!("{}/c-edit{}.reg", scratch(), id);
-        let rpath = format!("{}/r-edit{}.reg", scratch(), id);
-        std::fs::write(&cpath, src).unwrap();
-        std::fs::write(&rpath, src).unwrap();
-        let out = Command::new(cbin).args(["--edit", &cpath, seg, row, col, val]).output().unwrap();
-        let cexit = out.status.code();
-        // strip only the final newline: a trailing space inside the ok line is contract
-        let chop = |b: &[u8]| String::from_utf8_lossy(b.strip_suffix(b"\n").unwrap_or(b)).into_owned();
-        let cout = chop(&out.stdout);
-        let cerr = chop(&out.stderr);
-        let cfile = std::fs::read(&cpath).unwrap();
-        // my side, edit_reg's logic inline (stdout capture replaced by string build)
-        let mut app = App::new();
-        let (rexit, rline) = match world_load(&rpath) {
-            Err(e) => (1, format!("FAIL {}: {}", rpath, e)),
-            Ok(w) => {
-                app.world = w;
-                app.w_seg = atoi(seg.as_bytes());
-                app.w_row = atoi(row.as_bytes());
-                app.w_col = atoi(col.as_bytes());
-                table_cols(&mut app);
-                match cell_commit(&mut app, val.as_bytes()) {
-                    Err(e) => (1, format!("FAIL {}: {}", rpath, e)),
-                    // the typed repair (clamp + warn) post-dates the C oracle: a clamped
-                    // write is intentionally divergent, not compared
-                    Ok(Some(_)) => return None,
-                    Ok(None) => {
-                        table_cols(&mut app);
-                        let ei = if app.w_seg != 0 {
-                            seg_field(&app, app.w_seg)
-                        } else if app.w_col >= 0 && (app.w_col as usize) < app.dcols.len() {
-                            Some(app.dcols[app.w_col as usize].ent)
-                        } else {
-                            None
-                        };
-                        let line = match ei {
-                            Some(i) => String::from_utf8_lossy(&app.world.lines[app.world.ents[i].line]).into_owned(),
-                            None => "?".to_string(),
-                        };
-                        (0, format!("ok {}", line))
-                    }
-                }
-            }
-        };
-        let rfile = std::fs::read(&rpath).unwrap();
-        // C's paths differ inside messages (c-edit vs r-edit): normalize
-        let cnorm = cerr.replace(&format!("c-edit{}.reg", id), "X.reg");
-        let rnorm = rline.replace(&format!("r-edit{}.reg", id), "X.reg");
-        let cline = if cexit == Some(0) { cout.clone() } else { cnorm.clone() };
-        let rl = if rexit == 0 { rline.clone() } else { rnorm.clone() };
-        if cexit != Some(rexit) || cline != rl || cfile != rfile {
-            return Some(format!(
-                "seg={} row={} col={} val={:?}\n  C : exit {:?} line {:?}\n  rs: exit {} line {:?}\n  files {}",
-                seg, row, col, val, cexit, cline, rexit, rl,
-                if cfile == rfile { "equal" } else { "DIFFER" }
-            ));
-        }
-        None
-    }
-
-    #[test]
-    fn edit_differential() {
-        let Some(cbin) = cbin() else { return };
-        let base: &[u8] = b"# a comment\nn 3\nunique id 5 6 7\ncol hp num 3 4 5 # hp tail\ncol name sym ana bob cy\ncol face char ab.\ncol pos vec 1 2 | 3 4 | 5 6 |\npres alive 1 0 1\nrel boss -1 0 1\nrel id mentor 5 6 7\nalias mask 1 2 4\nsrel kids 1 2 | | 0\ninv par kids\nlattice 3 2\nfield ground num 1 2 3 4 5 6\nfield tag char abcdef\nrole pos pos\n";
-        let vals: &[(&str, &str, &str, &str)] = &[
-            // num / bool / unique
-            ("0", "0", "1", "9"),
-            ("0", "2", "1", "9.5"),
-            ("0", "0", "0", "42"),
-            ("0", "0", "0", "6"),      // unique dup -> load fail after splice
-            ("0", "1", "1", "abc"),    // not a number
-            ("0", "9", "1", "9"),      // row out of range
-            ("0", "0", "1", "0x10"),   // hex
-            ("0", "0", "1", "1e999"),  // inf -> not a number
-            // sym
-            ("0", "1", "2", "zed"),
-            ("0", "1", "2", "two words"),
-            ("0", "1", "2", "#lead"),
-            ("0", "1", "2", ""),
-            // char col
-            ("0", "1", "3", "Z"),
-            ("0", "0", "3", " "),
-            ("0", "2", "3", "#"),
-            ("0", "5", "3", "Z"),
-            // vec
-            ("0", "1", "4", "7 8"),
-            ("0", "1", "4", "7.25 -0.5"),
-            ("0", "1", "4", "7 8 junk"),
-            ("0", "1", "4", "7"),
-            ("0", "2", "4", "0.1 0.2"),
-            // pres / alias
-            ("0", "1", "5", "1"),
-            ("0", "1", "5", "x"),
-            ("0", "2", "7", "8"),
-            // rel plain + none + keyed
-            ("0", "0", "6", "/"),
-            ("0", "1", "6", "2"),
-            ("0", "1", "6", "zz"),
-            ("0", "1", "8", "9"),
-            ("0", "9", "8", "9"),
-            // srel fiber replace / empty / insert / inv refusal / range
-            ("0", "0", "9", "7 8 9"),
-            ("0", "0", "9", ""),
-            ("0", "1", "9", "4 5"),
-            ("0", "2", "9", "1"),
-            ("0", "2", "9", ""),
-            ("0", "3", "9", "1"),
-            ("0", "0", "9", "1 x"),
-            ("0", "0", "10", "3"),
-            // field segment
-            ("1", "0", "1", "42"),
-            ("1", "1", "2", "0.5"),
-            ("1", "9", "9", "1"),
-            ("1", "0", "0", "abc"),
-            ("2", "0", "0", "Z"),
-            ("2", "1", "2", "#"),
-            ("3", "0", "0", "1"),      // no field segment
-            // bad column / negative
-            ("0", "0", "99", "1"),
-            ("0", "0", "-1", "1"),
-            ("-1", "0", "1", "9"),
-        ];
-        let mut bad = 0;
-        for (s, r, c, v) in vals {
-            if let Some(m) = edit_diff(&cbin, base, s, r, c, v) {
-                eprintln!("EDIT MISMATCH {}", m);
-                bad += 1;
-            }
-        }
-        assert_eq!(bad, 0, "{} edit mismatches", bad);
-    }
-
-    #[test]
-    fn edit_corpus_refusal() {
-        let Some(cbin) = cbin() else { return };
-        let reg = regs().into_iter().next().unwrap();
-        let out = Command::new(&cbin).args(["--edit", &reg, "0", "0", "0", "1"]).output().unwrap();
-        let cerr = String::from_utf8_lossy(&out.stderr).trim_end().to_string();
-        assert!(in_demos(&reg));
-        let mine = format!("FAIL {}: corpus file — point --edit at a copy", reg);
-        assert_eq!(out.status.code(), Some(1));
-        assert_eq!(cerr, mine);
-    }
-
-    #[test]
-    fn fmt_num_differential() {
-        let Some(cbin) = cbin() else { return };
-        // spelled through the C vec-edit path: splice pos with the value, read the line back
-        for v in ["0.1", "1e300", "3.14159265358979", "-0", "1e-7", "123456789012345678", "0.30000000000000004", "2", "-9e15", "9007199254740993"] {
-            let src = "n 1\ncol pos vec 1 2 |\nrole pos pos\n".to_string();
-            let val = format!("{} {}", v, v);
-            if let Some(m) = edit_diff(&cbin, src.as_bytes(), "0", "0", "1", &val) {
-                eprintln!("FMT MISMATCH {}", m);
-                panic!("fmt_num diff at {}", v);
-            }
-        }
-    }
 
     #[test]
     fn tag_and_paths() {
-        // no headless hook drives the C's tag; assert the documented shape and the
-        // raw-stem/realpath-hash asymmetry.
-        let t = tag_of("/no/such/dir/file.reg");
-        assert!(t.starts_with("file-") && t.len() == 5 + 8);
-        // realpath folds a dot-riddled spelling and the plain absolute to one hash
-        let some = regs().into_iter().next().unwrap();
-        let dotted = some.replace("/demos/", "/./demos/");
-        assert_eq!(tag_of(&some), tag_of(&dotted));
+        let tag = tag_of("/no/such/dir/file.reg");
+        assert!(tag.starts_with("file-") && tag.len() == 5 + 8);
+
+        let path = format!(
+            "{}/../demos/registries/001-canonical-masked-update.reg",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let dotted = path.replace("/demos/", "/./demos/");
+        assert_eq!(tag_of(&path), tag_of(&dotted));
     }
 }
 

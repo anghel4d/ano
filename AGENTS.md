@@ -20,6 +20,7 @@ Selection on the left, effect on the right, comma between. `source` defaults to 
 - Read `ano-language.md` before editing it. Match its part/section numbering and the canonical-task addendum already in place.
 - Open design questions live under "Open Questions, Next Steps". Never resolve one silently in prose; surface the tradeoff.
 - Steel and Kore implement Ano. BQN witnesses are not semantic or differential oracles. The bytecode VM and JIT target stay fixed.
+- The C implementations are archival. Never compile or run them as test oracles, differential targets, or acceptance checks.
 - No heavyweight deps. No frameworks.
 - TODO.md lists current tasks.
 
