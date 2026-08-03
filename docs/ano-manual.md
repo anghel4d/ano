@@ -199,7 +199,7 @@ A scan accumulates and returns a column of equal length, which means it needs an
 scan(+) Weight along pathCells       -- the order named explicitly
 ```
 
-The whole family fits one table. Ano adopts q's Greater and Lesser operations directly. `|` is OR on masks and pointwise maximum on numbers. `&` is AND on masks and pointwise minimum on numbers. Steel currently refuses mixed carriers pending Ano's operator-specific coercion table. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
+The whole family fits one table. Ano adopts q's Greater and Lesser operations directly. `|` is OR on masks and pointwise maximum on numbers. `&` is AND on masks and pointwise minimum on numbers. Mixed carriers refuse: the ruled contract is no implicit coercion, with explicit registered conversions as the cross-carrier path. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
 
 | f | `f/` fold | `f\` scan | empty-scope identity |
 |---|---|---|---|

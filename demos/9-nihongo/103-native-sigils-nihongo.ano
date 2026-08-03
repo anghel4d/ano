@@ -1,7 +1,14 @@
 --! registry ../registries/103-native-sigils.reg
 --! ja
 --! expect 印 = .#..#.
---! expect 打撃 = 0 0 0 0 0 9
+--! expect 打撃 = 0 1 0 0 0 9
 --! expect 派閥 = 山賊 勇者 山賊 勇者 山賊 賊軍
 
 ^照準 と 派閥 :勇者 同 、 打撃 に 九 にする て 派閥 に :賊軍 にする
+照準 、 打撃 に 一 にする
+
+--! out 2
+総数 ^照準
+
+--! out 1
+総数 照準

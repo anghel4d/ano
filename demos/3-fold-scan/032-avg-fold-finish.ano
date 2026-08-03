@@ -1,10 +1,27 @@
+-- The mean is a prefix machine: state (sum,count), an emitted mean per prefix, and a finish that is the state after the last element. avg/ is therefore the last prefix of avg\ by construction, never the backend's own sum in its own order.
+-- On the empty scope the mean declares no result and yields no row (A12); the count declares 0 and answers it.
 --! registry ../registries/032-avg-fold-finish.reg
+
+--! out 400 450 500 600
+avg\ Weight @ Cow
 
 --! out 600
 avg/ Weight @ Cow
+
+--! out 0 0 0 1
+(avg\ Weight @ Cow) == (avg/ Weight @ Cow)
 
 --! out 4
 #/ Cow
 
 --! out 2400
 +/ Weight @ Cow
+
+--! out
+avg/ Weight @ None
+
+--! out
+avg\ Weight @ None
+
+--! out 0
+#/ None

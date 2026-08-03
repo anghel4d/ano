@@ -1,9 +1,12 @@
+-- Both statements resolve ^cursor against one frozen overlay snapshot: one submission is one barrier, so the second statement cannot observe a different target than the first (todo/02's statement-snapshot law, seen from the batch host).
+-- The verbs sequence left to right behind one selection; !^cursor negates the resolved mask, so the blessing lands everywhere the knockback did not.
 --! registry ../registries/019-sequenced-effects.reg
 --! expect pos = 0 10 25 30 40 50
 --! expect tint = None None Red None None None
 --! expect shielded = 1 1 0 0 1 0
---! expect gold = 1005 10 15 1020 25 30
---! expect blessed = 1 1 0 1 0 0
+--! expect gold = 5 10 115 20 25 30
+--! expect blessed = 1 1 0 1 1 1
 
 ^cursor , Knockback 5 ; Flash :Red ; -Shielded
-Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
+^cursor , Gold += 100
+!^cursor , Blessed = 1

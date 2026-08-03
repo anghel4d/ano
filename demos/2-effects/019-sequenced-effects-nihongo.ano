@@ -3,8 +3,9 @@
 --! expect pos = 0 10 25 30 40 50
 --! expect tint = None None Red None None None
 --! expect shielded = 1 1 0 0 1 0
---! expect gold = 1005 10 15 1020 25 30
---! expect blessed = 1 1 0 1 0 0
+--! expect gold = 5 10 115 20 25 30
+--! expect blessed = 1 1 0 1 1 1
 
 ^cursor 、 Knockback 5 て Flash :Red て 防護 除
-北 と 両手 60 より 、 金 に 1000 たす て 祝福 付
+^cursor 、 金 に 100 たす
+^cursor ない 、 祝福 に 1 にする

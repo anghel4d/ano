@@ -1,8 +1,0 @@
-n 8
-col enemies bool 0 1 1 0 1 0 1 0
-col damage nat 5 12 7 0 30 4 9 2
-col none bool 0 0 0 0 0 0 0 0
-fn threat {𝕨⌈𝕩}
-ja 敵勢 enemies
-ja 損傷 damage
-ja 無 none

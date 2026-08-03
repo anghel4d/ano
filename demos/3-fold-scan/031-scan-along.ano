@@ -1,7 +1,15 @@
+-- The along form runs the same descriptors over a declared traversal order: scan(+), scan(min), and scan(-) walk pathCells 4 2 7 1, so the carry follows the path and not the row order. The masked scans beside them are the same recurrence over row order.
+-- One head resolver serves scan(f) along, the glyph scans, and the folds: the last prefix of +\ is +/.
 --! registry ../registries/031-scan-along.reg
 
 --! out 2 5 9 10
 scan(+) Weight along pathCells
+
+--! out 2 2 2 1
+scan(min) Weight along pathCells
+
+--! out 2 -1 -5 -6
+scan(-) Weight along pathCells
 
 --! out 1 4 6 10
 +\ Weight @ Mask

@@ -1,0 +1,21 @@
+-- The live overlay is consulted only by ^name: ^focus reads the sidecar mask while bare focus keeps naming its column, so the two counts agree at 2 and their conjunction is empty in one and the same world.
+-- The first statement elides its subject with no antecedent, which is the ruled ^cursor cold default: the overlay's cursor mask marks row 4, not the bare cursor column's row 2. ^watch has no overlay entry, so it falls back to the bare name — the static alias-mask fixture, which never moves.
+--! registry ../registries/005-alias-overlay.reg
+--! expect marked = 0 0 0 0 1
+--! expect health = 50 0 1 0 90
+--! expect gold = 15 99 30 40 55
+
++Marked
+^focus , Health = 0
+focus , Gold += 5
+!^focus & !focus , Health = 1
+^watch , Gold = 99
+
+--! out 2
+#/ ^focus
+
+--! out 2
+#/ focus
+
+--! out 0
+#/ (^focus & focus)

@@ -1,0 +1,12 @@
+# Exact ordered steps: drain is a registered non-associative accumulator ((acc-x)⌈0), so its
+# fold is lawful only as the exact left recurrence — the registry cannot prove regrouping for
+# an undeclared law, which is why 12 5 0 0 is the one admissible scan.
+n 8
+col enemies bool 0 1 1 0 1 0 1 0
+col damage nat 5 12 7 0 30 4 9 2
+fn threat {𝕨⌈𝕩}
+fn drain {(𝕨-𝕩)⌈0}
+ja 敵勢 enemies
+ja 損傷 damage
+ja 脅威 threat
+ja 消耗 drain

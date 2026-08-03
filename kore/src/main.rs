@@ -439,3 +439,161 @@ mod demux_tests {
         assert_eq!(a.qgroups[0].recs[0].label.len(), 63);
     }
 }
+
+// The Kore half of todo/03 item 9, observed end to end: a real Steel invocation over a real
+// BQN backend, demuxed by Kore's own cap_split into the OUTPUTS data model draw_outputs
+// renders.  The handcrafted-capture pins above prove the demux law; these prove the stream
+// Steel actually sends is the stream that law was written for.
+#[cfg(test)]
+mod outputs_end_to_end {
+    use super::*;
+
+    // The workspace steel binary beside this test's own target directory.  $STEEL-style PATH
+    // discovery is deliberately bypassed: a test must never fall back to a stale release build.
+    fn steel_bin() -> String {
+        let mut p = std::env::current_exe().expect("current_exe");
+        p.pop(); // deps
+        p.pop(); // debug
+        p.push("steel");
+        assert!(
+            p.exists(),
+            "steel binary missing at {} — build the workspace first (cargo test/build --workspace)",
+            p.display()
+        );
+        p.to_string_lossy().into_owned()
+    }
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("kore-outputs-{}-{}", std::process::id(), tag));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    // An identityless fold over an empty scope reaches Kore as a suppressed record: no 0x1D
+    // tag, no value, no OUTPUTS row — while the identity folds and a live sibling land as
+    // ordinary rows.  No fabricated scalar exists anywhere in the pane's data model.
+    #[test]
+    fn empty_identityless_fold_shows_no_outputs_row() {
+        let dir = scratch("empty");
+        let reg = dir.join("world.reg");
+        std::fs::write(
+            &reg,
+            "n 3\ncol gold num 1 2 3\ncol burning bool 0 0 0\ncol alive bool 1 1 1\n",
+        )
+        .unwrap();
+        let prog = format!(
+            "--! registry {}\nmax/ Gold @ Burning\n+/ Gold @ Burning\n#/ Burning\navg/ Gold @ Burning\n+/ Gold @ Alive\n",
+            reg.display()
+        );
+        let ano = dir.join("world.ano");
+        std::fs::write(&ano, &prog).unwrap();
+
+        let steel = steel_bin();
+        let argv = [
+            steel.as_str(),
+            "--run",
+            "--label",
+            ano.to_str().expect("utf8 path"),
+        ];
+        let (cap, code) = crate::run_steel(&argv);
+        assert_eq!(
+            code,
+            0,
+            "steel --run failed:\n{}",
+            String::from_utf8_lossy(&cap)
+        );
+
+        let mut app = App::new();
+        app.run_lines_set(prog.as_bytes());
+        cap_split(&mut app, &cap, code, 1);
+
+        // one group; the two identityless folds contribute no record at all
+        assert_eq!(app.qgroups.len(), 1, "{}", String::from_utf8_lossy(&cap));
+        let recs = &app.qgroups[0].recs;
+        let labels: Vec<&[u8]> = recs.iter().map(|r| r.label.as_slice()).collect();
+        assert_eq!(
+            labels,
+            vec![
+                b"+/ Gold @ Burning".as_slice(),
+                b"#/ Burning".as_slice(),
+                b"+/ Gold @ Alive".as_slice(),
+            ],
+            "suppressed queries left rows behind: {}",
+            String::from_utf8_lossy(&cap)
+        );
+        assert_eq!(recs[0].value, b"0");
+        assert_eq!(recs[1].value, b"0");
+        assert_eq!(recs[2].value, b"6");
+    }
+
+    // Every query suppressed: the run leaves no group and no seam — the OUTPUTS pane keeps
+    // showing its placeholder, not a stack of empty steps.
+    #[test]
+    fn all_suppressed_queries_leave_no_group() {
+        let dir = scratch("allempty");
+        let reg = dir.join("world.reg");
+        std::fs::write(&reg, "n 2\ncol gold num 5 7\ncol burning bool 0 0\n").unwrap();
+        let prog = format!(
+            "--! registry {}\nmax/ Gold @ Burning\nmin/ Gold @ Burning\navg/ Gold @ Burning\n",
+            reg.display()
+        );
+        let ano = dir.join("world.ano");
+        std::fs::write(&ano, &prog).unwrap();
+
+        let steel = steel_bin();
+        let argv = [
+            steel.as_str(),
+            "--run",
+            "--label",
+            ano.to_str().expect("utf8 path"),
+        ];
+        let (cap, code) = crate::run_steel(&argv);
+        assert_eq!(
+            code,
+            0,
+            "steel --run failed:\n{}",
+            String::from_utf8_lossy(&cap)
+        );
+
+        let mut app = App::new();
+        app.run_lines_set(prog.as_bytes());
+        cap_split(&mut app, &cap, code, 1);
+        assert!(app.qgroups.is_empty(), "{}", String::from_utf8_lossy(&cap));
+    }
+
+    // The 02 gate's Kore half for the rewritten alias demos: the demo file runs through the
+    // exact plumbing a Kore session uses — run_steel, the sidecar riding the registry
+    // directive, cap_split — and its overlay-dependent observations land as OUTPUTS rows.
+    #[test]
+    fn rewritten_alias_demo_passes_through_kore() {
+        let demo = format!(
+            "{}/../demos/1-selection/005-alias-overlay.ano",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read(&demo).expect("demo 005 exists");
+
+        let steel = steel_bin();
+        let argv = [steel.as_str(), "--run", "--label", demo.as_str()];
+        let (cap, code) = crate::run_steel(&argv);
+        assert_eq!(
+            code,
+            0,
+            "demo 005 failed under kore's runner:\n{}",
+            String::from_utf8_lossy(&cap)
+        );
+
+        let mut app = App::new();
+        app.run_lines_set(&text);
+        cap_split(&mut app, &cap, code, 1);
+        assert_eq!(app.qgroups.len(), 1, "{}", String::from_utf8_lossy(&cap));
+        let recs = &app.qgroups[0].recs;
+        // the overlay observations: sigiled and bare focus diverge in one world
+        assert_eq!(recs[0].label, b"#/ ^focus");
+        assert_eq!(recs[0].value, b"2");
+        assert_eq!(recs[1].label, b"#/ focus");
+        assert_eq!(recs[1].value, b"2");
+        assert_eq!(recs[2].label, b"#/ (^focus & focus)");
+        assert_eq!(recs[2].value, b"0");
+    }
+}

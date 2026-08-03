@@ -4984,6 +4984,71 @@ mod normalize {
             Ok(Node::new(NodeKind::Alias { look, req: symbol }, line))
         }
 
+        // The ruled `^cursor` cold default (A4, todo/02).  An elided or continuation statement
+        // with no antecedent resolves its subject as `^cursor`: overlay first, bare fallback.
+        // The overlay half is wired here, at the one alias consultation boundary: when the
+        // captured overlay holds the stem, the statement gains that resolution as its explicit
+        // selection.  When it does not, the statement is left untouched and the lowerer's bare
+        // `cursor` path is the fallback, byte-identical to every pre-overlay plan; a present but
+        // invalid entry refuses in `resolve_alias_or_bare` and never falls through.  The
+        // antecedent rule mirrors the lowerer: an emitted statement or comprehension saves a
+        // selection, an installed rule's tick fires and saves before the next performed
+        // statement, and a query or plain def saves nothing.
+        fn normalize_program(&mut self, items: &[Node]) -> Result<Vec<Node>, Diag> {
+            let mut normalized = Vec::with_capacity(items.len());
+            let mut antecedent = false;
+            for item in items {
+                let cold = !antecedent
+                    && matches!(
+                        &item.kind,
+                        NodeKind::Stmt {
+                            sel: None,
+                            rule: false,
+                            cont,
+                            elided,
+                            ..
+                        } if *cont || *elided
+                    )
+                    && self.aliases.target("cursor").is_some();
+                if cold {
+                    let NodeKind::Stmt { effects, .. } = &item.kind else {
+                        unreachable!("cold selects only Stmt nodes");
+                    };
+                    let symbol = self.intern("cursor");
+                    let subject = self.resolve_alias_or_bare(symbol, item.line)?;
+                    let effects = effects
+                        .iter()
+                        .map(|effect| self.normalize(effect, Context::Neutral, TracePhase::Effect))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    normalized.push(Node::new(
+                        NodeKind::Stmt {
+                            sel: Some(Box::new(subject)),
+                            effects,
+                            rule: false,
+                            cont: false,
+                            elided: false,
+                        },
+                        item.line,
+                    ));
+                } else {
+                    normalized.push(self.normalize(
+                        item,
+                        Context::Neutral,
+                        TracePhase::Predicate,
+                    )?);
+                }
+                antecedent = antecedent
+                    || match &item.kind {
+                        NodeKind::Stmt { .. } | NodeKind::Compr { .. } => true,
+                        NodeKind::DefStmt { body, .. } => {
+                            matches!(body.kind, NodeKind::Stmt { .. })
+                        }
+                        _ => false,
+                    };
+            }
+            Ok(normalized)
+        }
+
         fn carrier_of_entry(&self, index: usize) -> SemanticCarrier {
             match &self.reg.ents[index].kind {
                 RegEntryKind::Col {
@@ -5615,12 +5680,7 @@ mod normalize {
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                 },
-                NodeKind::Program(items) => NodeKind::Program(
-                    items
-                        .iter()
-                        .map(|item| self.normalize(item, Context::Neutral, TracePhase::Predicate))
-                        .collect::<Result<Vec<_>, _>>()?,
-                ),
+                NodeKind::Program(items) => NodeKind::Program(self.normalize_program(items)?),
             };
             Ok(Node::new(kind, line))
         }

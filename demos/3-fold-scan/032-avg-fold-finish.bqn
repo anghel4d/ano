@@ -1,24 +1,15 @@
+# ano: avg\ and avg/ over weight 400 500 600 900, and the empty scope under the mean and the count.
+# Semantics: the mean machine's state is (sum,count); each prefix emits sum÷count and the finish is the state after the last element — the same left order the scan holds, so avg/ is the last prefix of avg\.
+# Invariant: the prefixes are integral by fixture design; the empty mean has no result row; the empty count is 0.
 
-cow    ← 1‿1‿0‿1‿1‿0
-weight ← 400‿500‿50‿600‿900‿70
-w ← cow/weight
-
-! 2400 ≡ +´ w
-! 4    ≡ +´ 1¨w
-! 600  ≡ (+´w) ÷ +´1¨w
-! 4    ≡ +´ cow
-
-M ← {(𝕨+𝕩)÷2}
-! ¬ ((400 M 500) M 900) ≡ 400 M (500 M 900)
-foldR ← M´ w
-foldL ← M˜´ ⌽w
-! 512.5 ≡ foldR
-! 712.5 ≡ foldL
-! ¬ foldR ≡ foldL
-! ¬ 600 ≡ foldR
-! ¬ 600 ≡ foldL
-
-! 0 ≡ +´⟨⟩ ⋄ ! 1 ≡ ×´⟨⟩ ⋄ ! 1 ≡ ∧´⟨⟩ ⋄ ! 0 ≡ ∨´⟨⟩
-Avg ← {!0<≠𝕩 ⋄ (+´𝕩)÷≠𝕩}
-! 600 ≡ Avg w
-! "row fails" ≡ Avg⎊("row fails"˙) ⟨⟩
+w ← 400‿500‿600‿900
+LeftSum ← {+˜´⌽(0∾𝕩)}
+Mean    ← {(LeftSum 𝕩)÷≠𝕩}
+prefixes ← (+`w)÷+`1¨w
+! 400‿450‿500‿600 ≡ prefixes
+! 600 ≡ Mean w
+! (Mean w) ≡ ¯1⊑prefixes                   # the finish is the last prefix
+! 2400 ≡ LeftSum w
+! 4 ≡ ≠w
+! ⟨⟩ ≡ (+`⟨⟩)÷+`1¨⟨⟩                        # empty scan is empty
+! 0 ≡ +´⟨⟩                                  # count declares 0

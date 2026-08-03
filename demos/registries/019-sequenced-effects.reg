@@ -1,10 +1,10 @@
+# Sequenced effects through the live overlay: the sidecar's cursor mask is the subject of
+# both sigiled statements — one emission, one frozen environment — and the bare world moves
+# only where the effects say. knockback and flash are registered verbs; `;` sequences them.
 n 6
-alias cursor 0 0 1 0 0 0
 col pos num 0 10 20 30 40 50
 col tint sym None None None None None None
 col shielded bool 1 1 1 0 1 0
-col nord bool 1 1 0 1 1 0
-col twoHanded num 70 50 90 61 10 99
 col gold num 5 10 15 20 25 30
 col blessed bool 0 1 0 0 0 0
 fn knockback pos {s 𝕊 c‿k: c+k×s}
@@ -12,7 +12,5 @@ fn flash tint {s 𝕊 c‿v: s‿((+´s)⥊v) AnoScat c}
 ja 位置 pos
 ja 色合 tint
 ja 防護 shielded
-ja 北 nord
-ja 両手 twoHanded
 ja 金 gold
 ja 祝福 blessed

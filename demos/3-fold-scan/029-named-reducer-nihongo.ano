@@ -1,7 +1,0 @@
---! registry ../registries/029-named-reducer.reg
---! ja
---! out 30
-縮約 ( threat ) 損傷 敵勢 で
-
---! out 30
-threat/ 損傷 敵勢 で

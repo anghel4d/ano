@@ -1,40 +1,35 @@
+-- The scope of a fold can be a live alias: ^party is the sidecar's mask and ^empty selects nothing. Identity folds answer their registered identities on the empty scope; max/ and avg/ declare none and print no row at all (A12); #/ declares 0.
+-- !^party negates the resolved mask, so the sigiled and negated golds partition the column's total of 210.
 --! registry ../registries/028-reductions.reg
 
 --! out 150
 +/ Gold @ Nord
 
+--! out 155
++/ Gold @ ^party
+
+--! out 3
+#/ ^party
+
+def rest = !^party
+
+--! out 55
++/ Gold @ rest
+
 --! out 0.09375
 */ (1 - Resist) @ Hits
 
---! out 1
-&/ Alive @ Party
+--! out 0
++/ Gold @ ^empty
 
 --! out 1
-|/ Burning @ Forest
-
---! out 2
-#/ (Nord & TwoHanded > 60)
+*/ (1 - Resist) @ ^empty
 
 --! out 0
-+/ Gold @ None
+#/ ^empty
 
---! out 1
-*/ (1 - Resist) @ None
+--! out
+max/ Gold @ ^empty
 
---! out 1
-&/ Alive @ None
-
---! out 0
-|/ Burning @ None
-
---! out 3
-#/ (Merchant & !Whiterun)
-
---! out 180
-+/ Gold @ Merchant
-
---! out 30
-+/ Gold @ (Nord & Merchant & !Whiterun)
-
---! out 0 180 0 180 180 180 0 180
-+/ Gold @ Merchant & !^Whiterun
+--! out
+avg/ Gold @ ^empty

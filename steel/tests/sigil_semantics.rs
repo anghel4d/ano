@@ -545,3 +545,125 @@ fn trace_provenance_line() {
         fallback
     );
 }
+
+// The ruled `^cursor` cold default (A4, todo/02): an elided or continuation statement with no
+// antecedent resolves its subject as `^cursor` — overlay first, bare fallback.  The overlay hit
+// is byte-identical to spelling `^cursor` explicitly, and an unrelated overlay entry leaves the
+// bare-fallback plan byte-identical to the empty-overlay plan.
+#[test]
+fn cold_default_is_alias_first_with_bare_fallback() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_mask(&reg, "cursor", &[0.0, 1.0, 0.0]).unwrap();
+
+    // elided subject: the overlay hit is exactly the explicit sigiled spelling
+    assert_eq!(
+        ok("+Flag", &reg, &env),
+        ok("^cursor , +Flag", &reg, &env),
+        "elided cold default is ^cursor"
+    );
+    assert_ne!(
+        ok("+Flag", &reg, &env),
+        ok("+Flag", &reg, &empty),
+        "the overlay entry moves the elided subject"
+    );
+
+    // leading-comma continuation with no antecedent falls to the same default
+    assert_eq!(
+        ok(", Silver = 0", &reg, &env),
+        ok("^cursor , Silver = 0", &reg, &env),
+        "cold continuation is ^cursor"
+    );
+
+    // bare fallback: no cursor stem in the overlay leaves the pre-overlay plan byte-identical,
+    // even while an unrelated alias is installed
+    let mut unrelated = AliasEnvironment::for_registry(&reg);
+    unrelated.install_binding(&reg, "focus", "Gold").unwrap();
+    assert_eq!(ok("+Flag", &reg, &empty), ok("+Flag", &reg, &unrelated));
+    assert_eq!(
+        ok(", Silver = 0", &reg, &empty),
+        ok(", Silver = 0", &reg, &unrelated)
+    );
+}
+
+// An antecedent wins over the cold default: only the first statement of a session lacks one, so
+// an installed `^cursor` alias must not move a continuation that follows a real selection.
+#[test]
+fn cold_default_defers_to_the_antecedent() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_mask(&reg, "cursor", &[0.0, 1.0, 0.0]).unwrap();
+
+    let src = "Gold > 1 , Silver = 0\n+Flag\n, Silver = 2\n";
+    assert_eq!(
+        ok(src, &reg, &env),
+        ok(src, &reg, &empty),
+        "with an antecedent the overlay entry is not consulted"
+    );
+}
+
+// With no antecedent, no overlay entry, and no bare cursor entry, the site still refuses with
+// the pinned diagnostic; and a world whose only cursor is the static AliasMask fixture keeps
+// reaching it through the unchanged bare fallback.
+#[test]
+fn cold_default_refusal_and_static_fixture_fallback() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    // the registry's static AliasMask `cursor` answers the bare fallback today, exactly as before
+    let fallback = ok("+Flag", &reg, &empty);
+    assert!(fallback.contains("\ns1m ← cursor\n"), "{}", fallback);
+
+    let mut bare = registry();
+    bare.ents.retain(|e| e.name != "cursor");
+    let none = AliasEnvironment::for_registry(&bare);
+    assert!(
+        err("+Flag", &bare, &none)
+            .contains("elided subject with no antecedent and no ^cursor alias"),
+        "the refusal names both holes"
+    );
+}
+
+// An overlay mask is not permission to align equal-length buffers: it lowers through the same
+// RegEntryKind::AliasMask vehicle as a static registry fixture, so every alignment and lineage
+// rule that judges the static mask judges the dynamic one identically.  Pinned by plan identity
+// under nothing but the entry-name substitution.
+#[test]
+fn dynamic_masks_ride_the_static_alias_vehicle() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    let mut env = AliasEnvironment::for_registry(&reg);
+    // the static `cursor` fixture's own values, under a fresh dynamic stem
+    env.install_mask(&reg, "dyn", &[1.0, 0.0, 1.0]).unwrap();
+
+    // the fixture prologue legitimately differs by exactly the materialized declaration;
+    // everything from the first statement on is identical under the name substitution alone
+    let lowered = |text: &str| {
+        let at = text
+            .find("\n# s1")
+            .or_else(|| text.find("\n# q1"))
+            .expect("statement or query marker");
+        text[at..].to_string()
+    };
+    for (sigiled, bare) in [
+        ("^dyn , Silver = 0", "cursor , Silver = 0"),
+        ("!^dyn , Silver = 0", "!cursor , Silver = 0"),
+        ("+/ Gold @ ^dyn", "+/ Gold @ cursor"),
+    ] {
+        let dynamic = ok(sigiled, &reg, &env);
+        assert!(
+            dynamic.contains("anoDynMask0 ← ⟨1, 0, 1⟩"),
+            "{}: the dynamic mask declares its own materialization\n{}",
+            sigiled,
+            dynamic
+        );
+        assert_eq!(
+            lowered(&dynamic).replace("anoDynMask0", "cursor"),
+            lowered(&ok(bare, &reg, &empty)),
+            "{} vs {}",
+            sigiled,
+            bare
+        );
+    }
+}

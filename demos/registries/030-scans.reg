@@ -1,13 +1,12 @@
+# The running forms. route scopes the weight column to 3 1 8 4 9, whose prefix means are
+# integral on purpose: the harness compares within 1e-9, so the mean prefixes are pinned as
+# exact integers. gone is the all-false control for the empty scan and the zero count.
 n 8
 col route bool 1 0 1 1 0 1 0 1
-col weight num 3 9 1 4 8 2 7 5
-col comboChain bool 1 1 0 0 1 1 0 0
-col multiplier num 2 3 9 9 1.5 2 9 9
-col ray bool 0 1 1 1 1 1 0 0
-col height num 9 3 1 4 1 5 9 9
+col weight num 3 9 1 8 8 4 7 9
+col mixed bool 1 0 1 1 0 0 1 0
+col gone bool 0 0 0 0 0 0 0 0
 ja 経路 route
 ja 重量 weight
-ja 連鎖 comboChain
-ja 倍率 multiplier
-ja 光線 ray
-ja 高さ height
+ja 混在 mixed
+ja 不在 gone

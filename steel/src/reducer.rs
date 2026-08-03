@@ -431,8 +431,46 @@ pub fn resolve_head(
             ));
         }
     };
+    validate_descriptor(&desc)?;
     validate_strategy(&desc, Strategy::ExactLeft)?;
     Ok(desc)
+}
+
+/// Validate a descriptor's own coherence before any strategy or rendering question.  A reducer
+/// is homogeneous, so its output carrier is its input carrier and a declared identity inhabits
+/// that carrier; a machine's registered empty result inhabits its output carrier.  The canonical
+/// table satisfies this by construction — the check is the boundary that refuses a drifted table
+/// entry or a future registration surface before a mistyped identity could seed a lowering.
+pub fn validate_descriptor(desc: &OpDesc) -> Result<(), String> {
+    match desc {
+        OpDesc::Reducer(desc) => {
+            if desc.output != desc.input {
+                return Err(format!(
+                    "reducer '{}' is not homogeneous: input {:?}, output {:?}",
+                    desc.spelling, desc.input, desc.output
+                ));
+            }
+            if let Some(identity) = desc.identity {
+                if identity.carrier != desc.output {
+                    return Err(format!(
+                        "reducer '{}' declares a {:?} identity for a {:?} result",
+                        desc.spelling, identity.carrier, desc.output
+                    ));
+                }
+            }
+        }
+        OpDesc::Machine(desc) => {
+            if let Some(identity) = desc.empty_fold.identity() {
+                if identity.carrier != desc.output {
+                    return Err(format!(
+                        "machine '{}' declares a {:?} empty result for a {:?} output",
+                        desc.spelling, identity.carrier, desc.output
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Validate a descriptor against the execution strategy a plan intends.  Exact left execution
@@ -809,6 +847,72 @@ mod tests {
         let sum = head("+", Carrier::Number);
         assert!(validate_strategy(&sum, Strategy::Regroup).is_ok());
         assert!(validate_strategy(&sum, Strategy::Reorder).is_ok());
+    }
+
+    // A registered identity is typed, and a descriptor whose identity does not inhabit its
+    // result carrier refuses at the resolver boundary — the drift guard for the table itself
+    // and for any future registration surface, since neither the registry `fn` form nor the
+    // canonical table can spell one today.
+    #[test]
+    fn mistyped_descriptors_refuse_at_the_boundary() {
+        let mut bad = match head("&", Carrier::Mask) {
+            OpDesc::Reducer(desc) => desc,
+            OpDesc::Machine(..) => unreachable!("mask Lesser is a reducer"),
+        };
+        bad.identity = Some(TypedIdentity {
+            carrier: Carrier::Number,
+            bqn: "1",
+        });
+        assert_eq!(
+            validate_descriptor(&OpDesc::Reducer(bad.clone())).unwrap_err(),
+            "reducer '&' declares a Number identity for a Mask result"
+        );
+        bad.identity = None;
+        bad.output = Carrier::Number;
+        assert_eq!(
+            validate_descriptor(&OpDesc::Reducer(bad)).unwrap_err(),
+            "reducer '&' is not homogeneous: input Mask, output Number"
+        );
+        let mut machine = match head("#", Carrier::Presence) {
+            OpDesc::Machine(desc) => desc,
+            OpDesc::Reducer(..) => unreachable!("count is a machine"),
+        };
+        machine.empty_fold = EmptyFold::Identity(TypedIdentity {
+            carrier: Carrier::Mask,
+            bqn: "0",
+        });
+        assert_eq!(
+            validate_descriptor(&OpDesc::Machine(machine)).unwrap_err(),
+            "machine '#' declares a Mask empty result for a Number output"
+        );
+    }
+
+    // Every descriptor either surface can reach passes its own validation: the whole canonical
+    // table over every form and carrier, and the registered-fn default.
+    #[test]
+    fn every_reachable_descriptor_validates() {
+        for spelling in ["+", "-", "*", "/", "|", "&", "max", "min", "#", "avg"] {
+            for form in [Form::Direct, Form::Fold, Form::Scan, Form::ScanAlong] {
+                for carrier in [
+                    Carrier::Mask,
+                    Carrier::Number,
+                    Carrier::Char,
+                    Carrier::Presence,
+                ] {
+                    if let Ok(desc) = resolve_head(spelling, form, carrier, false) {
+                        assert!(
+                            validate_descriptor(&desc).is_ok(),
+                            "{} {:?} {:?}",
+                            spelling,
+                            form,
+                            carrier
+                        );
+                    }
+                }
+            }
+        }
+        let named = resolve_head("threat", Form::Fold, Carrier::Number, true).unwrap();
+        assert!(validate_descriptor(&named).is_ok());
     }
 
     // Canonical retrieval is what the emitters use; a machine has no direct dyadic reading.

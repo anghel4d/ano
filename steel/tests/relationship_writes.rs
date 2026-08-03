@@ -87,11 +87,13 @@ fn demos(root: &Path, skip: &BTreeSet<u32>) -> Vec<PathBuf> {
     out
 }
 
-// Inputs: a demo's source and its directory. Output: the world it declares and its surface
-// flag. Only the two directives that decide what is emitted are read; expectations do not
-// change which values reach a relationship.
-fn world(source: &str, dir: &Path) -> (Registry, bool) {
+// Inputs: a demo's source and its directory. Output: the world it declares, the path it was
+// loaded from, and its surface flag. Only the two directives that decide what is emitted are
+// read; expectations do not change which values reach a relationship. The path rides along so
+// the sweep can load the sidecar overlay the driver itself would load beside the registry.
+fn world(source: &str, dir: &Path) -> (Registry, Option<PathBuf>, bool) {
     let mut reg = Registry::default();
+    let mut reg_path = None;
     let mut ja = false;
     for line in source.lines() {
         let Some(tail) = line.trim_start().strip_prefix("--!") else {
@@ -110,11 +112,12 @@ fn world(source: &str, dir: &Path) -> (Registry, bool) {
                     format!("{}.reg", spec)
                 });
                 reg = steel::registry::reg_load(path.to_str().expect("path")).expect(spec);
+                reg_path = Some(path);
             }
             _ => {}
         }
     }
-    (reg, ja)
+    (reg, reg_path, ja)
 }
 
 // Inputs: a registry. Output: the BQN variable and Ano name of every relationship a write must
@@ -166,9 +169,18 @@ fn no_relationship_write_escapes_its_seal() {
     for file in &files {
         let source = std::fs::read_to_string(file).expect("demo source");
         let dir = file.parent().expect("demo directory");
-        let (reg, ja) = world(&source, dir);
+        let (reg, reg_path, ja) = world(&source, dir);
         let mut it = Interner::new();
-        let environment = AliasEnvironment::for_registry(&reg);
+        // the overlay the driver would load: the sidecar beside the registry, or the empty
+        // environment when no world (or no sidecar) is declared
+        let environment = match &reg_path {
+            Some(path) => AliasEnvironment::load(
+                steel::alias::sidecar_path(path.to_str().expect("path")),
+                &reg,
+            )
+            .expect("sidecar"),
+            None => AliasEnvironment::for_registry(&reg),
+        };
         let emitted = lex(source.as_bytes(), ja, &mut it)
             .and_then(|toks| parse(&toks, &mut it))
             .and_then(|prog| {

@@ -1,7 +1,0 @@
---! registry ../registries/029-named-reducer.reg
-
---! out 30
-fold(threat) Damage @ Enemies
-
---! out 30
-threat/ Damage @ Enemies

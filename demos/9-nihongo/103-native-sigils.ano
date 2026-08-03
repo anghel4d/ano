@@ -1,6 +1,14 @@
+-- The overlay carries a native stem: ^照準 reads the sidecar mask (rows 0 and 5) while the bare 照準 column keeps naming its own row. Non-ASCII stems fold nothing — the overlay key is exact bytes, the same rule the registry uses.
 --! registry ../registries/103-native-sigils.reg
 --! expect 印 = .#..#.
---! expect 打撃 = 0 0 0 0 0 9
+--! expect 打撃 = 0 1 0 0 0 9
 --! expect 派閥 = 山賊 勇者 山賊 勇者 山賊 賊軍
 
 ^照準 & 派閥 == :勇者 , 打撃 = 9 ; 派閥 = :賊軍
+照準 , 打撃 = 1
+
+--! out 2
+#/ ^照準
+
+--! out 1
+#/ 照準

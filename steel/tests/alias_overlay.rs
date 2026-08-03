@@ -246,3 +246,87 @@ fn steel_cli_sidecar_end_to_end() {
     assert!(text.contains("alias"), "{}", text);
     assert!(text.contains("schema"), "{}", text);
 }
+
+// Host boundary bullet 2 and the failed-installation test row: every refused transition —
+// unknown target, wrong-shape or non-Boolean mask, unknown resolver, malformed resolver input,
+// wrong-schema world — leaves the environment untouched: version, schema, and entries alike.
+#[test]
+fn failed_installations_leave_the_environment_unchanged() {
+    let reg = registry();
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_binding(&reg, "focus", "Gold").unwrap();
+    let before = env.clone();
+
+    // unknown binding target
+    assert!(env.install_binding(&reg, "focus", "Mithril").is_err());
+    // mask with the wrong row count, then a value outside 0/1
+    assert!(env.install_mask(&reg, "focus", &[1.0, 0.0]).is_err());
+    assert!(env.install_mask(&reg, "focus", &[1.0, 0.5, 0.0]).is_err());
+    // unknown resolver id, then a malformed input member
+    assert!(
+        env.install_resolver(&reg, "focus", "input.rift", &pairs(&[("entity", "1")]))
+            .is_err()
+    );
+    assert!(
+        env.install_resolver(&reg, "focus", "input.entity", &pairs(&[("", "1")]))
+            .is_err()
+    );
+    // a structurally different world refuses at the schema gate before any target validation
+    let mut moved = registry();
+    moved.ents.push(RegEntry {
+        name: "Mithril".to_string(),
+        defval: 0.0,
+        kind: RegEntryKind::Col {
+            ty: ColType::Num,
+            uniq: false,
+            nums: vec![0.0, 0.0, 0.0],
+            syms: Vec::new(),
+            pres: None,
+            rng: None,
+        },
+    });
+    assert!(env.install_binding(&moved, "focus", "Silver").is_err());
+
+    assert_eq!(
+        env, before,
+        "a failed transition leaves the old environment"
+    );
+}
+
+// The stale-present-entry half of the same row: an entry the current world can no longer
+// validate refuses the lookup path outright — at the snapshot barrier and at sidecar load —
+// and never exposes the bare binding underneath it.
+#[test]
+fn stale_present_entries_refuse_rather_than_fall_through() {
+    let reg = registry();
+    let mut env = AliasEnvironment::for_registry(&reg);
+    // deliberately shadow a live bare column: a silent fallthrough would answer with `Gold`
+    env.install_binding(&reg, "gold", "Silver").unwrap();
+
+    let mut moved = registry();
+    moved.ents.push(RegEntry {
+        name: "Mithril".to_string(),
+        defval: 0.0,
+        kind: RegEntryKind::Col {
+            ty: ColType::Num,
+            uniq: false,
+            nums: vec![0.0, 0.0, 0.0],
+            syms: Vec::new(),
+            pres: None,
+            rng: None,
+        },
+    });
+
+    // the statement barrier: no snapshot exists against the moved world, so no gather can run
+    let refusal = env.snapshot(&moved).unwrap_err();
+    assert!(refusal.msg.contains("stale"), "{}", refusal.msg);
+
+    // and the persisted environment refuses the same way at load
+    let path = scratch("stale").join("world.reg.aliases");
+    env.save(&path).unwrap();
+    let refusal = AliasEnvironment::load(&path, &moved).unwrap_err();
+    assert!(refusal.msg.contains("belongs to schema"), "{}", refusal.msg);
+
+    // the unmoved world still resolves the entry: the refusal above was staleness, not damage
+    assert!(env.snapshot(&reg).is_ok());
+}
