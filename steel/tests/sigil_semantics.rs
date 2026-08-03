@@ -68,25 +68,40 @@ fn registry() -> Registry {
             RegEntry {
                 name: "anchor".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Bind { kind: BindKind::Entity, vals: vec![1.0] },
+                kind: RegEntryKind::Bind {
+                    kind: BindKind::Entity,
+                    vals: vec![1.0],
+                },
             },
             RegEntry {
                 name: "beacon".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Bind { kind: BindKind::Entity, vals: vec![2.0] },
+                kind: RegEntryKind::Bind {
+                    kind: BindKind::Entity,
+                    vals: vec![2.0],
+                },
             },
             RegEntry {
                 name: "spot".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Bind { kind: BindKind::Point, vals: vec![1.0, 2.0] },
+                kind: RegEntryKind::Bind {
+                    kind: BindKind::Point,
+                    vals: vec![1.0, 2.0],
+                },
             },
             RegEntry {
                 name: "cursor".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::AliasMask { mask: vec![1.0, 0.0, 1.0] },
+                kind: RegEntryKind::AliasMask {
+                    mask: vec![1.0, 0.0, 1.0],
+                },
             },
         ],
-        aliases: vec![AliasRow { from: "X".to_string(), to: "Gold".to_string(), ja: false }],
+        aliases: vec![AliasRow {
+            from: "X".to_string(),
+            to: "Gold".to_string(),
+            ja: false,
+        }],
         ..Registry::default()
     }
 }
@@ -145,7 +160,13 @@ fn fallback_plans_are_byte_identical() {
         ("anchor.Gold", "^anchor.Gold"),
     ];
     for (bare, sigil) in pairs {
-        assert_eq!(ok(bare, &reg, &env), ok(sigil, &reg, &env), "{} vs {}", bare, sigil);
+        assert_eq!(
+            ok(bare, &reg, &env),
+            ok(sigil, &reg, &env),
+            "{} vs {}",
+            bare,
+            sigil
+        );
     }
 }
 
@@ -218,7 +239,10 @@ fn overlay_moves_only_the_sigiled_spelling() {
     let mut env = AliasEnvironment::for_registry(&reg);
     env.install_binding(&reg, "focus", "Silver").unwrap();
 
-    assert_eq!(ok("Gold > ^focus", &reg, &env), ok("Gold > Silver", &reg, &empty));
+    assert_eq!(
+        ok("Gold > ^focus", &reg, &env),
+        ok("Gold > Silver", &reg, &empty)
+    );
     assert!(err("Gold > focus", &reg, &env).contains("unregistered name 'focus'"));
 }
 
@@ -228,7 +252,10 @@ fn dynamic_alias_case_folds_ascii() {
     let reg = registry();
     let mut env = AliasEnvironment::for_registry(&reg);
     env.install_binding(&reg, "focus", "Silver").unwrap();
-    assert_eq!(ok("Gold > ^FOCUS", &reg, &env), ok("Gold > ^focus", &reg, &env));
+    assert_eq!(
+        ok("Gold > ^FOCUS", &reg, &env),
+        ok("Gold > ^focus", &reg, &env)
+    );
 }
 
 // Gate 3: a static alias-mask fixture and a dynamic overlay mask of the same name stay split.
@@ -252,7 +279,10 @@ fn static_alias_mask_fixture_stays_static() {
 fn spelling_alias_control() {
     let reg = registry();
     let env = AliasEnvironment::for_registry(&reg);
-    assert_eq!(ok("X , Silver = 0", &reg, &env), ok("^X , Silver = 0", &reg, &env));
+    assert_eq!(
+        ok("X , Silver = 0", &reg, &env),
+        ok("^X , Silver = 0", &reg, &env)
+    );
 }
 
 // The synthetic materialization names are reserved for the emission that generates them.
@@ -283,7 +313,11 @@ fn non_mask_operand_refuses_both_spellings() {
     let reg = registry();
     let env = AliasEnvironment::for_registry(&reg);
     for src in ["!spot , Silver = 0", "!^spot , Silver = 0"] {
-        assert!(err(src, &reg, &env).contains("binding 'spot' (point) as mask"), "{}", src);
+        assert!(
+            err(src, &reg, &env).contains("binding 'spot' (point) as mask"),
+            "{}",
+            src
+        );
     }
 }
 
@@ -302,7 +336,10 @@ fn shadowed_and_bare_diverge_in_one_world() {
     assert_eq!(sigiled, ok("Silver , Silver = 0", &reg, &empty));
     assert_ne!(sigiled, ok("Gold , Silver = 0", &reg, &empty));
     // the bare half of the same world is untouched by the overlay
-    assert_eq!(ok("Gold , Silver = 0", &reg, &env), ok("Gold , Silver = 0", &reg, &empty));
+    assert_eq!(
+        ok("Gold , Silver = 0", &reg, &env),
+        ok("Gold , Silver = 0", &reg, &empty)
+    );
 
     // both halves in ONE emission: the bare operand stays Gold, the sigiled one is Silver
     let both = ok("Gold > ^Gold , Silver = 0", &reg, &env);
@@ -320,7 +357,10 @@ fn bind_shadowing() {
 
     let mut env = AliasEnvironment::for_registry(&reg);
     env.install_binding(&reg, "anchor", "beacon").unwrap();
-    assert_eq!(ok("^anchor.Gold", &reg, &env), ok("beacon.Gold", &reg, &empty));
+    assert_eq!(
+        ok("^anchor.Gold", &reg, &env),
+        ok("beacon.Gold", &reg, &empty)
+    );
     assert_ne!(ok("^anchor.Gold", &reg, &env), bare_before);
     assert_eq!(ok("anchor.Gold", &reg, &env), bare_before);
 }
@@ -348,7 +388,10 @@ fn negation_during_and_after() {
 
     // (c) after the delete the sigiled spelling is the bare spelling again
     assert!(env.delete("flag"));
-    assert_eq!(ok("!^Flag , Silver = 0", &reg, &env), ok("!Flag , Silver = 0", &reg, &empty));
+    assert_eq!(
+        ok("!^Flag , Silver = 0", &reg, &env),
+        ok("!Flag , Silver = 0", &reg, &empty)
+    );
 }
 
 // The dynamic-alias name fold is the registry fold: non-ASCII bytes are exact, so a stem outside
@@ -362,7 +405,11 @@ fn nonascii_alias_end_to_end() {
     let mut wide = AliasEnvironment::for_registry(&reg);
     wide.install_mask(&reg, "世界", &[0.0, 1.0, 0.0]).unwrap();
     let resolved = ok("^世界 , Silver = 0", &reg, &wide);
-    assert!(resolved.contains("\nanoDynMask0 ← ⟨0, 1, 0⟩\n"), "{}", resolved);
+    assert!(
+        resolved.contains("\nanoDynMask0 ← ⟨0, 1, 0⟩\n"),
+        "{}",
+        resolved
+    );
     assert!(resolved.contains("\ns1m ← anoDynMask0\n"), "{}", resolved);
     assert!(err("^世界 , Silver = 0", &reg, &empty).contains("'^世界'"));
 
@@ -371,8 +418,15 @@ fn nonascii_alias_end_to_end() {
     let mut greek = AliasEnvironment::for_registry(&reg);
     greek.install_binding(&reg, "σ", "Gold").unwrap();
     let refusal = err("^Σ , Silver = 0", &reg, &greek);
-    assert!(refusal.contains("unregistered mask name '^Σ'"), "{}", refusal);
-    assert_eq!(ok("^σ , Silver = 0", &reg, &greek), ok("Gold , Silver = 0", &reg, &empty));
+    assert!(
+        refusal.contains("unregistered mask name '^Σ'"),
+        "{}",
+        refusal
+    );
+    assert_eq!(
+        ok("^σ , Silver = 0", &reg, &greek),
+        ok("Gold , Silver = 0", &reg, &empty)
+    );
 }
 
 // The overlay is keyed by the written stem and only the bare fallback goes on to apply the
@@ -385,8 +439,13 @@ fn overlay_keys_before_the_spelling_table() {
     let empty = AliasEnvironment::for_registry(&reg);
 
     let mut under_target = AliasEnvironment::for_registry(&reg);
-    under_target.install_binding(&reg, "gold", "Silver").unwrap();
-    assert_eq!(ok("^X , Silver = 0", &reg, &under_target), ok("X , Silver = 0", &reg, &empty));
+    under_target
+        .install_binding(&reg, "gold", "Silver")
+        .unwrap();
+    assert_eq!(
+        ok("^X , Silver = 0", &reg, &under_target),
+        ok("X , Silver = 0", &reg, &empty)
+    );
 
     let mut under_spelling = AliasEnvironment::for_registry(&reg);
     under_spelling.install_binding(&reg, "x", "Silver").unwrap();
@@ -394,7 +453,10 @@ fn overlay_keys_before_the_spelling_table() {
         ok("^X , Silver = 0", &reg, &under_spelling),
         ok("Silver , Silver = 0", &reg, &empty)
     );
-    assert_ne!(ok("^X , Silver = 0", &reg, &under_spelling), ok("X , Silver = 0", &reg, &empty));
+    assert_ne!(
+        ok("^X , Silver = 0", &reg, &under_spelling),
+        ok("X , Silver = 0", &reg, &empty)
+    );
 }
 
 // Bullet 11: the spelling table, a static alias-mask fixture, and the dynamic overlay are three
@@ -417,7 +479,10 @@ fn triple_coexistence() {
     // moved: both sigiled spellings read the overlay
     assert_ne!(ok("^X , Silver = 0", &reg, &env), bare_spelling);
     assert_ne!(ok("^cursor , Silver = 0", &reg, &env), bare_static);
-    assert_eq!(ok("^X , Silver = 0", &reg, &env), ok("Silver , Silver = 0", &reg, &empty));
+    assert_eq!(
+        ok("^X , Silver = 0", &reg, &env),
+        ok("Silver , Silver = 0", &reg, &empty)
+    );
 }
 
 // Completion gate (todo/02:103): a refusal reached through a moved lookup spells the sigiled
@@ -449,7 +514,10 @@ fn trace_provenance_line() {
         "^focus , Silver = 0",
         &reg,
         &env,
-        &Directives { trace: true, ..Directives::default() },
+        &Directives {
+            trace: true,
+            ..Directives::default()
+        },
     ) {
         Ok(text) => text,
         Err(d) => panic!("{}", d.msg),
@@ -463,10 +531,17 @@ fn trace_provenance_line() {
         "^Gold , Silver = 0",
         &reg,
         &empty,
-        &Directives { trace: true, ..Directives::default() },
+        &Directives {
+            trace: true,
+            ..Directives::default()
+        },
     ) {
         Ok(text) => text,
         Err(d) => panic!("{}", d.msg),
     };
-    assert!(fallback.contains("TRACE-ALIAS ^Gold -> bare fallback"), "{}", fallback);
+    assert!(
+        fallback.contains("TRACE-ALIAS ^Gold -> bare fallback"),
+        "{}",
+        fallback
+    );
 }

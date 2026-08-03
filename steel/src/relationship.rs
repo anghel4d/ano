@@ -8,12 +8,15 @@
 
 use crate::num;
 use crate::registry::{names_eq, reg_find};
-use crate::{ColType, Diag, RegEntryKind, Registry, ANO_NATMAX};
+use crate::{ANO_NATMAX, ColType, Diag, RegEntryKind, Registry};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TargetCarrier {
     RowIndex,
-    Key { ty: ColType, range: Option<(f64, f64)> },
+    Key {
+        ty: ColType,
+        range: Option<(f64, f64)>,
+    },
 }
 
 fn fail(context: &str, value: f64, detail: &str) -> Diag {
@@ -30,17 +33,27 @@ pub fn is_no_link(value: f64) -> bool {
 }
 
 pub fn key_carrier(reg: &Registry, key_name: &str) -> Result<TargetCarrier, Diag> {
-    let Some(entry) = reg.ents.iter().find(|entry| names_eq(&entry.name, key_name)) else {
+    let Some(entry) = reg
+        .ents
+        .iter()
+        .find(|entry| names_eq(&entry.name, key_name))
+    else {
         return Err(Diag::refuse(format!(
             "relationship key column '{}' is missing",
             key_name
         )));
     };
     match &entry.kind {
-        RegEntryKind::Col { ty, uniq: true, rng, .. } => match ty {
-            ColType::Num | ColType::Bool | ColType::Nat | ColType::Int => {
-                Ok(TargetCarrier::Key { ty: *ty, range: *rng })
-            }
+        RegEntryKind::Col {
+            ty,
+            uniq: true,
+            rng,
+            ..
+        } => match ty {
+            ColType::Num | ColType::Bool | ColType::Nat | ColType::Int => Ok(TargetCarrier::Key {
+                ty: *ty,
+                range: *rng,
+            }),
             ColType::Sym | ColType::Char => Err(Diag::refuse(format!(
                 "relationship key column '{}' has a nonnumeric carrier",
                 entry.name
@@ -97,11 +110,7 @@ pub fn validate_target(value: f64, carrier: TargetCarrier, context: &str) -> Res
     Ok(())
 }
 
-pub fn validate_targets(
-    values: &[f64],
-    carrier: TargetCarrier,
-    context: &str,
-) -> Result<(), Diag> {
+pub fn validate_targets(values: &[f64], carrier: TargetCarrier, context: &str) -> Result<(), Diag> {
     for (row, &value) in values.iter().enumerate() {
         validate_target(value, carrier, &format!("{} row {}", context, row))?;
     }
@@ -136,7 +145,11 @@ pub fn validate_registry(reg: &Registry) -> Result<(), Diag> {
                 validate_targets(targets, carrier, &format!("rel {}", entry.name))?;
                 validate_target(entry.defval, carrier, &format!("default {}", entry.name))?;
             }
-            RegEntryKind::SRel { fib, inv_of, key_of } => {
+            RegEntryKind::SRel {
+                fib,
+                inv_of,
+                key_of,
+            } => {
                 if inv_of.is_none() {
                     let carrier = carrier_for(reg, key_of.as_deref())?;
                     for (row, fiber) in fib.iter().enumerate() {
@@ -199,7 +212,10 @@ pub fn bqn_validity(value: &str, carrier: TargetCarrier, functional: bool) -> St
                 ColType::Num => "1".to_string(),
                 ColType::Bool => format!("({}=0)∨({}=1)", value, value),
                 ColType::Nat => {
-                    format!("(0≤{})∧({}=⌊{})∧({}≤9007199254740992)", value, value, value, value)
+                    format!(
+                        "(0≤{})∧({}=⌊{})∧({}≤9007199254740992)",
+                        value, value, value, value
+                    )
                 }
                 ColType::Int => {
                     format!("({}=⌊{})∧((|{})≤9007199254740992)", value, value, value)
@@ -267,25 +283,40 @@ mod tests {
 
     #[test]
     fn key_carrier_admits_only_its_own_type() {
-        let bool_key = TargetCarrier::Key { ty: ColType::Bool, range: None };
+        let bool_key = TargetCarrier::Key {
+            ty: ColType::Bool,
+            range: None,
+        };
         assert!(validate_target(1.0, bool_key, "k").is_ok());
         assert!(validate_target(2.0, bool_key, "k").is_err());
         assert!(validate_target(-1.0, bool_key, "k").is_ok());
-        let nat_key = TargetCarrier::Key { ty: ColType::Nat, range: None };
+        let nat_key = TargetCarrier::Key {
+            ty: ColType::Nat,
+            range: None,
+        };
         assert!(validate_target(7.0, nat_key, "k").is_ok());
         assert!(validate_target(7.5, nat_key, "k").is_err());
         // nat's nonnegativity comes from the carrier, not relationship machinery
         assert!(validate_target(-5.0, nat_key, "k").is_err());
         // an int carrier admits negative keys (A11); deadness is the found guard's business
-        let int_key = TargetCarrier::Key { ty: ColType::Int, range: None };
+        let int_key = TargetCarrier::Key {
+            ty: ColType::Int,
+            range: None,
+        };
         assert!(validate_target(-5.0, int_key, "k").is_ok());
-        let num_key = TargetCarrier::Key { ty: ColType::Num, range: None };
+        let num_key = TargetCarrier::Key {
+            ty: ColType::Num,
+            range: None,
+        };
         assert!(validate_target(7.5, num_key, "k").is_ok());
     }
 
     #[test]
     fn key_carrier_honors_the_declared_range() {
-        let ranged = TargetCarrier::Key { ty: ColType::Nat, range: Some((10.0, 20.0)) };
+        let ranged = TargetCarrier::Key {
+            ty: ColType::Nat,
+            range: Some((10.0, 20.0)),
+        };
         assert!(validate_target(10.0, ranged, "k").is_ok());
         assert!(validate_target(20.0, ranged, "k").is_ok());
         assert!(validate_target(9.0, ranged, "k").is_err());

@@ -83,8 +83,8 @@ pub struct App {
     pub world_is_copy: bool, // the world is the demo's .kore/play scratch
     pub pristine: String,    // the demo's own registry (never mutated); "" = registry-less
     pub demo_path: String,   // the demo's identity: tags, sessions, anchors key off it
-    pub demo_live: String,   // the file backing the code buffer — corpus demo until first save, play copy after
-    pub world_orig: String,  // MODE_REG: the corpus .reg the play copy shadows
+    pub demo_live: String, // the file backing the code buffer — corpus demo until first save, play copy after
+    pub world_orig: String, // MODE_REG: the corpus .reg the play copy shadows
     pub confirm_reset: bool, // >reset armed: y wipes the play tree, any other key cancels
     pub code: Vec<Vec<u8>>,
     pub code_dirty: bool,
@@ -141,14 +141,14 @@ pub struct App {
     pub out_r: Rect,
     pub prompt_r: Rect,
     // relocated C statics:
-    pub dcols: Vec<DCol>,          // table_cols' dcols/ndcols
-    pub vrows: Vec<VRow>,          // world_vrows' vrows/nvrows
-    pub run_lines: Vec<Vec<u8>>,   // composed program for 0x1D tag resolution
-    pub snap_seq: i32,             // per-process snapshot counter, deliberately not disk-scanned
+    pub dcols: Vec<DCol>,           // table_cols' dcols/ndcols
+    pub vrows: Vec<VRow>,           // world_vrows' vrows/nvrows
+    pub run_lines: Vec<Vec<u8>>,    // composed program for 0x1D tag resolution
+    pub snap_seq: i32,              // per-process snapshot counter, deliberately not disk-scanned
     pub steel_path: Option<String>, // find_steel's cache
     // the dynamic-alias overlay as the host sees it: A_t is session state, never world time
-    pub sess_barrier: u32,       // successful submissions this session — the record's barrier index
-    pub alias_ver: Option<u64>,  // last observed environment version; None until the first observation
+    pub sess_barrier: u32, // successful submissions this session — the record's barrier index
+    pub alias_ver: Option<u64>, // last observed environment version; None until the first observation
     pub alias_list: Vec<String>, // last observed `^name<TAB>describe` lines
 }
 
@@ -236,7 +236,10 @@ impl App {
             return None;
         }
         let l = &self.run_lines[ln as usize - 1];
-        let start = l.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(l.len());
+        let start = l
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(l.len());
         Some(&l[start..])
     }
 }

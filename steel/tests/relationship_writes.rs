@@ -15,7 +15,10 @@ use steel::parse::parse;
 use steel::{Directives, Interner, RegEntryKind, Registry};
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("workspace root").to_path_buf()
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root")
+        .to_path_buf()
 }
 
 // Inputs: the text of todo/TODO.md. Output: every decommissioned demo number, ranges expanded.
@@ -37,7 +40,9 @@ fn quarantined(todo: &str) -> BTreeSet<u32> {
         if item.is_empty() {
             continue;
         }
-        let mut ends = item.split('–').map(|n| n.trim().parse::<u32>().expect("demo number"));
+        let mut ends = item
+            .split('–')
+            .map(|n| n.trim().parse::<u32>().expect("demo number"));
         let low = ends.next().expect("range start");
         let high = ends.next().unwrap_or(low);
         for number in low..=high {
@@ -50,7 +55,9 @@ fn quarantined(todo: &str) -> BTreeSet<u32> {
 // Inputs: a demo path. Output: its three-digit number, or None when it is not a numbered demo.
 fn number(path: &Path) -> Option<u32> {
     let stem = path.file_name()?.to_str()?;
-    stem.get(..3).filter(|n| n.len() == 3).and_then(|n| n.parse().ok())
+    stem.get(..3)
+        .filter(|n| n.len() == 3)
+        .and_then(|n| n.parse().ok())
 }
 
 fn demos(root: &Path, skip: &BTreeSet<u32>) -> Vec<PathBuf> {
@@ -69,7 +76,9 @@ fn demos(root: &Path, skip: &BTreeSet<u32>) -> Vec<PathBuf> {
             .collect();
         files.sort();
         for file in files {
-            let Some(number) = number(&file) else { continue };
+            let Some(number) = number(&file) else {
+                continue;
+            };
             if !skip.contains(&number) {
                 out.push(file);
             }
@@ -85,7 +94,9 @@ fn world(source: &str, dir: &Path) -> (Registry, bool) {
     let mut reg = Registry::default();
     let mut ja = false;
     for line in source.lines() {
-        let Some(tail) = line.trim_start().strip_prefix("--!") else { continue };
+        let Some(tail) = line.trim_start().strip_prefix("--!") else {
+            continue;
+        };
         let mut words = tail.split_whitespace();
         match (words.next(), words.next()) {
             (Some("ja"), _) => ja = true,
@@ -93,8 +104,11 @@ fn world(source: &str, dir: &Path) -> (Registry, bool) {
                 // the driver's rule: a '/'-bearing or .reg-suffixed spec is a literal path
                 // against the source file's dir, a bare name resolves as <dir>/<name>.reg
                 let literal = spec.contains('/') || (spec.len() > 4 && spec.ends_with(".reg"));
-                let path =
-                    dir.join(if literal { spec.to_string() } else { format!("{}.reg", spec) });
+                let path = dir.join(if literal {
+                    spec.to_string()
+                } else {
+                    format!("{}.reg", spec)
+                });
                 reg = steel::registry::reg_load(path.to_str().expect("path")).expect(spec);
             }
             _ => {}
@@ -118,7 +132,10 @@ fn sealed(reg: &Registry) -> Vec<(String, String)> {
             continue;
         }
         let legal = !entry.name.is_empty()
-            && entry.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && entry
+                .name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
             && entry.name.starts_with(|c: char| c.is_ascii_alphabetic());
         let var = if legal {
             let mut chars = entry.name.chars();
@@ -138,7 +155,11 @@ fn no_relationship_write_escapes_its_seal() {
     let todo = std::fs::read_to_string(root.join("todo/TODO.md")).expect("todo/TODO.md");
     let skip = quarantined(&todo);
     let files = demos(&root, &skip);
-    assert!(files.len() > 40, "the active corpus is {} files", files.len());
+    assert!(
+        files.len() > 40,
+        "the active corpus is {} files",
+        files.len()
+    );
 
     let mut writes = 0usize;
     let mut refusals = Vec::new();
@@ -182,7 +203,9 @@ fn no_relationship_write_escapes_its_seal() {
         for line in bqn.lines() {
             let line = line.trim_start();
             for (var, name) in &watched {
-                let Some(rhs) = line.strip_prefix(&format!("{} ↩ ", var)) else { continue };
+                let Some(rhs) = line.strip_prefix(&format!("{} ↩ ", var)) else {
+                    continue;
+                };
                 assert!(
                     staged.contains(rhs),
                     "{}: relationship '{}' is written outside the seal: {}",
@@ -191,7 +214,12 @@ fn no_relationship_write_escapes_its_seal() {
                     line
                 );
                 // one staged binding publishes once: a second publication is a second write
-                assert!(published.insert(rhs.to_string()), "{}: {} publishes twice", file.display(), rhs);
+                assert!(
+                    published.insert(rhs.to_string()),
+                    "{}: {} publishes twice",
+                    file.display(),
+                    rhs
+                );
                 writes += 1;
             }
         }
@@ -207,13 +235,25 @@ fn no_relationship_write_escapes_its_seal() {
         for stage in &staged {
             let staging = bqn.find(&format!("{} ← ", stage)).expect("staging");
             let assertion = bqn[staging..].find("\"relationship ").expect("assertion") + staging;
-            let publication = bqn[staging..].find(&format!("↩ {}\n", stage)).expect("publication") + staging;
-            assert!(staging < assertion && assertion < publication, "{}: {}", file.display(), stage);
+            let publication = bqn[staging..]
+                .find(&format!("↩ {}\n", stage))
+                .expect("publication")
+                + staging;
+            assert!(
+                staging < assertion && assertion < publication,
+                "{}: {}",
+                file.display(),
+                stage
+            );
         }
     }
     // a corpus that writes no relationship would prove nothing
     assert!(writes > 0, "no relationship write in {} demos", files.len());
-    assert!(refusals.is_empty(), "active demos that do not emit: {:?}", refusals);
+    assert!(
+        refusals.is_empty(),
+        "active demos that do not emit: {:?}",
+        refusals
+    );
 }
 
 // The seal rests on the staging variable being the emitter's alone.  anoRelStage<n> is a

@@ -29,7 +29,9 @@ fn main() {
 // while !quit { resized -> size; ui::draw; ev_read; ui::handle } — draw runs
 // unconditionally every pass; term_leave on the way out.
 fn kore_main() -> i32 {
-    let args: Vec<String> = std::env::args_os().map(|a| a.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = std::env::args_os()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
     if args.get(1).map(String::as_str) == Some("alias") {
         return aliases::run(&args[1..]);
     }
@@ -63,7 +65,10 @@ fn kore_main() -> i32 {
             app.demo_list.sort_by(|a, b| text::cmp_demo(a, b));
             app.focus = Focus::Rail;
             let n = app.demo_list.len();
-            app.say(&format!("{} demos — enter opens, r resets the world, n steps it, : prompts", n));
+            app.say(&format!(
+                "{} demos — enter opens, r resets the world, n steps it, : prompts",
+                n
+            ));
         }
         Some(a) if a.len() > 4 && a.ends_with(".reg") => {
             app.mode = Mode::Reg;
@@ -110,7 +115,9 @@ fn kore_main() -> i32 {
 // Recursive walk from `demos` relative to CWD, dot-entries skipped, `.ano` suffix, cap
 // KMAXDEMO; sorted by text::cmp_demo. kore.c walk_demos.
 pub fn walk_demos(app: &mut App, dir: &str) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     for de in rd.flatten() {
         let name = de.file_name();
         if name.as_encoded_bytes().first() == Some(&b'.') {
@@ -121,7 +128,9 @@ pub fn walk_demos(app: &mut App, dir: &str) {
         if p.len() >= 4096 {
             continue;
         }
-        let Ok(st) = std::fs::metadata(&p) else { continue };
+        let Ok(st) = std::fs::metadata(&p) else {
+            continue;
+        };
         if st.is_dir() {
             walk_demos(app, &p);
         } else if p.len() > 4 && p.ends_with(".ano") && app.demo_list.len() < crate::app::KMAXDEMO {
@@ -172,7 +181,11 @@ pub fn run_steel(argv: &[&str]) -> (Vec<u8>, i32) {
         if let Some(index) = owned.iter().position(|arg| arg == "--registry") {
             if let Some(registry) = owned.get(index + 1).cloned() {
                 owned.push("--aliases".to_string());
-                owned.push(steel::alias::sidecar_path(&registry).to_string_lossy().into_owned());
+                owned.push(
+                    steel::alias::sidecar_path(&registry)
+                        .to_string_lossy()
+                        .into_owned(),
+                );
             }
         }
     }
@@ -304,7 +317,10 @@ pub fn cap_split(app: &mut App, cap: &[u8], code: i32, step: i32) {
             }
             let lbl = scan_q_tag(tag).and_then(|ln| app.run_line(ln));
             let label = label_dup(lbl.unwrap_or(tag));
-            recs.push(QRec { label, value: Vec::new() });
+            recs.push(QRec {
+                label,
+                value: Vec::new(),
+            });
             open = true;
         } else if open {
             val.extend_from_slice(&s[i..j]);
@@ -351,7 +367,12 @@ mod demux_tests {
     fn exit0_records_resolve_tags() {
         let mut a = App::new();
         a.run_lines_set(b"--! registry w\n  #/ Planted\nsecond\n");
-        cap_split(&mut a, b"pre-tag\n\x1Dq1@2\n42  \n\x1Ftrace mid\nmore\n\x1Dweird\nv\n", 0, 7);
+        cap_split(
+            &mut a,
+            b"pre-tag\n\x1Dq1@2\n42  \n\x1Ftrace mid\nmore\n\x1Dweird\nv\n",
+            0,
+            7,
+        );
         assert_eq!(a.out_log, b"pre-tag\ntrace mid\n");
         assert_eq!(a.qgroups.len(), 1);
         let g = &a.qgroups[0];

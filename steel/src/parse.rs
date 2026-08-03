@@ -70,7 +70,10 @@ fn assignop(k: TokKind) -> Option<AssignOp> {
 // Input: token kind. Output: true when it can begin an expression atom.
 fn atomstart(k: TokKind) -> bool {
     use TokKind::*;
-    matches!(k, Name | Alias | Sym | Num | Counter | Str | Wild | Lp | Iota)
+    matches!(
+        k,
+        Name | Alias | Sym | Num | Counter | Str | Wild | Lp | Iota
+    )
 }
 
 /* ---------- parser state ---------- */
@@ -91,7 +94,11 @@ impl P<'_, '_> {
 
     fn pk2(&self, k: usize) -> TokKind {
         let j = self.i + k;
-        if j < self.t.len() { self.t.kind[j] } else { TokKind::Eof }
+        if j < self.t.len() {
+            self.t.kind[j]
+        } else {
+            TokKind::Eof
+        }
     }
 
     fn tname(&self) -> Symbol {
@@ -157,7 +164,13 @@ impl P<'_, '_> {
         let line = self.tline();
         self.adv();
         let sh = self.parse_shape(true)?;
-        Ok(Node::new(NodeKind::To { shape: Box::new(sh), poured: None }, line))
+        Ok(Node::new(
+            NodeKind::To {
+                shape: Box::new(sh),
+                poured: None,
+            },
+            line,
+        ))
     }
 
     // Input: cursor at T_NAME with '(' next. Output: Call, args comma-separated at min 5.
@@ -235,7 +248,13 @@ impl P<'_, '_> {
                 Ok(n)
             }
             TokKind::Counter => {
-                let n = Node::new(NodeKind::Counter { val: self.tnum(), unit: self.tname() }, line);
+                let n = Node::new(
+                    NodeKind::Counter {
+                        val: self.tnum(),
+                        unit: self.tname(),
+                    },
+                    line,
+                );
                 self.adv();
                 Ok(n)
             }
@@ -252,7 +271,13 @@ impl P<'_, '_> {
             TokKind::Alias => {
                 // parse-time look and req coincide; normalization moves look, never req
                 let stem = self.tname();
-                let n = Node::new(NodeKind::Alias { look: stem, req: stem }, line);
+                let n = Node::new(
+                    NodeKind::Alias {
+                        look: stem,
+                        req: stem,
+                    },
+                    line,
+                );
                 self.adv();
                 Ok(n)
             }
@@ -287,7 +312,13 @@ impl P<'_, '_> {
             self.adv();
             desc = true;
         }
-        Ok(Node::new(NodeKind::OrderBy { key: Box::new(key), desc }, line))
+        Ok(Node::new(
+            NodeKind::OrderBy {
+                key: Box::new(key),
+                desc,
+            },
+            line,
+        ))
     }
 
     // Input: cursor at a pipeline stage head. Output: stage node
@@ -328,7 +359,8 @@ impl P<'_, '_> {
         let op = match self.pk() {
             TokKind::Plus => self.it.intern("+"),
             TokKind::Minus => self.it.intern("-"),
-            TokKind::Star => self.it.intern("*"), TokKind::Slash => self.it.intern("/"),
+            TokKind::Star => self.it.intern("*"),
+            TokKind::Slash => self.it.intern("/"),
             TokKind::Amp => self.it.intern("&"),
             TokKind::Bar => self.it.intern("|"),
             TokKind::Name => self.tname(),
@@ -356,9 +388,15 @@ impl P<'_, '_> {
                     self.adv();
                     let x = self.parse_expr(10)?;
                     let kind = if k == TokKind::Fold {
-                        NodeKind::Fold { op, operand: Box::new(x) }
+                        NodeKind::Fold {
+                            op,
+                            operand: Box::new(x),
+                        }
                     } else {
-                        NodeKind::ScanExpr { op, operand: Box::new(x) }
+                        NodeKind::ScanExpr {
+                            op,
+                            operand: Box::new(x),
+                        }
                     };
                     return Ok(Node::new(kind, line));
                 }
@@ -370,7 +408,13 @@ impl P<'_, '_> {
                         desc = true;
                     }
                     let key = self.parse_expr(10)?;
-                    return Ok(Node::new(NodeKind::Grade { key: Box::new(key), desc }, line));
+                    return Ok(Node::new(
+                        NodeKind::Grade {
+                            key: Box::new(key),
+                            desc,
+                        },
+                        line,
+                    ));
                 }
                 TokKind::Top => {
                     self.adv();
@@ -380,7 +424,13 @@ impl P<'_, '_> {
                     let kk = self.tnum();
                     self.adv();
                     let x = self.parse_expr(10)?;
-                    return Ok(Node::new(NodeKind::Top { k: kk, inner: Box::new(x) }, line));
+                    return Ok(Node::new(
+                        NodeKind::Top {
+                            k: kk,
+                            inner: Box::new(x),
+                        },
+                        line,
+                    ));
                 }
                 TokKind::FoldKw => {
                     // fold(f): the long form of f/ — one node, Fold
@@ -389,7 +439,13 @@ impl P<'_, '_> {
                     let op = self.parse_opname()?;
                     self.expect(TokKind::Rp, "')' after reducer")?;
                     let x = self.parse_expr(10)?;
-                    return Ok(Node::new(NodeKind::Fold { op, operand: Box::new(x) }, line));
+                    return Ok(Node::new(
+                        NodeKind::Fold {
+                            op,
+                            operand: Box::new(x),
+                        },
+                        line,
+                    ));
                 }
                 TokKind::ScanKw => {
                     self.adv();
@@ -400,14 +456,21 @@ impl P<'_, '_> {
                     if self.pk() != TokKind::Along {
                         // scan(f) col: the long form of f\, no declared order clause
                         return Ok(Node::new(
-                            NodeKind::ScanExpr { op, operand: Box::new(col) },
+                            NodeKind::ScanExpr {
+                                op,
+                                operand: Box::new(col),
+                            },
                             line,
                         ));
                     }
                     self.adv();
                     let ord = self.parse_expr(10)?;
                     return Ok(Node::new(
-                        NodeKind::ScanAlong { op, col: Box::new(col), order: Box::new(ord) },
+                        NodeKind::ScanAlong {
+                            op,
+                            col: Box::new(col),
+                            order: Box::new(ord),
+                        },
                         line,
                     ));
                 }
@@ -421,7 +484,11 @@ impl P<'_, '_> {
                     let x = self.parse_expr(10)?;
                     let y = self.parse_expr(10)?;
                     return Ok(Node::new(
-                        NodeKind::CrossV { f, a: Box::new(x), b: Box::new(y) },
+                        NodeKind::CrossV {
+                            f,
+                            a: Box::new(x),
+                            b: Box::new(y),
+                        },
                         line,
                     ));
                 }
@@ -451,7 +518,13 @@ impl P<'_, '_> {
                     return Err(perr(self.tline(), "expected name after '.'"));
                 }
                 let r = self.mkname();
-                l = Node::new(NodeKind::Hop { l: Box::new(l), r: Box::new(r) }, line);
+                l = Node::new(
+                    NodeKind::Hop {
+                        l: Box::new(l),
+                        r: Box::new(r),
+                    },
+                    line,
+                );
                 continue;
             }
             if k == TokKind::Tick {
@@ -460,9 +533,17 @@ impl P<'_, '_> {
                 l = match l.kind {
                     NodeKind::Name(rel) => Node::new(NodeKind::SetHop { rel }, lline),
                     NodeKind::Hop { l: hl, r } if matches!(r.kind, NodeKind::Name(_)) => {
-                        let NodeKind::Name(rel) = r.kind else { unreachable!() };
+                        let NodeKind::Name(rel) = r.kind else {
+                            unreachable!()
+                        };
                         let s = Node::new(NodeKind::SetHop { rel }, r.line);
-                        Node::new(NodeKind::Hop { l: hl, r: Box::new(s) }, lline)
+                        Node::new(
+                            NodeKind::Hop {
+                                l: hl,
+                                r: Box::new(s),
+                            },
+                            lline,
+                        )
                     }
                     _ => return Err(perr(line, "tick after non-name")),
                 };
@@ -489,12 +570,33 @@ impl P<'_, '_> {
             } else if k == TokKind::Amp {
                 Node::new(NodeKind::And(Box::new(l), Box::new(r)), line)
             } else if k == TokKind::At {
-                Node::new(NodeKind::Scope { l: Box::new(l), r: Box::new(r), origin: None }, line)
+                Node::new(
+                    NodeKind::Scope {
+                        l: Box::new(l),
+                        r: Box::new(r),
+                        origin: None,
+                    },
+                    line,
+                )
             } else if let Some(op) = cmpop(k) {
-                Node::new(NodeKind::Cmp { op, l: Box::new(l), r: Box::new(r) }, line)
+                Node::new(
+                    NodeKind::Cmp {
+                        op,
+                        l: Box::new(l),
+                        r: Box::new(r),
+                    },
+                    line,
+                )
             } else {
                 let op = arithop(k).unwrap(); // binlevel gates: only + - * / % reach here
-                Node::new(NodeKind::Arith { op, l: Box::new(l), r: Box::new(r) }, line)
+                Node::new(
+                    NodeKind::Arith {
+                        op,
+                        l: Box::new(l),
+                        r: Box::new(r),
+                    },
+                    line,
+                )
             };
             if k == TokKind::At && self.pk() == TokKind::AtKw {
                 // mask @ frame at origin: anchored frame
@@ -516,7 +618,9 @@ impl P<'_, '_> {
             return Err(perr(self.tline(), "expression nested too deeply"));
         }
         self.depth += 1;
-        let r = self.parse_prefix(min).and_then(|l| self.parse_binloop(l, min));
+        let r = self
+            .parse_prefix(min)
+            .and_then(|l| self.parse_binloop(l, min));
         self.depth -= 1;
         r
     }
@@ -535,7 +639,11 @@ impl P<'_, '_> {
                 }
                 let name = self.tname();
                 self.adv();
-                let kind = if add { NodeKind::EAdd(name) } else { NodeKind::EDel(name) };
+                let kind = if add {
+                    NodeKind::EAdd(name)
+                } else {
+                    NodeKind::EDel(name)
+                };
                 Ok(Node::new(kind, line))
             }
             TokKind::Tilde => {
@@ -545,7 +653,11 @@ impl P<'_, '_> {
             TokKind::Spawn => {
                 self.adv();
                 let what = if self.pk() == TokKind::Name {
-                    if self.pk2(1) == TokKind::Lp { self.parse_call()? } else { self.mkname() }
+                    if self.pk2(1) == TokKind::Lp {
+                        self.parse_call()?
+                    } else {
+                        self.mkname()
+                    }
                 } else if self.pk() == TokKind::Lp {
                     self.parse_paren()?
                 } else {
@@ -561,7 +673,14 @@ impl P<'_, '_> {
                     self.adv();
                     pos = Some(Box::new(self.parse_expr(10)?));
                 }
-                Ok(Node::new(NodeKind::ESpawn { what: Box::new(what), count, at: pos }, line))
+                Ok(Node::new(
+                    NodeKind::ESpawn {
+                        what: Box::new(what),
+                        count,
+                        at: pos,
+                    },
+                    line,
+                ))
             }
             TokKind::Name => {
                 let mut tgt = self.mkname();
@@ -571,9 +690,17 @@ impl P<'_, '_> {
                     if self.pk() != TokKind::Name {
                         return Err(perr(self.tline(), "expected relation after 'via'"));
                     }
-                    let NodeKind::Name(f) = tgt.kind else { unreachable!() };
+                    let NodeKind::Name(f) = tgt.kind else {
+                        unreachable!()
+                    };
                     let col = self.mkname();
-                    return Ok(Node::new(NodeKind::EVia { f, col: Box::new(col) }, line));
+                    return Ok(Node::new(
+                        NodeKind::EVia {
+                            f,
+                            col: Box::new(col),
+                        },
+                        line,
+                    ));
                 }
                 while self.pk() == TokKind::Dot {
                     // pos.x target chain
@@ -582,7 +709,13 @@ impl P<'_, '_> {
                         return Err(perr(self.tline(), "expected field after '.'"));
                     }
                     let r = self.mkname();
-                    tgt = Node::new(NodeKind::Hop { l: Box::new(tgt), r: Box::new(r) }, line);
+                    tgt = Node::new(
+                        NodeKind::Hop {
+                            l: Box::new(tgt),
+                            r: Box::new(r),
+                        },
+                        line,
+                    );
                 }
                 if let Some(op) = assignop(self.pk()) {
                     self.adv();
@@ -592,7 +725,11 @@ impl P<'_, '_> {
                         self.parse_expr(4)?
                     };
                     return Ok(Node::new(
-                        NodeKind::EAssign { op, target: Box::new(tgt), rhs: Box::new(rhs) },
+                        NodeKind::EAssign {
+                            op,
+                            target: Box::new(tgt),
+                            rhs: Box::new(rhs),
+                        },
                         line,
                     ));
                 }
@@ -640,7 +777,13 @@ impl P<'_, '_> {
                 self.adv();
                 self.adv();
                 let src = self.parse_expr(5)?;
-                rest.push(Node::new(NodeKind::Binder { name, source: Box::new(src) }, bline));
+                rest.push(Node::new(
+                    NodeKind::Binder {
+                        name,
+                        source: Box::new(src),
+                    },
+                    bline,
+                ));
             } else {
                 rest.push(self.parse_expr(5)?);
             }
@@ -651,7 +794,14 @@ impl P<'_, '_> {
             break;
         }
         self.expect(TokKind::Rb, "']'")?;
-        Ok(Node::new(NodeKind::Compr { sel: Box::new(sel), effect: Box::new(eff), rest }, line))
+        Ok(Node::new(
+            NodeKind::Compr {
+                sel: Box::new(sel),
+                effect: Box::new(eff),
+                rest,
+            },
+            line,
+        ))
     }
 
     // Input: cursor at the first token of a line (never Nl/Eof). Output: one statement:
@@ -671,7 +821,10 @@ impl P<'_, '_> {
             if crate::lex::lex_reserved(self.it.resolve(name)) {
                 return Err(perr(
                     self.tline(),
-                    format!("'{}' is lexer-reserved and cannot name a def", self.it.resolve(name)),
+                    format!(
+                        "'{}' is lexer-reserved and cannot name a def",
+                        self.it.resolve(name)
+                    ),
                 ));
             }
             self.adv();
@@ -693,7 +846,13 @@ impl P<'_, '_> {
                     line,
                 );
             }
-            return Ok(Node::new(NodeKind::DefStmt { name, body: Box::new(body) }, line));
+            return Ok(Node::new(
+                NodeKind::DefStmt {
+                    name,
+                    body: Box::new(body),
+                },
+                line,
+            ));
         }
         if k == TokKind::Tilde && matches!(self.pk2(1), TokKind::Nl | TokKind::Eof) {
             // lone ~
@@ -715,7 +874,13 @@ impl P<'_, '_> {
             let mut effects = Vec::new();
             self.parse_effects(&mut effects)?;
             return Ok(Node::new(
-                NodeKind::Stmt { sel: None, effects, rule: false, cont: true, elided: false },
+                NodeKind::Stmt {
+                    sel: None,
+                    effects,
+                    rule: false,
+                    cont: true,
+                    elided: false,
+                },
                 line,
             ));
         }
@@ -734,7 +899,12 @@ impl P<'_, '_> {
             self.adv();
             self.adv();
             let ts = crate::lex::lex(quoted.as_bytes(), false, self.it)?;
-            let mut q = P { t: &ts, i: 0, depth: 0, it: &mut *self.it };
+            let mut q = P {
+                t: &ts,
+                i: 0,
+                depth: 0,
+                it: &mut *self.it,
+            };
             while q.pk() == TokKind::Nl {
                 q.adv();
             }
@@ -759,7 +929,13 @@ impl P<'_, '_> {
             let mut effects = Vec::new();
             self.parse_effects(&mut effects)?;
             return Ok(Node::new(
-                NodeKind::Stmt { sel: None, effects, rule: false, cont: false, elided: true },
+                NodeKind::Stmt {
+                    sel: None,
+                    effects,
+                    rule: false,
+                    cont: false,
+                    elided: true,
+                },
                 line,
             ));
         }
@@ -792,7 +968,13 @@ impl P<'_, '_> {
             let mut effects = Vec::new();
             self.parse_effects(&mut effects)?;
             return Ok(Node::new(
-                NodeKind::Stmt { sel: Some(Box::new(sel)), effects, rule, cont: false, elided: false },
+                NodeKind::Stmt {
+                    sel: Some(Box::new(sel)),
+                    effects,
+                    rule,
+                    cont: false,
+                    elided: false,
+                },
                 line,
             ));
         }
@@ -813,7 +995,13 @@ impl P<'_, '_> {
                     effects.push(self.parse_effect()?);
                 }
                 return Ok(Node::new(
-                    NodeKind::Stmt { sel: None, effects, rule: false, cont: false, elided: true },
+                    NodeKind::Stmt {
+                        sel: None,
+                        effects,
+                        rule: false,
+                        cont: false,
+                        elided: true,
+                    },
                     line,
                 ));
             }
@@ -859,10 +1047,19 @@ pub fn parse(toks: &Toks, it: &mut Interner) -> Result<Node, Diag> {
         ts.push(k, toks.name[i], toks.num[i], toks.line[i]);
         i += 1;
     }
-    let eof_line = if ts.is_empty() { 1 } else { ts.line[ts.len() - 1] };
+    let eof_line = if ts.is_empty() {
+        1
+    } else {
+        ts.line[ts.len() - 1]
+    };
     ts.push(TokKind::Eof, Symbol::EMPTY, 0.0, eof_line);
 
-    let mut p = P { t: &ts, i: 0, depth: 0, it };
+    let mut p = P {
+        t: &ts,
+        i: 0,
+        depth: 0,
+        it,
+    };
     let mut stmts = Vec::new();
     loop {
         while p.pk() == TokKind::Nl {
@@ -980,8 +1177,8 @@ mod tests {
     // Inputs: out buffer, node. Output: the C sx S-expression appended:
     // (KIND[:FLAGS] [op] [name] [num] kids...), "()" for NULL kid slots.
     fn sx(b: &mut String, n: &Node, it: &Interner) {
-        use std::fmt::Write;
         use NodeKind::*;
+        use std::fmt::Write;
         match &n.kind {
             Num(v) => {
                 let _ = write!(b, "(NUM {})", g(*v));
@@ -1182,7 +1379,13 @@ mod tests {
                 sx(b, col, it);
                 b.push(')');
             }
-            Stmt { sel, effects, rule, cont, elided } => {
+            Stmt {
+                sel,
+                effects,
+                rule,
+                cont,
+                elided,
+            } => {
                 b.push_str("(STMT");
                 if *rule {
                     b.push_str(":RULE");
@@ -1241,25 +1444,71 @@ mod tests {
         // Nord & TwoHanded > 60 , Gold += 1000
         run_case(
             "hinge+cmp",
-            &[tn!("Nord"), tk!(Amp), tn!("TwoHanded"), tk!(Gt), tv!(60), tk!(Comma), tn!("Gold"), tk!(PlusEq), tv!(1000), tk!(Eof)],
+            &[
+                tn!("Nord"),
+                tk!(Amp),
+                tn!("TwoHanded"),
+                tk!(Gt),
+                tv!(60),
+                tk!(Comma),
+                tn!("Gold"),
+                tk!(PlusEq),
+                tv!(1000),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (NAME Nord) (CMP > (NAME TwoHanded) (NUM 60))) (EASSIGN + (NAME Gold) (NUM 1000))))",
         );
         // Bandit & !Dead & Faction == :Bandit , Faction = :Hostile
         run_case(
             "not+sym+eq",
-            &[tn!("Bandit"), tk!(Amp), tk!(Bang), tn!("Dead"), tk!(Amp), tn!("Faction"), tk!(EqEq), tsy!("Bandit"), tk!(Comma), tn!("Faction"), tk!(Eq), tsy!("Hostile"), tk!(Eof)],
+            &[
+                tn!("Bandit"),
+                tk!(Amp),
+                tk!(Bang),
+                tn!("Dead"),
+                tk!(Amp),
+                tn!("Faction"),
+                tk!(EqEq),
+                tsy!("Bandit"),
+                tk!(Comma),
+                tn!("Faction"),
+                tk!(Eq),
+                tsy!("Hostile"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (AND (NAME Bandit) (NOT (NAME Dead))) (CMP = (NAME Faction) (SYM Bandit))) (EASSIGN = (NAME Faction) (SYM Hostile))))",
         );
         // Frenzy.targets' , +Frenzied
         run_case(
             "hop-tick",
-            &[tn!("Frenzy"), tk!(Dot), tn!("targets"), tk!(Tick), tk!(Comma), tk!(Plus), tn!("Frenzied"), tk!(Eof)],
+            &[
+                tn!("Frenzy"),
+                tk!(Dot),
+                tn!("targets"),
+                tk!(Tick),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Frenzied"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (HOP (NAME Frenzy) (SETHOP targets (NAME targets))) (EADD Frenzied)))",
         );
         // ^cursor , Knockback 5 ; Flash :Red ; -Shielded
         run_case(
             "verb-batch",
-            &[tkn!(Alias, "cursor"), tk!(Comma), tn!("Knockback"), tv!(5), tk!(Semi), tn!("Flash"), tsy!("Red"), tk!(Semi), tk!(Minus), tn!("Shielded"), tk!(Eof)],
+            &[
+                tkn!(Alias, "cursor"),
+                tk!(Comma),
+                tn!("Knockback"),
+                tv!(5),
+                tk!(Semi),
+                tn!("Flash"),
+                tsy!("Red"),
+                tk!(Semi),
+                tk!(Minus),
+                tn!("Shielded"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (ALIAS cursor) (EVERB Knockback (NUM 5)) (EVERB Flash (SYM Red)) (EDEL Shielded)))",
         );
         // +/ Gold @ Nord
@@ -1271,79 +1520,277 @@ mod tests {
         // Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
         run_case(
             "count-fold-cmp",
-            &[tn!("Plot"), tk!(Amp), tk!(Bang), tn!("Planted"), tk!(Amp), tkn!(Fold, "#"), tk!(Lp), tn!("neighbors"), tk!(Tick), tk!(Amp), tn!("Planted"), tk!(Rp), tk!(Ge), tv!(2), tk!(Comma), tk!(Plus), tn!("Planted"), tk!(Eof)],
+            &[
+                tn!("Plot"),
+                tk!(Amp),
+                tk!(Bang),
+                tn!("Planted"),
+                tk!(Amp),
+                tkn!(Fold, "#"),
+                tk!(Lp),
+                tn!("neighbors"),
+                tk!(Tick),
+                tk!(Amp),
+                tn!("Planted"),
+                tk!(Rp),
+                tk!(Ge),
+                tv!(2),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Planted"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (AND (NAME Plot) (NOT (NAME Planted))) (CMP g (FOLD # (AND (SETHOP neighbors (NAME neighbors)) (NAME Planted))) (NUM 2))) (EADD Planted)))",
         );
         // top 5 (grade desc Threat) , +Targeted
         run_case(
             "top-grade",
-            &[tk!(Top), tv!(5), tk!(Lp), tk!(Grade), tk!(Desc), tn!("Threat"), tk!(Rp), tk!(Comma), tk!(Plus), tn!("Targeted"), tk!(Eof)],
+            &[
+                tk!(Top),
+                tv!(5),
+                tk!(Lp),
+                tk!(Grade),
+                tk!(Desc),
+                tn!("Threat"),
+                tk!(Rp),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Targeted"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (TOP 5 (GRADE:DESC (NAME Threat))) (EADD Targeted)))",
         );
         // Enemy |> order by Threat desc |> take 5 , +Targeted
         run_case(
             "pipeline",
-            &[tn!("Enemy"), tk!(PipeGt), tk!(Order), tk!(By), tn!("Threat"), tk!(Desc), tk!(PipeGt), tk!(Take), tv!(5), tk!(Comma), tk!(Plus), tn!("Targeted"), tk!(Eof)],
+            &[
+                tn!("Enemy"),
+                tk!(PipeGt),
+                tk!(Order),
+                tk!(By),
+                tn!("Threat"),
+                tk!(Desc),
+                tk!(PipeGt),
+                tk!(Take),
+                tv!(5),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Targeted"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (PIPE (NAME Enemy) (ORDERBY:DESC (NAME Threat)) (TAKE 5)) (EADD Targeted)))",
         );
         // +/ threat @ (Enemy |> order by dps desc |> take 10)
         run_case(
             "fold-pipe-paren",
-            &[tkn!(Fold, "+"), tn!("threat"), tk!(At), tk!(Lp), tn!("Enemy"), tk!(PipeGt), tk!(Order), tk!(By), tn!("dps"), tk!(Desc), tk!(PipeGt), tk!(Take), tv!(10), tk!(Rp), tk!(Eof)],
+            &[
+                tkn!(Fold, "+"),
+                tn!("threat"),
+                tk!(At),
+                tk!(Lp),
+                tn!("Enemy"),
+                tk!(PipeGt),
+                tk!(Order),
+                tk!(By),
+                tn!("dps"),
+                tk!(Desc),
+                tk!(PipeGt),
+                tk!(Take),
+                tv!(10),
+                tk!(Rp),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (FOLD + (SCOPE (NAME threat) (PIPE (NAME Enemy) (ORDERBY:DESC (NAME dps)) (TAKE 10))))))",
         );
         // Unit , Slot = rank(Initiative)
         run_case(
             "call-rhs",
-            &[tn!("Unit"), tk!(Comma), tn!("Slot"), tk!(Eq), tn!("rank"), tk!(Lp), tn!("Initiative"), tk!(Rp), tk!(Eof)],
+            &[
+                tn!("Unit"),
+                tk!(Comma),
+                tn!("Slot"),
+                tk!(Eq),
+                tn!("rank"),
+                tk!(Lp),
+                tn!("Initiative"),
+                tk!(Rp),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (NAME Unit) (EASSIGN = (NAME Slot) (CALL rank (NAME Initiative)))))",
         );
         // 12 , offset = prev.offset + prev.prev.offset \n , spawn Cheese at Player.pos + (offset, 0)
         run_case(
             "shape+cont",
-            &[tv!(12), tk!(Comma), tn!("offset"), tk!(Eq), tn!("prev"), tk!(Dot), tn!("offset"), tk!(Plus), tn!("prev"), tk!(Dot), tn!("prev"), tk!(Dot), tn!("offset"), tk!(Nl), tk!(Comma), tk!(Spawn), tn!("Cheese"), tk!(AtKw), tn!("Player"), tk!(Dot), tn!("pos"), tk!(Plus), tk!(Lp), tn!("offset"), tk!(Comma), tv!(0), tk!(Rp), tk!(Eof)],
+            &[
+                tv!(12),
+                tk!(Comma),
+                tn!("offset"),
+                tk!(Eq),
+                tn!("prev"),
+                tk!(Dot),
+                tn!("offset"),
+                tk!(Plus),
+                tn!("prev"),
+                tk!(Dot),
+                tn!("prev"),
+                tk!(Dot),
+                tn!("offset"),
+                tk!(Nl),
+                tk!(Comma),
+                tk!(Spawn),
+                tn!("Cheese"),
+                tk!(AtKw),
+                tn!("Player"),
+                tk!(Dot),
+                tn!("pos"),
+                tk!(Plus),
+                tk!(Lp),
+                tn!("offset"),
+                tk!(Comma),
+                tv!(0),
+                tk!(Rp),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (SHAPE (NUM 12)) (EASSIGN = (NAME offset) (ARITH + (HOP (NAME prev) (NAME offset)) (HOP (HOP (NAME prev) (NAME prev)) (NAME offset))))) (STMT:CONT () (ESPAWN (NAME Cheese) () (ARITH + (HOP (NAME Player) (NAME pos)) (TUPLE (NAME offset) (NUM 0))))))",
         );
         // Soldier , pos = to 4 _
         run_case(
             "to-wild",
-            &[tn!("Soldier"), tk!(Comma), tn!("pos"), tk!(Eq), tk!(To), tv!(4), tk!(Wild), tk!(Eof)],
+            &[
+                tn!("Soldier"),
+                tk!(Comma),
+                tn!("pos"),
+                tk!(Eq),
+                tk!(To),
+                tv!(4),
+                tk!(Wild),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (NAME Soldier) (EASSIGN = (NAME pos) (TO (SHAPE (NUM 4) (WILD))))))",
         );
         // 8 8 & (x + y) % 2 == 0 , spawn Wheat
         run_case(
             "lattice-pred",
-            &[tv!(8), tv!(8), tk!(Amp), tk!(Lp), tn!("x"), tk!(Plus), tn!("y"), tk!(Rp), tk!(Pct), tv!(2), tk!(EqEq), tv!(0), tk!(Comma), tk!(Spawn), tn!("Wheat"), tk!(Eof)],
+            &[
+                tv!(8),
+                tv!(8),
+                tk!(Amp),
+                tk!(Lp),
+                tn!("x"),
+                tk!(Plus),
+                tn!("y"),
+                tk!(Rp),
+                tk!(Pct),
+                tv!(2),
+                tk!(EqEq),
+                tv!(0),
+                tk!(Comma),
+                tk!(Spawn),
+                tn!("Wheat"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (SHAPE (NUM 8) (NUM 8)) (CMP = (ARITH % (ARITH + (NAME x) (NAME y)) (NUM 2)) (NUM 0))) (ESPAWN (NAME Wheat) () ())))",
         );
         // "RNBQ" \n to 8 8 , spawn (pieceOf char)   — exercises the NL-before-to splice
         run_case(
             "board-splice",
-            &[tkn!(Str, "RNBQ"), tk!(Nl), tk!(To), tv!(8), tv!(8), tk!(Comma), tk!(Spawn), tk!(Lp), tn!("pieceOf"), tn!("char"), tk!(Rp), tk!(Eof)],
+            &[
+                tkn!(Str, "RNBQ"),
+                tk!(Nl),
+                tk!(To),
+                tv!(8),
+                tv!(8),
+                tk!(Comma),
+                tk!(Spawn),
+                tk!(Lp),
+                tn!("pieceOf"),
+                tn!("char"),
+                tk!(Rp),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (TO (SHAPE (NUM 8) (NUM 8)) (STR RNBQ)) (ESPAWN (CALL pieceOf (NAME char)) () ())))",
         );
         // Nord & Dead , spawn Ghost \n ~
         run_case(
             "despawn-cont",
-            &[tn!("Nord"), tk!(Amp), tn!("Dead"), tk!(Comma), tk!(Spawn), tn!("Ghost"), tk!(Nl), tk!(Tilde), tk!(Eof)],
+            &[
+                tn!("Nord"),
+                tk!(Amp),
+                tn!("Dead"),
+                tk!(Comma),
+                tk!(Spawn),
+                tn!("Ghost"),
+                tk!(Nl),
+                tk!(Tilde),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (NAME Nord) (NAME Dead)) (ESPAWN (NAME Ghost) () ())) (STMT:CONT () (EDESPAWN)))",
         );
         // [ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
         run_case(
             "comprehension",
-            &[tk!(Lb), tn!("t"), tk!(Amp), tn!("c"), tk!(Comma), tk!(Plus), tn!("InRange"), tk!(Bar), tn!("t"), tk!(LArrow), tn!("Tower"), tk!(Comma), tn!("c"), tk!(LArrow), tn!("Creep"), tk!(Comma), tn!("dist"), tk!(Lp), tn!("t"), tk!(Comma), tn!("c"), tk!(Rp), tk!(Lt), tv!(50), tk!(Rb), tk!(Eof)],
+            &[
+                tk!(Lb),
+                tn!("t"),
+                tk!(Amp),
+                tn!("c"),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("InRange"),
+                tk!(Bar),
+                tn!("t"),
+                tk!(LArrow),
+                tn!("Tower"),
+                tk!(Comma),
+                tn!("c"),
+                tk!(LArrow),
+                tn!("Creep"),
+                tk!(Comma),
+                tn!("dist"),
+                tk!(Lp),
+                tn!("t"),
+                tk!(Comma),
+                tn!("c"),
+                tk!(Rp),
+                tk!(Lt),
+                tv!(50),
+                tk!(Rb),
+                tk!(Eof),
+            ],
             "(PROGRAM (COMPR (AND (NAME t) (NAME c)) (EADD InRange) (BINDER t (NAME Tower)) (BINDER c (NAME Creep)) (CMP < (CALL dist (NAME t) (NAME c)) (NUM 50))))",
         );
         // Hostile , shortestPath via Adj
         run_case(
             "via",
-            &[tn!("Hostile"), tk!(Comma), tn!("shortestPath"), tk!(Via), tn!("Adj"), tk!(Eof)],
+            &[
+                tn!("Hostile"),
+                tk!(Comma),
+                tn!("shortestPath"),
+                tk!(Via),
+                tn!("Adj"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (NAME Hostile) (EVIA shortestPath (NAME Adj))))",
         );
         // 64 64 & top 5 (grade desc Resource) , +MiningNode
         run_case(
             "shape-top",
-            &[tv!(64), tv!(64), tk!(Amp), tk!(Top), tv!(5), tk!(Lp), tk!(Grade), tk!(Desc), tn!("Resource"), tk!(Rp), tk!(Comma), tk!(Plus), tn!("MiningNode"), tk!(Eof)],
+            &[
+                tv!(64),
+                tv!(64),
+                tk!(Amp),
+                tk!(Top),
+                tv!(5),
+                tk!(Lp),
+                tk!(Grade),
+                tk!(Desc),
+                tn!("Resource"),
+                tk!(Rp),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("MiningNode"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (SHAPE (NUM 64) (NUM 64)) (TOP 5 (GRADE:DESC (NAME Resource)))) (EADD MiningNode)))",
         );
         // order by threat desc
@@ -1355,19 +1802,56 @@ mod tests {
         // Cell @ row , Height = prev.Height + prev.prev.Height
         run_case(
             "stencil",
-            &[tn!("Cell"), tk!(At), tn!("row"), tk!(Comma), tn!("Height"), tk!(Eq), tn!("prev"), tk!(Dot), tn!("Height"), tk!(Plus), tn!("prev"), tk!(Dot), tn!("prev"), tk!(Dot), tn!("Height"), tk!(Eof)],
+            &[
+                tn!("Cell"),
+                tk!(At),
+                tn!("row"),
+                tk!(Comma),
+                tn!("Height"),
+                tk!(Eq),
+                tn!("prev"),
+                tk!(Dot),
+                tn!("Height"),
+                tk!(Plus),
+                tn!("prev"),
+                tk!(Dot),
+                tn!("prev"),
+                tk!(Dot),
+                tn!("Height"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (SCOPE (NAME Cell) (NAME row)) (EASSIGN = (NAME Height) (ARITH + (HOP (NAME prev) (NAME Height)) (HOP (HOP (NAME prev) (NAME prev)) (NAME Height))))))",
         );
         // scan(+) Weight along pathCells
         run_case(
             "scan-along",
-            &[tk!(ScanKw), tk!(Lp), tk!(Plus), tk!(Rp), tn!("Weight"), tk!(Along), tn!("pathCells"), tk!(Eof)],
+            &[
+                tk!(ScanKw),
+                tk!(Lp),
+                tk!(Plus),
+                tk!(Rp),
+                tn!("Weight"),
+                tk!(Along),
+                tn!("pathCells"),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (SCANALONG + (NAME Weight) (NAME pathCells))))",
         );
         // (Nord, TwoHanded _) , +Trained
         run_case(
             "presence-tuple",
-            &[tk!(Lp), tn!("Nord"), tk!(Comma), tn!("TwoHanded"), tk!(Wild), tk!(Rp), tk!(Comma), tk!(Plus), tn!("Trained"), tk!(Eof)],
+            &[
+                tk!(Lp),
+                tn!("Nord"),
+                tk!(Comma),
+                tn!("TwoHanded"),
+                tk!(Wild),
+                tk!(Rp),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Trained"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (TUPLE (NAME Nord) (CMP _ (NAME TwoHanded))) (EADD Trained)))",
         );
         // spawn Wheat
@@ -1379,49 +1863,132 @@ mod tests {
         // Cheese @ cellar & Aged > 3mo , Price *= 2
         run_case(
             "counter",
-            &[tn!("Cheese"), tk!(At), tn!("cellar"), tk!(Amp), tn!("Aged"), tk!(Gt), tknv!(Counter, "mo", 3), tk!(Comma), tn!("Price"), tk!(StarEq), tv!(2), tk!(Eof)],
+            &[
+                tn!("Cheese"),
+                tk!(At),
+                tn!("cellar"),
+                tk!(Amp),
+                tn!("Aged"),
+                tk!(Gt),
+                tknv!(Counter, "mo", 3),
+                tk!(Comma),
+                tn!("Price"),
+                tk!(StarEq),
+                tv!(2),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (SCOPE (NAME Cheese) (NAME cellar)) (CMP > (NAME Aged) (COUNTER mo 3))) (EASSIGN * (NAME Price) (NUM 2))))",
         );
         // max\ Height @ (Eye + til n * north)
         run_case(
             "iota-scan",
-            &[tkn!(ScanOp, "max"), tn!("Height"), tk!(At), tk!(Lp), tn!("Eye"), tk!(Plus), tk!(Iota), tn!("n"), tk!(Star), tn!("north"), tk!(Rp), tk!(Eof)],
+            &[
+                tkn!(ScanOp, "max"),
+                tn!("Height"),
+                tk!(At),
+                tk!(Lp),
+                tn!("Eye"),
+                tk!(Plus),
+                tk!(Iota),
+                tn!("n"),
+                tk!(Star),
+                tn!("north"),
+                tk!(Rp),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (SCANEXPR max (SCOPE (NAME Height) (ARITH + (NAME Eye) (ARITH * (IOTAX (NAME n)) (NAME north)))))))",
         );
         // +/ Elevation @ 64 64
         run_case(
             "at-shape",
-            &[tkn!(Fold, "+"), tn!("Elevation"), tk!(At), tv!(64), tv!(64), tk!(Eof)],
+            &[
+                tkn!(Fold, "+"),
+                tn!("Elevation"),
+                tk!(At),
+                tv!(64),
+                tv!(64),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (FOLD + (SCOPE (NAME Elevation) (SHAPE (NUM 64) (NUM 64))))))",
         );
         // Spawner |> expand Count , spawn Minion
         run_case(
             "expand",
-            &[tn!("Spawner"), tk!(PipeGt), tk!(Expand), tn!("Count"), tk!(Comma), tk!(Spawn), tn!("Minion"), tk!(Eof)],
+            &[
+                tn!("Spawner"),
+                tk!(PipeGt),
+                tk!(Expand),
+                tn!("Count"),
+                tk!(Comma),
+                tk!(Spawn),
+                tn!("Minion"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (PIPE (NAME Spawner) (EXPAND (NAME Count))) (ESPAWN (NAME Minion) () ())))",
         );
         // Spawner , spawn Minion * Count
         run_case(
             "spawn-mult",
-            &[tn!("Spawner"), tk!(Comma), tk!(Spawn), tn!("Minion"), tk!(Star), tn!("Count"), tk!(Eof)],
+            &[
+                tn!("Spawner"),
+                tk!(Comma),
+                tk!(Spawn),
+                tn!("Minion"),
+                tk!(Star),
+                tn!("Count"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (NAME Spawner) (ESPAWN (NAME Minion) (NAME Count) ())))",
         );
         // fold(threat) Damage @ Enemies
         run_case(
             "fold-long",
-            &[tk!(FoldKw), tk!(Lp), tn!("threat"), tk!(Rp), tn!("Damage"), tk!(At), tn!("Enemies"), tk!(Eof)],
+            &[
+                tk!(FoldKw),
+                tk!(Lp),
+                tn!("threat"),
+                tk!(Rp),
+                tn!("Damage"),
+                tk!(At),
+                tn!("Enemies"),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (FOLD threat (SCOPE (NAME Damage) (NAME Enemies)))))",
         );
         // +\ Weight @ (til steps |> route A B)
         run_case(
             "iota-pipe",
-            &[tkn!(ScanOp, "+"), tn!("Weight"), tk!(At), tk!(Lp), tk!(Iota), tn!("steps"), tk!(PipeGt), tn!("route"), tn!("A"), tn!("B"), tk!(Rp), tk!(Eof)],
+            &[
+                tkn!(ScanOp, "+"),
+                tn!("Weight"),
+                tk!(At),
+                tk!(Lp),
+                tk!(Iota),
+                tn!("steps"),
+                tk!(PipeGt),
+                tn!("route"),
+                tn!("A"),
+                tn!("B"),
+                tk!(Rp),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (SCANEXPR + (SCOPE (NAME Weight) (PIPE (IOTAX (NAME steps)) (CALL route (NAME A) (NAME B)))))))",
         );
         // Plot , Moisture = avg/ neighbors'.Moisture
         run_case(
             "sethop-gather",
-            &[tn!("Plot"), tk!(Comma), tn!("Moisture"), tk!(Eq), tkn!(Fold, "avg"), tn!("neighbors"), tk!(Tick), tk!(Dot), tn!("Moisture"), tk!(Eof)],
+            &[
+                tn!("Plot"),
+                tk!(Comma),
+                tn!("Moisture"),
+                tk!(Eq),
+                tkn!(Fold, "avg"),
+                tn!("neighbors"),
+                tk!(Tick),
+                tk!(Dot),
+                tn!("Moisture"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (NAME Plot) (EASSIGN = (NAME Moisture) (FOLD avg (HOP (SETHOP neighbors (NAME neighbors)) (NAME Moisture))))))",
         );
         // Knockback 5   — line-start juxtaposed verb, elided subject
@@ -1433,7 +2000,13 @@ mod tests {
         // cross dist Tower Creep
         run_case(
             "cross",
-            &[tk!(Cross), tn!("dist"), tn!("Tower"), tn!("Creep"), tk!(Eof)],
+            &[
+                tk!(Cross),
+                tn!("dist"),
+                tn!("Tower"),
+                tn!("Creep"),
+                tk!(Eof),
+            ],
             "(PROGRAM (QUERY (CROSSV dist (NAME Tower) (NAME Creep))))",
         );
     }
@@ -1454,19 +2027,44 @@ mod tests {
         // ^cursor , +Tagged
         run_case(
             "alias-stmt",
-            &[tkn!(Alias, "cursor"), tk!(Comma), tk!(Plus), tn!("Tagged"), tk!(Eof)],
+            &[
+                tkn!(Alias, "cursor"),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Tagged"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (ALIAS cursor) (EADD Tagged)))",
         );
         // Bandit & !^Dead , +X   — !^name is structurally Not(Alias)
         run_case(
             "not-alias",
-            &[tn!("Bandit"), tk!(Amp), tk!(Bang), tkn!(Alias, "Dead"), tk!(Comma), tk!(Plus), tn!("X"), tk!(Eof)],
+            &[
+                tn!("Bandit"),
+                tk!(Amp),
+                tk!(Bang),
+                tkn!(Alias, "Dead"),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("X"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (AND (NAME Bandit) (NOT (ALIAS Dead))) (EADD X)))",
         );
         // ^cursor.Gold > 100 , +Rich
         run_case(
             "alias-hop",
-            &[tkn!(Alias, "cursor"), tk!(Dot), tn!("Gold"), tk!(Gt), tv!(100), tk!(Comma), tk!(Plus), tn!("Rich"), tk!(Eof)],
+            &[
+                tkn!(Alias, "cursor"),
+                tk!(Dot),
+                tn!("Gold"),
+                tk!(Gt),
+                tv!(100),
+                tk!(Comma),
+                tk!(Plus),
+                tn!("Rich"),
+                tk!(Eof),
+            ],
             "(PROGRAM (STMT (CMP > (HOP (ALIAS cursor) (NAME Gold)) (NUM 100)) (EADD Rich)))",
         );
         // Gold > ^focus
@@ -1487,7 +2085,14 @@ mod tests {
         );
         run_refuse(
             "alias-effect-refuses",
-            &[tn!("Unit"), tk!(Comma), tkn!(Alias, "Gold"), tk!(Eq), tv!(5), tk!(Eof)],
+            &[
+                tn!("Unit"),
+                tk!(Comma),
+                tkn!(Alias, "Gold"),
+                tk!(Eq),
+                tv!(5),
+                tk!(Eof),
+            ],
             "expected effect",
         );
         run_refuse(
@@ -1503,19 +2108,38 @@ mod tests {
         // def threat = Damage * Speed / Range
         run_case(
             "def-column",
-            &[tk!(Def), tn!("threat"), tk!(Eq), tn!("Damage"), tk!(Star), tn!("Speed"), tk!(Slash), tn!("Range"), tk!(Eof)],
+            &[
+                tk!(Def),
+                tn!("threat"),
+                tk!(Eq),
+                tn!("Damage"),
+                tk!(Star),
+                tn!("Speed"),
+                tk!(Slash),
+                tn!("Range"),
+                tk!(Eof),
+            ],
             "(PROGRAM (DEFSTMT threat (ARITH / (ARITH * (NAME Damage) (NAME Speed)) (NAME Range))))",
         );
         // def spread = Plot & p => +Planted
         run_case(
             "def-rule",
-            &[tk!(Def), tn!("spread"), tk!(Eq), tn!("Plot"), tk!(Amp), tn!("p"), tk!(Arrow), tk!(Plus), tn!("Planted"), tk!(Eof)],
+            &[
+                tk!(Def),
+                tn!("spread"),
+                tk!(Eq),
+                tn!("Plot"),
+                tk!(Amp),
+                tn!("p"),
+                tk!(Arrow),
+                tk!(Plus),
+                tn!("Planted"),
+                tk!(Eof),
+            ],
             "(PROGRAM (DEFSTMT spread (STMT:RULE (AND (NAME Plot) (NAME p)) (EADD Planted))))",
         );
     }
 }
-
-
 
 #[cfg(test)]
 mod semantic_tests {
@@ -1527,9 +2151,15 @@ mod semantic_tests {
         let mut interner = Interner::new();
         let tokens = lex::lex(b"#\\ Values", false, &mut interner).unwrap();
         let program = parse(&tokens, &mut interner).unwrap();
-        let NodeKind::Program(items) = program.kind else { panic!("program") };
-        let NodeKind::Query(value) = &items[0].kind else { panic!("query") };
-        let NodeKind::ScanExpr { op, .. } = value.kind else { panic!("scan") };
+        let NodeKind::Program(items) = program.kind else {
+            panic!("program")
+        };
+        let NodeKind::Query(value) = &items[0].kind else {
+            panic!("query")
+        };
+        let NodeKind::ScanExpr { op, .. } = value.kind else {
+            panic!("scan")
+        };
         assert_eq!(interner.resolve(op), "#");
     }
 
@@ -1538,9 +2168,15 @@ mod semantic_tests {
         let mut interner = Interner::new();
         let tokens = lex::lex(b"fold(-) Values", false, &mut interner).unwrap();
         let program = parse(&tokens, &mut interner).unwrap();
-        let NodeKind::Program(items) = program.kind else { panic!("program") };
-        let NodeKind::Query(value) = &items[0].kind else { panic!("query") };
-        let NodeKind::Fold { op, .. } = value.kind else { panic!("fold") };
+        let NodeKind::Program(items) = program.kind else {
+            panic!("program")
+        };
+        let NodeKind::Query(value) = &items[0].kind else {
+            panic!("query")
+        };
+        let NodeKind::Fold { op, .. } = value.kind else {
+            panic!("fold")
+        };
         assert_eq!(interner.resolve(op), "-");
     }
 
@@ -1548,8 +2184,12 @@ mod semantic_tests {
     fn query_of(src: &[u8], it: &mut Interner) -> NodeKind {
         let tokens = lex::lex(src, false, it).unwrap();
         let program = parse(&tokens, it).unwrap();
-        let NodeKind::Program(items) = program.kind else { panic!("program") };
-        let NodeKind::Query(value) = &items[0].kind else { panic!("query") };
+        let NodeKind::Program(items) = program.kind else {
+            panic!("program")
+        };
+        let NodeKind::Query(value) = &items[0].kind else {
+            panic!("query")
+        };
         value.kind.clone()
     }
 
@@ -1560,20 +2200,27 @@ mod semantic_tests {
             panic!("scan")
         };
         assert_eq!(it.resolve(op), "+");
-        let NodeKind::Name(col) = operand.kind else { panic!("operand") };
+        let NodeKind::Name(col) = operand.kind else {
+            panic!("operand")
+        };
         assert_eq!(it.resolve(col), "Damage");
     }
 
     #[test]
     fn long_scan_with_along_still_carries_the_order() {
         let mut it = Interner::new();
-        let NodeKind::ScanAlong { op, col, order } = query_of(b"scan(+) Damage along Gold", &mut it)
+        let NodeKind::ScanAlong { op, col, order } =
+            query_of(b"scan(+) Damage along Gold", &mut it)
         else {
             panic!("scan-along")
         };
         assert_eq!(it.resolve(op), "+");
-        let NodeKind::Name(c) = col.kind else { panic!("col") };
-        let NodeKind::Name(o) = order.kind else { panic!("order") };
+        let NodeKind::Name(c) = col.kind else {
+            panic!("col")
+        };
+        let NodeKind::Name(o) = order.kind else {
+            panic!("order")
+        };
         assert_eq!((it.resolve(c), it.resolve(o)), ("Damage", "Gold"));
     }
 
@@ -1581,7 +2228,9 @@ mod semantic_tests {
     fn long_scan_accepts_subtraction_and_division() {
         for (src, want) in [(&b"scan(-) Damage"[..], "-"), (&b"scan(/) Damage"[..], "/")] {
             let mut it = Interner::new();
-            let NodeKind::ScanExpr { op, .. } = query_of(src, &mut it) else { panic!("scan") };
+            let NodeKind::ScanExpr { op, .. } = query_of(src, &mut it) else {
+                panic!("scan")
+            };
             assert_eq!(it.resolve(op), want);
         }
     }
@@ -1589,10 +2238,14 @@ mod semantic_tests {
     #[test]
     fn fused_subtraction_scan_parses() {
         let mut it = Interner::new();
-        let NodeKind::ScanExpr { op, .. } = query_of(b"-\\ Damage", &mut it) else { panic!("scan") };
+        let NodeKind::ScanExpr { op, .. } = query_of(b"-\\ Damage", &mut it) else {
+            panic!("scan")
+        };
         assert_eq!(it.resolve(op), "-");
         let mut it = Interner::new();
-        let NodeKind::Fold { op, .. } = query_of(b"-/ Damage", &mut it) else { panic!("fold") };
+        let NodeKind::Fold { op, .. } = query_of(b"-/ Damage", &mut it) else {
+            panic!("fold")
+        };
         assert_eq!(it.resolve(op), "-");
     }
 
@@ -1601,6 +2254,10 @@ mod semantic_tests {
         let mut it = Interner::new();
         let tokens = lex::lex(b">/ x", false, &mut it).unwrap();
         let d = parse(&tokens, &mut it).unwrap_err();
-        assert!(d.msg.contains("unexpected token in expression"), "got {:?}", d.msg);
+        assert!(
+            d.msg.contains("unexpected token in expression"),
+            "got {:?}",
+            d.msg
+        );
     }
 }

@@ -5,8 +5,8 @@
 // lex::lex_reserved_fold; files move through fs::fs_read and fs::fs_write_commit.
 
 use crate::{
-    AliasRow, BindKind, ColType, Diag, ProtoField, Reap, RegEntry, RegEntryKind, Registry,
-    ANO_NAMESZ, ANO_NATMAX,
+    ANO_NAMESZ, ANO_NATMAX, AliasRow, BindKind, ColType, Diag, ProtoField, Reap, RegEntry,
+    RegEntryKind, Registry,
 };
 use crate::{fs, lex, num};
 use std::fmt::Write;
@@ -17,8 +17,18 @@ const ANO_NROLES: usize = 8;
 // The twelve emitter-reserved BQN identifiers wuniq refuses under the fold — exactly
 // these, never a blanket ano prefix.
 const RESV: [&str; 12] = [
-    "anoN", "anoSel", "anoIdx", "anoSaveSep", "AnoSaveNum", "AnoSaveRow", "AnoRank", "AnoScat",
-    "AnoAvg", "AnoNbrClamp", "AnoImage", "AnoInvFib",
+    "anoN",
+    "anoSel",
+    "anoIdx",
+    "anoSaveSep",
+    "AnoSaveNum",
+    "AnoSaveRow",
+    "AnoRank",
+    "AnoScat",
+    "AnoAvg",
+    "AnoNbrClamp",
+    "AnoImage",
+    "AnoInvFib",
 ];
 
 // The emitter's relationship-write staging variables are a generated family, anoRelStage<n>,
@@ -41,7 +51,11 @@ fn clip(mut s: String) -> String {
 // Inputs: 1-based line number (0: no line prefix), message body. Output: the refusal Diag
 // "registry line N: msg" (or bare msg), clipped at the C err-buffer bound.
 fn rerr(ln: i32, msg: String) -> Diag {
-    let full = if ln != 0 { format!("registry line {}: {}", ln, msg) } else { msg };
+    let full = if ln != 0 {
+        format!("registry line {}: {}", ln, msg)
+    } else {
+        msg
+    };
     Diag::refuse(clip(full))
 }
 
@@ -104,7 +118,10 @@ fn wname(w: &str, dstsz: usize, ln: i32) -> Result<String, Diag> {
 // on either surface under the fold — the name is the address.
 fn wfree(w: &str, ln: i32) -> Result<(), Diag> {
     if lex::lex_reserved_fold(w) {
-        return Err(rerr(ln, format!("'{}' is lexer-reserved and cannot name an entry", w)));
+        return Err(rerr(
+            ln,
+            format!("'{}' is lexer-reserved and cannot name an entry", w),
+        ));
     }
     Ok(())
 }
@@ -116,7 +133,10 @@ fn wuniq(reg: &Registry, name: &str, ln: i32) -> Result<(), Diag> {
         if names_eq(name, r) {
             return Err(rerr(
                 ln,
-                format!("'{}' collides with the emitter's reserved '{}' under the case fold", name, r),
+                format!(
+                    "'{}' collides with the emitter's reserved '{}' under the case fold",
+                    name, r
+                ),
             ));
         }
     }
@@ -124,13 +144,22 @@ fn wuniq(reg: &Registry, name: &str, ln: i32) -> Result<(), Diag> {
         if name.get(..p.len()).is_some_and(|head| names_eq(head, p)) {
             return Err(rerr(
                 ln,
-                format!("'{}' collides with the emitter's reserved '{}<n>' names under the case fold", name, p),
+                format!(
+                    "'{}' collides with the emitter's reserved '{}<n>' names under the case fold",
+                    name, p
+                ),
             ));
         }
     }
     for e in &reg.ents {
         if names_eq(&e.name, name) {
-            return Err(rerr(ln, format!("'{}' collides with entry '{}' under the case fold", name, e.name)));
+            return Err(rerr(
+                ln,
+                format!(
+                    "'{}' collides with entry '{}' under the case fold",
+                    name, e.name
+                ),
+            ));
         }
     }
     Ok(())
@@ -141,7 +170,13 @@ fn wuniq(reg: &Registry, name: &str, ln: i32) -> Result<(), Diag> {
 fn wuniq_alias(reg: &Registry, w: &str, ln: i32) -> Result<(), Diag> {
     for a in &reg.aliases {
         if names_eq(&a.from, w) {
-            return Err(rerr(ln, format!("alias source '{}' collides with '{}' under the case fold", w, a.from)));
+            return Err(rerr(
+                ln,
+                format!(
+                    "alias source '{}' collides with '{}' under the case fold",
+                    w, a.from
+                ),
+            ));
         }
     }
     Ok(())
@@ -183,7 +218,11 @@ fn is_uniq_col(e: &RegEntry) -> bool {
 }
 
 fn col_nums(e: &RegEntry) -> Option<&[f64]> {
-    if let RegEntryKind::Col { nums, .. } = &e.kind { Some(nums) } else { None }
+    if let RegEntryKind::Col { nums, .. } = &e.kind {
+        Some(nums)
+    } else {
+        None
+    }
 }
 
 // Inputs: a refined type. Output: its .reg kind word (Num-family only; sym/char/vec spell
@@ -212,7 +251,16 @@ fn ty_admits(ty: ColType, v: f64) -> bool {
 fn seal_ty(kw: &str, name: &str, ty: ColType, nums: &[f64], ln: i32) -> Result<(), Diag> {
     for &v in nums {
         if !ty_admits(ty, v) {
-            return Err(rerr(ln, format!("{} {}: value {} outside {}", kw, name, num::fmt_g(6, v), ty_word(ty))));
+            return Err(rerr(
+                ln,
+                format!(
+                    "{} {}: value {} outside {}",
+                    kw,
+                    name,
+                    num::fmt_g(6, v),
+                    ty_word(ty)
+                ),
+            ));
         }
     }
     Ok(())
@@ -260,8 +308,16 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
         }
         let nw = words.len();
         // raw tails into the untouched stripped line, for space-carrying payloads
-        let raw2 = if nw > 2 { Some(&line[words[2].0..]) } else { None };
-        let raw3 = if nw > 3 { Some(&line[words[3].0..]) } else { None };
+        let raw2 = if nw > 2 {
+            Some(&line[words[2].0..])
+        } else {
+            None
+        };
+        let raw3 = if nw > 3 {
+            Some(&line[words[3].0..])
+        } else {
+            None
+        };
         let k = words[0].1;
 
         match k {
@@ -280,7 +336,11 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
             }
 
             "lattice" => {
-                let wh = if nw == 3 { num::wnum(words[1].1).zip(num::wnum(words[2].1)) } else { None };
+                let wh = if nw == 3 {
+                    num::wnum(words[1].1).zip(num::wnum(words[2].1))
+                } else {
+                    None
+                };
                 let Some((w, h)) = wh.filter(|&(w, h)| w >= 0.0 && h >= 0.0) else {
                     return Err(rerr(ln, "usage: lattice <w> <h>".into()));
                 };
@@ -294,7 +354,11 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
 
             "col" | "field" => {
                 let is_field = k == "field";
-                let rows = if is_field { reg.lat_w.wrapping_mul(reg.lat_h) } else { reg.n };
+                let rows = if is_field {
+                    reg.lat_w.wrapping_mul(reg.lat_h)
+                } else {
+                    reg.n
+                };
                 if nw < 3 {
                     return Err(rerr(ln, format!("usage: {} <name> <type> <values>", k)));
                 }
@@ -317,7 +381,10 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     }
                     "sym" => {
                         if nw as i32 - 3 != rows {
-                            return Err(rerr(ln, format!("expected {} values, got {}", rows, nw as i32 - 3)));
+                            return Err(rerr(
+                                ln,
+                                format!("expected {} values, got {}", rows, nw as i32 - 3),
+                            ));
                         }
                         let mut syms = Vec::with_capacity(rows as usize);
                         for j in 0..rows as usize {
@@ -330,7 +397,10 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                             return Err(rerr(ln, format!("char {} needs a glyph string", k)));
                         };
                         if raw3.len() as i32 != rows {
-                            return Err(rerr(ln, format!("expected {} glyphs, got {}", rows, raw3.len())));
+                            return Err(rerr(
+                                ln,
+                                format!("expected {} glyphs, got {}", rows, raw3.len()),
+                            ));
                         }
                         (ColType::Char, Vec::new(), vec![raw3.to_string()])
                     }
@@ -368,11 +438,27 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     _ => return Err(rerr(ln, format!("unknown col type '{}'", ty_w))),
                 };
                 let kind = if is_field {
-                    RegEntryKind::Field { ty, nums, syms, rng: None }
+                    RegEntryKind::Field {
+                        ty,
+                        nums,
+                        syms,
+                        rng: None,
+                    }
                 } else {
-                    RegEntryKind::Col { ty, uniq: false, nums, syms, pres: None, rng: None }
+                    RegEntryKind::Col {
+                        ty,
+                        uniq: false,
+                        nums,
+                        syms,
+                        pres: None,
+                        rng: None,
+                    }
                 };
-                reg.ents.push(RegEntry { name, defval: 0.0, kind });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind,
+                });
             }
 
             "unique" => {
@@ -385,7 +471,10 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 // ceiling case is not checked), which is why range alone refuses to stack
                 // on unique — a ceiling contradicts it.
                 if nw < 3 {
-                    return Err(rerr(ln, "usage: unique <name> [num|nat|int] <values>".into()));
+                    return Err(rerr(
+                        ln,
+                        "usage: unique <name> [num|nat|int] <values>".into(),
+                    ));
                 }
                 let name = gate_name(&reg, words[1].1, ln)?;
                 let (ty, vi) = if num::wnum(words[2].1).is_none() {
@@ -393,7 +482,12 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         "num" => ColType::Num,
                         "nat" => ColType::Nat,
                         "int" => ColType::Int,
-                        w => return Err(rerr(ln, format!("unique {}: unsupported kind '{}' (num nat int)", name, w))),
+                        w => {
+                            return Err(rerr(
+                                ln,
+                                format!("unique {}: unsupported kind '{}' (num nat int)", name, w),
+                            ));
+                        }
                     };
                     (ty, 3)
                 } else {
@@ -406,7 +500,13 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         if nums[x] == nums[y] {
                             return Err(rerr(
                                 ln,
-                                format!("unique {}: value {} repeats (rows {}, {})", name, num::fmt_g(6, nums[x]), x, y),
+                                format!(
+                                    "unique {}: value {} repeats (rows {}, {})",
+                                    name,
+                                    num::fmt_g(6, nums[x]),
+                                    x,
+                                    y
+                                ),
                             ));
                         }
                     }
@@ -414,7 +514,14 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 reg.ents.push(RegEntry {
                     name,
                     defval: 0.0,
-                    kind: RegEntryKind::Col { ty, uniq: true, nums, syms: Vec::new(), pres: None, rng: None },
+                    kind: RegEntryKind::Col {
+                        ty,
+                        uniq: true,
+                        nums,
+                        syms: Vec::new(),
+                        pres: None,
+                        rng: None,
+                    },
                 });
             }
 
@@ -428,7 +535,13 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     return Err(rerr(ln, format!("pres: no column '{}'", words[1].1)));
                 };
                 if is_uniq_col(&reg.ents[idx]) {
-                    return Err(rerr(ln, format!("pres on unique column '{}': a key column is total", reg.ents[idx].name)));
+                    return Err(rerr(
+                        ln,
+                        format!(
+                            "pres on unique column '{}': a key column is total",
+                            reg.ents[idx].name
+                        ),
+                    ));
                 }
                 let mask = wnums(&words, 2, reg.n, ln)?;
                 if let RegEntryKind::Col { pres, .. } = &mut reg.ents[idx].kind {
@@ -449,19 +562,38 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 // a unique column's values are minted, never defaulted: a shared default is
                 // a standing violation of the declared injectivity
                 if is_uniq_col(&reg.ents[idx]) {
-                    return Err(rerr(ln, format!("default on unique column '{}'", reg.ents[idx].name)));
+                    return Err(rerr(
+                        ln,
+                        format!("default on unique column '{}'", reg.ents[idx].name),
+                    ));
                 }
                 // the default is the spawn fill: it must sit in the column's carrier set
-                if let RegEntryKind::Col { ty, rng, .. } | RegEntryKind::Field { ty, rng, .. } = &reg.ents[idx].kind {
+                if let RegEntryKind::Col { ty, rng, .. } | RegEntryKind::Field { ty, rng, .. } =
+                    &reg.ents[idx].kind
+                {
                     let name = &reg.ents[idx].name;
                     if !ty_admits(*ty, v) {
-                        return Err(rerr(ln, format!("default {}: value {} outside {}", name, num::fmt_g(6, v), ty_word(*ty))));
+                        return Err(rerr(
+                            ln,
+                            format!(
+                                "default {}: value {} outside {}",
+                                name,
+                                num::fmt_g(6, v),
+                                ty_word(*ty)
+                            ),
+                        ));
                     }
                     if let Some((lo, hi)) = rng {
                         if v < *lo || v > *hi {
                             return Err(rerr(
                                 ln,
-                                format!("default {}: value {} outside {}..{}", name, num::fmt_g(6, v), num::fmt_g(6, *lo), num::fmt_g(6, *hi)),
+                                format!(
+                                    "default {}: value {} outside {}..{}",
+                                    name,
+                                    num::fmt_g(6, v),
+                                    num::fmt_g(6, *lo),
+                                    num::fmt_g(6, *hi)
+                                ),
                             ));
                         }
                     }
@@ -475,13 +607,19 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     return Err(rerr(ln, "usage: range <col> <lo> <hi>".into()));
                 }
                 let idx = find_ent(&reg, words[1].1).filter(|&i| {
-                    matches!(reg.ents[i].kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. })
+                    matches!(
+                        reg.ents[i].kind,
+                        RegEntryKind::Col { .. } | RegEntryKind::Field { .. }
+                    )
                 });
                 let Some(idx) = idx else {
                     return Err(rerr(ln, format!("range: no column '{}'", words[1].1)));
                 };
                 if is_uniq_col(&reg.ents[idx]) {
-                    return Err(rerr(ln, format!("range on unique column '{}'", reg.ents[idx].name)));
+                    return Err(rerr(
+                        ln,
+                        format!("range on unique column '{}'", reg.ents[idx].name),
+                    ));
                 }
                 let (lo, hi) = match (num::wnum(words[2].1), num::wnum(words[3].1)) {
                     (Some(lo), Some(hi)) => (lo, hi),
@@ -490,20 +628,38 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 };
                 let name = reg.ents[idx].name.clone();
                 if lo > hi {
-                    return Err(rerr(ln, format!("range {}: lo {} above hi {}", name, num::fmt_g(6, lo), num::fmt_g(6, hi))));
+                    return Err(rerr(
+                        ln,
+                        format!(
+                            "range {}: lo {} above hi {}",
+                            name,
+                            num::fmt_g(6, lo),
+                            num::fmt_g(6, hi)
+                        ),
+                    ));
                 }
                 let is_field = matches!(reg.ents[idx].kind, RegEntryKind::Field { .. });
-                let crows = if is_field { reg.lat_w.wrapping_mul(reg.lat_h) } else { reg.n };
+                let crows = if is_field {
+                    reg.lat_w.wrapping_mul(reg.lat_h)
+                } else {
+                    reg.n
+                };
                 let defval = reg.ents[idx].defval;
-                let (RegEntryKind::Col { ty, nums, rng, .. } | RegEntryKind::Field { ty, nums, rng, .. }) =
-                    &mut reg.ents[idx].kind
+                let (RegEntryKind::Col { ty, nums, rng, .. }
+                | RegEntryKind::Field { ty, nums, rng, .. }) = &mut reg.ents[idx].kind
                 else {
                     unreachable!()
                 };
                 match ty {
-                    ColType::Bool => return Err(rerr(ln, format!("range on bool column '{}'", name))),
-                    ColType::Sym => return Err(rerr(ln, format!("range on sym column '{}'", name))),
-                    ColType::Char => return Err(rerr(ln, format!("range on char column '{}'", name))),
+                    ColType::Bool => {
+                        return Err(rerr(ln, format!("range on bool column '{}'", name)));
+                    }
+                    ColType::Sym => {
+                        return Err(rerr(ln, format!("range on sym column '{}'", name)));
+                    }
+                    ColType::Char => {
+                        return Err(rerr(ln, format!("range on char column '{}'", name)));
+                    }
                     _ => {}
                 }
                 if crows > 0 && nums.len() as i64 == 2 * crows as i64 {
@@ -516,7 +672,13 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     if v < lo || v > hi {
                         return Err(rerr(
                             ln,
-                            format!("range {}: value {} outside {}..{}", name, num::fmt_g(6, v), num::fmt_g(6, lo), num::fmt_g(6, hi)),
+                            format!(
+                                "range {}: value {} outside {}..{}",
+                                name,
+                                num::fmt_g(6, v),
+                                num::fmt_g(6, lo),
+                                num::fmt_g(6, hi)
+                            ),
                         ));
                     }
                 }
@@ -524,7 +686,13 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 if defval < lo || defval > hi {
                     return Err(rerr(
                         ln,
-                        format!("range {}: default {} outside {}..{}", name, num::fmt_g(6, defval), num::fmt_g(6, lo), num::fmt_g(6, hi)),
+                        format!(
+                            "range {}: default {} outside {}..{}",
+                            name,
+                            num::fmt_g(6, defval),
+                            num::fmt_g(6, lo),
+                            num::fmt_g(6, hi)
+                        ),
                     ));
                 }
                 *rng = Some((lo, hi));
@@ -537,14 +705,18 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 // keyed form (rel only): data is always numeric, so two names before it mean
                 // the first is the key column and the second the declared name — LL(1)
                 let is_rel = k == "rel";
-                let keyed = is_rel && nw >= 3 && num::wnum(words[2].1).is_none() && words[2].1 != "|";
+                let keyed =
+                    is_rel && nw >= 3 && num::wnum(words[2].1).is_none() && words[2].1 != "|";
                 let ni = if keyed { 2 } else { 1 };
                 let name = gate_name(&reg, words[ni].1, ln)?;
                 let mut key_of = None;
                 if keyed {
                     let kc = find_ent(&reg, words[1].1).filter(|&i| is_uniq_col(&reg.ents[i]));
                     let Some(kc) = kc else {
-                        return Err(rerr(ln, format!("rel {}: key '{}' is not a unique column", name, words[1].1)));
+                        return Err(rerr(
+                            ln,
+                            format!("rel {}: key '{}' is not a unique column", name, words[1].1),
+                        ));
                     };
                     let kname = reg.ents[kc].name.clone();
                     // the key column's declared carrier governs which values it admits — nat excludes
@@ -553,11 +725,18 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 }
                 let vals = wnums(&words, ni + 1, reg.n, ln)?;
                 let kind = if is_rel {
-                    RegEntryKind::Rel { targets: vals, key_of }
+                    RegEntryKind::Rel {
+                        targets: vals,
+                        key_of,
+                    }
                 } else {
                     RegEntryKind::AliasMask { mask: vals }
                 };
-                reg.ents.push(RegEntry { name, defval: 0.0, kind });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind,
+                });
             }
 
             "srel" => {
@@ -571,7 +750,10 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 if keyed {
                     let kc = find_ent(&reg, words[1].1).filter(|&i| is_uniq_col(&reg.ents[i]));
                     let Some(kc) = kc else {
-                        return Err(rerr(ln, format!("srel {}: key '{}' is not a unique column", name, words[1].1)));
+                        return Err(rerr(
+                            ln,
+                            format!("srel {}: key '{}' is not a unique column", name, words[1].1),
+                        ));
                     };
                     key_of = Some(reg.ents[kc].name.clone());
                 }
@@ -587,7 +769,15 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         }
                     }
                 }
-                reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::SRel { fib, inv_of: None, key_of } });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::SRel {
+                        fib,
+                        inv_of: None,
+                        key_of,
+                    },
+                });
             }
 
             "inv" => {
@@ -612,7 +802,10 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 let mut kc_nums: Option<Vec<f64>> = None;
                 if let Some(kname) = rel_key {
                     let Some(kc) = find_ent(&reg, &kname) else {
-                        return Err(rerr(ln, format!("inv {}: key column '{}' missing", name, kname)));
+                        return Err(rerr(
+                            ln,
+                            format!("inv {}: key column '{}' missing", name, kname),
+                        ));
                     };
                     kc_nums = col_nums(&reg.ents[kc]).map(<[f64]>::to_vec);
                     key_of = Some(kname);
@@ -629,7 +822,15 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     }
                     fib.push(f);
                 }
-                reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::SRel { fib, inv_of: Some(inv_of), key_of } });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::SRel {
+                        fib,
+                        inv_of: Some(inv_of),
+                        key_of,
+                    },
+                });
             }
 
             "bind" => {
@@ -646,7 +847,11 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     bk => return Err(rerr(ln, format!("unknown bind kind '{}'", bk))),
                 };
                 let vals = wnums(&words, 3, expect, ln)?;
-                reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Bind { kind, vals } });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Bind { kind, vals },
+                });
             }
 
             "fn" => {
@@ -655,7 +860,11 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 }
                 let name = gate_name(&reg, words[1].1, ln)?;
                 let body = raw2.map(str::to_string); // verbatim BQN body convention
-                reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Fn { body } });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Fn { body },
+                });
             }
 
             // the spelling alias: one hop, no transitivity, outranked by real entries; `ja` and
@@ -673,10 +882,16 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 // mask over the live column, recomputed at each use. The word is an entry
                 // name and folds; the value is a value and never does.
                 if nw != 4 {
-                    return Err(rerr(ln, "usage: as <word> <name> | as <word> <col> <value>".into()));
+                    return Err(rerr(
+                        ln,
+                        "usage: as <word> <name> | as <word> <col> <value>".into(),
+                    ));
                 }
                 let cidx = find_ent(&reg, words[2].1).filter(|&i| {
-                    matches!(reg.ents[i].kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. })
+                    matches!(
+                        reg.ents[i].kind,
+                        RegEntryKind::Col { .. } | RegEntryKind::Field { .. }
+                    )
                 });
                 let Some(cidx) = cidx else {
                     return Err(rerr(ln, format!("as: no column '{}'", words[2].1)));
@@ -687,11 +902,21 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                     _ => unreachable!(),
                 };
                 if cty == ColType::Char {
-                    return Err(rerr(ln, "as: derived tag over a char column is unsupported".into()));
+                    return Err(rerr(
+                        ln,
+                        "as: derived tag over a char column is unsupported".into(),
+                    ));
                 }
-                let crows = if is_field { reg.lat_w.wrapping_mul(reg.lat_h) } else { reg.n };
+                let crows = if is_field {
+                    reg.lat_w.wrapping_mul(reg.lat_h)
+                } else {
+                    reg.n
+                };
                 if cty == ColType::Num && crows > 0 && cnn as i64 == 2 * crows as i64 {
-                    return Err(rerr(ln, "as: derived tag over a vec column is unsupported".into()));
+                    return Err(rerr(
+                        ln,
+                        "as: derived tag over a vec column is unsupported".into(),
+                    ));
                 }
                 let name = gate_name(&reg, words[1].1, ln)?;
                 let col = wname(words[2].1, ANO_NAMESZ, ln)?; // the word AS WRITTEN
@@ -703,7 +928,12 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 reg.ents.push(RegEntry {
                     name,
                     defval: 0.0,
-                    kind: RegEntryKind::Tag { col, carrier_ty: cty, num: num_v, sym: sym_v },
+                    kind: RegEntryKind::Tag {
+                        col,
+                        carrier_ty: cty,
+                        num: num_v,
+                        sym: sym_v,
+                    },
                 });
             }
 
@@ -715,7 +945,10 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 }
                 const KNOWN: [&str; 5] = ["keys", "id", "parent", "proto", "pos"];
                 if !KNOWN.contains(&words[1].1) {
-                    return Err(rerr(ln, format!("unknown role '{}' (keys id parent proto pos)", words[1].1)));
+                    return Err(rerr(
+                        ln,
+                        format!("unknown role '{}' (keys id parent proto pos)", words[1].1),
+                    ));
                 }
                 let cidx = find_ent(&reg, words[2].1)
                     .filter(|&i| matches!(reg.ents[i].kind, RegEntryKind::Col { .. }));
@@ -745,24 +978,42 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         Some(p) => p + 1 == fw.len(),
                     };
                     if bad {
-                        return Err(rerr(ln, format!("def {}: field '{}' is not <col>=<v>", name, fw)));
+                        return Err(rerr(
+                            ln,
+                            format!("def {}: field '{}' is not <col>=<v>", name, fw),
+                        ));
                     }
                     let p = eq.unwrap();
                     let (cw, vw) = (&fw[..p], &fw[p + 1..]);
                     let cidx = find_ent(&reg, cw).filter(|&i| {
-                        matches!(reg.ents[i].kind, RegEntryKind::Col { .. } | RegEntryKind::Rel { .. })
+                        matches!(
+                            reg.ents[i].kind,
+                            RegEntryKind::Col { .. } | RegEntryKind::Rel { .. }
+                        )
                     });
                     let Some(cidx) = cidx else {
                         return Err(rerr(ln, format!("def {}: no column '{}'", name, cw)));
                     };
                     let cname = reg.ents[cidx].name.clone();
                     if is_uniq_col(&reg.ents[cidx]) {
-                        return Err(rerr(ln, format!("def {}: unique column '{}' is minted, not defaulted", name, cname)));
+                        return Err(rerr(
+                            ln,
+                            format!(
+                                "def {}: unique column '{}' is minted, not defaulted",
+                                name, cname
+                            ),
+                        ));
                     }
                     // the id/keys role column mints at spawn even when merely magic-named — a
                     // proto field on it would be silently outranked by the mint (mid-load view)
                     if reg_role(&reg, "keys") == Some(cidx) || reg_role(&reg, "id") == Some(cidx) {
-                        return Err(rerr(ln, format!("def {}: key column '{}' is minted, not defaulted", name, cname)));
+                        return Err(rerr(
+                            ln,
+                            format!(
+                                "def {}: key column '{}' is minted, not defaulted",
+                                name, cname
+                            ),
+                        ));
                     }
                     let (is_rel, cty, cnn, crng) = match &reg.ents[cidx].kind {
                         RegEntryKind::Col { ty, nums, rng, .. } => (false, *ty, nums.len(), *rng),
@@ -770,17 +1021,35 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         _ => unreachable!(),
                     };
                     let crows = reg.n;
-                    if !is_rel && cty == ColType::Num && crows > 0 && cnn as i64 == 2 * crows as i64 {
-                        return Err(rerr(ln, format!("def {}: proto field over vec column '{}' unsupported", name, cname)));
+                    if !is_rel && cty == ColType::Num && crows > 0 && cnn as i64 == 2 * crows as i64
+                    {
+                        return Err(rerr(
+                            ln,
+                            format!(
+                                "def {}: proto field over vec column '{}' unsupported",
+                                name, cname
+                            ),
+                        ));
                     }
                     if !is_rel && cty == ColType::Char {
-                        return Err(rerr(ln, format!("def {}: proto field over char column '{}' unsupported", name, cname)));
+                        return Err(rerr(
+                            ln,
+                            format!(
+                                "def {}: proto field over char column '{}' unsupported",
+                                name, cname
+                            ),
+                        ));
                     }
                     let mut num_v = 0.0;
                     if is_rel || cty != ColType::Sym {
                         match num::wnum(vw) {
                             Some(x) => num_v = x,
-                            None => return Err(rerr(ln, format!("def {}: bad number '{}' for '{}'", name, vw, cname))),
+                            None => {
+                                return Err(rerr(
+                                    ln,
+                                    format!("def {}: bad number '{}' for '{}'", name, vw, cname),
+                                ));
+                            }
                         }
                     }
                     // a proto value is spawn fill layer one: it must sit in the carrier set
@@ -788,23 +1057,44 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                         if !ty_admits(cty, num_v) {
                             return Err(rerr(
                                 ln,
-                                format!("def {}: value {} outside {} for '{}'", name, num::fmt_g(6, num_v), ty_word(cty), cname),
+                                format!(
+                                    "def {}: value {} outside {} for '{}'",
+                                    name,
+                                    num::fmt_g(6, num_v),
+                                    ty_word(cty),
+                                    cname
+                                ),
                             ));
                         }
                         if let Some((lo, hi)) = crng {
                             if num_v < lo || num_v > hi {
                                 return Err(rerr(
                                     ln,
-                                    format!("def {}: value {} outside {}..{} for '{}'", name, num::fmt_g(6, num_v), num::fmt_g(6, lo), num::fmt_g(6, hi), cname),
+                                    format!(
+                                        "def {}: value {} outside {}..{} for '{}'",
+                                        name,
+                                        num::fmt_g(6, num_v),
+                                        num::fmt_g(6, lo),
+                                        num::fmt_g(6, hi),
+                                        cname
+                                    ),
                                 ));
                             }
                         }
                     }
                     let col = wname(&cname, ANO_NAMESZ, ln)?;
                     let spelling = wname(vw, ANO_NAMESZ, ln)?;
-                    fields.push(ProtoField { col, spelling, num: num_v });
+                    fields.push(ProtoField {
+                        col,
+                        spelling,
+                        num: num_v,
+                    });
                 }
-                reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Proto { fields } });
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Proto { fields },
+                });
             }
 
             "reap" => {
@@ -815,7 +1105,11 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 if reg.reap.is_some() {
                     return Err(rerr(ln, "reap redeclared".into()));
                 }
-                reg.reap = Some(if words[1].1 == "seal" { Reap::Seal } else { Reap::Host });
+                reg.reap = Some(if words[1].1 == "seal" {
+                    Reap::Seal
+                } else {
+                    Reap::Host
+                });
             }
 
             _ => return Err(rerr(ln, format!("unknown kind '{}'", k))),
@@ -832,7 +1126,9 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
 pub fn names_eq(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
     a.len() == b.len()
-        && a.iter().zip(b).all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
 }
 
 // Inputs: registry, surface word. Output: entry INDEX — entry names first (declaration
@@ -873,7 +1169,15 @@ pub fn reg_role(reg: &Registry, role: &str) -> Option<usize> {
 // Inputs: sink, keyword (col/field), entry name, type, values, rows. Output: one column
 // line — sym words, the char glyph run, the structurally re-detected pair column as vec,
 // else num/bool with dnum-canonical values. Trailing newline included.
-fn dump_column(b: &mut String, kw: &str, name: &str, ty: ColType, nums: &[f64], syms: &[String], rows: i32) {
+fn dump_column(
+    b: &mut String,
+    kw: &str,
+    name: &str,
+    ty: ColType,
+    nums: &[f64],
+    syms: &[String],
+    rows: i32,
+) {
     match ty {
         ColType::Sym => {
             let _ = write!(b, "{} {} sym", kw, name);
@@ -883,7 +1187,13 @@ fn dump_column(b: &mut String, kw: &str, name: &str, ty: ColType, nums: &[f64], 
             }
         }
         ColType::Char => {
-            let _ = write!(b, "{} {} char {}", kw, name, syms.first().map(String::as_str).unwrap_or(""));
+            let _ = write!(
+                b,
+                "{} {} char {}",
+                kw,
+                name,
+                syms.first().map(String::as_str).unwrap_or("")
+            );
         }
         _ => {
             if rows > 0 && nums.len() as i64 == 2 * rows as i64 {
@@ -930,7 +1240,14 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
         // against the range at the range line, so default must precede it on reload
         let mut ent_rng: Option<(f64, f64)> = None;
         match &e.kind {
-            RegEntryKind::Col { ty, uniq, nums, syms, pres, rng } => {
+            RegEntryKind::Col {
+                ty,
+                uniq,
+                nums,
+                syms,
+                pres,
+                rng,
+            } => {
                 if *uniq {
                     // the kind word rides the line only when refined: bare unique = num
                     match ty {
@@ -959,8 +1276,21 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
                     ent_rng = *rng;
                 }
             }
-            RegEntryKind::Field { ty, nums, syms, rng } => {
-                dump_column(&mut b, "field", &e.name, *ty, nums, syms, reg.lat_w.wrapping_mul(reg.lat_h));
+            RegEntryKind::Field {
+                ty,
+                nums,
+                syms,
+                rng,
+            } => {
+                dump_column(
+                    &mut b,
+                    "field",
+                    &e.name,
+                    *ty,
+                    nums,
+                    syms,
+                    reg.lat_w.wrapping_mul(reg.lat_h),
+                );
                 ent_rng = *rng;
             }
             RegEntryKind::Rel { targets, key_of } => {
@@ -986,7 +1316,11 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
                 }
                 b.push('\n');
             }
-            RegEntryKind::SRel { fib, inv_of, key_of } => {
+            RegEntryKind::SRel {
+                fib,
+                inv_of,
+                key_of,
+            } => {
                 if let Some(iv) = inv_of {
                     // fibers recompute at load, never dumped
                     let _ = writeln!(b, "inv {} {}", e.name, iv);
@@ -1034,7 +1368,12 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
                     let _ = writeln!(b, "fn {}", e.name);
                 }
             },
-            RegEntryKind::Tag { col, carrier_ty, num: nv, sym } => {
+            RegEntryKind::Tag {
+                col,
+                carrier_ty,
+                num: nv,
+                sym,
+            } => {
                 let _ = write!(b, "as {} {} ", e.name, col);
                 if *carrier_ty == ColType::Sym {
                     b.push_str(sym.as_deref().unwrap_or(""));
@@ -1068,6 +1407,9 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
     }
     match fs::fs_write_commit(path, b.as_bytes()) {
         Ok(()) => Ok(()),
-        Err(e) => Err(rerr(0, format!("cannot write '{}': {}", path, fs::strerror(&e)))),
+        Err(e) => Err(rerr(
+            0,
+            format!("cannot write '{}': {}", path, fs::strerror(&e)),
+        )),
     }
 }

@@ -62,7 +62,13 @@ impl Cell {
     pub fn blank() -> Cell {
         let mut g = [0u8; 8];
         g[0] = b' ';
-        Cell { g, attr: 0, fg: 0, bg: 0, cont: false }
+        Cell {
+            g,
+            attr: 0,
+            fg: 0,
+            bg: 0,
+            cont: false,
+        }
     }
 
     // The glyph's NUL-terminated byte run.
@@ -74,7 +80,13 @@ impl Cell {
 
 // All-zero cell used for fresh grids and as the base of continuation cells.
 fn cell_zeroed() -> Cell {
-    Cell { g: [0; 8], attr: 0, fg: 0, bg: 0, cont: false }
+    Cell {
+        g: [0; 8],
+        attr: 0,
+        fg: 0,
+        bg: 0,
+        cont: false,
+    }
 }
 
 // The terminal state (kore.c `T`): grid row-major grid[y*cols+x]; out is the frame
@@ -133,14 +145,30 @@ pub struct Ev {
 
 impl Ev {
     pub fn none() -> Ev {
-        Ev { etype: EV_NONE, key: 0, mkind: 0, mx: 0, my: 0, ch: 0, u8b: [0; 8] }
+        Ev {
+            etype: EV_NONE,
+            key: 0,
+            mkind: 0,
+            mx: 0,
+            my: 0,
+            ch: 0,
+            u8b: [0; 8],
+        }
     }
 }
 
 impl Term {
     // A zero-size Term; size()/headless() allocate the grid.
     pub fn new() -> Term {
-        Term { rows: 0, cols: 0, grid: Vec::new(), out: Vec::new(), cur_x: 0, cur_y: 0, cur_shape: 0 }
+        Term {
+            rows: 0,
+            cols: 0,
+            grid: Vec::new(),
+            out: Vec::new(),
+            cur_x: 0,
+            cur_y: 0,
+            cur_shape: 0,
+        }
     }
 
     // The --check render target: an in-memory grid, no tty (C sets T.rows=200, T.cols=400).
@@ -310,7 +338,14 @@ impl Term {
         }
         if !title.is_empty() {
             self.put(x + 2, y, a | A_BOLD, fg, "╴".as_bytes(), 1);
-            let tw = self.put(x + 3, y, if focused { A_BOLD } else { 0 }, fg, title.as_bytes(), w - 6);
+            let tw = self.put(
+                x + 3,
+                y,
+                if focused { A_BOLD } else { 0 },
+                fg,
+                title.as_bytes(),
+                w - 6,
+            );
             self.put(x + 3 + tw, y, a | A_BOLD, fg, "╶".as_bytes(), 1);
         }
     }
@@ -328,7 +363,11 @@ impl Term {
             thumb = 1;
         }
         let max_top = total - vis;
-        let mut at = if max_top > 0 { top * (track - thumb) / max_top } else { 0 };
+        let mut at = if max_top > 0 {
+            top * (track - thumb) / max_top
+        } else {
+            0
+        };
         if at > track - thumb {
             at = track - thumb;
         }
@@ -388,7 +427,12 @@ impl Term {
         }
         self.out.extend_from_slice(b"\x1b[0m");
         if self.cur_shape != 0 {
-            let park = format!("\x1b[{};{}H\x1b[{} q\x1b[?25h", self.cur_y + 1, self.cur_x + 1, self.cur_shape);
+            let park = format!(
+                "\x1b[{};{}H\x1b[{} q\x1b[?25h",
+                self.cur_y + 1,
+                self.cur_x + 1,
+                self.cur_shape
+            );
             self.out.extend_from_slice(park.as_bytes());
         }
         sys::write_stdout(&self.out);

@@ -59,7 +59,10 @@ fn live(src: &str, reg: &Registry, env: &AliasEnvironment) -> String {
 }
 
 fn pairs(members: &[(&str, &str)]) -> Vec<(String, String)> {
-    members.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    members
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
 }
 
 // A private directory under the system temp root, unique per test and per process.
@@ -102,7 +105,8 @@ fn multi_gather_one_snapshot() {
 fn resolver_frozen_snapshot_and_next_barrier() {
     let reg = registry();
     let mut env = AliasEnvironment::for_registry(&reg);
-    env.install_resolver(&reg, "focus", "input.entity", &pairs(&[("entity", "1")])).unwrap();
+    env.install_resolver(&reg, "focus", "input.entity", &pairs(&[("entity", "1")]))
+        .unwrap();
     let frozen = env.snapshot(&reg).expect("snapshot");
 
     let src = "^focus , Silver = 0\n^focus , Bronze = 9\n";
@@ -111,7 +115,8 @@ fn resolver_frozen_snapshot_and_next_barrier() {
     assert!(first.contains("\ns2m ← ((↕anoN)=1)\n"), "{}", first);
 
     // the host rebinds the same stem: the next emission observes the new frozen input
-    env.install_resolver(&reg, "focus", "input.entity", &pairs(&[("entity", "2")])).unwrap();
+    env.install_resolver(&reg, "focus", "input.entity", &pairs(&[("entity", "2")]))
+        .unwrap();
     let second = live(src, &reg, &env);
     assert!(second.contains("\ns1m ← ((↕anoN)=2)\n"), "{}", second);
     assert!(second.contains("\ns2m ← ((↕anoN)=2)\n"), "{}", second);
@@ -140,11 +145,17 @@ fn lifecycle_across_emissions() {
 
     let mut env = AliasEnvironment::for_registry(&reg);
     env.install_binding(&reg, "gold", "Silver").unwrap();
-    assert_eq!(live(sigiled, &reg, &env), live("Silver , Silver = 0", &reg, &empty));
+    assert_eq!(
+        live(sigiled, &reg, &env),
+        live("Silver , Silver = 0", &reg, &empty)
+    );
     assert_eq!(live(bare, &reg, &env), bare_plan);
 
     env.install_binding(&reg, "gold", "Bronze").unwrap();
-    assert_eq!(live(sigiled, &reg, &env), live("Bronze , Silver = 0", &reg, &empty));
+    assert_eq!(
+        live(sigiled, &reg, &env),
+        live("Bronze , Silver = 0", &reg, &empty)
+    );
     assert_eq!(live(bare, &reg, &env), bare_plan);
 
     assert!(env.delete("GOLD"));
@@ -163,7 +174,8 @@ fn version_preserved_across_reload() {
     let mut env = AliasEnvironment::for_registry(&reg);
     env.install_binding(&reg, "focus", "Gold").unwrap();
     env.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).unwrap();
-    env.install_resolver(&reg, "here", "input.entity", &pairs(&[("entity", "2")])).unwrap();
+    env.install_resolver(&reg, "here", "input.entity", &pairs(&[("entity", "2")]))
+        .unwrap();
     assert_eq!(env.version(), 3);
 
     env.save(&path).unwrap();
@@ -184,7 +196,8 @@ fn steel_cli_sidecar_end_to_end() {
 
     let mut env = AliasEnvironment::for_registry(&reg);
     env.install_mask(&reg, "focus", &[0.0, 1.0, 0.0]).unwrap();
-    env.save(steel::alias::sidecar_path(reg_path.to_str().unwrap())).unwrap();
+    env.save(steel::alias::sidecar_path(reg_path.to_str().unwrap()))
+        .unwrap();
 
     // the expect pin is the observation: silver moves on row 1 only if `^focus` reached the
     // sidecar mask; the trailing query prints the post-state so the observation is also visible

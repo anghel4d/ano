@@ -115,7 +115,11 @@ pub enum OpDesc {
 
 impl ReducerDesc {
     pub fn direct_step(&self) -> Option<&'static str> {
-        if self.step.is_empty() { None } else { Some(self.step) }
+        if self.step.is_empty() {
+            None
+        } else {
+            Some(self.step)
+        }
     }
 
     /// The declaration `step` names, for the emitter's prologue.  `None` when the step is a BQN
@@ -203,7 +207,10 @@ impl OpDesc {
 }
 
 fn is_builtin(spelling: &str) -> bool {
-    matches!(spelling, "+" | "-" | "*" | "/" | "|" | "&" | "max" | "min" | "#" | "avg")
+    matches!(
+        spelling,
+        "+" | "-" | "*" | "/" | "|" | "&" | "max" | "min" | "#" | "avg"
+    )
 }
 
 fn admits(desc: &OpDesc, form: Form) -> bool {
@@ -219,8 +226,18 @@ fn admits(desc: &OpDesc, form: Form) -> bool {
 /// Canonical spelling × form is a bijection onto descriptors: every emitter retrieves the same
 /// object the resolver checked, so a second table cannot drift into existence.
 pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
-    let number = |bqn| Some(TypedIdentity { carrier: Carrier::Number, bqn });
-    let mask = |bqn| Some(TypedIdentity { carrier: Carrier::Mask, bqn });
+    let number = |bqn| {
+        Some(TypedIdentity {
+            carrier: Carrier::Number,
+            bqn,
+        })
+    };
+    let mask = |bqn| {
+        Some(TypedIdentity {
+            carrier: Carrier::Mask,
+            bqn,
+        })
+    };
     let homogeneous = |step, body, carrier, identity, associativity, commutativity| {
         OpDesc::Reducer(ReducerDesc {
             spelling: spelling.to_string(),
@@ -244,7 +261,14 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
         })
     };
     let desc = match spelling {
-        "+" => homogeneous("+", "", Carrier::Number, number("0"), LawStatus::Holds, LawStatus::Holds),
+        "+" => homogeneous(
+            "+",
+            "",
+            Carrier::Number,
+            number("0"),
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
         "-" => homogeneous(
             "-",
             "",
@@ -253,7 +277,14 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
             LawStatus::DoesNotHold,
             LawStatus::DoesNotHold,
         ),
-        "*" => homogeneous("×", "", Carrier::Number, number("1"), LawStatus::Holds, LawStatus::Holds),
+        "*" => homogeneous(
+            "×",
+            "",
+            Carrier::Number,
+            number("1"),
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
         "/" => homogeneous(
             "÷",
             "",
@@ -262,11 +293,39 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
             LawStatus::DoesNotHold,
             LawStatus::DoesNotHold,
         ),
-        "|" => homogeneous("∨", "", Carrier::Mask, mask("0"), LawStatus::Holds, LawStatus::Holds),
-        "&" => homogeneous("∧", "", Carrier::Mask, mask("1"), LawStatus::Holds, LawStatus::Holds),
+        "|" => homogeneous(
+            "∨",
+            "",
+            Carrier::Mask,
+            mask("0"),
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
+        "&" => homogeneous(
+            "∧",
+            "",
+            Carrier::Mask,
+            mask("1"),
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
         // The current numeric extrema descriptor declares no empty identity and never invents ±∞.
-        "max" => homogeneous("⌈", "", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
-        "min" => homogeneous("⌊", "", Carrier::Number, None, LawStatus::Holds, LawStatus::Holds),
+        "max" => homogeneous(
+            "⌈",
+            "",
+            Carrier::Number,
+            None,
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
+        "min" => homogeneous(
+            "⌊",
+            "",
+            Carrier::Number,
+            None,
+            LawStatus::Holds,
+            LawStatus::Holds,
+        ),
         // A9 over the char carrier: `⌈` and `⌊` refuse characters, so the step steps through code
         // points.  `@` is the null character, `c-@` its code point and `@+n` the character at one.
         // The order is the code-point order, and it has no identity either — there is no greatest
@@ -291,12 +350,24 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
             MachineKind::Count,
             Carrier::Presence,
             Carrier::Number,
-            EmptyFold::Identity(TypedIdentity { carrier: Carrier::Number, bqn: "0" }),
+            EmptyFold::Identity(TypedIdentity {
+                carrier: Carrier::Number,
+                bqn: "0",
+            }),
         ),
-        "avg" => machine(MachineKind::Average, Carrier::Number, Carrier::Number, EmptyFold::NoRow),
+        "avg" => machine(
+            MachineKind::Average,
+            Carrier::Number,
+            Carrier::Number,
+            EmptyFold::NoRow,
+        ),
         _ => return None,
     };
-    if admits(&desc, form) { Some(desc) } else { None }
+    if admits(&desc, form) {
+        Some(desc)
+    } else {
+        None
+    }
 }
 
 /// A registered `fn` defaults to a dyadic numeric reducer with undeclared laws and no identity.
@@ -342,14 +413,23 @@ pub fn resolve_head(
         ("&", Carrier::Char) | ("min", Carrier::Char) => "charmin",
         (name, Carrier::Number) if registered_fn => name,
         (name, _) if registered_fn || is_builtin(name) => {
-            return Err(format!("reducer '{}' is not defined on {:?}", name, carrier));
+            return Err(format!(
+                "reducer '{}' is not defined on {:?}",
+                name, carrier
+            ));
         }
         (name, _) => return Err(format!("unknown reducer '{}'", name)),
     };
     let desc = match canonical(head, form) {
         Some(desc) => desc,
         None if registered_fn && !is_builtin(head) => registered(head),
-        None => return Err(format!("reducer '{}' has no {} form", spelling, form.name())),
+        None => {
+            return Err(format!(
+                "reducer '{}' has no {} form",
+                spelling,
+                form.name()
+            ));
+        }
     };
     validate_strategy(&desc, Strategy::ExactLeft)?;
     Ok(desc)
@@ -470,8 +550,14 @@ mod tests {
 
     #[test]
     fn greater_and_lesser_are_carrier_directed() {
-        assert_eq!(head("|", Carrier::Mask).reducer().unwrap().direct_step(), Some("∨"));
-        assert_eq!(head("|", Carrier::Number).reducer().unwrap().direct_step(), Some("⌈"));
+        assert_eq!(
+            head("|", Carrier::Mask).reducer().unwrap().direct_step(),
+            Some("∨")
+        );
+        assert_eq!(
+            head("|", Carrier::Number).reducer().unwrap().direct_step(),
+            Some("⌈")
+        );
         assert_eq!(head("&", Carrier::Mask).empty_identity(), Some("1"));
         assert_eq!(head("&", Carrier::Number).empty_identity(), None);
         // A9 over the char carrier is a derivation, not a fourth glyph: one more instance of the
@@ -530,14 +616,26 @@ mod tests {
         let or = head("|", Carrier::Mask);
         assert_eq!(
             and.reducer().unwrap().identity,
-            Some(TypedIdentity { carrier: Carrier::Mask, bqn: "1" })
+            Some(TypedIdentity {
+                carrier: Carrier::Mask,
+                bqn: "1"
+            })
         );
         assert_eq!(
             or.reducer().unwrap().identity,
-            Some(TypedIdentity { carrier: Carrier::Mask, bqn: "0" })
+            Some(TypedIdentity {
+                carrier: Carrier::Mask,
+                bqn: "0"
+            })
         );
-        assert_eq!(head("max", Carrier::Number).reducer().unwrap().identity, None);
-        assert_eq!(head("min", Carrier::Number).reducer().unwrap().identity, None);
+        assert_eq!(
+            head("max", Carrier::Number).reducer().unwrap().identity,
+            None
+        );
+        assert_eq!(
+            head("min", Carrier::Number).reducer().unwrap().identity,
+            None
+        );
         assert_eq!(head("#", Carrier::Presence).empty_identity(), Some("0"));
         assert_eq!(head("avg", Carrier::Number).empty_identity(), None);
     }
@@ -588,8 +686,15 @@ mod tests {
     fn every_direct_step_renders_a_fold() {
         for spelling in ["+", "-", "*", "/", "|", "&", "max", "min"] {
             for carrier in [Carrier::Number, Carrier::Mask, Carrier::Char] {
-                let Ok(desc) = resolve_head(spelling, Form::Fold, carrier, false) else { continue };
-                assert!(render_fold(&desc, "x").is_some(), "{} over {:?}", spelling, carrier);
+                let Ok(desc) = resolve_head(spelling, Form::Fold, carrier, false) else {
+                    continue;
+                };
+                assert!(
+                    render_fold(&desc, "x").is_some(),
+                    "{} over {:?}",
+                    spelling,
+                    carrier
+                );
             }
         }
     }
@@ -611,10 +716,19 @@ mod tests {
 
     #[test]
     fn count_and_average_are_prefix_machines() {
-        assert_eq!(head("#", Carrier::Presence).machine().unwrap().kind, MachineKind::Count);
-        assert_eq!(head("avg", Carrier::Number).machine().unwrap().kind, MachineKind::Average);
+        assert_eq!(
+            head("#", Carrier::Presence).machine().unwrap().kind,
+            MachineKind::Count
+        );
+        assert_eq!(
+            head("avg", Carrier::Number).machine().unwrap().kind,
+            MachineKind::Average
+        );
         // count consumes selection presence, not a numeric payload
-        assert_eq!(head("#", Carrier::Presence).machine().unwrap().input, Carrier::Presence);
+        assert_eq!(
+            head("#", Carrier::Presence).machine().unwrap().input,
+            Carrier::Presence
+        );
         assert!(head("#", Carrier::Presence).fold_glyph().is_none());
     }
 
@@ -679,15 +793,19 @@ mod tests {
         }
         let named = resolve_head("threat", Form::Fold, Carrier::Number, true).unwrap();
         assert!(validate_strategy(&named, Strategy::ExactLeft).is_ok());
-        assert!(validate_strategy(&named, Strategy::Regroup)
-            .unwrap_err()
-            .contains("does not declare associativity"));
+        assert!(
+            validate_strategy(&named, Strategy::Regroup)
+                .unwrap_err()
+                .contains("does not declare associativity")
+        );
         assert!(validate_strategy(&named, Strategy::Reorder).is_err());
         let machine = head("#", Carrier::Presence);
         assert!(validate_strategy(&machine, Strategy::ExactLeft).is_ok());
-        assert!(validate_strategy(&machine, Strategy::Regroup)
-            .unwrap_err()
-            .contains("prefix machine"));
+        assert!(
+            validate_strategy(&machine, Strategy::Regroup)
+                .unwrap_err()
+                .contains("prefix machine")
+        );
         let sum = head("+", Carrier::Number);
         assert!(validate_strategy(&sum, Strategy::Regroup).is_ok());
         assert!(validate_strategy(&sum, Strategy::Reorder).is_ok());
@@ -696,10 +814,22 @@ mod tests {
     // Canonical retrieval is what the emitters use; a machine has no direct dyadic reading.
     #[test]
     fn canonical_retrieval_matches_resolution() {
-        assert_eq!(canonical("max", Form::Scan).unwrap().scan_glyph(), Some("⌈`".to_string()));
-        assert_eq!(canonical("min", Form::Scan).unwrap().scan_glyph(), Some("⌊`".to_string()));
-        assert_eq!(canonical("&", Form::Scan).unwrap().scan_glyph(), Some("∧`".to_string()));
-        assert_eq!(canonical("-", Form::Fold).unwrap().fold_glyph(), Some("-´".to_string()));
+        assert_eq!(
+            canonical("max", Form::Scan).unwrap().scan_glyph(),
+            Some("⌈`".to_string())
+        );
+        assert_eq!(
+            canonical("min", Form::Scan).unwrap().scan_glyph(),
+            Some("⌊`".to_string())
+        );
+        assert_eq!(
+            canonical("&", Form::Scan).unwrap().scan_glyph(),
+            Some("∧`".to_string())
+        );
+        assert_eq!(
+            canonical("-", Form::Fold).unwrap().fold_glyph(),
+            Some("-´".to_string())
+        );
         assert!(canonical("#", Form::Direct).is_none());
         assert!(canonical("avg", Form::Direct).is_none());
         assert!(canonical("threat", Form::Fold).is_none());

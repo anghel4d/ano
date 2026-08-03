@@ -3,12 +3,12 @@
 // pinned by native Rust tests. Child spawning and the 0x1D/0x1F demux live in main.rs
 // (crate::find_steel, crate::cap_split); sys:: provides strtod_prefix/fmt_g for wnum/fmt_num.
 
-use crate::app::{App, DCol, Mode, SDef, KMAXHIST, KMAXSDEF};
+use crate::app::{App, DCol, KMAXHIST, KMAXSDEF, Mode, SDef};
 use crate::sys;
-use crate::term::{Rect, Term, C_AT, C_CASELO, C_CASEUP};
+use crate::term::{C_AT, C_CASELO, C_CASEUP, Rect, Term};
 use crate::text;
 use std::io::Write;
-use steel::alias::{sidecar_path, AliasEnvironment};
+use steel::alias::{AliasEnvironment, sidecar_path};
 
 pub const KMAXENT: usize = 512; // data lines past the cap parse to no Ent but stay in lines[]
 
@@ -47,10 +47,10 @@ pub struct Ent {
     pub kind: EKind,
     pub vtype: VType,
     pub name: Vec<u8>,
-    pub line: usize, // index into World.lines — the splice target
+    pub line: usize,    // index into World.lines — the splice target
     pub nums: Vec<f64>, // num/bool/rel/pres/alias values; vec flattened pairs
     pub syms: Vec<Vec<u8>>,
-    pub chars: Vec<u8>, // char payload copy
+    pub chars: Vec<u8>,      // char payload copy
     pub fib_off: Vec<usize>, // srel fibers into fib_vals
     pub fib_len: Vec<usize>,
     pub fib_vals: Vec<f64>,
@@ -71,7 +71,7 @@ pub struct World {
     pub lat_w: i32,
     pub lat_h: i32,
     pub ents: Vec<Ent>,
-    pub pos_col: Vec<u8>,   // role pos target, else empty (literal `pos` fallback)
+    pub pos_col: Vec<u8>, // role pos target, else empty (literal `pos` fallback)
     pub glyph_col: Vec<u8>, // role glyph target, else empty (literal `glyph`)
     pub proto_col: Vec<u8>, // role proto target, else empty (literal `proto`)
     pub loaded: bool,
@@ -326,7 +326,10 @@ pub fn world_load(path: &str) -> Result<World, String> {
         Err(_) => return Err(format!("cannot read {}: {}", path, sys::errno_str())),
     };
     let buf = cstr(&raw);
-    let mut w = World { path: path.to_string(), ..World::default() };
+    let mut w = World {
+        path: path.to_string(),
+        ..World::default()
+    };
     let mut p = 0usize;
     loop {
         let nl = buf[p..].iter().position(|&b| b == b'\n').map(|k| p + k);
@@ -365,7 +368,11 @@ pub fn world_load(path: &str) -> Result<World, String> {
                 }
             }
         } else if (k == b"col" || k == b"field") && nw >= 3 && can {
-            let kind = if k[0] == b'f' { EKind::Field } else { EKind::Col };
+            let kind = if k[0] == b'f' {
+                EKind::Field
+            } else {
+                EKind::Col
+            };
             let ty: &[u8] = &words[2];
             if ty == b"num" || ty == b"bool" || ty == b"nat" || ty == b"int" || ty == b"vec" {
                 let vt = if ty == b"bool" {
@@ -494,7 +501,9 @@ pub fn world_load(path: &str) -> Result<World, String> {
                 if lo <= hi {
                     let name = name_trunc(&words[1]);
                     for e in w.ents.iter_mut().rev() {
-                        if (e.kind == EKind::Col || e.kind == EKind::Field) && names_eq(&e.name, &name) {
+                        if (e.kind == EKind::Col || e.kind == EKind::Field)
+                            && names_eq(&e.name, &name)
+                        {
                             e.rng = Some((lo, hi));
                             break;
                         }
@@ -518,7 +527,9 @@ pub fn world_load(path: &str) -> Result<World, String> {
 impl World {
     // First entry of kind whose name matches under names_eq.
     pub fn ent(&self, name: &[u8], kind: EKind) -> Option<usize> {
-        self.ents.iter().position(|e| e.kind == kind && names_eq(&e.name, name))
+        self.ents
+            .iter()
+            .position(|e| e.kind == kind && names_eq(&e.name, name))
     }
 
     // The pos-role column when it resolves to a V_VEC E_COL, else literal `pos` when V_VEC.
@@ -531,7 +542,11 @@ impl World {
             }
         }
         let i = self.ent(b"pos", EKind::Col)?;
-        if self.ents[i].vtype == VType::Vec { Some(i) } else { None }
+        if self.ents[i].vtype == VType::Vec {
+            Some(i)
+        } else {
+            None
+        }
     }
 
     // Role name first (must be V_SYM E_COL), else the literal name.
@@ -544,7 +559,11 @@ impl World {
             }
         }
         let i = self.ent(lit, EKind::Col)?;
-        if self.ents[i].vtype == VType::Sym { Some(i) } else { None }
+        if self.ents[i].vtype == VType::Sym {
+            Some(i)
+        } else {
+            None
+        }
     }
 
     pub fn glyph_col_ent(&self) -> Option<usize> {
@@ -666,7 +685,8 @@ pub fn table_cols(app: &mut App) {
             } else if e.kind == EKind::Srel {
                 cell = b"(inv)".to_vec();
             } else if e.vtype == VType::Vec {
-                cell = format!("{},{}", fmt_num(e.nums[2 * r]), fmt_num(e.nums[2 * r + 1])).into_bytes();
+                cell = format!("{},{}", fmt_num(e.nums[2 * r]), fmt_num(e.nums[2 * r + 1]))
+                    .into_bytes();
             } else if e.vtype == VType::Sym {
                 if r < e.syms.len() {
                     cell = e.syms[r].clone();
@@ -717,7 +737,12 @@ pub fn table_cell(app: &App, row: i32, col: i32) -> Vec<u8> {
         out.push(b')');
     } else if e.vtype == VType::Vec {
         if row >= 0 && 2 * ru + 1 < e.nums.len() {
-            out = format!("{} {}", fmt_num(e.nums[2 * ru]), fmt_num(e.nums[2 * ru + 1])).into_bytes();
+            out = format!(
+                "{} {}",
+                fmt_num(e.nums[2 * ru]),
+                fmt_num(e.nums[2 * ru + 1])
+            )
+            .into_bytes();
         }
     } else if e.vtype == VType::Sym {
         if row >= 0 && ru < e.syms.len() {
@@ -756,7 +781,11 @@ pub fn seg_rows(app: &App, seg: i32) -> i32 {
     if seg == 0 {
         return app.world.n;
     }
-    if app.world.lat_h != 0 { app.world.lat_h } else { 1 }
+    if app.world.lat_h != 0 {
+        app.world.lat_h
+    } else {
+        1
+    }
 }
 
 // Segment 0 -> dcols.len(); fields -> latW ? latW : the field's nn.
@@ -767,7 +796,9 @@ pub fn seg_cols(app: &App, seg: i32) -> i32 {
     if app.world.lat_w != 0 {
         app.world.lat_w
     } else {
-        seg_field(app, seg).map(|i| app.world.ents[i].nums.len() as i32).unwrap_or(0)
+        seg_field(app, seg)
+            .map(|i| app.world.ents[i].nums.len() as i32)
+            .unwrap_or(0)
     }
 }
 
@@ -828,12 +859,22 @@ pub fn mkdirs(path: &str) {
 // (normalizes a missing final newline; CRLF already collapsed at load), write_commit, and
 // world_load the same path back into app.world. Errors verbatim: `splice: no line %d`,
 // `splice: bad span`, `cannot write %.180s: %s`. kore.c world_splice.
-pub fn world_splice(app: &mut App, line: usize, off: usize, len: usize, repl: &[u8]) -> Result<(), String> {
+pub fn world_splice(
+    app: &mut App,
+    line: usize,
+    off: usize,
+    len: usize,
+    repl: &[u8],
+) -> Result<(), String> {
     if line >= app.world.lines.len() {
         return Err(format!("splice: no line {}", line));
     }
     let old_len = app.world.lines[line].len();
-    if off.checked_add(len).map(|end| end > old_len).unwrap_or(true) {
+    if off
+        .checked_add(len)
+        .map(|end| end > old_len)
+        .unwrap_or(true)
+    {
         return Err("splice: bad span".to_string());
     }
     let mut lines = app.world.lines.clone();
@@ -855,19 +896,29 @@ pub fn world_splice(app: &mut App, line: usize, off: usize, len: usize, repl: &[
 // byte`); char_span (`bad char line`); cell in range and len == rows (`glyph out of
 // range`); the mutated run passes run_ok (`that run would have no .reg spelling (boundary
 // space or word-boundary '#')`). Then a 1-byte splice. kore.c char_splice.
-pub fn char_splice(app: &mut App, ent: usize, cell: i32, rows: i32, repl: &[u8]) -> Result<(), String> {
+pub fn char_splice(
+    app: &mut App,
+    ent: usize,
+    cell: i32,
+    rows: i32,
+    repl: &[u8],
+) -> Result<(), String> {
     if repl.len() != 1 || repl[0] < 0x20 || repl[0] >= 0x7F {
         return Err("char cell wants one printable ASCII byte".to_string());
     }
     let line_idx = app.world.ents[ent].line;
-    let (off, len) = char_span(&app.world.lines[line_idx]).ok_or_else(|| "bad char line".to_string())?;
+    let (off, len) =
+        char_span(&app.world.lines[line_idx]).ok_or_else(|| "bad char line".to_string())?;
     if cell < 0 || cell >= len as i32 || len as i32 != rows {
         return Err("glyph out of range".to_string());
     }
     let mut cand = app.world.lines[line_idx][off..off + len].to_vec();
     cand[cell as usize] = repl[0];
     if !run_ok(&cand, rows) {
-        return Err("that run would have no .reg spelling (boundary space or word-boundary '#')".to_string());
+        return Err(
+            "that run would have no .reg spelling (boundary space or word-boundary '#')"
+                .to_string(),
+        );
     }
     world_splice(app, line_idx, off + cell as usize, 1, repl)
 }
@@ -927,10 +978,11 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String>
                 let (x, y) = scan_two_lf(&repl).ok_or_else(|| "vec cell wants: x y".to_string())?;
                 // one splice covering both pair words — the reload frees e, so never two
                 let ln = &app.world.lines[line_idx];
-                let (o1, _l1, o2, l2) = match (word_span(ln, 3 + 3 * row), word_span(ln, 4 + 3 * row)) {
-                    (Some((o1, l1)), Some((o2, l2))) => (o1, l1, o2, l2),
-                    _ => return Err("row out of range".to_string()),
-                };
+                let (o1, _l1, o2, l2) =
+                    match (word_span(ln, 3 + 3 * row), word_span(ln, 4 + 3 * row)) {
+                        (Some((o1, l1)), Some((o2, l2))) => (o1, l1, o2, l2),
+                        _ => return Err("row out of range".to_string()),
+                    };
                 let pair = format!("{} {}", fmt_num(x), fmt_num(y));
                 world_splice(app, line_idx, o1, o2 + l2 - o1, pair.as_bytes()).map(|_| None)
             }
@@ -980,7 +1032,10 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String>
                 (e.is_inv, e.inv.clone())
             };
             if is_inv {
-                return Err(format!("inv fibers derive from '{}' — edit the rel", trunc_lossy(&inv, 100)));
+                return Err(format!(
+                    "inv fibers derive from '{}' — edit the rel",
+                    trunc_lossy(&inv, 100)
+                ));
             }
             // replace fiber `row` wholesale: every word must parse, or the splice would not reload
             for wv in split_words(&repl).iter().take(128) {
@@ -993,7 +1048,9 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String>
             let mut fib: i32 = 0;
             let (mut first_w, mut last_w) = (-1i32, -1i32);
             loop {
-                let Some((off, len)) = word_span(&ln, wi) else { break };
+                let Some((off, len)) = word_span(&ln, wi) else {
+                    break;
+                };
                 let word = &ln[off..off + len];
                 if word == b"|" {
                     if fib == row {
@@ -1027,7 +1084,9 @@ pub fn cell_commit(app: &mut App, text: &[u8]) -> Result<Option<String>, String>
             let mut f2: i32 = 0;
             let mut ins_at: i64 = -1;
             loop {
-                let Some((off, len)) = word_span(&ln, sep) else { break };
+                let Some((off, len)) = word_span(&ln, sep) else {
+                    break;
+                };
                 if &ln[off..off + len] == b"|" {
                     if f2 == row {
                         ins_at = off as i64;
@@ -1087,7 +1146,10 @@ pub fn clamp_typed(vtype: VType, rng: Option<(f64, f64)>, v: f64) -> (f64, Optio
         let (lo, hi) = rng.unwrap_or((0.0, 0.0));
         format!("range {}..{}", fmt_num(lo), fmt_num(hi))
     };
-    (c, Some(format!("{} clamps {} → {}", why, fmt_num(v), fmt_num(c))))
+    (
+        c,
+        Some(format!("{} clamps {} → {}", why, fmt_num(v), fmt_num(c))),
+    )
 }
 
 // C sscanf("%lf %lf") over bytes: skip isspace, strtod prefix, twice. None unless both parse.
@@ -1135,7 +1197,11 @@ pub fn tag_of(path: &str) -> String {
         Some(i) => &sb[..i],
         None => sb,
     };
-    format!("{}-{:08x}", String::from_utf8_lossy(stem), (h & 0xffffffff) as u32)
+    format!(
+        "{}-{:08x}",
+        String::from_utf8_lossy(stem),
+        (h & 0xffffffff) as u32
+    )
 }
 
 // tag_of over the live world's path (kore.c world_tag).
@@ -1153,14 +1219,26 @@ fn basename(p: &str) -> &str {
 // .kore/play/<tag(demoPath||worldPath)>/<basename(pristine||worldPath)>; None on overflow
 // is the C's -1 — in Rust paths don't overflow, keep Option for the empty-inputs edge.
 pub fn play_scratch(app: &App) -> Option<String> {
-    let key_path = if !app.demo_path.is_empty() { &app.demo_path } else { &app.world.path };
-    let src = if !app.pristine.is_empty() { &app.pristine } else { &app.world.path };
+    let key_path = if !app.demo_path.is_empty() {
+        &app.demo_path
+    } else {
+        &app.world.path
+    };
+    let src = if !app.pristine.is_empty() {
+        &app.pristine
+    } else {
+        &app.world.path
+    };
     Some(format!(".kore/play/{}/{}", tag_of(key_path), basename(src)))
 }
 
 // .kore/play/<tag(demoPath)>/<demo basename> — the editable .ano copy.
 pub fn play_code(app: &App) -> Option<String> {
-    Some(format!(".kore/play/{}/{}", tag_of(&app.demo_path), basename(&app.demo_path)))
+    Some(format!(
+        ".kore/play/{}/{}",
+        tag_of(&app.demo_path),
+        basename(&app.demo_path)
+    ))
 }
 
 // Ensure the scratch's directory exists; scratch is the file itself (kore.c play_mkdir).
@@ -1174,7 +1252,9 @@ fn play_mkdir(scratch: &str) {
 
 // realpath succeeds AND contains "/demos/" as a plain substring; fails closed.
 pub fn in_demos(path: &str) -> bool {
-    sys::real_path(path).map(|rp| rp.contains("/demos/")).unwrap_or(false)
+    sys::real_path(path)
+        .map(|rp| rp.contains("/demos/"))
+        .unwrap_or(false)
 }
 
 // Copy-on-first-mutation for the world: already a copy, or MODE_REG on a non-corpus file,
@@ -1242,7 +1322,11 @@ pub fn play_adopt(app: &mut App, dst: &str, copy_first: bool) -> Result<(), Stri
     play_mkdir(dst);
     if copy_first {
         if !copy_file(&app.pristine, dst) {
-            return Err(format!("cannot copy {} to {}", trunc_str(&app.pristine, 100), trunc_str(dst, 100)));
+            return Err(format!(
+                "cannot copy {} to {}",
+                trunc_str(&app.pristine, 100),
+                trunc_str(dst, 100)
+            ));
         }
         copy_sidecar(&app.pristine, dst); // the overlay follows the file the world reads
     }
@@ -1268,7 +1352,9 @@ pub fn play_adopt(app: &mut App, dst: &str, copy_first: bool) -> Result<(), Stri
 pub fn undo_scan(app: &mut App) {
     app.undo_seq = 0;
     let pre = format!("{}-", world_tag(app));
-    let Ok(rd) = std::fs::read_dir(".kore/undo") else { return };
+    let Ok(rd) = std::fs::read_dir(".kore/undo") else {
+        return;
+    };
     for de in rd.flatten() {
         let name = de.file_name();
         let name = name.to_string_lossy();
@@ -1331,7 +1417,9 @@ pub fn undo_pop(app: &mut App) {
 // Unlink every ring file for tag_of(path); the file must still exist when called.
 pub fn undo_wipe(path: &str) {
     let pre = format!("{}-", tag_of(path));
-    let Ok(rd) = std::fs::read_dir(".kore/undo") else { return };
+    let Ok(rd) = std::fs::read_dir(".kore/undo") else {
+        return;
+    };
     for de in rd.flatten() {
         let name = de.file_name();
         let n = name.to_string_lossy();
@@ -1359,7 +1447,9 @@ pub fn snapshot(app: &mut App) {
 
 // Non-dot entries directly under .kore/play.
 pub fn play_count() -> i32 {
-    let Ok(rd) = std::fs::read_dir(".kore/play") else { return 0 };
+    let Ok(rd) = std::fs::read_dir(".kore/play") else {
+        return 0;
+    };
     let mut n = 0;
     for de in rd.flatten() {
         if !de.file_name().to_string_lossy().starts_with('.') {
@@ -1382,7 +1472,9 @@ pub fn reset_all(app: &mut App) {
                 continue;
             }
             let dir = format!(".kore/play/{}", name);
-            let Ok(pd) = std::fs::read_dir(&dir) else { continue };
+            let Ok(pd) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             for pe in pd.flatten() {
                 let pn = pe.file_name().to_string_lossy().into_owned();
                 if pn.starts_with('.') {
@@ -1456,7 +1548,10 @@ pub fn kore_command(app: &mut App, cmd: &str) {
         ));
         return;
     }
-    app.sayerr(&format!("unknown command >{} — commands: >reset >alias", trunc_str(cmd, 60)));
+    app.sayerr(&format!(
+        "unknown command >{} — commands: >reset >alias",
+        trunc_str(cmd, 60)
+    ));
 }
 
 // ---------- the session log ----------
@@ -1484,10 +1579,18 @@ pub fn session_log(app: &mut App, stmt: &[u8], ja: bool) {
             None => 0,
         };
     }
-    let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(&p) else { return };
+    let Ok(mut f) = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&p)
+    else {
+        return;
+    };
     if fresh {
         app.sess_ja = ja as i32;
-        let _ = f.write_all("-- kore session — a valid .ano program: replay with steel --run\n".as_bytes());
+        let _ = f.write_all(
+            "-- kore session — a valid .ano program: replay with steel --run\n".as_bytes(),
+        );
         let _ = f.write_all(b"--! registry session-base.reg\n");
         if ja {
             let _ = f.write_all(b"--! ja\n");
@@ -1531,7 +1634,12 @@ pub fn def_head(body: &[u8], ja: bool) -> Option<Vec<u8>> {
         p += 1;
     }
     let mut out = Vec::new();
-    while p < body.len() && body[p] != b' ' && body[p] != b'=' && body[p] != b'\n' && out.len() < 127 {
+    while p < body.len()
+        && body[p] != b' '
+        && body[p] != b'='
+        && body[p] != b'\n'
+        && out.len() < 127
+    {
         out.push(body[p]);
         p += 1;
     }
@@ -1556,7 +1664,10 @@ pub fn session_rehydrate(app: &mut App) {
     let ja = contains(s, b"\n--! ja");
     app.sess_ja = ja as i32;
     for l0 in s.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
-        let st = l0.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(l0.len());
+        let st = l0
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(l0.len());
         let l = &l0[st..];
         if l.starts_with(b"--") {
             continue;
@@ -1572,7 +1683,11 @@ pub fn session_rehydrate(app: &mut App) {
             Some(i) => app.sdefs[i].text = l.to_vec(),
             None => {
                 if app.sdefs.len() < KMAXSDEF {
-                    app.sdefs.push(SDef { text: l.to_vec(), ja, name: dh });
+                    app.sdefs.push(SDef {
+                        text: l.to_vec(),
+                        ja,
+                        name: dh,
+                    });
                 }
             }
         }
@@ -1615,7 +1730,10 @@ fn alias_told(line: &str) -> &str {
 pub fn alias_observe(world_path: &str) -> Option<(u64, Vec<String>)> {
     let reg = steel::registry::reg_load(world_path).ok()?;
     let env = AliasEnvironment::load(sidecar_path(world_path), &reg).ok()?;
-    let lines = env.iter().map(|(name, t)| format!("^{}\t{}", name, t.describe())).collect();
+    let lines = env
+        .iter()
+        .map(|(name, t)| format!("^{}\t{}", name, t.describe()))
+        .collect();
     Some((env.version(), lines))
 }
 
@@ -1626,12 +1744,21 @@ pub fn alias_records(prev: &[String], next: &[String], version: u64, barrier: u3
     let mut out = vec![format!("-- alias@{}: environment v{}\n", barrier, version)];
     for line in next {
         if !prev.iter().any(|old| old == line) {
-            out.push(format!("-- alias@{}: {} = {}\n", barrier, alias_stem(line), alias_told(line)));
+            out.push(format!(
+                "-- alias@{}: {} = {}\n",
+                barrier,
+                alias_stem(line),
+                alias_told(line)
+            ));
         }
     }
     for line in prev {
         if !next.iter().any(|new| alias_stem(new) == alias_stem(line)) {
-            out.push(format!("-- alias@{}: {} deleted\n", barrier, alias_stem(line)));
+            out.push(format!(
+                "-- alias@{}: {} deleted\n",
+                barrier,
+                alias_stem(line)
+            ));
         }
     }
     out
@@ -1659,7 +1786,9 @@ fn alias_prime(app: &mut App) {
         return;
     }
     let path = app.world.path.clone();
-    let Some((version, listing)) = alias_observe(&path) else { return };
+    let Some((version, listing)) = alias_observe(&path) else {
+        return;
+    };
     alias_freeze(app, version);
     app.alias_ver = Some(version);
     app.alias_list = listing;
@@ -1673,7 +1802,9 @@ fn alias_prime(app: &mut App) {
 fn alias_barrier(app: &mut App) {
     app.sess_barrier = app.sess_barrier.wrapping_add(1);
     let path = app.world.path.clone();
-    let Some((version, listing)) = alias_observe(&path) else { return };
+    let Some((version, listing)) = alias_observe(&path) else {
+        return;
+    };
     if app.alias_ver == Some(version) && app.alias_list == listing {
         return;
     }
@@ -1715,7 +1846,11 @@ fn alias_show(app: &mut App) {
         text.push('\n');
     }
     app.log(text.as_bytes());
-    app.say(&format!("alias environment v{} — {} entries", version, listing.len()));
+    app.say(&format!(
+        "alias environment v{} — {} entries",
+        version,
+        listing.len()
+    ));
 }
 
 // ---------- the ticks ----------
@@ -1749,7 +1884,11 @@ pub fn repl_submit(app: &mut App) {
     if !world_guard(app) {
         return;
     }
-    let (ja, body): (bool, &[u8]) = if stmt.starts_with(b"ja ") { (true, &stmt[3..]) } else { (false, &stmt[..]) };
+    let (ja, body): (bool, &[u8]) = if stmt.starts_with(b"ja ") {
+        (true, &stmt[3..])
+    } else {
+        (false, &stmt[..])
+    };
     let absw = sys::real_path(&app.world.path).unwrap_or_else(|| app.world.path.clone());
     if absw.contains(' ') || absw.contains('\t') {
         app.sayerr("world path contains a space — the --! registry directive is one word");
@@ -1793,7 +1932,15 @@ pub fn repl_submit(app: &mut App) {
     // the trace slot repeats --label when tracing is off: a fixed argv, one flag flipped
     let steel = crate::find_steel(app);
     let trace = if app.trace { "--trace" } else { "--label" };
-    let argv = [steel.as_str(), "--run", "--save", &absw, "--label", trace, ".kore/repl.ano"];
+    let argv = [
+        steel.as_str(),
+        "--run",
+        "--save",
+        &absw,
+        "--label",
+        trace,
+        ".kore/repl.ano",
+    ];
     let (cap, code) = crate::run_steel(&argv);
     let mut echo = b"> ".to_vec();
     echo.extend_from_slice(&stmt);
@@ -1816,7 +1963,11 @@ pub fn repl_submit(app: &mut App) {
                 Some(i) => app.sdefs[i].text = l.to_vec(),
                 None => {
                     if app.sdefs.len() < KMAXSDEF {
-                        app.sdefs.push(SDef { text: l.to_vec(), ja, name: dh });
+                        app.sdefs.push(SDef {
+                            text: l.to_vec(),
+                            ja,
+                            name: dh,
+                        });
                     }
                 }
             }
@@ -1826,12 +1977,18 @@ pub fn repl_submit(app: &mut App) {
             Err(e) => app.sayerr(&e),
             Ok(w) => {
                 app.world = w;
-                app.say(&format!("world advanced · step {} staged · session logged", seq));
+                app.say(&format!(
+                    "world advanced · step {} staged · session logged",
+                    seq
+                ));
             }
         }
     } else {
         undo_drop(app);
-        app.sayerr(&format!("statement failed (exit {}) — the world stands", code));
+        app.sayerr(&format!(
+            "statement failed (exit {}) — the world stands",
+            code
+        ));
     }
     app.out_scroll = 0;
 }
@@ -1842,7 +1999,10 @@ pub fn demo_registry(ano_path: &str, anchor: &str) -> Option<String> {
     let raw = read_file(ano_path)?;
     let src = cstr(&raw);
     for l0 in src.split(|&b| b == b'\n').filter(|l| !l.is_empty()) {
-        let st = l0.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(l0.len());
+        let st = l0
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(l0.len());
         let ln = &l0[st..];
         if !ln.starts_with(b"--! registry ") {
             continue;
@@ -1902,7 +2062,10 @@ pub fn tick_program(app: &mut App, absw: Option<&str>) -> Result<(), String> {
         if nl.is_none() && ln.is_empty() {
             break;
         }
-        let st = ln.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(ln.len());
+        let st = ln
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(ln.len());
         let lt = &ln[st..];
         if absw.is_some() && !retargeted && lt.starts_with(b"--! registry ") {
             prog.extend(format!("--! registry {}\n", absw.unwrap()).into_bytes());
@@ -1995,18 +2158,35 @@ pub fn world_next(app: &mut App) {
     }
     let steel = crate::find_steel(app);
     let trace = if app.trace { "--trace" } else { "--label" };
-    let argv = [steel.as_str(), "--run", "--save", &absw, "--label", trace, ".kore/next.ano"];
+    let argv = [
+        steel.as_str(),
+        "--run",
+        "--save",
+        &absw,
+        "--label",
+        trace,
+        ".kore/next.ano",
+    ];
     let (cap, code) = crate::run_steel(&argv);
     app.log(format!("$ n — {} against {}\n", app.demo_path, app.world.path).as_bytes());
     crate::cap_split(app, &cap, code, seq);
     if code == 0 {
-        session_seam(app, &format!("-- n: {} ticked the world (not replayable)\n", app.demo_path));
+        session_seam(
+            app,
+            &format!(
+                "-- n: {} ticked the world (not replayable)\n",
+                app.demo_path
+            ),
+        );
         let path = app.world.path.clone();
         match world_load(&path) {
             Err(e) => app.sayerr(&e),
             Ok(w) => {
                 app.world = w;
-                app.say(&format!("tick — world advanced · step {} · u steps back", seq));
+                app.say(&format!(
+                    "tick — world advanced · step {} · u steps back",
+                    seq
+                ));
             }
         }
     } else {
@@ -2064,7 +2244,13 @@ pub fn world_reset(app: &mut App) {
                 app.sayerr("cannot stage undo copy");
                 return;
             }
-            session_seam(app, &format!("-- r: world reset to pristine {} (not replayable)\n", app.pristine));
+            session_seam(
+                app,
+                &format!(
+                    "-- r: world reset to pristine {} (not replayable)\n",
+                    app.pristine
+                ),
+            );
         }
     }
     if let Err(e) = play_adopt(app, &dst, true) {
@@ -2092,11 +2278,18 @@ pub fn open_demo(app: &mut App, path: &str) {
     // an earlier session's play code copy shadows a corpus demo — the buffer rides it
     let live = play_code(app);
     let shadowed = in_demos(path) && live.as_deref().map(sys::access_f).unwrap_or(false);
-    app.demo_live = if shadowed { live.unwrap() } else { path.to_string() };
+    app.demo_live = if shadowed {
+        live.unwrap()
+    } else {
+        path.to_string()
+    };
     let dl = app.demo_live.clone();
     crate::ui::code_load(app, &dl);
     if shadowed {
-        let msg = format!("code: play copy {} resumed — >reset restores the corpus\n", app.demo_live);
+        let msg = format!(
+            "code: play copy {} resumed — >reset restores the corpus\n",
+            app.demo_live
+        );
         app.log(msg.as_bytes());
     }
     app.world_is_copy = false;
@@ -2114,7 +2307,10 @@ pub fn open_demo(app: &mut App, path: &str) {
                 app.w_col = 0;
                 app.w_top = 0;
                 let step = app.undo_seq;
-                app.say(&format!("{} — play world resumed at step {} (r resets to pristine)", path, step));
+                app.say(&format!(
+                    "{} — play world resumed at step {} (r resets to pristine)",
+                    path, step
+                ));
                 return;
             }
         }
@@ -2154,13 +2350,23 @@ pub fn check_reg(app: &mut App, path: &str) -> i32 {
             let _ = table_cell(app, r, c); // exercises the cell paths
         }
     }
-    let fields = app.world.ents.iter().filter(|e| e.kind == EKind::Field).count();
+    let fields = app
+        .world
+        .ents
+        .iter()
+        .filter(|e| e.kind == EKind::Field)
+        .count();
     let space = app.world.lat_w > 0 || app.world.pos().is_some();
     if space {
         // render the space views to memory: the glyph map, then the bitmap
         let mut t = Term::headless(200, 400);
         t.frame_clear();
-        app.world_r = Rect { x: 0, y: 0, w: 399, h: 199 };
+        app.world_r = Rect {
+            x: 0,
+            y: 0,
+            w: 399,
+            h: 199,
+        };
         crate::ui::draw_space(app, &mut t);
         t.frame_clear();
         crate::ui::draw_bitmap(app, &mut t);
@@ -2314,16 +2520,37 @@ mod alias_session {
 
     #[test]
     fn alias_records_report_installs_rebinds_and_deletes() {
-        let prev = vec!["^focus\tGold (number)".to_string(), "^hot\tmask [1 0 1]".to_string()];
-        let next = vec!["^focus\tSilver (number)".to_string(), "^new\tGold (number)".to_string()];
+        let prev = vec![
+            "^focus\tGold (number)".to_string(),
+            "^hot\tmask [1 0 1]".to_string(),
+        ];
+        let next = vec![
+            "^focus\tSilver (number)".to_string(),
+            "^new\tGold (number)".to_string(),
+        ];
         let recs = alias_records(&prev, &next, 7, 3);
         assert_eq!(recs[0], "-- alias@3: environment v7\n");
-        assert!(recs.contains(&"-- alias@3: ^focus = Silver (number)\n".to_string()), "{:?}", recs);
-        assert!(recs.contains(&"-- alias@3: ^new = Gold (number)\n".to_string()), "{:?}", recs);
-        assert!(recs.contains(&"-- alias@3: ^hot deleted\n".to_string()), "{:?}", recs);
+        assert!(
+            recs.contains(&"-- alias@3: ^focus = Silver (number)\n".to_string()),
+            "{:?}",
+            recs
+        );
+        assert!(
+            recs.contains(&"-- alias@3: ^new = Gold (number)\n".to_string()),
+            "{:?}",
+            recs
+        );
+        assert!(
+            recs.contains(&"-- alias@3: ^hot deleted\n".to_string()),
+            "{:?}",
+            recs
+        );
         assert_eq!(recs.len(), 4);
         // an unmoved listing records the environment line alone
-        assert_eq!(alias_records(&prev, &prev, 7, 3), vec!["-- alias@3: environment v7\n"]);
+        assert_eq!(
+            alias_records(&prev, &prev, 7, 3),
+            vec!["-- alias@3: environment v7\n"]
+        );
         // an emptied overlay deletes every stem
         assert_eq!(alias_records(&prev, &[], 8, 1).len(), 3);
     }
@@ -2336,7 +2563,10 @@ mod alias_session {
         std::fs::write(&src, FIXTURE).unwrap();
         std::fs::write(sidecar_path(&src), "overlay\n").unwrap();
         copy_sidecar(&src, &dst);
-        assert_eq!(std::fs::read_to_string(sidecar_path(&dst)).unwrap(), "overlay\n");
+        assert_eq!(
+            std::fs::read_to_string(sidecar_path(&dst)).unwrap(),
+            "overlay\n"
+        );
         // a source without one clears the destination's stale overlay rather than leaving it live
         std::fs::remove_file(sidecar_path(&src)).unwrap();
         copy_sidecar(&src, &dst);
@@ -2353,7 +2583,10 @@ mod alias_session {
         let before = plan_at(&world, SRC);
         assert_eq!(before, plan_at(&world, "Gold , Silver = 0"));
 
-        assert_eq!(crate::aliases::run(&argv(&["alias", &world, "set", "^gold", "Silver"])), 0);
+        assert_eq!(
+            crate::aliases::run(&argv(&["alias", &world, "set", "^gold", "Silver"])),
+            0
+        );
 
         let after = plan_at(&world, SRC);
         assert_eq!(after, plan_at(&world, "Silver , Silver = 0"));
@@ -2380,7 +2613,10 @@ mod alias_session {
         let segment0 = plan_at(&world, SRC);
 
         // the host transition between barriers, then barrier 1
-        assert_eq!(crate::aliases::run(&argv(&["alias", &world, "set", "^gold", "Silver"])), 0);
+        assert_eq!(
+            crate::aliases::run(&argv(&["alias", &world, "set", "^gold", "Silver"])),
+            0
+        );
         let (v1, list1) = alias_observe(&world).unwrap();
         assert_eq!(v1, 1);
         let records = alias_records(&list0, &list1, v1, 1);
@@ -2392,7 +2628,11 @@ mod alias_session {
 
         // the recorded version comes out of the session log, never out of memory
         let logged = std::fs::read_to_string(&sess).unwrap();
-        assert!(logged.contains("-- alias@1: ^gold = Silver (number)\n"), "{}", logged);
+        assert!(
+            logged.contains("-- alias@1: ^gold = Silver (number)\n"),
+            "{}",
+            logged
+        );
         let marker = "-- alias@1: environment v";
         let line = logged.lines().find(|l| l.starts_with(marker)).unwrap();
         let recorded: u64 = line[marker.len()..].parse().unwrap();

@@ -2,17 +2,17 @@
 // scroll state, so that mutation stays inside draw functions.
 // Headless checks call only draw_space and draw_bitmap; both render into the supplied grid.
 
-use crate::app::{App, CodeSnap, Focus, Mode, VRow, KCUNDO};
+use crate::app::{App, CodeSnap, Focus, KCUNDO, Mode, VRow};
 use crate::sys;
 use crate::term::{
-    Ev, Rect, Term, A_BOLD, A_DIM, C_BG, C_CHAR, C_CODEC, C_DEF, C_DIRECTIVE, C_ERR, C_FRAME,
-    C_GLOW, C_HDR, C_NIHONGO, C_NUMLIT, C_OK, C_OP, C_OUTC, C_OUTPUTSC, C_PROMPTC, C_RAILC,
-    C_REL, C_ROWLBL, C_SEARCH, C_SYM, C_WORLDC, C_BOOL, EV_CHAR, EV_KEY, EV_MOUSE, EV_NONE,
-    K_BS, K_DOWN, K_END, K_ENTER, K_ESC, K_HOME, K_LEFT, K_NEWLINE, K_PGDN, K_PGUP,
-    K_RESETALL, K_RIGHT, K_TAB, K_UP, M_DRAG, M_PRESS, M_RELEASE, M_WHEELDN, M_WHEELUP,
+    A_BOLD, A_DIM, C_BG, C_BOOL, C_CHAR, C_CODEC, C_DEF, C_DIRECTIVE, C_ERR, C_FRAME, C_GLOW,
+    C_HDR, C_NIHONGO, C_NUMLIT, C_OK, C_OP, C_OUTC, C_OUTPUTSC, C_PROMPTC, C_RAILC, C_REL,
+    C_ROWLBL, C_SEARCH, C_SYM, C_WORLDC, EV_CHAR, EV_KEY, EV_MOUSE, EV_NONE, Ev, K_BS, K_DOWN,
+    K_END, K_ENTER, K_ESC, K_HOME, K_LEFT, K_NEWLINE, K_PGDN, K_PGUP, K_RESETALL, K_RIGHT, K_TAB,
+    K_UP, M_DRAG, M_PRESS, M_RELEASE, M_WHEELDN, M_WHEELUP, Rect, Term,
 };
 use crate::text;
-use crate::world::{self, EKind, VType, FIELD_PAL};
+use crate::world::{self, EKind, FIELD_PAL, VType};
 
 // The EV_CHAR raw bytes: the NUL-terminated run of e.u8b (kore.c e.u8 semantics).
 fn ev_bytes(e: &Ev) -> &[u8] {
@@ -51,7 +51,12 @@ fn split_lines(src: &[u8], strip_cr: bool) -> Vec<Vec<u8>> {
 
 // Segment count: 1 (the entity table) + one per E_FIELD. kore.c nsegs.
 fn nsegs(app: &App) -> i32 {
-    1 + app.world.ents.iter().filter(|e| e.kind == EKind::Field).count() as i32
+    1 + app
+        .world
+        .ents
+        .iter()
+        .filter(|e| e.kind == EKind::Field)
+        .count() as i32
 }
 
 fn hit(r: Rect, x: i32, y: i32) -> bool {
@@ -67,7 +72,11 @@ pub fn layout(app: &mut App, t: &Term) {
     let big_w = t.cols;
     let h = t.rows;
     let rail_w = if app.mode == Mode::Rail {
-        if big_w / 4 < 34 { if big_w / 4 > 20 { big_w / 4 } else { 20 } } else { 34 }
+        if big_w / 4 < 34 {
+            if big_w / 4 > 20 { big_w / 4 } else { 20 }
+        } else {
+            34
+        }
     } else {
         0
     };
@@ -85,15 +94,49 @@ pub fn layout(app: &mut App, t: &Term) {
     }
     let out_h = 5;
     let outputs_h = (h - prompt_h - status_h - out_h) * 2 / 5;
-    let code_h = if app.mode == Mode::Reg { 0 } else { (h - prompt_h - status_h - out_h - outputs_h) * 2 / 5 };
-    app.rail_r = Rect { x: 0, y: 0, w: rail_w, h: h - prompt_h - status_h };
+    let code_h = if app.mode == Mode::Reg {
+        0
+    } else {
+        (h - prompt_h - status_h - out_h - outputs_h) * 2 / 5
+    };
+    app.rail_r = Rect {
+        x: 0,
+        y: 0,
+        w: rail_w,
+        h: h - prompt_h - status_h,
+    };
     let x = rail_w;
     let w = big_w - rail_w;
-    app.code_r = Rect { x, y: 0, w, h: code_h };
-    app.world_r = Rect { x, y: code_h, w, h: h - prompt_h - status_h - out_h - outputs_h - code_h };
-    app.outputs_r = Rect { x, y: h - prompt_h - status_h - out_h - outputs_h, w, h: outputs_h };
-    app.out_r = Rect { x, y: h - prompt_h - status_h - out_h, w, h: out_h };
-    app.prompt_r = Rect { x: 0, y: h - prompt_h - status_h, w: big_w, h: prompt_h };
+    app.code_r = Rect {
+        x,
+        y: 0,
+        w,
+        h: code_h,
+    };
+    app.world_r = Rect {
+        x,
+        y: code_h,
+        w,
+        h: h - prompt_h - status_h - out_h - outputs_h - code_h,
+    };
+    app.outputs_r = Rect {
+        x,
+        y: h - prompt_h - status_h - out_h - outputs_h,
+        w,
+        h: outputs_h,
+    };
+    app.out_r = Rect {
+        x,
+        y: h - prompt_h - status_h - out_h,
+        w,
+        h: out_h,
+    };
+    app.prompt_r = Rect {
+        x: 0,
+        y: h - prompt_h - status_h,
+        w: big_w,
+        h: prompt_h,
+    };
 }
 
 // Frame order (kore.c draw): frame_clear, layout, draw_rail, draw_code, draw_world,
@@ -136,7 +179,11 @@ pub fn draw_rail(app: &mut App, t: &mut Term) {
     while i < vis && app.rail_top + i < n_demos {
         let di = app.rail_top + i;
         let full: &[u8] = app.demo_list[di as usize].as_bytes();
-        let p: &[u8] = if full.starts_with(b"demos/") { &full[6..] } else { full };
+        let p: &[u8] = if full.starts_with(b"demos/") {
+            &full[6..]
+        } else {
+            full
+        };
         let sel = di == app.rail_sel;
         let y = r.y + 1 + i;
         if sel {
@@ -147,14 +194,32 @@ pub fn draw_rail(app: &mut App, t: &mut Term) {
         let mut xx = r.x + 2;
         if let Some(sl) = slash {
             let dl = (sl + 1).min(159); // the C's 160-byte dir buffer
-            xx += t.put(xx, y, (if sel { crate::term::A_REV } else { 0 }) | A_DIM, 0, &p[..dl], r.w - 3);
+            xx += t.put(
+                xx,
+                y,
+                (if sel { crate::term::A_REV } else { 0 }) | A_DIM,
+                0,
+                &p[..dl],
+                r.w - 3,
+            );
         }
         let fname = match slash {
             Some(sl) => &p[sl + 1..],
             None => p,
         };
-        let fg = if contains(fname, b"-nihongo") { C_NIHONGO } else { 0 };
-        t.put(xx, y, if sel { crate::term::A_REV } else { 0 }, fg, fname, r.w - 2 - (xx - r.x));
+        let fg = if contains(fname, b"-nihongo") {
+            C_NIHONGO
+        } else {
+            0
+        };
+        t.put(
+            xx,
+            y,
+            if sel { crate::term::A_REV } else { 0 },
+            fg,
+            fname,
+            r.w - 2 - (xx - r.x),
+        );
         i += 1;
     }
     t.scrollbar(r, app.rail_top, vis, n_demos, C_RAILC);
@@ -324,7 +389,11 @@ pub fn code_undo_push(app: &mut App) {
     if app.cundo.len() == KCUNDO {
         app.cundo.remove(0);
     }
-    app.cundo.push(CodeSnap { code: app.code.clone(), ccx: app.ccx, ccy: app.ccy });
+    app.cundo.push(CodeSnap {
+        code: app.code.clone(),
+        ccx: app.ccx,
+        ccy: app.ccy,
+    });
 }
 
 // Pop: restore buffer and cursor (clamped), set dirty, `code undo (%d left)` /
@@ -338,7 +407,11 @@ pub fn code_undo_pop(app: &mut App) {
     if app.code.is_empty() {
         app.code.push(Vec::new());
     }
-    app.ccy = if snap.ccy < app.code.len() as i32 { snap.ccy } else { app.code.len() as i32 - 1 };
+    app.ccy = if snap.ccy < app.code.len() as i32 {
+        snap.ccy
+    } else {
+        app.code.len() as i32 - 1
+    };
     app.ccx = snap.ccx;
     let lw = text::swidth(&app.code[app.ccy as usize]);
     if app.ccx > lw {
@@ -411,7 +484,11 @@ pub fn code_search_jump(app: &mut App, dir: i32) {
                 break;
             }
         } else {
-            let limit = if step == 0 { line_byte_at(ln, app.ccx) } else { ll + 1 };
+            let limit = if step == 0 {
+                line_byte_at(ln, app.ccx)
+            } else {
+                ll + 1
+            };
             let mut best = text::NPOS;
             let mut at = 0usize;
             loop {
@@ -433,7 +510,11 @@ pub fn code_search_jump(app: &mut App, dir: i32) {
             let col = line_col_of(&app.code[li as usize], at);
             app.ccy = li;
             app.ccx = col;
-            let msg = format!("{}{}", if dir > 0 { "/" } else { "?" }, String::from_utf8_lossy(&needle));
+            let msg = format!(
+                "{}{}",
+                if dir > 0 { "/" } else { "?" },
+                String::from_utf8_lossy(&needle)
+            );
             app.say(&msg);
         }
         None => {
@@ -512,7 +593,8 @@ pub fn code_key(app: &mut App, e: &Ev) {
     // browse: vim vocabulary — counts, word motions, gg/G, /-search, code-local undo
     if e.etype == EV_CHAR {
         let ch = e.ch;
-        if (ch >= b'1' as u32 && ch <= b'9' as u32) || (app.code_pending != 0 && ch == b'0' as u32) {
+        if (ch >= b'1' as u32 && ch <= b'9' as u32) || (app.code_pending != 0 && ch == b'0' as u32)
+        {
             app.code_pending = app.code_pending * 10 + (ch - b'0' as u32) as i32;
             if app.code_pending > 999999 {
                 app.code_pending = 999999;
@@ -545,7 +627,11 @@ pub fn code_key(app: &mut App, e: &Ev) {
             app.ccx = if app.ccx > rep { app.ccx - rep } else { 0 };
             return;
         } else if ch == b'l' as u32 {
-            app.ccx = if app.ccx + rep < lw { app.ccx + rep } else { lw };
+            app.ccx = if app.ccx + rep < lw {
+                app.ccx + rep
+            } else {
+                lw
+            };
             return;
         } else if ch == b'0' as u32 {
             app.ccx = 0;
@@ -590,7 +676,11 @@ pub fn code_key(app: &mut App, e: &Ev) {
             return;
         } else if ch == b'G' as u32 {
             // [count]G goes to that line, bare G to the last
-            app.ccy = if had_count { if rep <= ncode { rep - 1 } else { ncode - 1 } } else { ncode - 1 };
+            app.ccy = if had_count {
+                if rep <= ncode { rep - 1 } else { ncode - 1 }
+            } else {
+                ncode - 1
+            };
             app.ccx = 0;
             return;
         } else if ch == b'i' as u32 {
@@ -673,7 +763,11 @@ pub fn code_key(app: &mut App, e: &Ev) {
         }
     }
     if e.etype == EV_KEY {
-        let page = if app.code_r.h > 4 { app.code_r.h - 3 } else { 10 };
+        let page = if app.code_r.h > 4 {
+            app.code_r.h - 3
+        } else {
+            10
+        };
         let ncode = app.code.len() as i32;
         match e.key {
             K_UP => app.ccy = if app.ccy > 0 { app.ccy - 1 } else { 0 },
@@ -687,7 +781,13 @@ pub fn code_key(app: &mut App, e: &Ev) {
             K_HOME => app.ccx = 0,
             K_END => app.ccx = lw,
             K_PGUP => app.ccy = if app.ccy > page { app.ccy - page } else { 0 },
-            K_PGDN => app.ccy = if app.ccy + page < ncode { app.ccy + page } else { ncode - 1 },
+            K_PGDN => {
+                app.ccy = if app.ccy + page < ncode {
+                    app.ccy + page
+                } else {
+                    ncode - 1
+                }
+            }
             K_ENTER => {
                 code_undo_push(app);
                 app.code_insert = true;
@@ -735,8 +835,16 @@ pub fn draw_code(app: &mut App, t: &mut Term) {
     }
     let title = format!(
         "code · {}{}{} · {}/{}",
-        if app.demo_path.is_empty() { "—" } else { app.demo_path.as_str() },
-        if !app.demo_path.is_empty() && app.demo_live != app.demo_path { " · play copy" } else { "" },
+        if app.demo_path.is_empty() {
+            "—"
+        } else {
+            app.demo_path.as_str()
+        },
+        if !app.demo_path.is_empty() && app.demo_live != app.demo_path {
+            " · play copy"
+        } else {
+            ""
+        },
         if app.code_dirty { " +" } else { "" },
         app.ccy + 1,
         app.code.len()
@@ -744,13 +852,21 @@ pub fn draw_code(app: &mut App, t: &mut Term) {
     t.draw_box(r, &title, C_CODEC, app.focus == Focus::Code);
     // the mode chip: loud in the pane's own title rule, not the status-line corner
     if app.focus == Focus::Code {
-        let chip: &[u8] = if app.code_insert { b" INSERT " } else { b" BROWSE " };
+        let chip: &[u8] = if app.code_insert {
+            b" INSERT "
+        } else {
+            b" BROWSE "
+        };
         let chw = text::swidth(chip);
         if r.w > chw + 4 {
             t.put(
                 r.x + r.w - 2 - chw,
                 r.y,
-                if app.code_insert { crate::term::A_REV | A_BOLD } else { A_DIM },
+                if app.code_insert {
+                    crate::term::A_REV | A_BOLD
+                } else {
+                    A_DIM
+                },
                 if app.code_insert { C_GLOW } else { 0 },
                 chip,
                 chw,
@@ -768,7 +884,10 @@ pub fn draw_code(app: &mut App, t: &mut Term) {
     while i < vis && app.code_top + i < app.code.len() as i32 {
         let li = app.code_top + i;
         let ln = &app.code[li as usize];
-        let lt = ln.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(ln.len());
+        let lt = ln
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(ln.len());
         let dirline = ln[lt..].starts_with(b"--!"); // directives in their own hue
         let dim = !dirline && ln[lt..].starts_with(b"--"); // comments dim
         let mut def_off = -1i32;
@@ -805,9 +924,17 @@ pub fn draw_code(app: &mut App, t: &mut Term) {
             } else if (at as i32) >= def_off && (at as i32) < def_end {
                 attr = A_BOLD;
                 fg = C_DEF;
-            } else if c == b'&' as u32 || c == b'|' as u32 || c == b'<' as u32 || c == b'>' as u32
-                || c == b'=' as u32 || c == b'~' as u32 || c == b'!' as u32 || c == b'+' as u32
-                || c == b'*' as u32 || c == b'/' as u32 || c == b'%' as u32
+            } else if c == b'&' as u32
+                || c == b'|' as u32
+                || c == b'<' as u32
+                || c == b'>' as u32
+                || c == b'=' as u32
+                || c == b'~' as u32
+                || c == b'!' as u32
+                || c == b'+' as u32
+                || c == b'*' as u32
+                || c == b'/' as u32
+                || c == b'%' as u32
             {
                 fg = C_OP;
             } else if c >= b'0' as u32 && c <= b'9' as u32 {
@@ -869,10 +996,18 @@ pub fn world_vrows(app: &mut App) {
     app.vrows.clear();
     let mut r = 0;
     while r < app.world.n && (app.vrows.len() as i32) < 32760 {
-        app.vrows.push(VRow { kind: 0, seg: 0, row: r });
+        app.vrows.push(VRow {
+            kind: 0,
+            seg: 0,
+            row: r,
+        });
         r += 1;
     }
-    let gh = if app.world.lat_h != 0 { app.world.lat_h } else { 1 };
+    let gh = if app.world.lat_h != 0 {
+        app.world.lat_h
+    } else {
+        1
+    };
     let mut seg = 1;
     for i in 0..app.world.ents.len() {
         if app.world.ents[i].kind != EKind::Field {
@@ -881,10 +1016,22 @@ pub fn world_vrows(app: &mut App) {
         if app.vrows.len() as i32 + gh + 2 >= 32760 {
             break;
         }
-        app.vrows.push(VRow { kind: 3, seg, row: 0 });
-        app.vrows.push(VRow { kind: 1, seg, row: 0 });
+        app.vrows.push(VRow {
+            kind: 3,
+            seg,
+            row: 0,
+        });
+        app.vrows.push(VRow {
+            kind: 1,
+            seg,
+            row: 0,
+        });
         for gy in 0..gh {
-            app.vrows.push(VRow { kind: 2, seg, row: gy });
+            app.vrows.push(VRow {
+                kind: 2,
+                seg,
+                row: gy,
+            });
         }
         seg += 1;
     }
@@ -928,8 +1075,18 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
     }
     let mut title = format!(
         "{} · {}{} · n {}",
-        if app.space_view == 2 { "bitmap" } else if app.space_view != 0 { "space" } else { "world" },
-        if app.world.loaded { app.world.path.as_str() } else { "—" },
+        if app.space_view == 2 {
+            "bitmap"
+        } else if app.space_view != 0 {
+            "space"
+        } else {
+            "world"
+        },
+        if app.world.loaded {
+            app.world.path.as_str()
+        } else {
+            "—"
+        },
         if app.world_is_copy {
             " (play)"
         } else if app.world.loaded && app.mode != Mode::Reg {
@@ -947,7 +1104,14 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
     }
     t.draw_box(r, &title, C_WORLDC, app.focus == Focus::World);
     if !app.world.loaded {
-        t.put(r.x + 2, r.y + 1, A_DIM, 0, "no world — pick a demo or open a .reg".as_bytes(), r.w - 4);
+        t.put(
+            r.x + 2,
+            r.y + 1,
+            A_DIM,
+            0,
+            "no world — pick a demo or open a .reg".as_bytes(),
+            r.w - 4,
+        );
         return;
     }
     if app.space_view == 2 {
@@ -975,7 +1139,14 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
             break;
         }
         let e = &app.world.ents[app.dcols[c].ent];
-        t.put(cx, y, A_BOLD | if e.kind == EKind::Pres { A_DIM } else { 0 }, C_HDR, &e.name, app.dcols[c].width);
+        t.put(
+            cx,
+            y,
+            A_BOLD | if e.kind == EKind::Pres { A_DIM } else { 0 },
+            C_HDR,
+            &e.name,
+            app.dcols[c].width,
+        );
         cx += app.dcols[c].width + 1;
     }
     let mut vis = r.h - 3;
@@ -1037,7 +1208,10 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
                 if e.kind == EKind::Rel && cell.first() == Some(&b'/') {
                     dim = true;
                 }
-                let cur = app.w_seg == 0 && app.focus == Focus::World && row == app.w_row && c as i32 == app.w_col;
+                let cur = app.w_seg == 0
+                    && app.focus == Focus::World
+                    && row == app.w_row
+                    && c as i32 == app.w_col;
                 let in_drag = app.dragging
                     && app.drag_seg == 0
                     && row >= app.drag_r0.min(app.drag_r1)
@@ -1068,7 +1242,11 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
                     t.put(
                         cx,
                         yy,
-                        (if cur || in_drag { crate::term::A_REV } else { 0 }) | (if dim { A_DIM } else { 0 }),
+                        (if cur || in_drag {
+                            crate::term::A_REV
+                        } else {
+                            0
+                        }) | (if dim { A_DIM } else { 0 }),
                         if dim { 0 } else { cfg },
                         &cell,
                         width,
@@ -1079,9 +1257,15 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
             continue;
         }
         // field row: the lattice field in its w×h shape
-        let Some(fi) = world::seg_field(app, vr.seg) else { continue };
+        let Some(fi) = world::seg_field(app, vr.seg) else {
+            continue;
+        };
         let e = &app.world.ents[fi];
-        let gw = if app.world.lat_w != 0 { app.world.lat_w } else { e.nums.len() as i32 };
+        let gw = if app.world.lat_w != 0 {
+            app.world.lat_w
+        } else {
+            e.nums.len() as i32
+        };
         let gy = vr.row;
         let (cell_w, pad) = field_cellw(app, fi);
         let e = &app.world.ents[fi];
@@ -1090,7 +1274,12 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
             let cell: Vec<u8> = if e.vtype == VType::Char {
                 world::glyph_at(e, k)
             } else if (k as usize) < e.nums.len() {
-                format!("{:>width$}", world::fmt_num(e.nums[k as usize]), width = cell_w as usize).into_bytes()
+                format!(
+                    "{:>width$}",
+                    world::fmt_num(e.nums[k as usize]),
+                    width = cell_w as usize
+                )
+                .into_bytes()
             } else {
                 Vec::new()
             };
@@ -1098,18 +1287,35 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
             if px + cell_w >= r.x + r.w - 1 {
                 break;
             }
-            let cur = app.focus == Focus::World && app.w_seg == vr.seg && app.w_row == gy && app.w_col == gx;
+            let cur = app.focus == Focus::World
+                && app.w_seg == vr.seg
+                && app.w_row == gy
+                && app.w_col == gx;
             if cur && app.editing {
                 let mut eb = app.edit_buf.clone();
                 eb.extend_from_slice("▏".as_bytes());
                 t.put(px, yy, crate::term::A_REV | A_BOLD, 93, &eb, cell_w + 1);
             } else {
-                let zero = e.vtype == VType::Bool && (k as usize) < e.nums.len() && e.nums[k as usize] == 0.0;
+                let zero = e.vtype == VType::Bool
+                    && (k as usize) < e.nums.len()
+                    && e.nums[k as usize] == 0.0;
                 t.put(
                     px,
                     yy,
-                    if cur { crate::term::A_REV } else if zero { A_DIM } else { 0 },
-                    if e.vtype == VType::Char { C_CHAR } else if e.vtype == VType::Bool { C_BOOL } else { 0 },
+                    if cur {
+                        crate::term::A_REV
+                    } else if zero {
+                        A_DIM
+                    } else {
+                        0
+                    },
+                    if e.vtype == VType::Char {
+                        C_CHAR
+                    } else if e.vtype == VType::Bool {
+                        C_BOOL
+                    } else {
+                        0
+                    },
                     &cell,
                     cell_w + 1,
                 );
@@ -1134,8 +1340,16 @@ pub fn world_key(app: &mut App, e: &Ev) {
         sgw = if a < 1 { 1 } else { a };
         sgh = if b < 1 { 1 } else { b };
     }
-    let rows = if app.space_view != 0 { sgh } else { world::seg_rows(app, app.w_seg) };
-    let cols = if app.space_view != 0 { sgw } else { world::seg_cols(app, app.w_seg) };
+    let rows = if app.space_view != 0 {
+        sgh
+    } else {
+        world::seg_rows(app, app.w_seg)
+    };
+    let cols = if app.space_view != 0 {
+        sgw
+    } else {
+        world::seg_cols(app, app.w_seg)
+    };
     let ch = if e.etype == EV_CHAR { e.ch } else { 0 };
     let key = if e.etype == EV_KEY { e.key } else { 0 };
     if ch == b'j' as u32 || key == K_DOWN {
@@ -1201,7 +1415,8 @@ pub fn world_key(app: &mut App, e: &Ev) {
                     match si {
                         Some(si) => {
                             let se = &app.world.ents[si];
-                            (ent_row as usize) < se.syms.len() && !se.syms[ent_row as usize].is_empty()
+                            (ent_row as usize) < se.syms.len()
+                                && !se.syms[ent_row as usize].is_empty()
                         }
                         None => false,
                     }
@@ -1226,7 +1441,13 @@ pub fn world_key(app: &mut App, e: &Ev) {
                 app.w_row = ent_row;
                 app.w_col = c;
             } else {
-                let k = app.w_row * (if app.world.lat_w != 0 { app.world.lat_w } else { 1 }) + app.w_col;
+                let k = app.w_row
+                    * (if app.world.lat_w != 0 {
+                        app.world.lat_w
+                    } else {
+                        1
+                    })
+                    + app.w_col;
                 let mut s = 1i32;
                 let mut pick = 0i32;
                 let mut first = 0i32;
@@ -1260,12 +1481,22 @@ pub fn world_key(app: &mut App, e: &Ev) {
             world::table_cols(app);
             world::table_cell(app, app.w_row, app.w_col)
         } else {
-            let k = app.w_row * (if app.world.lat_w != 0 { app.world.lat_w } else { 1 }) + app.w_col;
+            let k = app.w_row
+                * (if app.world.lat_w != 0 {
+                    app.world.lat_w
+                } else {
+                    1
+                })
+                + app.w_col;
             match world::seg_field(app, app.w_seg) {
                 Some(fi) => {
                     let fe = &app.world.ents[fi];
                     if fe.vtype == VType::Char {
-                        if (k as usize) < fe.chars.len() { world::glyph_at(fe, k) } else { b".".to_vec() }
+                        if (k as usize) < fe.chars.len() {
+                            world::glyph_at(fe, k)
+                        } else {
+                            b".".to_vec()
+                        }
                     } else if (k as usize) < fe.nums.len() {
                         world::fmt_num(fe.nums[k as usize]).into_bytes()
                     } else {
@@ -1390,7 +1621,17 @@ pub fn space_dims(app: &App) -> (i32, i32) {
 pub fn shade(v: f64, max: f64) -> &'static str {
     let max = if max <= 0.0 { 1.0 } else { max };
     let t = v / max;
-    if t <= 0.0 { "·" } else if t < 0.25 { "░" } else if t < 0.5 { "▒" } else if t < 0.75 { "▓" } else { "█" }
+    if t <= 0.0 {
+        "·"
+    } else if t < 0.25 {
+        "░"
+    } else if t < 0.5 {
+        "▒"
+    } else if t < 0.75 {
+        "▓"
+    } else {
+        "█"
+    }
 }
 
 // The glyph map: square cells two columns wide, ground '·' dim, fields paint in
@@ -1402,7 +1643,14 @@ pub fn draw_space(app: &mut App, t: &mut Term) {
     let (gw, gh) = space_dims(app);
     let pos = app.world.pos();
     if gw == 0 || gh == 0 {
-        t.put(r.x + 2, r.y + 1, A_DIM, 0, "no lattice, no positions — table only (m cycles views)".as_bytes(), r.w - 4);
+        t.put(
+            r.x + 2,
+            r.y + 1,
+            A_DIM,
+            0,
+            "no lattice, no positions — table only (m cycles views)".as_bytes(),
+            r.w - 4,
+        );
         return;
     }
     let ox = r.x + 2;
@@ -1456,7 +1704,14 @@ pub fn draw_space(app: &mut App, t: &mut Term) {
                 pi += 1;
             }
             t.put(ox + 2 * cx, oy + cy, attr, fg, &g, 1);
-            t.put(ox + 2 * cx + 1, oy + cy, attr, fg, if dbl { &g[..] } else { b" " }, 1);
+            t.put(
+                ox + 2 * cx + 1,
+                oy + cy,
+                attr,
+                fg,
+                if dbl { &g[..] } else { b" " },
+                1,
+            );
             cx += 1;
         }
         cy += 1;
@@ -1511,7 +1766,8 @@ pub fn draw_space(app: &mut App, t: &mut Term) {
         while yy <= rr1 && yy < gh {
             let mut xx = cc0;
             while xx <= cc1 && xx < gw {
-                if xx >= 0 && yy >= 0 && ox + 2 * xx + 2 <= r.x + r.w - 1 && oy + yy < r.y + r.h - 1 {
+                if xx >= 0 && yy >= 0 && ox + 2 * xx + 2 <= r.x + r.w - 1 && oy + yy < r.y + r.h - 1
+                {
                     t.rev_cell(ox + 2 * xx, oy + yy);
                     t.rev_cell(ox + 2 * xx + 1, oy + yy);
                 }
@@ -1530,7 +1786,14 @@ pub fn draw_bitmap(app: &mut App, t: &mut Term) {
     let (gw, gh) = space_dims(app);
     let pos = app.world.pos();
     if gw == 0 || gh == 0 {
-        t.put(r.x + 2, r.y + 1, A_DIM, 0, "no lattice, no positions — table only (m cycles views)".as_bytes(), r.w - 4);
+        t.put(
+            r.x + 2,
+            r.y + 1,
+            A_DIM,
+            0,
+            "no lattice, no positions — table only (m cycles views)".as_bytes(),
+            r.w - 4,
+        );
         return;
     }
     let ox = r.x + 2;
@@ -1575,7 +1838,11 @@ pub fn draw_bitmap(app: &mut App, t: &mut Term) {
                     if tt > 1.0 {
                         tt = 1.0;
                     }
-                    pix[k] = if e.vtype == VType::Bool { FIELD_PAL[pi % 10] } else { (236 + (tt * 12.0) as i32) as u8 };
+                    pix[k] = if e.vtype == VType::Bool {
+                        FIELD_PAL[pi % 10]
+                    } else {
+                        (236 + (tt * 12.0) as i32) as u8
+                    };
                 }
                 k += 1;
             }
@@ -1597,7 +1864,8 @@ pub fn draw_bitmap(app: &mut App, t: &mut Term) {
             }
             let row = ((i - 2) / 2) as i32;
             let eg = app.world.ent_glyph(row);
-            pix[(dy as i32 * gw + dx as i32) as usize] = app.world.ent_color(row, eg.as_deref().unwrap_or(b""));
+            pix[(dy as i32 * gw + dx as i32) as usize] =
+                app.world.ent_color(row, eg.as_deref().unwrap_or(b""));
         }
     }
     let mut ty = 0;
@@ -1605,7 +1873,11 @@ pub fn draw_bitmap(app: &mut App, t: &mut Term) {
         let mut cx = 0;
         while cx < gw && ox + cx < r.x + r.w - 1 {
             let up = pix[(2 * ty * gw + cx) as usize];
-            let lo = if 2 * ty + 1 < gh { pix[((2 * ty + 1) * gw + cx) as usize] } else { C_BG };
+            let lo = if 2 * ty + 1 < gh {
+                pix[((2 * ty + 1) * gw + cx) as usize]
+            } else {
+                C_BG
+            };
             t.putp(ox + cx, oy + ty, 0, up, lo, "▀".as_bytes(), 1);
             cx += 1;
         }
@@ -1665,7 +1937,14 @@ pub fn draw_outputs(app: &mut App, t: &mut Term) {
         app.outputs_scroll = 0;
     }
     if app.qgroups.is_empty() {
-        t.put(r.x + 2, r.y + 1, A_DIM, 0, "query results land here — n ticks the demo, the prompt asks".as_bytes(), r.w - 4);
+        t.put(
+            r.x + 2,
+            r.y + 1,
+            A_DIM,
+            0,
+            "query results land here — n ticks the demo, the prompt asks".as_bytes(),
+            r.w - 4,
+        );
         return;
     }
     let mut li = 0i32;
@@ -1676,7 +1955,11 @@ pub fn draw_outputs(app: &mut App, t: &mut Term) {
         gi -= 1;
         let step = app.qgroups[gi].step;
         if li >= app.outputs_scroll {
-            let seam = if step > 0 { format!("— step {}", step) } else { "— run".to_string() };
+            let seam = if step > 0 {
+                format!("— step {}", step)
+            } else {
+                "— run".to_string()
+            };
             t.put(r.x + 2, y, A_DIM, C_FRAME, seam.as_bytes(), r.w - 4);
             y += 1;
         }
@@ -1758,7 +2041,10 @@ pub fn draw_out(app: &mut App, t: &mut Term) {
             } else if line.len() >= 2 && line[0] == b'$' && line[1] == b' ' {
                 fg = C_CODEC;
                 attr = A_DIM;
-            } else if contains(line, b"error") || contains(line, b"FAIL") || contains(line, b"cannot") {
+            } else if contains(line, b"error")
+                || contains(line, b"FAIL")
+                || contains(line, b"cannot")
+            {
                 fg = C_ERR;
             } else if contains(line, b" IS DEAD !") || contains(line, b" IS EMPTY !") {
                 fg = C_ERR;
@@ -1790,7 +2076,16 @@ pub fn draw_out(app: &mut App, t: &mut Term) {
 pub fn draw_prompt(app: &mut App, t: &mut Term) {
     let r = app.prompt_r;
     let on = app.focus == Focus::Prompt;
-    t.draw_box(r, if app.mode == Mode::Reg { "prompt · the program" } else { "prompt" }, C_PROMPTC, on);
+    t.draw_box(
+        r,
+        if app.mode == Mode::Reg {
+            "prompt · the program"
+        } else {
+            "prompt"
+        },
+        C_PROMPTC,
+        on,
+    );
     let mut vis = r.h - 2;
     if vis < 1 {
         vis = 1;
@@ -1830,7 +2125,14 @@ pub fn draw_prompt(app: &mut App, t: &mut Term) {
         let lend = rel.map(|k| lstart + k).unwrap_or(app.prompt.len());
         if li >= app.ptop && li < app.ptop + vis {
             let y = r.y + 1 + li - app.ptop;
-            t.put(r.x + 2, y, A_BOLD, if on { C_PROMPTC } else { C_FRAME }, if li == 0 { b">" } else { "·".as_bytes() }, 1);
+            t.put(
+                r.x + 2,
+                y,
+                A_BOLD,
+                if on { C_PROMPTC } else { C_FRAME },
+                if li == 0 { b">" } else { "·".as_bytes() },
+                1,
+            );
             let mut off = 0usize;
             if li == cl {
                 // horizontal window on the cursor's line only
@@ -1848,7 +2150,14 @@ pub fn draw_prompt(app: &mut App, t: &mut Term) {
                 }
                 off = app.pscroll - lstart;
             }
-            t.put(r.x + 4, y, if on { 0 } else { A_DIM }, 0, &app.prompt[lstart + off..lend], avail);
+            t.put(
+                r.x + 4,
+                y,
+                if on { 0 } else { A_DIM },
+                0,
+                &app.prompt[lstart + off..lend],
+                avail,
+            );
             if li == cl && off > 0 {
                 t.put(r.x + 3, y, A_DIM, C_PROMPTC, "…".as_bytes(), 1);
             }
@@ -2157,7 +2466,14 @@ pub fn handle(app: &mut App, t: &mut Term, e: &Ev) {
         return;
     }
     if e.etype == EV_KEY && e.key == K_TAB {
-        let order = [Focus::Rail, Focus::Code, Focus::World, Focus::Outputs, Focus::Out, Focus::Prompt];
+        let order = [
+            Focus::Rail,
+            Focus::Code,
+            Focus::World,
+            Focus::Outputs,
+            Focus::Out,
+            Focus::Prompt,
+        ];
         let mut at = 0usize;
         for (i, f) in order.iter().enumerate() {
             if *f == app.focus {
@@ -2259,10 +2575,18 @@ pub fn mouse_ev(app: &mut App, e: &Ev) {
                 app.ccy = 0;
             }
             if app.ccy >= app.code.len() as i32 {
-                app.ccy = if !app.code.is_empty() { app.code.len() as i32 - 1 } else { 0 };
+                app.ccy = if !app.code.is_empty() {
+                    app.code.len() as i32 - 1
+                } else {
+                    0
+                };
             }
         } else if hit(app.world_r, x, y) {
-            let rows = if app.space_view != 0 { space_dims(app).1 } else { world::seg_rows(app, app.w_seg) };
+            let rows = if app.space_view != 0 {
+                space_dims(app).1
+            } else {
+                world::seg_rows(app, app.w_seg)
+            };
             app.w_row += d;
             if app.w_row < 0 {
                 app.w_row = 0;
@@ -2401,7 +2725,11 @@ pub fn mouse_ev(app: &mut App, e: &Ev) {
                     if let Some(fi) = world::seg_field(app, vr.seg) {
                         let (cell_w, pad) = field_cellw(app, fi);
                         let gx = (x - app.world_r.x - 1) / (cell_w + pad);
-                        let gw = if app.world.lat_w != 0 { app.world.lat_w } else { app.world.ents[fi].nums.len() as i32 };
+                        let gw = if app.world.lat_w != 0 {
+                            app.world.lat_w
+                        } else {
+                            app.world.ents[fi].nums.len() as i32
+                        };
                         if gx >= 0 && gx < gw {
                             app.w_seg = vr.seg;
                             app.w_row = vr.row;
@@ -2525,7 +2853,9 @@ fn path_has(cmd: &str) -> bool {
     if cmd.contains('/') {
         return sys::access_x(cmd);
     }
-    let Ok(p) = std::env::var("PATH") else { return false };
+    let Ok(p) = std::env::var("PATH") else {
+        return false;
+    };
     for dir in p.split(':') {
         if dir.is_empty() {
             continue;

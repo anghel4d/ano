@@ -4,7 +4,6 @@
 
 use std::io::{Error, Read, Write};
 
-
 pub const ANO_PATHSZ: usize = 1024;
 
 // A resolved path. Invariant: only constructed through the checked fns below — anything the
@@ -40,7 +39,9 @@ pub fn fs_exe_dir() -> Option<AnoPath> {
     if len == 0 || len >= ANO_PATHSZ {
         return None;
     }
-    Some(AnoPath { s: s[..len].to_string() })
+    Some(AnoPath {
+        s: s[..len].to_string(),
+    })
 }
 
 // Inputs: a path. Output: its directory — "." when slash-free or empty input, "/" kept at
@@ -62,7 +63,9 @@ pub fn fs_dirname(path: &str) -> Option<AnoPath> {
     while len > 1 && b[len - 1] == b'/' {
         len -= 1;
     }
-    Some(AnoPath { s: r.s[..len].to_string() })
+    Some(AnoPath {
+        s: r.s[..len].to_string(),
+    })
 }
 
 // Inputs: dir (empty -> "."), rel. Output: absolute rel passes VERBATIM; else "dir/rel";
@@ -100,9 +103,7 @@ pub fn fs_norm(p: &mut AnoPath) {
         }
         let seg = &src[i..j];
         let dotdot = seg == "..";
-        let last_is_dotdot = start
-            .last()
-            .is_some_and(|&st| &out[st..] == "..");
+        let last_is_dotdot = start.last().is_some_and(|&st| &out[st..] == "..");
         if seg.is_empty() || seg == "." {
             // skip
         } else if dotdot && !start.is_empty() && !last_is_dotdot {

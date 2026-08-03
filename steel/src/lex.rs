@@ -29,7 +29,13 @@ struct TokBuf {
 
 impl TokBuf {
     fn new() -> TokBuf {
-        TokBuf { kind: Vec::new(), name: Vec::new(), num: Vec::new(), line: Vec::new(), post: Vec::new() }
+        TokBuf {
+            kind: Vec::new(),
+            name: Vec::new(),
+            num: Vec::new(),
+            line: Vec::new(),
+            post: Vec::new(),
+        }
     }
 
     // Inputs: kind, line. Output: index of the appended token (name EMPTY, num 0, post false).
@@ -179,9 +185,7 @@ fn kwkind(nm: &str) -> Option<TokKind> {
 fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
     let src = s.as_bytes();
     let n = src.len();
-    let at = |i: usize| -> u8 {
-        if i < n { src[i] } else { 0 }
-    };
+    let at = |i: usize| -> u8 { if i < n { src[i] } else { 0 } };
     let mut line: i32 = 1;
     let mut i = 0usize;
     while i < n {
@@ -508,7 +512,8 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                     i += 1;
                 }
             }
-            b'#' => { if d == b'/' {
+            b'#' => {
+                if d == b'/' {
                     let ix = b.push(t(TokKind::Fold), line);
                     b.name[ix] = it.intern("#");
                     i += 2;
@@ -516,7 +521,10 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                     let ix = b.push(t(TokKind::ScanOp), line);
                     b.name[ix] = it.intern("#");
                     i += 2;
-                } else { return Err(lex_err(line, "'#' begins only '#/' or '#\\'")); } }
+                } else {
+                    return Err(lex_err(line, "'#' begins only '#/' or '#\\'"));
+                }
+            }
             b'@' => {
                 b.push(t(TokKind::At), line);
                 i += 1;
@@ -533,7 +541,12 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 }
             }
             b'\'' => return Err(lex_err(line, "stray tick: ' is postfix on a name")),
-            b'\\' => return Err(lex_err(line, "stray '\\': scans are +\\ -\\ *\\ /\\ &\\ |\\ #\\ or name\\ glued")),
+            b'\\' => {
+                return Err(lex_err(
+                    line,
+                    "stray '\\': scans are +\\ -\\ *\\ /\\ &\\ |\\ #\\ or name\\ glued",
+                ));
+            }
             _ => return Err(lex_err(line, format!("unknown byte 0x{:02X}", c))),
         }
     }
@@ -890,7 +903,10 @@ fn grab_primary(b: &TokBuf, j: i32) -> i32 {
             return j; // unbalanced: bail
         }
         let mut o = o;
-        if o > 0 && (b.kind[(o - 1) as usize] == t(TokKind::Name) || b.kind[(o - 1) as usize] == t(TokKind::Alias)) {
+        if o > 0
+            && (b.kind[(o - 1) as usize] == t(TokKind::Name)
+                || b.kind[(o - 1) as usize] == t(TokKind::Alias))
+        {
             o -= 1; // callee
         }
         return o;
@@ -941,9 +957,7 @@ fn operand_start(b: &TokBuf, k: i32) -> i32 {
 fn lex_ja(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
     let src = s.as_bytes();
     let n = src.len();
-    let at = |i: usize| -> u8 {
-        if i < n { src[i] } else { 0 }
-    };
+    let at = |i: usize| -> u8 { if i < n { src[i] } else { 0 } };
     let mut line: i32 = 1;
     let mut i = 0usize;
     while i < n {
@@ -1037,7 +1051,14 @@ fn lex_ja(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             continue;
         }
         if let Some((v, u)) = ja_numeral(w) {
-            let ix = b.push(t(if u.is_empty() { TokKind::Num } else { TokKind::Counter }), line);
+            let ix = b.push(
+                t(if u.is_empty() {
+                    TokKind::Num
+                } else {
+                    TokKind::Counter
+                }),
+                line,
+            );
             b.num[ix] = v;
             if !u.is_empty() {
                 b.name[ix] = it.intern(u);
@@ -1051,7 +1072,14 @@ fn lex_ja(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             if wl > 1 && (wb[wl - 1] == b'/' || wb[wl - 1] == b'\\') {
                 let stem = &w[..wl - 1];
                 if word_name(stem) {
-                    let ix = b.push(t(if wb[wl - 1] == b'/' { TokKind::Fold } else { TokKind::ScanOp }), line);
+                    let ix = b.push(
+                        t(if wb[wl - 1] == b'/' {
+                            TokKind::Fold
+                        } else {
+                            TokKind::ScanOp
+                        }),
+                        line,
+                    );
                     b.name[ix] = it.intern(stem);
                     continue;
                 }
@@ -1211,7 +1239,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod semantic_tests {
     use super::*;
@@ -1250,21 +1277,29 @@ mod semantic_tests {
         let mut it = Interner::new();
         let toks = lex(src, ja, &mut it).unwrap();
         let kinds = toks.kind.clone();
-        let names = (0..kinds.len()).map(|i| it.resolve(toks.name[i]).to_string()).collect();
+        let names = (0..kinds.len())
+            .map(|i| it.resolve(toks.name[i]).to_string())
+            .collect();
         (kinds, names)
     }
 
     #[test]
     fn caret_lexes_dynamic_alias_request() {
         let (kinds, names) = lexed(b"^Whiterun , +Tagged", false);
-        assert_eq!(&kinds[..4], &[TokKind::Alias, TokKind::Comma, TokKind::Plus, TokKind::Name]);
+        assert_eq!(
+            &kinds[..4],
+            &[TokKind::Alias, TokKind::Comma, TokKind::Plus, TokKind::Name]
+        );
         assert_eq!(names[0], "Whiterun"); // stem interned bare; the request is the kind
     }
 
     #[test]
     fn bang_caret_is_two_tokens() {
         let (kinds, names) = lexed(b"Bandit & !^Dead", false);
-        assert_eq!(&kinds[..4], &[TokKind::Name, TokKind::Amp, TokKind::Bang, TokKind::Alias]);
+        assert_eq!(
+            &kinds[..4],
+            &[TokKind::Name, TokKind::Amp, TokKind::Bang, TokKind::Alias]
+        );
         assert_eq!(names[3], "Dead");
     }
 
@@ -1319,12 +1354,22 @@ mod semantic_tests {
         assert_eq!(
             &kinds[..9],
             &[
-                TokKind::Name, TokKind::Minus, TokKind::Name, TokKind::Slash, TokKind::Name,
-                TokKind::MinusEq, TokKind::Num, TokKind::SlashEq, TokKind::Num,
+                TokKind::Name,
+                TokKind::Minus,
+                TokKind::Name,
+                TokKind::Slash,
+                TokKind::Name,
+                TokKind::MinusEq,
+                TokKind::Num,
+                TokKind::SlashEq,
+                TokKind::Num,
             ]
         );
         let (kinds, _) = lexed(b"a // b", false); // '//' is two slashes, never a fold of '/'
-        assert_eq!(&kinds[..4], &[TokKind::Name, TokKind::Slash, TokKind::Slash, TokKind::Name]);
+        assert_eq!(
+            &kinds[..4],
+            &[TokKind::Name, TokKind::Slash, TokKind::Slash, TokKind::Name]
+        );
     }
 
     #[test]

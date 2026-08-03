@@ -29,14 +29,24 @@ fn alias_snapshot_is_frozen_and_absence_only_falls_back() {
     let before = live.snapshot(&reg).unwrap();
     live.install_binding(&reg, "focus", "Value").unwrap();
     assert!(before.resolve(&reg, "focus").unwrap().is_none());
-    assert_eq!(live.snapshot(&reg).unwrap().resolve(&reg, "focus").unwrap(), Some(ResolvedAlias::Entry(0)));
+    assert_eq!(
+        live.snapshot(&reg).unwrap().resolve(&reg, "focus").unwrap(),
+        Some(ResolvedAlias::Entry(0))
+    );
 }
 
 #[test]
 fn reducer_carriers_are_not_glyph_only() {
-    let head = |spelling, carrier| reducer::resolve_head(spelling, Form::Fold, carrier, false).unwrap();
-    assert_eq!(head("|", Carrier::Mask).reducer().unwrap().direct_step(), Some("∨"));
-    assert_eq!(head("|", Carrier::Number).reducer().unwrap().direct_step(), Some("⌈"));
+    let head =
+        |spelling, carrier| reducer::resolve_head(spelling, Form::Fold, carrier, false).unwrap();
+    assert_eq!(
+        head("|", Carrier::Mask).reducer().unwrap().direct_step(),
+        Some("∨")
+    );
+    assert_eq!(
+        head("|", Carrier::Number).reducer().unwrap().direct_step(),
+        Some("⌈")
+    );
     assert!(head("&", Carrier::Mask).empty_identity().is_some());
     assert!(head("&", Carrier::Number).empty_identity().is_none());
 }

@@ -34,8 +34,10 @@ fn main() -> ExitCode {
 // directive parsing (C-string fidelity); --tokens returns before parse; --dump happens
 // before lexing and exits 0 when no other mode was asked.
 fn run() -> i32 {
-    let args: Vec<String> =
-        std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = std::env::args_os()
+        .skip(1)
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
     let (mut mode_tokens, mut mode_run, mut mode_emit) = (false, false, false);
     let (mut label_flag, mut trace_flag) = (false, false);
     let mut rt_flag: Option<String> = None;
@@ -140,7 +142,11 @@ fn run() -> i32 {
         reg_flag.or_else(|| (!dirs.registry.is_empty()).then(|| dirs.registry.clone()));
     if let Some(rspec) = &rspec {
         let is_path = rspec.contains('/') || (rspec.len() > 4 && rspec.ends_with(".reg"));
-        let spec = if is_path { rspec.clone() } else { format!("{}.reg", rspec) };
+        let spec = if is_path {
+            rspec.clone()
+        } else {
+            format!("{}.reg", rspec)
+        };
         let regp = fs::fs_dirname(&path)
             .filter(|_| !spec.is_empty() && spec.len() < fs::ANO_PATHSZ)
             .and_then(|d| fs::fs_join(&d.s, &spec)) // absolute rspec passes verbatim
@@ -248,7 +254,12 @@ fn run() -> i32 {
         match fs::fs_read(&rtp.s) {
             Ok(v) => std::borrow::Cow::Owned(v),
             Err(e) => {
-                eprintln!("{}: cannot read runtime {}: {}", path, rtp.s, fs::strerror(&e));
+                eprintln!(
+                    "{}: cannot read runtime {}: {}",
+                    path,
+                    rtp.s,
+                    fs::strerror(&e)
+                );
                 return 2;
             }
         }
@@ -425,9 +436,16 @@ fn dir_line(s: &[u8], dirs: &mut Directives) -> Result<(), Diag> {
             }
             w = c.word();
         }
-        dirs.expects.push(if is_out { Expect::Out { vals } } else { Expect::Col { col, vals } });
+        dirs.expects.push(if is_out {
+            Expect::Out { vals }
+        } else {
+            Expect::Col { col, vals }
+        });
     } else {
-        return Err(Diag::refuse(format!("directive: unknown key '{}'", lossy(key))));
+        return Err(Diag::refuse(format!(
+            "directive: unknown key '{}'",
+            lossy(key)
+        )));
     }
     Ok(())
 }
@@ -442,7 +460,10 @@ fn parse_directives(src: &mut [u8], dirs: &mut Directives) -> Result<(), Diag> {
     let total = src.len();
     let mut line = 0usize;
     while line < total {
-        let end = src[line..].iter().position(|&b| b == b'\n').map(|p| line + p);
+        let end = src[line..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|p| line + p);
         let len = end.unwrap_or(total) - line;
         let mut p = line;
         while p < line + len && (src[p] == b' ' || src[p] == b'\t') {
@@ -561,7 +582,11 @@ fn run_bqn(path: &str, rt: &[u8], prog: &str, cap: Option<&mut Vec<u8>>) -> i32 
         let mut last: Option<io::Error> = None;
         for salt in 0..100u64 {
             let name = format!("{}/steel-{}.bqn", tdir, rand6(salt));
-            match std::fs::OpenOptions::new().write(true).create_new(true).open(&name) {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&name)
+            {
                 Ok(f) => {
                     made = Some((name, f));
                     break;
@@ -579,7 +604,12 @@ fn run_bqn(path: &str, rt: &[u8], prog: &str, cap: Option<&mut Vec<u8>>) -> i32 
             Some(t) => t,
             None => {
                 let e = last.unwrap_or_else(|| io::Error::from(io::ErrorKind::AlreadyExists));
-                eprintln!("{}: cannot create temp file in {}: {}", path, tdir, fs::strerror(&e));
+                eprintln!(
+                    "{}: cannot create temp file in {}: {}",
+                    path,
+                    tdir,
+                    fs::strerror(&e)
+                );
                 return 2;
             }
         }
@@ -705,15 +735,27 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
     // char payload is the raw tail — word() consumed exactly one separator, so rest() is
     // the glyph run verbatim, spaces included
     let tail = c.rest();
-    let Some(ei) = reg.ents.iter().position(|e| registry::names_eq(&e.name, &name)) else {
+    let Some(ei) = reg
+        .ents
+        .iter()
+        .position(|e| registry::names_eq(&e.name, &name))
+    else {
         return Err(Diag::refuse(format!("save: unknown entry '{}'", name)));
     };
     let n_now = reg.n;
-    let rows = if is_field { reg.lat_w * reg.lat_h } else { n_now };
+    let rows = if is_field {
+        reg.lat_w * reg.lat_h
+    } else {
+        n_now
+    };
     let rows_u = rows.max(0) as usize;
     let char_target = match &reg.ents[ei].kind {
-        RegEntryKind::Col { ty: ColType::Char, .. } => is_col,
-        RegEntryKind::Field { ty: ColType::Char, .. } => is_field,
+        RegEntryKind::Col {
+            ty: ColType::Char, ..
+        } => is_col,
+        RegEntryKind::Field {
+            ty: ColType::Char, ..
+        } => is_field,
         _ => false,
     };
     if (is_col || is_field) && char_target {
@@ -736,7 +778,8 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             || tail[rows_u - 1] == b' '
             || tail[rows_u - 1] == b'\t';
         if !bad {
-            bad = (1..rows_u).any(|j| tail[j] == b'#' && (tail[j - 1] == b' ' || tail[j - 1] == b'\t'));
+            bad = (1..rows_u)
+                .any(|j| tail[j] == b'#' && (tail[j - 1] == b' ' || tail[j - 1] == b'\t'));
         }
         if bad {
             return Err(Diag::refuse(format!(
@@ -769,7 +812,13 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
         }
         let is_sym = matches!(
             &reg.ents[ei].kind,
-            RegEntryKind::Col { ty: ColType::Sym, .. } | RegEntryKind::Field { ty: ColType::Sym, .. }
+            RegEntryKind::Col {
+                ty: ColType::Sym,
+                ..
+            } | RegEntryKind::Field {
+                ty: ColType::Sym,
+                ..
+            }
         );
         if is_sym {
             if nw != rows {
@@ -781,7 +830,10 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             let mut vs = Vec::with_capacity(words.len());
             for &w in &words {
                 if w.len() >= ANO_NAMESZ {
-                    return Err(Diag::refuse(format!("save: {} {}: sym value too long", kw, name)));
+                    return Err(Diag::refuse(format!(
+                        "save: {} {}: sym value too long",
+                        kw, name
+                    )));
                 }
                 vs.push(lossy(w));
             }
@@ -835,7 +887,11 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             match save_num(w) {
                 Some(x) => v.push(x),
                 None => {
-                    return Err(Diag::refuse(format!("save: pres {}: bad bit '{}'", name, lossy(w))));
+                    return Err(Diag::refuse(format!(
+                        "save: pres {}: bad bit '{}'",
+                        name,
+                        lossy(w)
+                    )));
                 }
             }
         }
@@ -859,7 +915,11 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             match save_num(w) {
                 Some(x) => v.push(x),
                 None => {
-                    return Err(Diag::refuse(format!("save: rel {}: bad index '{}'", name, lossy(w))));
+                    return Err(Diag::refuse(format!(
+                        "save: rel {}: bad index '{}'",
+                        name,
+                        lossy(w)
+                    )));
                 }
             }
         }
@@ -884,7 +944,11 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
                     }
                 }
                 None => {
-                    return Err(Diag::refuse(format!("save: srel {}: bad id '{}'", name, lossy(w))));
+                    return Err(Diag::refuse(format!(
+                        "save: srel {}: bad id '{}'",
+                        name,
+                        lossy(w)
+                    )));
                 }
             }
         }
@@ -910,9 +974,10 @@ fn save_patch(reg: &mut Registry, cap: &[u8]) -> Result<(), Diag> {
     for e in &mut reg.ents {
         match &mut e.kind {
             RegEntryKind::AliasMask { mask } if mask.len() != n => mask.resize(n, 0.0),
-            RegEntryKind::Bind { kind: BindKind::Mask, vals } if vals.len() != n => {
-                vals.resize(n, 0.0)
-            }
+            RegEntryKind::Bind {
+                kind: BindKind::Mask,
+                vals,
+            } if vals.len() != n => vals.resize(n, 0.0),
             _ => {}
         }
     }

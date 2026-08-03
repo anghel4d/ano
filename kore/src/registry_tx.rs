@@ -38,7 +38,10 @@ pub fn publish(path: &str, data: &[u8]) -> Result<(), String> {
         steel::registry::reg_load(&staged.to_string_lossy()).map_err(|diag| diag.msg)?;
         std::fs::rename(&staged, live)
             .map_err(|error| format!("cannot publish {}: {}", path, error))?;
-        if let Some(parent) = live.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        if let Some(parent) = live
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             if let Ok(directory) = std::fs::File::open(parent) {
                 let _ = directory.sync_all();
             }
@@ -52,7 +55,9 @@ pub fn publish(path: &str, data: &[u8]) -> Result<(), String> {
 }
 
 pub fn validate(path: &str) -> Result<(), String> {
-    steel::registry::reg_load(path).map(|_| ()).map_err(|diag| diag.msg)
+    steel::registry::reg_load(path)
+        .map(|_| ())
+        .map_err(|diag| diag.msg)
 }
 
 #[cfg(test)]

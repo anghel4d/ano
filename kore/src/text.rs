@@ -20,7 +20,17 @@ pub fn u8next(s: &[u8], i: &mut usize) -> u32 {
         return 0;
     }
     let c = s[*i] as u32;
-    let n: usize = if c < 0x80 { 1 } else if c < 0xC0 { 1 } else if c < 0xE0 { 2 } else if c < 0xF0 { 3 } else { 4 };
+    let n: usize = if c < 0x80 {
+        1
+    } else if c < 0xC0 {
+        1
+    } else if c < 0xE0 {
+        2
+    } else if c < 0xF0 {
+        3
+    } else {
+        4
+    };
     if n == 1 {
         *i += 1;
         return if c < 0x80 { c } else { RUNE_REPLACEMENT };
@@ -47,13 +57,20 @@ pub fn cw(c: u32) -> i32 {
     if c < 0x1100 {
         return 1;
     }
-    if (c >= 0x1100 && c <= 0x115F) || (c >= 0x231A && c <= 0x231B)
-        || (c >= 0x2B1B && c <= 0x2B1C) || (c >= 0x2E80 && c <= 0x303E)
-        || (c >= 0x3041 && c <= 0x33FF) || (c >= 0x3400 && c <= 0x4DBF)
-        || (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0xA000 && c <= 0xA4CF)
-        || (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0xF900 && c <= 0xFAFF)
-        || (c >= 0xFE30 && c <= 0xFE4F) || (c >= 0xFF00 && c <= 0xFF60)
-        || (c >= 0xFFE0 && c <= 0xFFE6) || (c >= 0x1F300 && c <= 0x1FAFF)
+    if (c >= 0x1100 && c <= 0x115F)
+        || (c >= 0x231A && c <= 0x231B)
+        || (c >= 0x2B1B && c <= 0x2B1C)
+        || (c >= 0x2E80 && c <= 0x303E)
+        || (c >= 0x3041 && c <= 0x33FF)
+        || (c >= 0x3400 && c <= 0x4DBF)
+        || (c >= 0x4E00 && c <= 0x9FFF)
+        || (c >= 0xA000 && c <= 0xA4CF)
+        || (c >= 0xAC00 && c <= 0xD7A3)
+        || (c >= 0xF900 && c <= 0xFAFF)
+        || (c >= 0xFE30 && c <= 0xFE4F)
+        || (c >= 0xFF00 && c <= 0xFF60)
+        || (c >= 0xFFE0 && c <= 0xFFE6)
+        || (c >= 0x1F300 && c <= 0x1FAFF)
         || (c >= 0x20000 && c <= 0x3FFFD)
     {
         return 2;
@@ -258,7 +275,13 @@ struct CeIter<'a> {
 
 impl<'a> CeIter<'a> {
     fn new(s: &'a [u8]) -> Self {
-        CeIter { s, i: 0, qn: 0, qk: 0, q: [0; CE_QUEUE_CAP] }
+        CeIter {
+            s,
+            i: 0,
+            qn: 0,
+            qk: 0,
+            q: [0; CE_QUEUE_CAP],
+        }
     }
 
     fn ce_next(&mut self) -> Option<u32> {
@@ -465,7 +488,15 @@ pub fn u8_tail_fix(s: &mut Vec<u8>) {
         return;
     }
     let h = s[k - 1];
-    let need: usize = if h < 0xC0 { 1 } else if h < 0xE0 { 2 } else if h < 0xF0 { 3 } else { 4 };
+    let need: usize = if h < 0xC0 {
+        1
+    } else if h < 0xE0 {
+        2
+    } else if h < 0xF0 {
+        3
+    } else {
+        4
+    };
     if need > n - k + 1 {
         s.truncate(k - 1);
     }
@@ -486,7 +517,12 @@ mod tests {
         // base letters are level one
         assert!(collate("Äpfel".as_bytes(), b"Zebra") < 0);
         // the prefix rule: a stem sorts before its own conjugate
-        assert!(collate(b"01-canonical-masked-update", b"01-canonical-masked-update-nihongo") < 0);
+        assert!(
+            collate(
+                b"01-canonical-masked-update",
+                b"01-canonical-masked-update-nihongo"
+            ) < 0
+        );
     }
 
     #[test]
@@ -512,7 +548,13 @@ mod tests {
     #[test]
     fn demo_order_pin() {
         use std::cmp::Ordering;
-        assert_eq!(cmp_demo("demos/01-canonical-masked-update.ano", "demos/01-canonical-masked-update-nihongo.ano"), Ordering::Less);
+        assert_eq!(
+            cmp_demo(
+                "demos/01-canonical-masked-update.ano",
+                "demos/01-canonical-masked-update-nihongo.ano"
+            ),
+            Ordering::Less
+        );
         assert_eq!(cmp_demo("demos/2-b.ano", "demos/10-a.ano"), Ordering::Less);
     }
 

@@ -5,16 +5,14 @@
 // merged-capture and editor child runners, filesystem probes, and errno text.
 
 use nix::errno::Errno;
-use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
-use nix::sys::signal::{
-    raise, sigaction, signal, SaFlags, SigAction, SigHandler, SigSet, Signal,
-};
+use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
+use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, raise, sigaction, signal};
 use nix::sys::termios::{
-    tcgetattr, tcsetattr, InputFlags, LocalFlags, SetArg, SpecialCharacterIndices, Termios,
+    InputFlags, LocalFlags, SetArg, SpecialCharacterIndices, Termios, tcgetattr, tcsetattr,
 };
-use nix::sys::wait::{waitpid, WaitStatus};
+use nix::sys::wait::{WaitStatus, waitpid};
 use nix::unistd::{
-    access, dup2_stderr, dup2_stdout, execvp, fork, pipe, read, write, AccessFlags, ForkResult,
+    AccessFlags, ForkResult, access, dup2_stderr, dup2_stdout, execvp, fork, pipe, read, write,
 };
 use std::cell::UnsafeCell;
 use std::ffi::CString;
@@ -52,7 +50,6 @@ struct SavedTermios(UnsafeCell<Option<Termios>>);
 unsafe impl Sync for SavedTermios {}
 static SAVED: SavedTermios = SavedTermios(UnsafeCell::new(None));
 
-
 // strerror(errno) as an owned String — the exec-failure and file-error message text.
 pub fn errno_str() -> String {
     Errno::last().desc().to_string()
@@ -71,7 +68,8 @@ pub fn term_enter() -> bool {
     };
     let mut t = saved.clone();
     unsafe { *SAVED.0.get() = Some(saved) };
-    t.local_flags.remove(LocalFlags::ICANON | LocalFlags::ECHO | LocalFlags::ISIG);
+    t.local_flags
+        .remove(LocalFlags::ICANON | LocalFlags::ECHO | LocalFlags::ISIG);
     t.input_flags.remove(InputFlags::IXON | InputFlags::ICRNL);
     t.control_chars[SpecialCharacterIndices::VMIN as usize] = 0;
     t.control_chars[SpecialCharacterIndices::VTIME as usize] = 0;
@@ -150,11 +148,20 @@ pub fn resized_take() -> bool {
 // ioctl TIOCGWINSZ; Some((rows, cols)) only when both are positive.
 // The 24x80 fallback and the 12/20 floors are the caller's (term.rs term_size).
 pub fn win_size() -> Option<(i32, i32)> {
-    let mut ws = Winsize { ws_row: 0, ws_col: 0, ws_xpixel: 0, ws_ypixel: 0 };
+    let mut ws = Winsize {
+        ws_row: 0,
+        ws_col: 0,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
     if unsafe { tiocgwinsz(0, &mut ws) }.is_err() {
         return None;
     }
-    if ws.ws_row > 0 && ws.ws_col > 0 { Some((ws.ws_row as i32, ws.ws_col as i32)) } else { None }
+    if ws.ws_row > 0 && ws.ws_col > 0 {
+        Some((ws.ws_row as i32, ws.ws_col as i32))
+    } else {
+        None
+    }
 }
 
 // ---------- input / output ----------
@@ -192,9 +199,10 @@ pub fn write_stdout(buf: &[u8]) {
 // ---------- child processes ----------
 
 fn cstrings(argv: &[&str]) -> Vec<CString> {
-    argv.iter().map(|a| CString::new(*a).unwrap_or_default()).collect()
+    argv.iter()
+        .map(|a| CString::new(*a).unwrap_or_default())
+        .collect()
 }
-
 
 // Run argv to completion, child stdout AND stderr merged onto one pipe (dup2 both —
 // kernel interleaving order, exactly as kore.c run_child). Capture appended to cap.
@@ -216,8 +224,11 @@ pub fn run_capture(argv: &[&str], cap: &mut Vec<u8>) -> i32 {
             match execvp(&cargs[0], &cargs) {
                 Ok(_) => unreachable!(),
                 Err(e) => {
-                    let msg =
-                        format!("kore: cannot exec {}: {}\n", argv.first().unwrap_or(&""), e.desc());
+                    let msg = format!(
+                        "kore: cannot exec {}: {}\n",
+                        argv.first().unwrap_or(&""),
+                        e.desc()
+                    );
                     write_stdout(msg.as_bytes());
                     unsafe { nix::libc::_exit(127) }
                 }
@@ -337,5 +348,9 @@ pub fn fmt_lld(v: i64) -> String {
 // std::fs::canonicalize to an absolute normalized path, then strict UTF-8 conversion;
 // None on either filesystem failure or a non-UTF-8 result.
 pub fn real_path(path: &str) -> Option<String> {
-    std::fs::canonicalize(path).ok()?.into_os_string().into_string().ok()
+    std::fs::canonicalize(path)
+        .ok()?
+        .into_os_string()
+        .into_string()
+        .ok()
 }

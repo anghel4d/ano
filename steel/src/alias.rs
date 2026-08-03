@@ -33,7 +33,13 @@ pub fn sidecar_path(registry_path: &str) -> PathBuf {
 /// The registry name fold: ASCII A-Z only, all non-ASCII bytes exact.
 pub fn canonical_name(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_uppercase() { c.to_ascii_lowercase() } else { c })
+        .map(|c| {
+            if c.is_ascii_uppercase() {
+                c.to_ascii_lowercase()
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -146,7 +152,7 @@ fn run_input_mask(reg: &Registry, input: &HostInput) -> Result<ResolverValue, Di
                 return Err(fail(format!(
                     "resolver 'input.mask' token '{}' is not 0 or 1",
                     token
-                )))
+                )));
             }
         });
     }
@@ -226,7 +232,9 @@ impl AliasTarget {
 
     pub fn describe(&self) -> String {
         match self {
-            AliasTarget::Binding { binding, carrier, .. } => {
+            AliasTarget::Binding {
+                binding, carrier, ..
+            } => {
                 format!("{} ({})", binding, carrier.word())
             }
             AliasTarget::Mask { values, .. } => {
@@ -237,7 +245,13 @@ impl AliasTarget {
                     .join(" ");
                 format!("mask [{}]", bits)
             }
-            AliasTarget::Resolver { resolver, carrier, service, input, .. } => format!(
+            AliasTarget::Resolver {
+                resolver,
+                carrier,
+                service,
+                input,
+                ..
+            } => format!(
                 "resolver {} ({}, service {}, input v{})",
                 resolver,
                 carrier.word(),
@@ -255,7 +269,12 @@ impl AliasTarget {
             AliasTarget::Mask { .. } => {
                 format!("mask '{}'", materialized.unwrap_or(""))
             }
-            AliasTarget::Resolver { resolver, service, input, .. } => format!(
+            AliasTarget::Resolver {
+                resolver,
+                service,
+                input,
+                ..
+            } => format!(
                 "resolver '{}' service {} input v{}",
                 resolver, service, input.version
             ),
@@ -286,13 +305,21 @@ pub enum ResolvedAlias {
 
 impl Default for AliasEnvironment {
     fn default() -> Self {
-        Self { version: 0, schema: 0, entries: BTreeMap::new() }
+        Self {
+            version: 0,
+            schema: 0,
+            entries: BTreeMap::new(),
+        }
     }
 }
 
 impl Default for AliasSnapshot {
     fn default() -> Self {
-        Self { version: 0, schema: 0, entries: BTreeMap::new() }
+        Self {
+            version: 0,
+            schema: 0,
+            entries: BTreeMap::new(),
+        }
     }
 }
 
@@ -315,12 +342,24 @@ pub fn registry_fingerprint(reg: &Registry) -> u64 {
         hash = hash_bytes(hash, entry.name.as_bytes());
         hash = hash_bytes(hash, &[0]);
         let kind = match &entry.kind {
-            RegEntryKind::Col { ty, uniq, .. } => {
-                0x10u8.wrapping_add(*ty as u8).wrapping_add(if *uniq { 0x20 } else { 0 })
-            }
+            RegEntryKind::Col { ty, uniq, .. } => 0x10u8
+                .wrapping_add(*ty as u8)
+                .wrapping_add(if *uniq { 0x20 } else { 0 }),
             RegEntryKind::Field { ty, .. } => 0x30u8.wrapping_add(*ty as u8),
-            RegEntryKind::Rel { key_of, .. } => if key_of.is_some() { 0x41 } else { 0x40 },
-            RegEntryKind::SRel { key_of, .. } => if key_of.is_some() { 0x51 } else { 0x50 },
+            RegEntryKind::Rel { key_of, .. } => {
+                if key_of.is_some() {
+                    0x41
+                } else {
+                    0x40
+                }
+            }
+            RegEntryKind::SRel { key_of, .. } => {
+                if key_of.is_some() {
+                    0x51
+                } else {
+                    0x50
+                }
+            }
             RegEntryKind::AliasMask { .. } => 0x60,
             RegEntryKind::Bind { kind, .. } => 0x70u8.wrapping_add(*kind as u8),
             RegEntryKind::Fn { .. } => 0x80,
@@ -329,8 +368,12 @@ pub fn registry_fingerprint(reg: &Registry) -> u64 {
         };
         hash = hash_bytes(hash, &[kind]);
         match &entry.kind {
-            RegEntryKind::Rel { key_of: Some(key), .. }
-            | RegEntryKind::SRel { key_of: Some(key), .. } => {
+            RegEntryKind::Rel {
+                key_of: Some(key), ..
+            }
+            | RegEntryKind::SRel {
+                key_of: Some(key), ..
+            } => {
                 hash = hash_bytes(hash, key.as_bytes());
             }
             _ => {}
@@ -357,15 +400,25 @@ fn entry_carrier(reg: &Registry, index: usize) -> Result<AliasCarrier, Diag> {
         return Err(fail(format!("registry entry {} is stale", index)));
     };
     Ok(match &entry.kind {
-        RegEntryKind::Col { ty: ColType::Bool, .. }
-        | RegEntryKind::Field { ty: ColType::Bool, .. }
+        RegEntryKind::Col {
+            ty: ColType::Bool, ..
+        }
+        | RegEntryKind::Field {
+            ty: ColType::Bool, ..
+        }
         | RegEntryKind::AliasMask { .. }
         | RegEntryKind::Tag { .. } => AliasCarrier::Mask,
-        RegEntryKind::Col { ty: ColType::Sym | ColType::Char, .. }
-        | RegEntryKind::Field { ty: ColType::Sym | ColType::Char, .. } => AliasCarrier::Symbol,
-        RegEntryKind::Col { .. }
-        | RegEntryKind::Field { .. }
-        | RegEntryKind::Rel { .. } => AliasCarrier::Number,
+        RegEntryKind::Col {
+            ty: ColType::Sym | ColType::Char,
+            ..
+        }
+        | RegEntryKind::Field {
+            ty: ColType::Sym | ColType::Char,
+            ..
+        } => AliasCarrier::Symbol,
+        RegEntryKind::Col { .. } | RegEntryKind::Field { .. } | RegEntryKind::Rel { .. } => {
+            AliasCarrier::Number
+        }
         RegEntryKind::SRel { .. } => AliasCarrier::Vector,
         RegEntryKind::Bind { kind, .. } => match kind {
             BindKind::Entity => AliasCarrier::Entity,
@@ -382,7 +435,10 @@ fn entry_carrier(reg: &Registry, index: usize) -> Result<AliasCarrier, Diag> {
 
 fn validate_name(name: &str, what: &str) -> Result<(), Diag> {
     if name.is_empty() || name.bytes().any(|b| matches!(b, b'\t' | b'\r' | b'\n')) {
-        return Err(fail(format!("{} must be a nonempty single-line token", what)));
+        return Err(fail(format!(
+            "{} must be a nonempty single-line token",
+            what
+        )));
     }
     Ok(())
 }
@@ -414,7 +470,11 @@ fn binding_target(reg: &Registry, binding: &str, schema: u64) -> Result<AliasTar
 
 impl AliasEnvironment {
     pub fn for_registry(reg: &Registry) -> Self {
-        Self { version: 0, schema: registry_fingerprint(reg), entries: BTreeMap::new() }
+        Self {
+            version: 0,
+            schema: registry_fingerprint(reg),
+            entries: BTreeMap::new(),
+        }
     }
 
     pub fn version(&self) -> u64 {
@@ -430,7 +490,9 @@ impl AliasEnvironment {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&str, &AliasTarget)> {
-        self.entries.iter().map(|(name, target)| (name.as_str(), target))
+        self.entries
+            .iter()
+            .map(|(name, target)| (name.as_str(), target))
     }
 
     fn check_schema(&self, reg: &Registry) -> Result<u64, Diag> {
@@ -470,12 +532,7 @@ impl AliasEnvironment {
         Ok(())
     }
 
-    pub fn install_mask(
-        &mut self,
-        reg: &Registry,
-        name: &str,
-        values: &[f64],
-    ) -> Result<(), Diag> {
+    pub fn install_mask(&mut self, reg: &Registry, name: &str, values: &[f64]) -> Result<(), Diag> {
         validate_name(name, "alias name")?;
         let schema = self.check_schema(reg)?;
         let rows = reg.n.max(0) as usize;
@@ -504,7 +561,11 @@ impl AliasEnvironment {
         self.version = self.version.wrapping_add(1);
         self.entries.insert(
             canonical_name(name),
-            AliasTarget::Mask { values: values.to_vec(), rows, schema },
+            AliasTarget::Mask {
+                values: values.to_vec(),
+                rows,
+                schema,
+            },
         );
         Ok(())
     }
@@ -527,7 +588,10 @@ impl AliasEnvironment {
         let Some(spec) = resolver_spec(id) else {
             return Err(fail(format!("unknown resolver '{}'", id)));
         };
-        let input = HostInput { version: self.version.wrapping_add(1), pairs: members };
+        let input = HostInput {
+            version: self.version.wrapping_add(1),
+            pairs: members,
+        };
         let value = (spec.run)(reg, &input)?;
         if !value_fits(&value, spec.carrier, reg) {
             return Err(fail(format!(
@@ -572,7 +636,11 @@ impl AliasEnvironment {
         let _ = writeln!(text, "{}\t{}\t{:016x}", MAGIC, self.version, self.schema);
         for (name, target) in &self.entries {
             match target {
-                AliasTarget::Binding { binding, carrier, schema } => {
+                AliasTarget::Binding {
+                    binding,
+                    carrier,
+                    schema,
+                } => {
                     let _ = writeln!(
                         text,
                         "bind\t{}\t{}\t{}\t{:016x}",
@@ -582,7 +650,11 @@ impl AliasEnvironment {
                         schema
                     );
                 }
-                AliasTarget::Mask { values, rows, schema } => {
+                AliasTarget::Mask {
+                    values,
+                    rows,
+                    schema,
+                } => {
                     let _ = write!(text, "mask\t{}\t{}\t{:016x}", name, rows, schema);
                     for value in values {
                         let _ = write!(text, "\t{}", num::dnum(*value));
@@ -591,7 +663,13 @@ impl AliasEnvironment {
                 }
                 // MAGIC stays ano-aliases-v1: no sidecar written before resolvers existed can
                 // contain a `rslv` record, so a v1 reader that refuses the word stays sound.
-                AliasTarget::Resolver { resolver, carrier, service, schema, input } => {
+                AliasTarget::Resolver {
+                    resolver,
+                    carrier,
+                    service,
+                    schema,
+                    input,
+                } => {
                     let _ = write!(
                         text,
                         "rslv\t{}\t{}\t{}\t{}\t{:016x}\t{}",
@@ -616,7 +694,9 @@ impl AliasEnvironment {
         }
         let tmp = path.with_extension(format!(
             "{}.tmp.{}",
-            path.extension().and_then(|s| s.to_str()).unwrap_or("aliases"),
+            path.extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("aliases"),
             std::process::id()
         ));
         std::fs::write(&tmp, text.as_bytes())
@@ -640,7 +720,10 @@ impl AliasEnvironment {
             .ok_or_else(|| fail(format!("'{}' is empty", path.display())))?;
         let fields: Vec<&str> = header.split('\t').collect();
         if fields.len() != 3 || fields[0] != MAGIC {
-            return Err(fail(format!("'{}' has an unsupported header", path.display())));
+            return Err(fail(format!(
+                "'{}' has an unsupported header",
+                path.display()
+            )));
         }
         let version = fields[1]
             .parse::<u64>()
@@ -651,10 +734,16 @@ impl AliasEnvironment {
         if schema != current {
             return Err(fail(format!(
                 "'{}' belongs to schema {:016x}, current registry is {:016x}",
-                path.display(), schema, current
+                path.display(),
+                schema,
+                current
             )));
         }
-        let mut environment = Self { version, schema, entries: BTreeMap::new() };
+        let mut environment = Self {
+            version,
+            schema,
+            entries: BTreeMap::new(),
+        };
         for (offset, line) in lines.enumerate() {
             if line.is_empty() {
                 continue;
@@ -662,7 +751,11 @@ impl AliasEnvironment {
             let line_no = offset + 2;
             let fields: Vec<&str> = line.split('\t').collect();
             let malformed = || {
-                fail(format!("{}:{}: malformed alias record", path.display(), line_no))
+                fail(format!(
+                    "{}:{}: malformed alias record",
+                    path.display(),
+                    line_no
+                ))
             };
             match fields.first().copied() {
                 Some("bind") if fields.len() == 5 => {
@@ -677,10 +770,13 @@ impl AliasEnvironment {
                     if target.carrier() != carrier {
                         return Err(fail(format!(
                             "{}:{}: binding carrier changed",
-                            path.display(), line_no
+                            path.display(),
+                            line_no
                         )));
                     }
-                    environment.entries.insert(canonical_name(fields[1]), target);
+                    environment
+                        .entries
+                        .insert(canonical_name(fields[1]), target);
                 }
                 Some("mask") if fields.len() >= 4 => {
                     validate_name(fields[1], "alias name")?;
@@ -701,7 +797,11 @@ impl AliasEnvironment {
                     }
                     environment.entries.insert(
                         canonical_name(fields[1]),
-                        AliasTarget::Mask { values, rows, schema },
+                        AliasTarget::Mask {
+                            values,
+                            rows,
+                            schema,
+                        },
                     );
                 }
                 Some("rslv") if fields.len() >= 7 => {
@@ -709,7 +809,9 @@ impl AliasEnvironment {
                     let Some(spec) = resolver_spec(fields[2]) else {
                         return Err(fail(format!(
                             "{}:{}: unknown resolver '{}'",
-                            path.display(), line_no, fields[2]
+                            path.display(),
+                            line_no,
+                            fields[2]
                         )));
                     };
                     let carrier = AliasCarrier::parse(fields[3]).ok_or_else(malformed)?;
@@ -736,7 +838,10 @@ impl AliasEnvironment {
                             carrier,
                             service,
                             schema,
-                            input: HostInput { version, pairs: input_pairs(&pairs)? },
+                            input: HostInput {
+                                version,
+                                pairs: input_pairs(&pairs)?,
+                            },
                         },
                     );
                 }
@@ -776,7 +881,9 @@ impl AliasSnapshot {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&str, &AliasTarget)> {
-        self.entries.iter().map(|(name, target)| (name.as_str(), target))
+        self.entries
+            .iter()
+            .map(|(name, target)| (name.as_str(), target))
     }
 
     pub fn validate(&self, reg: &Registry) -> Result<(), Diag> {
@@ -789,7 +896,11 @@ impl AliasSnapshot {
         }
         for (name, target) in &self.entries {
             match target {
-                AliasTarget::Binding { binding, carrier, schema } => {
+                AliasTarget::Binding {
+                    binding,
+                    carrier,
+                    schema,
+                } => {
                     if *schema != current {
                         return Err(fail(format!("'^{}' has a stale schema", name)));
                     }
@@ -803,7 +914,11 @@ impl AliasSnapshot {
                         return Err(fail(format!("'^{}' binding carrier changed", name)));
                     }
                 }
-                AliasTarget::Mask { values, rows, schema } => {
+                AliasTarget::Mask {
+                    values,
+                    rows,
+                    schema,
+                } => {
                     if *schema != current
                         || *rows != reg.n.max(0) as usize
                         || values.len() != *rows
@@ -812,7 +927,13 @@ impl AliasSnapshot {
                         return Err(fail(format!("'^{}' is a stale or malformed mask", name)));
                     }
                 }
-                AliasTarget::Resolver { resolver, carrier, service, schema, input } => {
+                AliasTarget::Resolver {
+                    resolver,
+                    carrier,
+                    service,
+                    schema,
+                    input,
+                } => {
                     if *schema != current {
                         return Err(fail(format!("'^{}' has a stale schema", name)));
                     }
@@ -825,7 +946,12 @@ impl AliasSnapshot {
                     if spec.service != *service {
                         return Err(fail(format!("'^{}' resolver service changed", name)));
                     }
-                    let stale = || fail(format!("'^{}' resolver is stale for the current world", name));
+                    let stale = || {
+                        fail(format!(
+                            "'^{}' resolver is stale for the current world",
+                            name
+                        ))
+                    };
                     let value = (spec.run)(reg, input).map_err(|_| stale())?;
                     if spec.carrier != *carrier || !value_fits(&value, *carrier, reg) {
                         return Err(stale());
@@ -844,16 +970,16 @@ impl AliasSnapshot {
 
     /// `Ok(None)` means the overlay has no entry and the caller must perform ordinary bare
     /// lookup.  A present but stale entry is an error and never falls back.
-    pub fn resolve(
-        &self,
-        reg: &Registry,
-        name: &str,
-    ) -> Result<Option<ResolvedAlias>, Diag> {
+    pub fn resolve(&self, reg: &Registry, name: &str) -> Result<Option<ResolvedAlias>, Diag> {
         let Some(target) = self.entries.get(&canonical_name(name)) else {
             return Ok(None);
         };
         match target {
-            AliasTarget::Binding { binding, carrier, schema } => {
+            AliasTarget::Binding {
+                binding,
+                carrier,
+                schema,
+            } => {
                 let current = registry_fingerprint(reg);
                 if *schema != current || self.schema != current {
                     return Err(fail(format!("'^{}' has a stale schema", name)));
@@ -869,7 +995,11 @@ impl AliasSnapshot {
                 }
                 Ok(Some(ResolvedAlias::Entry(index)))
             }
-            AliasTarget::Mask { values, rows, schema } => {
+            AliasTarget::Mask {
+                values,
+                rows,
+                schema,
+            } => {
                 let current = registry_fingerprint(reg);
                 if *schema != current
                     || self.schema != current
@@ -880,7 +1010,13 @@ impl AliasSnapshot {
                 }
                 Ok(Some(ResolvedAlias::Mask(values.clone())))
             }
-            AliasTarget::Resolver { resolver, carrier, service, schema, input } => {
+            AliasTarget::Resolver {
+                resolver,
+                carrier,
+                service,
+                schema,
+                input,
+            } => {
                 let current = registry_fingerprint(reg);
                 if *schema != current || self.schema != current {
                     return Err(fail(format!("'^{}' has a stale schema", name)));
@@ -894,7 +1030,12 @@ impl AliasSnapshot {
                 if spec.service != *service {
                     return Err(fail(format!("'^{}' resolver service changed", name)));
                 }
-                let stale = || fail(format!("'^{}' resolver is stale for the current world", name));
+                let stale = || {
+                    fail(format!(
+                        "'^{}' resolver is stale for the current world",
+                        name
+                    ))
+                };
                 let value = (spec.run)(reg, input).map_err(|_| stale())?;
                 if spec.carrier != *carrier || !value_fits(&value, *carrier, reg) {
                     return Err(stale());
@@ -941,17 +1082,22 @@ mod tests {
     }
 
     fn pairs(members: &[(&str, &str)]) -> Vec<(String, String)> {
-        members.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        members
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     fn listing(environment: &AliasEnvironment) -> Vec<(String, AliasTarget)> {
-        environment.iter().map(|(name, target)| (name.to_string(), target.clone())).collect()
+        environment
+            .iter()
+            .map(|(name, target)| (name.to_string(), target.clone()))
+            .collect()
     }
 
     // A private directory under the system temp root, unique per test and per process.
     fn scratch(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir()
-            .join(format!("ano-alias-{}-{}", std::process::id(), tag));
+        let dir = std::env::temp_dir().join(format!("ano-alias-{}-{}", std::process::id(), tag));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -961,10 +1107,21 @@ mod tests {
     fn dynamic_alias_absent_falls_back_and_present_resolves() {
         let reg = registry();
         let mut environment = AliasEnvironment::for_registry(&reg);
-        assert!(environment.snapshot(&reg).unwrap().resolve(&reg, "focus").unwrap().is_none());
+        assert!(
+            environment
+                .snapshot(&reg)
+                .unwrap()
+                .resolve(&reg, "focus")
+                .unwrap()
+                .is_none()
+        );
         environment.install_binding(&reg, "focus", "gold").unwrap();
         assert_eq!(
-            environment.snapshot(&reg).unwrap().resolve(&reg, "FOCUS").unwrap(),
+            environment
+                .snapshot(&reg)
+                .unwrap()
+                .resolve(&reg, "FOCUS")
+                .unwrap(),
             Some(ResolvedAlias::Entry(0))
         );
     }
@@ -973,7 +1130,9 @@ mod tests {
     fn dynamic_alias_masks_pin_the_row_domain() {
         let reg = registry();
         let mut environment = AliasEnvironment::for_registry(&reg);
-        environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).unwrap();
+        environment
+            .install_mask(&reg, "hot", &[1.0, 0.0, 1.0])
+            .unwrap();
         let mut changed = reg.clone();
         changed.n = 4;
         assert!(environment.snapshot(&changed).is_err());
@@ -997,10 +1156,15 @@ mod tests {
         assert_eq!(environment.version(), 1);
         assert_eq!(listing(&environment).len(), 1);
 
-        environment.install_mask(&reg, "FOCUS", &[1.0, 0.0, 1.0]).unwrap();
+        environment
+            .install_mask(&reg, "FOCUS", &[1.0, 0.0, 1.0])
+            .unwrap();
         assert_eq!(environment.version(), 2);
         assert_eq!(listing(&environment).len(), 1);
-        assert!(matches!(listing(&environment)[0].1, AliasTarget::Mask { .. }));
+        assert!(matches!(
+            listing(&environment)[0].1,
+            AliasTarget::Mask { .. }
+        ));
 
         assert!(environment.delete("focus"));
         assert_eq!(environment.version(), 3);
@@ -1026,10 +1190,19 @@ mod tests {
         let refuse = |result: Result<(), Diag>, what: &str| {
             assert!(result.is_err(), "{} must refuse", what);
         };
-        refuse(environment.install_binding(&reg, "a", "Nope"), "unregistered binding");
+        refuse(
+            environment.install_binding(&reg, "a", "Nope"),
+            "unregistered binding",
+        );
         refuse(environment.install_binding(&reg, "a", "Blast"), "fn target");
-        refuse(environment.install_mask(&reg, "a", &[1.0, 0.0]), "mask row count");
-        refuse(environment.install_mask(&reg, "a", &[1.0, 2.0, 0.0]), "mask non-0/1");
+        refuse(
+            environment.install_mask(&reg, "a", &[1.0, 0.0]),
+            "mask row count",
+        );
+        refuse(
+            environment.install_mask(&reg, "a", &[1.0, 2.0, 0.0]),
+            "mask non-0/1",
+        );
         refuse(
             environment.install_resolver(&reg, "a", "input.nope", &pairs(&[("entity", "0")])),
             "unknown resolver",
@@ -1059,7 +1232,10 @@ mod tests {
         environment.install_binding(&reg, "σ", "Gold").unwrap();
         let snapshot = environment.snapshot(&reg).unwrap();
         assert!(snapshot.resolve(&reg, "Σ").unwrap().is_none());
-        assert_eq!(snapshot.resolve(&reg, "σ").unwrap(), Some(ResolvedAlias::Entry(0)));
+        assert_eq!(
+            snapshot.resolve(&reg, "σ").unwrap(),
+            Some(ResolvedAlias::Entry(0))
+        );
     }
 
     // A stem is one nonempty single-line token; the sidecar is tab-delimited and line-oriented.
@@ -1068,7 +1244,11 @@ mod tests {
         let reg = registry();
         let mut environment = AliasEnvironment::for_registry(&reg);
         for name in ["", "a\tb", "a\nb", "a\rb"] {
-            assert!(environment.install_binding(&reg, name, "Gold").is_err(), "{:?}", name);
+            assert!(
+                environment.install_binding(&reg, name, "Gold").is_err(),
+                "{:?}",
+                name
+            );
         }
         assert_eq!(environment.version(), 0);
     }
@@ -1086,13 +1266,19 @@ mod tests {
             .install_resolver(&reg, "hot", "input.mask", &pairs(&[("mask", "1 0 1")]))
             .unwrap();
         let snapshot = environment.snapshot(&reg).unwrap();
-        assert_eq!(snapshot.resolve(&reg, "FOCUS").unwrap(), Some(ResolvedAlias::EntityRow(1)));
+        assert_eq!(
+            snapshot.resolve(&reg, "FOCUS").unwrap(),
+            Some(ResolvedAlias::EntityRow(1))
+        );
         assert_eq!(
             snapshot.resolve(&reg, "hot").unwrap(),
             Some(ResolvedAlias::Mask(vec![1.0, 0.0, 1.0]))
         );
         // rerunning against the same frozen pair is observationally identical
-        assert_eq!(snapshot.resolve(&reg, "focus").unwrap(), Some(ResolvedAlias::EntityRow(1)));
+        assert_eq!(
+            snapshot.resolve(&reg, "focus").unwrap(),
+            Some(ResolvedAlias::EntityRow(1))
+        );
         assert_eq!(
             environment.iter().next().unwrap().1.describe(),
             "resolver input.entity (entity, service 1, input v1)"
@@ -1105,9 +1291,16 @@ mod tests {
         let path = scratch("round-trip").join("world.reg.aliases");
         let mut environment = AliasEnvironment::for_registry(&reg);
         environment.install_binding(&reg, "focus", "Gold").unwrap();
-        environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).unwrap();
         environment
-            .install_resolver(&reg, "cursorish", "input.entity", &pairs(&[("entity", "2")]))
+            .install_mask(&reg, "hot", &[1.0, 0.0, 1.0])
+            .unwrap();
+        environment
+            .install_resolver(
+                &reg,
+                "cursorish",
+                "input.entity",
+                &pairs(&[("entity", "2")]),
+            )
             .unwrap();
         environment.save(&path).unwrap();
 
@@ -1166,18 +1359,32 @@ mod tests {
 
         let unknown = write(
             "unknown",
-            format!("{}rslv\tfocus\tinput.nope\tentity\t1\t{:016x}\t1\tentity=1\n", header, schema),
+            format!(
+                "{}rslv\tfocus\tinput.nope\tentity\t1\t{:016x}\t1\tentity=1\n",
+                header, schema
+            ),
         );
         let error = AliasEnvironment::load(&unknown, &reg).unwrap_err();
-        assert!(error.msg.contains("unknown resolver 'input.nope'"), "{}", error.msg);
+        assert!(
+            error.msg.contains("unknown resolver 'input.nope'"),
+            "{}",
+            error.msg
+        );
 
         // the service field hand-edited under a registered resolver: caught by the final snapshot
         let drift = write(
             "service",
-            format!("{}rslv\tfocus\tinput.entity\tentity\t9\t{:016x}\t1\tentity=1\n", header, schema),
+            format!(
+                "{}rslv\tfocus\tinput.entity\tentity\t9\t{:016x}\t1\tentity=1\n",
+                header, schema
+            ),
         );
         let error = AliasEnvironment::load(&drift, &reg).unwrap_err();
-        assert!(error.msg.contains("resolver service changed"), "{}", error.msg);
+        assert!(
+            error.msg.contains("resolver service changed"),
+            "{}",
+            error.msg
+        );
     }
 
     // The operator-initiated reset: a sidecar this registry cannot load is discarded with its
@@ -1214,7 +1421,9 @@ mod tests {
         let reg = registry();
         let mut environment = AliasEnvironment::for_registry(&reg);
         environment.install_binding(&reg, "focus", "Gold").unwrap();
-        environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).unwrap();
+        environment
+            .install_mask(&reg, "hot", &[1.0, 0.0, 1.0])
+            .unwrap();
         environment
             .install_resolver(&reg, "here", "input.entity", &pairs(&[("entity", "2")]))
             .unwrap();
@@ -1230,7 +1439,11 @@ mod tests {
         let mut wider = reg.clone();
         wider.n = 4;
         let error = snapshot.resolve(&wider, "hot").unwrap_err();
-        assert!(error.msg.contains("stale for the current world"), "{}", error.msg);
+        assert!(
+            error.msg.contains("stale for the current world"),
+            "{}",
+            error.msg
+        );
 
         let mut narrower = reg.clone();
         narrower.n = 1;

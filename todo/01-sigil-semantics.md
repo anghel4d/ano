@@ -1,6 +1,6 @@
 # 01 — sigil semantics and the resolver boundary
 
-Status: the resolver boundary is implemented in Steel and `02` attaches to it as intended. Sixteen of the seventeen sigil tests hold — bare, sigiled and negated forms, case-fold and non-ASCII controls, spelling-alias and static-mask separation, provenance diagnostics. The seventeenth, byte-identical fallback plans, cannot run: its fixture folds, and fold rendering is a stub. Nothing here is owed to the sigil boundary itself; the charter closes when that fixture emits again.
+Status: the resolver boundary is implemented in Steel and `02` attaches to it as intended. Seventeen of the seventeen sigil tests hold — bare, sigiled and negated forms, case-fold and non-ASCII controls, spelling-alias and static-mask separation, provenance diagnostics, and byte-identical fallback plans under `03`'s landed fold renderer. Nothing here is owed to the sigil boundary itself.
 
 ## Verified current state
 

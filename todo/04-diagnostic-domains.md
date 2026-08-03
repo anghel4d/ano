@@ -118,7 +118,8 @@ Add exact trace tests for:
 - [X] DONE — grouped/fiber diagnostics with source and group identity;
 - [X] DONE — tracing disabled versus enabled: identical output and post-state;
 - [X] DONE — deterministic ordering across repeated runs and any available parallel/backend mode;
-- Kore's diagnostic pane and standalone Steel's machine-readable trace.
+- [X] DONE — standalone Steel's machine-readable trace.
+- Kore's diagnostic-pane parity with Steel's event identity, domain, order, and presentation.
 
 The relationship/spatial rewrite campaign must cover this cross-cutting contract especially in demo numbers `105–109` and `114–115`. Those numbers are already part of `99`'s spatial demolition set; this task adds no demolition number and must not inflate the global total above 64.
 

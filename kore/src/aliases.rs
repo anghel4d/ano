@@ -1,8 +1,8 @@
 //! Dynamic-alias administration integrated into Kore.
 
-use steel::alias::{sidecar_path, AliasEnvironment};
+use steel::alias::{AliasEnvironment, sidecar_path};
 use steel::registry::reg_find;
-use steel::{num, registry, Registry};
+use steel::{Registry, num, registry};
 
 fn usage() -> i32 {
     eprintln!(
@@ -35,7 +35,11 @@ fn save(path: &str, aliases: &AliasEnvironment) -> Result<(), String> {
 // also resolves in the bare namespace.  Separate from the print so the shadow diagnosis is
 // testable without capturing stdout.
 fn listing_text(reg: &Registry, aliases: &AliasEnvironment) -> String {
-    let mut text = format!("environment v{}\tschema {:016x}\n", aliases.version(), aliases.schema());
+    let mut text = format!(
+        "environment v{}\tschema {:016x}\n",
+        aliases.version(),
+        aliases.schema()
+    );
     if aliases.is_empty() {
         text.push_str("no dynamic aliases\n");
         return text;
@@ -170,7 +174,8 @@ mod tests {
 
     // A private world under the system temp root, unique per test and per process.
     fn world(tag: &str) -> String {
-        let dir = std::env::temp_dir().join(format!("ano-kore-alias-{}-{}", std::process::id(), tag));
+        let dir =
+            std::env::temp_dir().join(format!("ano-kore-alias-{}-{}", std::process::id(), tag));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("world.reg").to_string_lossy().into_owned();
@@ -197,8 +202,16 @@ mod tests {
         assert_eq!(run(&argv(&["alias", &path, "set", "^gold", "Silver"])), 0);
         assert_eq!(run(&argv(&["alias", &path, "set", "^focus", "Gold"])), 0);
         let listing = text(&path);
-        assert!(listing.starts_with("environment v2\tschema "), "{}", listing);
-        assert!(listing.contains("^gold\tSilver (number)\t(shadows Gold)\n"), "{}", listing);
+        assert!(
+            listing.starts_with("environment v2\tschema "),
+            "{}",
+            listing
+        );
+        assert!(
+            listing.contains("^gold\tSilver (number)\t(shadows Gold)\n"),
+            "{}",
+            listing
+        );
         assert!(listing.contains("^focus\tGold (number)\n"), "{}", listing);
         assert_eq!(run(&argv(&["alias", &path, "list"])), 0);
     }
@@ -206,9 +219,19 @@ mod tests {
     #[test]
     fn alias_cli_mask_and_resolver_targets_install() {
         let path = world("mask-resolve");
-        assert_eq!(run(&argv(&["alias", &path, "mask", "^hot", "1", "0", "1"])), 0);
         assert_eq!(
-            run(&argv(&["alias", &path, "resolve", "^here", "input.entity", "entity=1"])),
+            run(&argv(&["alias", &path, "mask", "^hot", "1", "0", "1"])),
+            0
+        );
+        assert_eq!(
+            run(&argv(&[
+                "alias",
+                &path,
+                "resolve",
+                "^here",
+                "input.entity",
+                "entity=1"
+            ])),
             0
         );
         let listing = text(&path);
@@ -219,10 +242,27 @@ mod tests {
             listing
         );
         // an operand without '=' is a host error, not a keyless member
-        assert_eq!(run(&argv(&["alias", &path, "resolve", "^x", "input.entity", "entity1"])), 2);
+        assert_eq!(
+            run(&argv(&[
+                "alias",
+                &path,
+                "resolve",
+                "^x",
+                "input.entity",
+                "entity1"
+            ])),
+            2
+        );
         // and the out-of-domain row refuses at install
         assert_eq!(
-            run(&argv(&["alias", &path, "resolve", "^x", "input.entity", "entity=9"])),
+            run(&argv(&[
+                "alias",
+                &path,
+                "resolve",
+                "^x",
+                "input.entity",
+                "entity=9"
+            ])),
             2
         );
     }
@@ -249,8 +289,21 @@ mod tests {
 
         assert_eq!(run(&argv(&["alias", &path, "set", "^focus", "Nope"])), 2);
         assert_eq!(run(&argv(&["alias", &path, "mask", "^hot", "1", "0"])), 2);
-        assert_eq!(run(&argv(&["alias", &path, "mask", "^hot", "1", "2", "0"])), 2);
-        assert_eq!(run(&argv(&["alias", &path, "resolve", "^x", "input.nope", "entity=0"])), 2);
+        assert_eq!(
+            run(&argv(&["alias", &path, "mask", "^hot", "1", "2", "0"])),
+            2
+        );
+        assert_eq!(
+            run(&argv(&[
+                "alias",
+                &path,
+                "resolve",
+                "^x",
+                "input.nope",
+                "entity=0"
+            ])),
+            2
+        );
         assert_eq!(run(&argv(&["alias", &path, "delete", "^absent"])), 2);
 
         assert_eq!(std::fs::read(side(&path)).unwrap(), before);

@@ -21,8 +21,19 @@ pub fn strtod(s: &str) -> (f64, usize) {
     }
     // inf / infinity, case-insensitive
     if ci_match(b, i, b"inf") {
-        let end = if ci_match(b, i + 3, b"inity") { i + 8 } else { i + 3 };
-        return (if neg { f64::NEG_INFINITY } else { f64::INFINITY }, end);
+        let end = if ci_match(b, i + 3, b"inity") {
+            i + 8
+        } else {
+            i + 3
+        };
+        return (
+            if neg {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            },
+            end,
+        );
     }
     // nan / nan(n-char-seq)
     if ci_match(b, i, b"nan") {
@@ -86,7 +97,11 @@ pub fn strtod(s: &str) -> (f64, usize) {
 
 // Inputs: bytes, positions. Output: true when b[i..] begins with pat, ASCII case-folded.
 fn ci_match(b: &[u8], i: usize, pat: &[u8]) -> bool {
-    b.len() >= i + pat.len() && b[i..i + pat.len()].iter().zip(pat).all(|(x, y)| x | 32 == *y)
+    b.len() >= i + pat.len()
+        && b[i..i + pat.len()]
+            .iter()
+            .zip(pat)
+            .all(|(x, y)| x | 32 == *y)
 }
 
 // Inputs: bytes, index just past "0x", sign. Output: Some(value, end) when at least one hex
@@ -221,9 +236,19 @@ pub fn wnum(s: &str) -> Option<f64> {
 // Default-precision C "%g" is fmt_g(6, x) — print_toks and the unique-repeat diagnostic.
 pub fn fmt_g(prec: i32, x: f64) -> String {
     // printf: negative precision means none (6); zero means 1
-    let p = if prec < 0 { 6 } else if prec == 0 { 1 } else { prec as usize };
+    let p = if prec < 0 {
+        6
+    } else if prec == 0 {
+        1
+    } else {
+        prec as usize
+    };
     if x.is_nan() {
-        return if x.is_sign_negative() { "-nan".into() } else { "nan".into() };
+        return if x.is_sign_negative() {
+            "-nan".into()
+        } else {
+            "nan".into()
+        };
     }
     if x.is_infinite() {
         return if x < 0.0 { "-inf".into() } else { "inf".into() };
@@ -234,7 +259,12 @@ pub fn fmt_g(prec: i32, x: f64) -> String {
     let exp: i32 = e[epos + 1..].parse().unwrap();
     if exp < -4 || exp >= p as i32 {
         let mant = strip_zeros(&e[..epos]);
-        format!("{}e{}{:02}", mant, if exp < 0 { '-' } else { '+' }, exp.abs())
+        format!(
+            "{}e{}{:02}",
+            mant,
+            if exp < 0 { '-' } else { '+' },
+            exp.abs()
+        )
     } else {
         let f = format!("{:.*}", (p as i32 - 1 - exp) as usize, x);
         strip_zeros(&f).to_string()

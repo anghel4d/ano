@@ -50,7 +50,12 @@ struct Frame {
 
 impl Frame {
     fn ent() -> Frame {
-        Frame { kind: FrameKind::Ent, w: 0, h: 0, lit: String::new() }
+        Frame {
+            kind: FrameKind::Ent,
+            w: 0,
+            h: 0,
+            lit: String::new(),
+        }
     }
 }
 
@@ -183,7 +188,9 @@ fn bqnlegal(n: &str) -> bool {
     if b.is_empty() || !b[0].is_ascii_alphabetic() {
         return false;
     }
-    b[1..].iter().all(|&c| c.is_ascii_alphanumeric() || c == b'_')
+    b[1..]
+        .iter()
+        .all(|&c| c.is_ascii_alphanumeric() || c == b'_')
 }
 
 // First letter lowercased (C tolower on byte 0; only reached on bqnlegal names).
@@ -280,17 +287,29 @@ fn key_of(e: &RegEntry) -> Option<&str> {
 
 // C nd->num where the port keeps typed payloads: Num nodes only, 0 otherwise (Wild dims).
 fn num_of(nd: &Node) -> f64 {
-    if let NodeKind::Num(x) = nd.kind { x } else { 0.0 }
+    if let NodeKind::Num(x) = nd.kind {
+        x
+    } else {
+        0.0
+    }
 }
 
 // The Shape node's dim list; empty when not a Shape.
 fn shape_dims(nd: &Node) -> &[Node] {
-    if let NodeKind::Shape(v) = &nd.kind { v } else { &[] }
+    if let NodeKind::Shape(v) = &nd.kind {
+        v
+    } else {
+        &[]
+    }
 }
 
 // The def body (C d->kids[0]).
 fn def_body(d: &Node) -> &Node {
-    if let NodeKind::DefStmt { body, .. } = &d.kind { body } else { d }
+    if let NodeKind::DefStmt { body, .. } = &d.kind {
+        body
+    } else {
+        d
+    }
 }
 
 // The fiber-name spelling of a node in relation position (C nd->name; N_SETHOP copies the
@@ -403,7 +422,10 @@ fn strip_frame(sel: Option<&Node>) -> Option<&Node> {
     if matches!(sel.kind, NodeKind::Shape(_)) {
         return None;
     }
-    if let NodeKind::To { poured: Some(p), .. } = &sel.kind {
+    if let NodeKind::To {
+        poured: Some(p), ..
+    } = &sel.kind
+    {
         if matches!(p.kind, NodeKind::Str(_)) {
             return None;
         }
@@ -445,11 +467,19 @@ fn is_gamma_operand(nd: &Node) -> bool {
 
 // The statement's selection / effect kids (C st->kids[0] / kids[1..]).
 fn stmt_sel(st: &Node) -> Option<&Node> {
-    if let NodeKind::Stmt { sel, .. } = &st.kind { sel.as_deref() } else { None }
+    if let NodeKind::Stmt { sel, .. } = &st.kind {
+        sel.as_deref()
+    } else {
+        None
+    }
 }
 
 fn stmt_effects(st: &Node) -> &[Node] {
-    if let NodeKind::Stmt { effects, .. } = &st.kind { effects } else { &[] }
+    if let NodeKind::Stmt { effects, .. } = &st.kind {
+        effects
+    } else {
+        &[]
+    }
 }
 
 // sscanf("%63s") on a verb's raw text: skip C isspace, take up to 63 bytes of the first word.
@@ -516,19 +546,31 @@ impl<'a> Em<'a> {
     // Registry-var spelling: lc(name) when BQN-legal, else jp<i> by registry entry index.
     fn bqnv(&self, i: usize) -> String {
         let n = &self.ent(i).name;
-        if bqnlegal(n) { lc(n) } else { format!("jp{}", i) }
+        if bqnlegal(n) {
+            lc(n)
+        } else {
+            format!("jp{}", i)
+        }
     }
 
     // Presence-mask spelling: pres_<raw name> (NOT lowercased) or pres_jp<i>.
     fn presv(&self, i: usize) -> String {
         let n = &self.ent(i).name;
-        if bqnlegal(n) { format!("pres_{}", n) } else { format!("pres_jp{}", i) }
+        if bqnlegal(n) {
+            format!("pres_{}", n)
+        } else {
+            format!("pres_jp{}", i)
+        }
     }
 
     // Registry-fn spelling: Fn_<raw name> or Fn_jp<i>.
     fn fnv(&self, i: usize) -> String {
         let n = &self.ent(i).name;
-        if bqnlegal(n) { format!("Fn_{}", n) } else { format!("Fn_jp{}", i) }
+        if bqnlegal(n) {
+            format!("Fn_{}", n)
+        } else {
+            format!("Fn_jp{}", i)
+        }
     }
 
     // Frame cell count as a BQN expr.
@@ -640,13 +682,19 @@ impl<'a> Em<'a> {
     // exactly the surfaces relationship::validate_registry seals in a fixture.
     fn seal_policy(&self, ri: usize) -> R<Option<(crate::relationship::TargetCarrier, bool)>> {
         Ok(match &self.ent(ri).kind {
-            RegEntryKind::Rel { key_of, .. } => {
-                Some((crate::relationship::carrier_for(self.reg, key_of.as_deref())?, true))
-            }
+            RegEntryKind::Rel { key_of, .. } => Some((
+                crate::relationship::carrier_for(self.reg, key_of.as_deref())?,
+                true,
+            )),
             // an inverse fiber is derived from the endpoint that was already sealed on write
-            RegEntryKind::SRel { key_of, inv_of: None, .. } => {
-                Some((crate::relationship::carrier_for(self.reg, key_of.as_deref())?, false))
-            }
+            RegEntryKind::SRel {
+                key_of,
+                inv_of: None,
+                ..
+            } => Some((
+                crate::relationship::carrier_for(self.reg, key_of.as_deref())?,
+                false,
+            )),
             _ => None,
         })
     }
@@ -675,7 +723,10 @@ impl<'a> Em<'a> {
     // name is lowercase, because BQN reads an uppercase initial as a function.
     fn stage_relationship_write(&mut self, ri: usize, rhs: &str) -> Result<String, Diag> {
         let Some((carrier, functional)) = self.seal_policy(ri)? else {
-            return Err(fail(0, format!("'{}' is not a sealed relationship", self.ent(ri).name)));
+            return Err(fail(
+                0,
+                format!("'{}' is not a sealed relationship", self.ent(ri).name),
+            ));
         };
         let name = self.ent(ri).name.clone();
         let var = self.bqnv(ri);
@@ -683,7 +734,11 @@ impl<'a> Em<'a> {
         self.rel_seals += 1;
         self.stage(format!("{} ← {}", stage, rhs));
         // a set endpoint validates its members, so the fibers join before the elementwise test
-        let value = if functional { stage.clone() } else { format!("∾{}", stage) };
+        let value = if functional {
+            stage.clone()
+        } else {
+            format!("∾{}", stage)
+        };
         let predicate = crate::relationship::bqn_validity(&value, carrier, functional);
         // the assertion refuses before the publication runs, so the world keeps its pre-state
         self.stage(format!("\"relationship {}\" ! ∧´1∾({})", name, predicate));
@@ -692,7 +747,11 @@ impl<'a> Em<'a> {
     }
 
     // Has-a-live-target guard for a bare rel.
-    fn rel_guard(&self, ri: usize) -> String { let v = self.bqnv(ri); let key = self.rel_key(ri); crate::relationship::bqn_found(&v, key.as_deref()) }
+    fn rel_guard(&self, ri: usize) -> String {
+        let v = self.bqnv(ri);
+        let key = self.rel_key(ri);
+        crate::relationship::bqn_found(&v, key.as_deref())
+    }
 
     // Trace origin ids: the idCol ladder with the iota fallback sized by the REL column.
     fn trace_ids(&self, rel_expr: &str) -> String {
@@ -733,7 +792,9 @@ impl<'a> Em<'a> {
             crate::trace::TraceDomain::Source
         };
         let site = format!("{}{}", self.site_kind, self.stmt);
-        let id = self.plan.record(phase, domain, site, line.max(0) as u32, relation);
+        let id = self
+            .plan
+            .record(phase, domain, site, line.max(0) as u32, relation);
         format!("USE {} {} {}", id.0, phase.word(), domain.word())
     }
 
@@ -742,7 +803,15 @@ impl<'a> Em<'a> {
     // stays silent in both carriers.  DEAD is spelled as the non-sentinel complement of the hop's
     // own guard rather than derived a second time, so the two cannot partition the targets
     // differently (A17).
-    fn trace_dead(&mut self, name: &str, key: Option<&str>, rel: &str, g: Option<&str>, m: Mode, line: i32) {
+    fn trace_dead(
+        &mut self,
+        name: &str,
+        key: Option<&str>,
+        rel: &str,
+        g: Option<&str>,
+        m: Mode,
+        line: i32,
+    ) {
         if !self.dirs.trace {
             return;
         }
@@ -776,33 +845,58 @@ impl<'a> Em<'a> {
 
     // Presence mask for a column entry, world space; None when total.
     fn pres_of(&self, i: usize) -> Option<String> {
-        if has_pres(self.ent(i)) { Some(self.presv(i)) } else { None }
+        if has_pres(self.ent(i)) {
+            Some(self.presv(i))
+        } else {
+            None
+        }
     }
 
     // The world-space mask a derived tag denotes: present(carrier) ∧ carrier = value,
     // recomputed against the live column; Err on a dangling carrier.
     fn tag_mask(&mut self, ti: usize, line: i32) -> R<String> {
         let e = self.ent(ti);
-        let RegEntryKind::Tag { col, carrier_ty, num, sym } = &e.kind else {
-            return Err(fail(line, format!("derived tag '{}': carrier '{}' unregistered", e.name, "")));
+        let RegEntryKind::Tag {
+            col,
+            carrier_ty,
+            num,
+            sym,
+        } = &e.kind
+        else {
+            return Err(fail(
+                line,
+                format!("derived tag '{}': carrier '{}' unregistered", e.name, ""),
+            ));
         };
         let Some(ci) = self.find(col) else {
-            return Err(fail(line, format!("derived tag '{}': carrier '{}' unregistered", e.name, col)));
+            return Err(fail(
+                line,
+                format!("derived tag '{}': carrier '{}' unregistered", e.name, col),
+            ));
         };
         let eq = if *carrier_ty == ColType::Sym {
-            format!("((<\"{}\")≡¨{})", sym.as_deref().unwrap_or(""), self.bqnv(ci))
+            format!(
+                "((<\"{}\")≡¨{})",
+                sym.as_deref().unwrap_or(""),
+                self.bqnv(ci)
+            )
         } else {
             format!("({}={})", self.bqnv(ci), num_lit(*num))
         };
-        Ok(if has_pres(self.ent(ci)) { format!("({}∧{})", self.presv(ci), eq) } else { eq })
+        Ok(if has_pres(self.ent(ci)) {
+            format!("({}∧{})", self.presv(ci), eq)
+        } else {
+            eq
+        })
     }
 
     // The C nd->name view of a node (spelling fields; "" where C left name unset).
     fn node_name(&self, nd: &Node) -> &'a str {
         match &nd.kind {
-            NodeKind::Name(s) | NodeKind::Alias { look: s, .. } | NodeKind::Sym(s) | NodeKind::Str(s) => {
-                self.rs(*s)
-            }
+            NodeKind::Name(s)
+            | NodeKind::Alias { look: s, .. }
+            | NodeKind::Sym(s)
+            | NodeKind::Str(s) => self.rs(*s),
             NodeKind::SetHop { rel } => self.rs(*rel),
             NodeKind::Call { callee, .. } => self.rs(*callee),
             NodeKind::CmpAny { name } => self.rs(*name),
@@ -818,7 +912,14 @@ impl<'a> Em<'a> {
     // request that produced it. Output: EV. Handles index/x/y/char specials, defs, then registry
     // entries by kind. Invariant: guard is world-space; req/lm only spell the source request back
     // in the unregistered refusal, so a moved `^name` never reads back as its target.
-    fn emit_name_val(&mut self, sym: Symbol, req: Symbol, line: i32, m: Mode, lm: LookupMode) -> R<Ev> {
+    fn emit_name_val(
+        &mut self,
+        sym: Symbol,
+        req: Symbol,
+        line: i32,
+        m: Mode,
+        lm: LookupMode,
+    ) -> R<Ev> {
         let n = self.rs(sym);
         let mut ev = Ev::default();
         if n == "index" {
@@ -850,7 +951,10 @@ impl<'a> Em<'a> {
             return self.emit_val(def_body(d), m);
         }
         let Some(ei) = self.find(n) else {
-            return Err(fail(line, format!("unregistered name '{}'", spelled(self.rs(req), lm))));
+            return Err(fail(
+                line,
+                format!("unregistered name '{}'", spelled(self.rs(req), lm)),
+            ));
         };
         let e = self.ent(ei);
         match &e.kind {
@@ -918,9 +1022,14 @@ impl<'a> Em<'a> {
             }
             RegEntryKind::Proto { .. } => Err(fail(
                 line,
-                format!("proto '{}' in value position: a proto is spawned, never read", n),
+                format!(
+                    "proto '{}' in value position: a proto is spawned, never read",
+                    n
+                ),
             )),
-            RegEntryKind::Fn { .. } => Err(fail(line, format!("name '{}' (fn) in value position", n))),
+            RegEntryKind::Fn { .. } => {
+                Err(fail(line, format!("name '{}' (fn) in value position", n)))
+            }
         }
     }
 
@@ -934,27 +1043,43 @@ impl<'a> Em<'a> {
             return self.emit_mask(def_body(d));
         }
         let Some(ei) = self.find(n) else {
-            return Err(fail(line, format!("unregistered mask name '{}'", spelled(rq, lm))));
+            return Err(fail(
+                line,
+                format!("unregistered mask name '{}'", spelled(rq, lm)),
+            ));
         };
         let v = self.bqnv(ei);
         let e = self.ent(ei);
         match &e.kind {
             RegEntryKind::Col { ty, pres, .. } => {
                 if *ty == ColType::Bool {
-                    return Ok(if pres.is_some() { format!("({}∧{})", self.presv(ei), v) } else { v });
+                    return Ok(if pres.is_some() {
+                        format!("({}∧{})", self.presv(ei), v)
+                    } else {
+                        v
+                    });
                 }
-                Ok(if pres.is_some() { self.presv(ei) } else { format!("(1¨{})", v) })
+                Ok(if pres.is_some() {
+                    self.presv(ei)
+                } else {
+                    format!("(1¨{})", v)
+                })
             }
             RegEntryKind::Field { ty, .. } => {
-                if *ty == ColType::Bool { Ok(v) } else { Ok(format!("(1¨{})", v)) }
+                if *ty == ColType::Bool {
+                    Ok(v)
+                } else {
+                    Ok(format!("(1¨{})", v))
+                }
             }
             RegEntryKind::Tag { .. } => self.tag_mask(ei, line),
             RegEntryKind::AliasMask { .. } => Ok(v),
             RegEntryKind::Bind { kind, vals } => match kind {
                 BindKind::Mask => Ok(v),
-                BindKind::Entity => {
-                    Ok(format!("((↕anoN)={})", num_lit(vals.first().copied().unwrap_or(0.0))))
-                }
+                BindKind::Entity => Ok(format!(
+                    "((↕anoN)={})",
+                    num_lit(vals.first().copied().unwrap_or(0.0))
+                )),
                 k if moved(n, rq, lm) => Err(fail(
                     line,
                     format!(
@@ -964,7 +1089,10 @@ impl<'a> Em<'a> {
                         bind_kind_str(*k)
                     ),
                 )),
-                k => Err(fail(line, format!("binding '{}' ({}) as mask", n, bind_kind_str(*k)))),
+                k => Err(fail(
+                    line,
+                    format!("binding '{}' ({}) as mask", n, bind_kind_str(*k)),
+                )),
             },
             RegEntryKind::Rel { .. } => {
                 // mask position is a predicate crossing over X
@@ -983,8 +1111,11 @@ impl<'a> Em<'a> {
 
     // grade [desc] key [@ scope] -> ids expr in frame space.
     fn emit_grade_ids(&mut self, key: &Node, desc: bool) -> R<String> {
-        let (key, scope): (&Node, Option<&Node>) =
-            if let NodeKind::Scope { l, r, .. } = &key.kind { (l, Some(r)) } else { (key, None) };
+        let (key, scope): (&Node, Option<&Node>) = if let NodeKind::Scope { l, r, .. } = &key.kind {
+            (l, Some(r))
+        } else {
+            (key, None)
+        };
         let g = if desc { "⍒" } else { "⍋" };
         if let Some(sc) = scope {
             if !matches!(sc.kind, NodeKind::Shape(_)) {
@@ -1085,7 +1216,10 @@ impl<'a> Em<'a> {
                     let v = self.bqnv(ei);
                     return Ok((v.clone(), v));
                 }
-                RegEntryKind::Col { ty: ColType::Num | ColType::Nat | ColType::Int, .. } => {
+                RegEntryKind::Col {
+                    ty: ColType::Num | ColType::Nat | ColType::Int,
+                    ..
+                } => {
                     let t = self.tv();
                     let idc = self.id_col();
                     let v = self.bqnv(ei);
@@ -1095,13 +1229,21 @@ impl<'a> Em<'a> {
                 _ => {}
             }
         }
-        Err(fail(line, format!("'{}' is not a set-valued relationship or a key column", n)))
+        Err(fail(
+            line,
+            format!("'{}' is not a set-valued relationship or a key column", n),
+        ))
     }
 
     // The key space stored fibers resolve through; None when they already hold row indices.
     fn fiber_key(&self, sym: Symbol) -> Option<String> {
         let ei = self.find(self.rs(sym))?;
-        let RegEntryKind::SRel { fib: fibers, key_of: ko, .. } = &self.ent(ei).kind else {
+        let RegEntryKind::SRel {
+            fib: fibers,
+            key_of: ko,
+            ..
+        } = &self.ent(ei).kind
+        else {
             return None;
         };
         if fibers.len() != self.reg.n as usize {
@@ -1117,8 +1259,12 @@ impl<'a> Em<'a> {
     // Translate stored srel fibers to CURRENT row indices when the key space can disagree:
     // declared key always, the idx key once shifted; else pass through untouched.
     fn fiber_rows(&mut self, sym: Symbol, fib: &mut String, m: Mode, line: i32) {
-        let Some(ei) = self.find(self.rs(sym)) else { return };
-        let Some(key) = self.fiber_key(sym) else { return };
+        let Some(ei) = self.find(self.rs(sym)) else {
+            return;
+        };
+        let Some(key) = self.fiber_key(sym) else {
+            return;
+        };
         let name = self.ent(ei).name.as_str();
         // --trace: a dead member is a dead link crossed inside the fiber; an effect crossing
         // reports only over the statement mask
@@ -1158,7 +1304,10 @@ impl<'a> Em<'a> {
         };
         let usage = self.record_use(scoped, line, name);
         let tids = self.trace_ids(fib);
-        self.stage(format!("AnoTraceEmpty ⟨\"{}\", {}/{}, \"{}\"⟩", name, mask, tids, usage));
+        self.stage(format!(
+            "AnoTraceEmpty ⟨\"{}\", {}/{}, \"{}\"⟩",
+            name, mask, tids, usage
+        ));
     }
 
     // The nonempty-fiber guard, spelled against DURABLE variables only: a keyed fiber counts
@@ -1200,7 +1349,10 @@ impl<'a> Em<'a> {
                 if op == "avg" {
                     self.trace_empty(fb_name, &fib, m, l.line);
                     let mean = self.render_mean();
-                    self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {} 𝕩⊏{}}}¨{}", t, mean, cv.v, fib));
+                    self.stage(format!(
+                        "{} ← {{0=≠𝕩 ? 0 ; {} 𝕩⊏{}}}¨{}",
+                        t, mean, cv.v, fib
+                    ));
                     ev.g = Some(nonempty);
                     ev.gv = true;
                 } else if op == "#" {
@@ -1248,11 +1400,19 @@ impl<'a> Em<'a> {
                     "#" => self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, tp, fib)),
                     "|" | "&" => {
                         let Some(call) = self.render_fold(op, &format!("𝕩⊏{}", tp)) else {
-                            return Err(fail(operand.line, format!("fold {}/ over filtered fiber", op)));
+                            return Err(fail(
+                                operand.line,
+                                format!("fold {}/ over filtered fiber", op),
+                            ));
                         };
                         self.stage(format!("{} ← {{{}}}¨{}", t, call, fib));
                     }
-                    _ => return Err(fail(operand.line, format!("fold {}/ over filtered fiber", op))),
+                    _ => {
+                        return Err(fail(
+                            operand.line,
+                            format!("fold {}/ over filtered fiber", op),
+                        ));
+                    }
                 }
                 ev.v = self.in_mode(t, m);
                 Ok(ev)
@@ -1268,7 +1428,9 @@ impl<'a> Em<'a> {
         ev.unit = true;
         // Adj@row: per-row fold over a fiber-matrix column
         if let NodeKind::Scope { l, r, .. } = &operand.kind {
-            if matches!(&r.kind, NodeKind::Name(s) if self.rs(*s) == "row") && self.find("row").is_none() {
+            if matches!(&r.kind, NodeKind::Name(s) if self.rs(*s) == "row")
+                && self.find("row").is_none()
+            {
                 let fs = fiber_sym(l);
                 let (mut fib, raw) = self.fiber_var(fs, l.line)?;
                 let nonempty = self.fiber_nonempty(fs, &raw);
@@ -1297,8 +1459,12 @@ impl<'a> Em<'a> {
             return self.emit_gamma(op, operand, m);
         }
         // split operand @ scope
-        let (x, scope): (&Node, Option<&Node>) =
-            if let NodeKind::Scope { l, r, .. } = &operand.kind { (l, Some(r)) } else { (operand, None) };
+        let (x, scope): (&Node, Option<&Node>) = if let NodeKind::Scope { l, r, .. } = &operand.kind
+        {
+            (l, Some(r))
+        } else {
+            (operand, None)
+        };
         let gathered: String;
         let cnt: String;
         match scope {
@@ -1368,7 +1534,9 @@ impl<'a> Em<'a> {
         let operand = if identity { gathered.as_str() } else { "𝕩" };
         let Some(call) = self.render_fold(op, operand) else {
             // named reducer: the registry fn steps the same left recurrence
-            let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+            let fe = self
+                .find(op)
+                .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
             let Some(fe) = fe else {
                 return Err(fail(line, format!("unknown reducer '{}'", op)));
             };
@@ -1409,16 +1577,25 @@ impl<'a> Em<'a> {
         if is_gamma_operand(core) {
             return Err(fail(line, "scan over fibers is not yet supported"));
         }
-        let (x, scope): (&Node, Option<&Node>) =
-            if let NodeKind::Scope { l, r, .. } = &operand.kind { (l, Some(r)) } else { (operand, None) };
+        let (x, scope): (&Node, Option<&Node>) = if let NodeKind::Scope { l, r, .. } = &operand.kind
+        {
+            (l, Some(r))
+        } else {
+            (operand, None)
+        };
         let gl: String = match self.render_scan(op, reducer::Form::Scan) {
             Some(gl) => gl,
             None => {
                 // named reducer scan: registry fn accumulates pairwise; the empty scope
                 // yields the empty column — a scan is length-preserving, no identity consulted
-                let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                let fe = self
+                    .find(op)
+                    .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
                 let Some(fe) = fe else {
-                    return Err(fail(line, format!("internal: no scan descriptor for '{}'", op)));
+                    return Err(fail(
+                        line,
+                        format!("internal: no scan descriptor for '{}'", op),
+                    ));
                 };
                 format!("{}`", self.fnv(fe))
             }
@@ -1427,7 +1604,11 @@ impl<'a> Em<'a> {
         if let Some(sc) = scope {
             if let NodeKind::Shape(dims) = &sc.kind {
                 let w = dims.first().map(num_of).unwrap_or(0.0) as i32;
-                let h = if dims.len() > 1 { num_of(&dims[1]) as i32 } else { 1 };
+                let h = if dims.len() > 1 {
+                    num_of(&dims[1]) as i32
+                } else {
+                    1
+                };
                 ev.v = format!("(⥊{}({}‿{}⥊{}))", gl, h, w, xv.v);
                 return Ok(ev);
             }
@@ -1445,7 +1626,13 @@ impl<'a> Em<'a> {
             if !idlist {
                 if let NodeKind::Name(s) | NodeKind::Alias { look: s, .. } = &sc.kind {
                     if let Some(ei) = self.find(self.rs(*s)) {
-                        if matches!(self.ent(ei).kind, RegEntryKind::Bind { kind: BindKind::Vec, .. }) {
+                        if matches!(
+                            self.ent(ei).kind,
+                            RegEntryKind::Bind {
+                                kind: BindKind::Vec,
+                                ..
+                            }
+                        ) {
                             idlist = true;
                         }
                     }
@@ -1519,7 +1706,9 @@ impl<'a> Em<'a> {
         while let NodeKind::Hop { l, .. } = &b.kind {
             b = l;
         }
-        if matches!(&b.kind, NodeKind::Name(s) if self.rs(*s) == "prev") && self.find("prev").is_none() {
+        if matches!(&b.kind, NodeKind::Name(s) if self.rs(*s) == "prev")
+            && self.find("prev").is_none()
+        {
             let mut prevs = 0usize;
             let mut w: &Node = nd;
             while let NodeKind::Hop { l, .. } = &w.kind {
@@ -1558,7 +1747,8 @@ impl<'a> Em<'a> {
             ev.v = self.in_mode(sh, m);
             return Ok(ev);
         }
-        if matches!(&b.kind, NodeKind::Call { callee, .. } if self.rs(*callee).starts_with("neighbor")) {
+        if matches!(&b.kind, NodeKind::Call { callee, .. } if self.rs(*callee).starts_with("neighbor"))
+        {
             let cv = self.emit_val(field, Mode::World)?;
             let sh = format!("(⥊AnoNbrClamp({}‿{}⥊{}))", self.fr.h, self.fr.w, cv.v);
             ev.v = self.in_mode(sh, m);
@@ -1585,10 +1775,18 @@ impl<'a> Em<'a> {
         // singleton roots: bindings and static alias masks mirror-read one row
         if let NodeKind::Name(bs) | NodeKind::Alias { look: bs, .. } = &base.kind {
             let be = self.find(self.rs(*bs));
-            let fe = if let NodeKind::Name(fs) = &field.kind { self.find(self.rs(*fs)) } else { None };
+            let fe = if let NodeKind::Name(fs) = &field.kind {
+                self.find(self.rs(*fs))
+            } else {
+                None
+            };
             if let Some(bi) = be {
                 // a point binding IS its pos: Player.pos with `bind Player point x y`
-                if let RegEntryKind::Bind { kind: BindKind::Point, vals } = &self.ent(bi).kind {
+                if let RegEntryKind::Bind {
+                    kind: BindKind::Point,
+                    vals,
+                } = &self.ent(bi).kind
+                {
                     ev.v = format!(
                         "(<{}‿{})",
                         num_lit(vals.first().copied().unwrap_or(0.0)),
@@ -1600,9 +1798,13 @@ impl<'a> Em<'a> {
                 }
                 if let Some(fi) = fe {
                     let bk = &self.ent(bi).kind;
-                    if matches!(bk, RegEntryKind::Bind { .. } | RegEntryKind::AliasMask { .. })
-                        && matches!(self.ent(fi).kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. })
-                    {
+                    if matches!(
+                        bk,
+                        RegEntryKind::Bind { .. } | RegEntryKind::AliasMask { .. }
+                    ) && matches!(
+                        self.ent(fi).kind,
+                        RegEntryKind::Col { .. } | RegEntryKind::Field { .. }
+                    ) {
                         let id = if let RegEntryKind::Bind { vals, .. } = bk {
                             num_lit(vals.first().copied().unwrap_or(0.0))
                         } else {
@@ -1625,7 +1827,11 @@ impl<'a> Em<'a> {
                         let rel = self.bqnv(bi);
                         let fe_ent = self.ent(fi);
                         let is_tag = matches!(fe_ent.kind, RegEntryKind::Tag { .. });
-                        let comp = if is_tag { self.tag_mask(fi, nd.line)? } else { self.bqnv(fi) };
+                        let comp = if is_tag {
+                            self.tag_mask(fi, nd.line)?
+                        } else {
+                            self.bqnv(fi)
+                        };
                         let w;
                         // every piece stays a self-contained expression: an assignment probe
                         // reuses the guard after discarding the staging buffer
@@ -1658,7 +1864,10 @@ impl<'a> Em<'a> {
                     }
                     // chained hop: rel.rel2.Comp
                     if matches!(field.kind, NodeKind::Hop { .. }) {
-                        return Err(fail(nd.line, "nested hop chains beyond one level: spell left-assoc"));
+                        return Err(fail(
+                            nd.line,
+                            "nested hop chains beyond one level: spell left-assoc",
+                        ));
                     }
                 }
             }
@@ -1667,17 +1876,32 @@ impl<'a> Em<'a> {
         // the rel whose VALUES the base gathered (bv.rel_ent), never the base rel's own
         if matches!(base.kind, NodeKind::Hop { .. }) {
             let bv = self.emit_hop(base, Mode::World)?;
-            let fe = if let NodeKind::Name(fs) = &field.kind { self.find(self.rs(*fs)) } else { None };
+            let fe = if let NodeKind::Name(fs) = &field.kind {
+                self.find(self.rs(*fs))
+            } else {
+                None
+            };
             let Some(fi) = fe else {
-                return Err(fail(nd.line, format!("hop target '{}' unregistered", self.node_name(field))));
+                return Err(fail(
+                    nd.line,
+                    format!("hop target '{}' unregistered", self.node_name(field)),
+                ));
             };
             let fe_ent = self.ent(fi);
             let is_tag = matches!(fe_ent.kind, RegEntryKind::Tag { .. });
-            let comp = if is_tag { self.tag_mask(fi, nd.line)? } else { self.bqnv(fi) };
+            let comp = if is_tag {
+                self.tag_mask(fi, nd.line)?
+            } else {
+                self.bqnv(fi)
+            };
             let key: Option<String> = match bv.rel_ent {
                 Some(ri) => self.rel_key(ri),
                 None => {
-                    if self.need_idx && self.world_shifted { Some("anoIdx".to_string()) } else { None }
+                    if self.need_idx && self.world_shifted {
+                        Some("anoIdx".to_string())
+                    } else {
+                        None
+                    }
                 }
             };
             let w;
@@ -1689,11 +1913,17 @@ impl<'a> Em<'a> {
             if let Some(key) = key {
                 let ix = format!("((≠{})|{}⊐{})", key, key, bv.v);
                 w = format!("({}⊏{})", ix, comp);
-                ev.g = g_and(bv.g.clone(), Some(crate::relationship::bqn_found(&bv.v, Some(&key))));
+                ev.g = g_and(
+                    bv.g.clone(),
+                    Some(crate::relationship::bqn_found(&bv.v, Some(&key))),
+                );
             } else {
                 let ix = format!("((≠{})|0⌈{})", comp, bv.v);
                 w = format!("({}⊏{})", ix, comp);
-                ev.g = g_and(bv.g.clone(), Some(crate::relationship::bqn_found(&bv.v, None)));
+                ev.g = g_and(
+                    bv.g.clone(),
+                    Some(crate::relationship::bqn_found(&bv.v, None)),
+                );
             }
             ev.sym = !is_tag && col_ty(fe_ent) == Some(ColType::Sym);
             if matches!(fe_ent.kind, RegEntryKind::Rel { .. }) {
@@ -1756,10 +1986,16 @@ impl<'a> Em<'a> {
                     let same = matches!((&a.along, &b.along), (Some(x), Some(y)) if x == y);
                     if !same {
                         if a.along.is_some() && !b.unit {
-                            return Err(fail(nd.line, "scan-along composed against a differently-ordered operand"));
+                            return Err(fail(
+                                nd.line,
+                                "scan-along composed against a differently-ordered operand",
+                            ));
                         }
                         if b.along.is_some() && !a.unit {
-                            return Err(fail(nd.line, "scan-along composed against a differently-ordered operand"));
+                            return Err(fail(
+                                nd.line,
+                                "scan-along composed against a differently-ordered operand",
+                            ));
                         }
                     }
                     ev.along = a.along.clone().or_else(|| b.along.clone());
@@ -1786,7 +2022,12 @@ impl<'a> Em<'a> {
                 ev.gv = a.gv || b.gv;
                 let sym = a.sym || b.sym;
                 if sym && matches!(op, CmpOp::Eq | CmpOp::Ne) {
-                    ev.v = format!("({}{}≡¨{})", if *op == CmpOp::Ne { "¬" } else { "" }, a.v, b.v);
+                    ev.v = format!(
+                        "({}{}≡¨{})",
+                        if *op == CmpOp::Ne { "¬" } else { "" },
+                        a.v,
+                        b.v
+                    );
                     return Ok(ev);
                 }
                 let opg = match op {
@@ -1877,8 +2118,16 @@ impl<'a> Em<'a> {
                 }
                 let d1 = dim(dims.get(1));
                 let k = format!("(+´{})", self.sel_var);
-                let rows = if d0 < 0 { format!("({}÷{})", k, d1) } else { format!("{}", d0) };
-                let cols = if d1 < 0 { format!("({}÷{})", k, d0) } else { format!("{}", d1) };
+                let rows = if d0 < 0 {
+                    format!("({}÷{})", k, d1)
+                } else {
+                    format!("{}", d0)
+                };
+                let cols = if d1 < 0 {
+                    format!("({}÷{})", k, d0)
+                } else {
+                    format!("{}", d1)
+                };
                 ev.pair = true;
                 ev.v = format!("(⥊↕{}‿{})", rows, cols);
                 Ok(ev)
@@ -1901,7 +2150,10 @@ impl<'a> Em<'a> {
                 ) {
                     return Err(fail(
                         nd.line,
-                        format!("top {} over a mask: the operand must be an ordered selection (grade or pipeline)", *k as i32),
+                        format!(
+                            "top {} over a mask: the operand must be an ordered selection (grade or pipeline)",
+                            *k as i32
+                        ),
                     ));
                 }
                 let inner_v = if let NodeKind::Grade { key, desc } = &inner.kind {
@@ -1921,7 +2173,9 @@ impl<'a> Em<'a> {
             NodeKind::CrossV { f, a, b } => {
                 let am = self.emit_mask(a)?;
                 let bm = self.emit_mask(b)?;
-                let fe = self.find(self.rs(*f)).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                let fe = self
+                    .find(self.rs(*f))
+                    .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
                 let Some(fe) = fe else {
                     return Err(fail(nd.line, "cross needs a registered fn"));
                 };
@@ -1935,7 +2189,10 @@ impl<'a> Em<'a> {
                 Ok(ev)
             }
             NodeKind::SetHop { .. } => Err(fail(nd.line, "bare rel' outside fold/source position")),
-            k => Err(fail(nd.line, format!("unsupported value node {}", k.c_kind()))),
+            k => Err(fail(
+                nd.line,
+                format!("unsupported value node {}", k.c_kind()),
+            )),
         }
     }
 }
@@ -1948,7 +2205,10 @@ impl<'a> Em<'a> {
     fn cell_coord(&self, axis: char) -> Option<String> {
         let e = self.find(if axis == 'x' { "x" } else { "y" });
         if let Some(i) = e {
-            if matches!(self.ent(i).kind, RegEntryKind::Field { .. } | RegEntryKind::Col { .. }) {
+            if matches!(
+                self.ent(i).kind,
+                RegEntryKind::Field { .. } | RegEntryKind::Col { .. }
+            ) {
                 return Some(self.bqnv(i));
             }
         }
@@ -1973,7 +2233,16 @@ impl<'a> Em<'a> {
             NodeKind::And(a, b) | NodeKind::Or(a, b) => {
                 let am = self.emit_mask(a)?;
                 let bm = self.emit_mask(b)?;
-                Ok(format!("({}{}{})", am, if matches!(nd.kind, NodeKind::And(..)) { "∧" } else { "∨" }, bm))
+                Ok(format!(
+                    "({}{}{})",
+                    am,
+                    if matches!(nd.kind, NodeKind::And(..)) {
+                        "∧"
+                    } else {
+                        "∨"
+                    },
+                    bm
+                ))
             }
             NodeKind::Not(k) => {
                 // absent-component reading for sparse value columns; a fallback ^name takes the
@@ -2023,7 +2292,11 @@ impl<'a> Em<'a> {
                 }
                 Ok(acc.unwrap_or_default())
             }
-            NodeKind::Scope { l, r, origin: Some(org) } => {
+            NodeKind::Scope {
+                l,
+                r,
+                origin: Some(org),
+            } => {
                 // mask @ frame at origin — the anchored frame (frame join): @ fixes (o, S) and
                 // `at` fills the origin slot with a mirror-read; the registered frame fn runs
                 // per cell as Fn ⟨cell, origin, args…⟩ and returns the frame mask
@@ -2031,20 +2304,34 @@ impl<'a> Em<'a> {
                 let fnode: &Node = r;
                 let orgv = self.emit_val(org, Mode::World)?;
                 if !orgv.unit || !orgv.pair {
-                    return Err(fail(nd.line, "frame anchor must be one point (a pair mirror-read)"));
+                    return Err(fail(
+                        nd.line,
+                        "frame anchor must be one point (a pair mirror-read)",
+                    ));
                 }
                 let NodeKind::Call { callee, args } = &fnode.kind else {
-                    return Err(fail(fnode.line, "anchored frame wants fn(args…) — a registered frame predicate"));
+                    return Err(fail(
+                        fnode.line,
+                        "anchored frame wants fn(args…) — a registered frame predicate",
+                    ));
                 };
                 let cn = self.rs(*callee);
-                let fe = self.find(cn).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                let fe = self
+                    .find(cn)
+                    .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
                 let Some(fe) = fe else {
-                    return Err(fail(fnode.line, format!("anchored frame '{}' is not a registered fn", cn)));
+                    return Err(fail(
+                        fnode.line,
+                        format!("anchored frame '{}' is not a registered fn", cn),
+                    ));
                 };
                 let xs = self.cell_coord('x');
                 let ys = self.cell_coord('y');
                 let (Some(xs), Some(ys)) = (xs, ys) else {
-                    return Err(fail(fnode.line, "anchored frame needs cell coordinates (x/y fields or a lattice frame)"));
+                    return Err(fail(
+                        fnode.line,
+                        "anchored frame needs cell coordinates (x/y fields or a lattice frame)",
+                    ));
                 };
                 let mut argstr = String::new();
                 for k in args {
@@ -2053,7 +2340,10 @@ impl<'a> Em<'a> {
                 }
                 let t = self.tv();
                 let fv = self.fnv(fe);
-                self.stage(format!("{} ← {{{} ⟨𝕩, ⊑{}{}⟩}}¨({}⋈¨{})", t, fv, orgv.v, argstr, xs, ys));
+                self.stage(format!(
+                    "{} ← {{{} ⟨𝕩, ⊑{}{}⟩}}¨({}⋈¨{})",
+                    t, fv, orgv.v, argstr, xs, ys
+                ));
                 Ok(format!("({}∧{})", a, t))
             }
             NodeKind::Scope { l, r, origin: None } => {
@@ -2074,7 +2364,10 @@ impl<'a> Em<'a> {
                 let se = self.find(self.rs(rel));
                 let mut ids: Option<String> = None;
                 if let Some(si) = se {
-                    if let RegEntryKind::SRel { key_of: Some(k), .. } = &self.ent(si).kind {
+                    if let RegEntryKind::SRel {
+                        key_of: Some(k), ..
+                    } = &self.ent(si).kind
+                    {
                         if let Some(kc) = self.find(k) {
                             ids = Some(self.bqnv(kc));
                         }
@@ -2174,12 +2467,20 @@ impl<'a> Em<'a> {
             }
             return;
         }
-        if let NodeKind::To { shape, poured: Some(p) } = &lm.kind {
+        if let NodeKind::To {
+            shape,
+            poured: Some(p),
+        } = &lm.kind
+        {
             if let NodeKind::Str(lit) = &p.kind {
                 self.fr.kind = FrameKind::Board;
                 let dims = shape_dims(shape);
                 self.fr.w = dims.first().map(num_of).unwrap_or(0.0) as i32;
-                self.fr.h = if dims.len() > 1 { num_of(&dims[1]) as i32 } else { 1 };
+                self.fr.h = if dims.len() > 1 {
+                    num_of(&dims[1]) as i32
+                } else {
+                    1
+                };
                 self.fr.lit = self.rs(*lit).to_string();
                 let line = format!("brd{} ← \"{}\"", self.stmt, self.fr.lit);
                 self.stage(line);
@@ -2191,19 +2492,35 @@ impl<'a> Em<'a> {
             let dims = shape_dims(sh);
             self.fr.kind = FrameKind::Lat;
             self.fr.w = dims.first().map(num_of).unwrap_or(0.0) as i32;
-            self.fr.h = if dims.len() > 1 { num_of(&dims[1]) as i32 } else { 1 };
+            self.fr.h = if dims.len() > 1 {
+                num_of(&dims[1]) as i32
+            } else {
+                1
+            };
         }
     }
 
     // §10 same-column batch: legal iff same commuting family, both '=' on distinct pair
     // fields, or (§11 third clause) certified row-disjoint rules; the base is the earlier
     // commit's expr — the later effect rebases onto it.
-    fn merge_base(&self, fx: &Fx, col_idx: usize, col: String, fam: u8, field: Option<&str>, line: i32, name: &str) -> R<String> {
+    fn merge_base(
+        &self,
+        fx: &Fx,
+        col_idx: usize,
+        col: String,
+        fam: u8,
+        field: Option<&str>,
+        line: i32,
+        name: &str,
+    ) -> R<String> {
         let Some(prev) = fx.commits.iter().find(|c| c.col_idx == col_idx) else {
             return Ok(col);
         };
         let mut ok = (prev.fam == fam && matches!(fam, b'+' | b'*' | b'|' | b'&'))
-            || (prev.fam == b'=' && fam == b'=' && field.is_some() && prev.field.is_some()
+            || (prev.fam == b'='
+                && fam == b'='
+                && field.is_some()
+                && prev.field.is_some()
                 && field != prev.field.as_deref());
         if !ok
             && self.cur_rule >= 0
@@ -2215,14 +2532,31 @@ impl<'a> Em<'a> {
             ok = true;
         }
         if !ok {
-            return Err(fail(line, format!("no merge law: '{}' written twice in one barrier (§10)", name)));
+            return Err(fail(
+                line,
+                format!(
+                    "no merge law: '{}' written twice in one barrier (§10)",
+                    name
+                ),
+            ));
         }
         Ok(prev.new_expr.clone())
     }
 
     // Replaces an existing commit for the column (the rebase result) and ORs the rule bit.
-    fn add_commit(&self, fx: &mut Fx, col_idx: usize, expr: String, fam: u8, field: Option<String>) {
-        let bit = if self.cur_rule >= 0 { 1u32 << self.cur_rule } else { 0 };
+    fn add_commit(
+        &self,
+        fx: &mut Fx,
+        col_idx: usize,
+        expr: String,
+        fam: u8,
+        field: Option<String>,
+    ) {
+        let bit = if self.cur_rule >= 0 {
+            1u32 << self.cur_rule
+        } else {
+            0
+        };
         for c in fx.commits.iter_mut() {
             if c.col_idx == col_idx {
                 c.new_expr = expr;
@@ -2232,7 +2566,13 @@ impl<'a> Em<'a> {
                 return;
             }
         }
-        fx.commits.push(Commit { col_idx, new_expr: expr, fam, field, rules: bit });
+        fx.commits.push(Commit {
+            col_idx,
+            new_expr: expr,
+            fam,
+            field,
+            rules: bit,
+        });
     }
 
     // The effect dispatch (C emitEffect). Effects read pre-state; commits land at the end.
@@ -2249,26 +2589,36 @@ impl<'a> Em<'a> {
     fn emit_effect_inner(&mut self, ef: &Node, fx: &mut Fx) -> R<()> {
         match &ef.kind {
             NodeKind::EAssign { op, target, rhs } => {
-                let (coln, field): (&Node, Option<&'a str>) = if let NodeKind::Hop { l, r } = &target.kind {
-                    (l, Some(self.node_name(r)))
-                } else {
-                    (target.as_ref(), None)
-                };
+                let (coln, field): (&Node, Option<&'a str>) =
+                    if let NodeKind::Hop { l, r } = &target.kind {
+                        (l, Some(self.node_name(r)))
+                    } else {
+                        (target.as_ref(), None)
+                    };
                 let col_name = self.node_name(coln);
                 let Some(ei) = self.find(col_name) else {
-                    return Err(fail(ef.line, format!("assign to unregistered '{}'", col_name)));
+                    return Err(fail(
+                        ef.line,
+                        format!("assign to unregistered '{}'", col_name),
+                    ));
                 };
                 let e = self.ent(ei);
                 // Derived tags are computed from their carrier and cannot be assigned.
                 if let RegEntryKind::Tag { col: carrier, .. } = &e.kind {
                     return Err(fail(
                         ef.line,
-                        format!("derived tag '{}' is not an effect target: write the carrier column '{}'", col_name, carrier),
+                        format!(
+                            "derived tag '{}' is not an effect target: write the carrier column '{}'",
+                            col_name, carrier
+                        ),
                     ));
                 }
                 // keys are minted at spawn, never written by effects
                 if is_uniq(e) {
-                    return Err(fail(ef.line, format!("unique column '{}' is minted, never written", col_name)));
+                    return Err(fail(
+                        ef.line,
+                        format!("unique column '{}' is minted, never written", col_name),
+                    ));
                 }
                 let col = self.bqnv(ei);
                 // guards must refine the mask before gathering: pre-scan via world-mode guard
@@ -2314,7 +2664,12 @@ impl<'a> Em<'a> {
                         _ => "÷",
                     };
                     let oldv = match field {
-                        Some(f) => format!("({}⊸⊑¨({}/{}))", (f.as_bytes().first() == Some(&b'y')) as i32, sel_e, base),
+                        Some(f) => format!(
+                            "({}⊸⊑¨({}/{}))",
+                            (f.as_bytes().first() == Some(&b'y')) as i32,
+                            sel_e,
+                            base
+                        ),
                         None => format!("({}/{})", sel_e, base),
                     };
                     rv = format!("({}{}{})", oldv, opch, rv);
@@ -2348,19 +2703,35 @@ impl<'a> Em<'a> {
                     if let RegEntryKind::Tag { col: carrier, .. } = &self.ent(i).kind {
                         return Err(fail(
                             ef.line,
-                            format!("derived tag '{}' is not an effect target: write the carrier column '{}'", n, carrier),
+                            format!(
+                                "derived tag '{}' is not an effect target: write the carrier column '{}'",
+                                n, carrier
+                            ),
                         ));
                     }
                 }
                 let ok = e.map_or(false, |i| {
-                    matches!(self.ent(i).kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. })
+                    matches!(
+                        self.ent(i).kind,
+                        RegEntryKind::Col { .. } | RegEntryKind::Field { .. }
+                    )
                 });
                 if !ok {
-                    return Err(fail(ef.line, format!("{}Comp on unregistered '{}'", if is_add { '+' } else { '-' }, n)));
+                    return Err(fail(
+                        ef.line,
+                        format!(
+                            "{}Comp on unregistered '{}'",
+                            if is_add { '+' } else { '-' },
+                            n
+                        ),
+                    ));
                 }
                 let ei = e.unwrap_or_default();
                 if is_uniq(self.ent(ei)) {
-                    return Err(fail(ef.line, format!("unique column '{}' is minted, never written", n)));
+                    return Err(fail(
+                        ef.line,
+                        format!("unique column '{}' is minted, never written", n),
+                    ));
                 }
                 let col = self.bqnv(ei);
                 let fam = if is_add { b'|' } else { b'&' };
@@ -2376,7 +2747,11 @@ impl<'a> Em<'a> {
             }
             NodeKind::EDespawn => {
                 fx.despawn_sel = Some(if fx.despawn {
-                    format!("({}∨{})", fx.despawn_sel.as_deref().unwrap_or(""), self.sel_var)
+                    format!(
+                        "({}∨{})",
+                        fx.despawn_sel.as_deref().unwrap_or(""),
+                        self.sel_var
+                    )
                 } else {
                     self.sel_var.clone()
                 });
@@ -2390,7 +2765,11 @@ impl<'a> Em<'a> {
                         if let RegEntryKind::Tag { col: carrier, .. } = &self.ent(wi).kind {
                             return Err(fail(
                                 ef.line,
-                                format!("derived tag '{}' is not an effect target: write the carrier column '{}'", self.rs(*ws), carrier),
+                                format!(
+                                    "derived tag '{}' is not an effect target: write the carrier column '{}'",
+                                    self.rs(*ws),
+                                    carrier
+                                ),
                             ));
                         }
                     }
@@ -2402,7 +2781,15 @@ impl<'a> Em<'a> {
                         if let Some(fi2) = self.find(self.rs(*ws)) {
                             if matches!(self.ent(fi2).kind, RegEntryKind::Field { .. }) {
                                 let col = self.bqnv(fi2);
-                                let base = self.merge_base(fx, fi2, col, b'|', None, ef.line, self.rs(*ws))?;
+                                let base = self.merge_base(
+                                    fx,
+                                    fi2,
+                                    col,
+                                    b'|',
+                                    None,
+                                    ef.line,
+                                    self.rs(*ws),
+                                )?;
                                 let t = self.tv();
                                 self.stage(format!("{} ← {}∨{}", t, base, self.sel_var));
                                 self.add_commit(fx, fi2, t, b'|', None);
@@ -2417,7 +2804,11 @@ impl<'a> Em<'a> {
                 let mut proto_sel: Option<String> = None; // computed proto, selection space
                 let cv: String = if let Some(cnt) = count {
                     let c = self.emit_val(cnt, Mode::Sel)?;
-                    if c.unit { format!("((+´{})⥊{})", self.sel_var, c.v) } else { c.v }
+                    if c.unit {
+                        format!("((+´{})⥊{})", self.sel_var, c.v)
+                    } else {
+                        c.v
+                    }
                 } else if !self.pipe_expand.is_empty() {
                     self.pipe_expand.clone()
                 } else if matches!(what.kind, NodeKind::Call { .. }) {
@@ -2451,7 +2842,11 @@ impl<'a> Em<'a> {
                 if let Some(at_n) = at {
                     let p = self.emit_val(at_n, Mode::Copy)?;
                     let pv = self.tv();
-                    let val = if p.unit { format!("({}⥊{})", tot, p.v) } else { p.v.clone() };
+                    let val = if p.unit {
+                        format!("({}⥊{})", tot, p.v)
+                    } else {
+                        p.v.clone()
+                    };
                     self.stage(format!("{} ← {}", pv, val));
                     pos = Some(pv);
                     pos_pair = p.pair;
@@ -2479,7 +2874,14 @@ impl<'a> Em<'a> {
                     self.stage(format!("{} ← {}", pt, pv.v));
                     proto_expr = Some(pt);
                 }
-                fx.sp.push(SpawnG { cnt: c_v, tot, pos, pos_pair, proto_name, proto_expr });
+                fx.sp.push(SpawnG {
+                    cnt: c_v,
+                    tot,
+                    pos,
+                    pos_pair,
+                    proto_name,
+                    proto_expr,
+                });
                 Ok(())
             }
             NodeKind::EVerb { name, args } => self.emit_verb(ef.line, *name, args, fx),
@@ -2493,17 +2895,30 @@ impl<'a> Em<'a> {
         let n = self.rs(name);
         let e = self.find(n);
         let raw: Option<&'a str> = e.and_then(|i| {
-            if let RegEntryKind::Fn { body: Some(b) } = &self.ent(i).kind { Some(b.as_str()) } else { None }
+            if let RegEntryKind::Fn { body: Some(b) } = &self.ent(i).kind {
+                Some(b.as_str())
+            } else {
+                None
+            }
         });
         let (Some(ei), Some(raw)) = (e, raw) else {
-            return Err(fail(line, format!("verb '{}' needs a registered fn with a target column", n)));
+            return Err(fail(
+                line,
+                format!("verb '{}' needs a registered fn with a target column", n),
+            ));
         };
         let target = verb_target(raw);
         let Some(ti) = self.find(&target) else {
-            return Err(fail(line, format!("verb '{}' target column '{}' unregistered", n, target)));
+            return Err(fail(
+                line,
+                format!("verb '{}' target column '{}' unregistered", n, target),
+            ));
         };
         if is_uniq(self.ent(ti)) {
-            return Err(fail(line, format!("unique column '{}' is minted, never written", target)));
+            return Err(fail(
+                line,
+                format!("unique column '{}' is minted, never written", target),
+            ));
         }
         let mut args_s = format!("⟨{}", self.bqnv(ti));
         for a in args {
@@ -2548,7 +2963,11 @@ impl<'a> Em<'a> {
     fn spawn_proto(&self, sg: &SpawnG) -> Option<usize> {
         let pn = sg.proto_name?;
         let pe = self.find(self.rs(pn))?;
-        if matches!(self.ent(pe).kind, RegEntryKind::Proto { .. }) { Some(pe) } else { None }
+        if matches!(self.ent(pe).kind, RegEntryKind::Proto { .. }) {
+            Some(pe)
+        } else {
+            None
+        }
     }
 
     // Index of a proto's field for a column name, None when the proto is silent on it.
@@ -2580,7 +2999,12 @@ impl<'a> Em<'a> {
             }
             ColType::Nat => v = format!("({}⌊0⌈⌊{})", num_lit(crate::ANO_NATMAX), v),
             ColType::Int => {
-                v = format!("({}⌊{}⌈⌊{})", num_lit(crate::ANO_NATMAX), num_lit(-crate::ANO_NATMAX), v)
+                v = format!(
+                    "({}⌊{}⌈⌊{})",
+                    num_lit(crate::ANO_NATMAX),
+                    num_lit(-crate::ANO_NATMAX),
+                    v
+                )
             }
             _ => {}
         }
@@ -2608,7 +3032,10 @@ impl<'a> Em<'a> {
         let mut keep: Option<String> = None;
         if fx.despawn {
             let k = self.tv();
-            let ds = fx.despawn_sel.clone().unwrap_or_else(|| self.sel_var.clone());
+            let ds = fx
+                .despawn_sel
+                .clone()
+                .unwrap_or_else(|| self.sel_var.clone());
             self.stage(format!("{} ← ¬{}", k, ds));
             keep = Some(k);
         }
@@ -2616,7 +3043,11 @@ impl<'a> Em<'a> {
         if self.fr.kind != FrameKind::Ent && structural && fx.despawn {
             return Err(fail(0, "despawn outside the entity world"));
         }
-        let tot_all = if !fx.sp.is_empty() { self.spawn_tot_all(fx) } else { None };
+        let tot_all = if !fx.sp.is_empty() {
+            self.spawn_tot_all(fx)
+        } else {
+            None
+        };
         // --trace: the pre-state row count, captured before anoN reassigns
         let mut pre_n: Option<String> = None;
         if self.dirs.trace && structural {
@@ -2628,8 +3059,10 @@ impl<'a> Em<'a> {
         for i in 0..self.reg.ents.len() {
             let e = self.ent(i);
             let is_field = matches!(e.kind, RegEntryKind::Field { .. });
-            if !matches!(e.kind, RegEntryKind::Col { .. } | RegEntryKind::Rel { .. } | RegEntryKind::SRel { .. })
-                && !is_field
+            if !matches!(
+                e.kind,
+                RegEntryKind::Col { .. } | RegEntryKind::Rel { .. } | RegEntryKind::SRel { .. }
+            ) && !is_field
             {
                 continue;
             }
@@ -2663,10 +3096,16 @@ impl<'a> Em<'a> {
                 // spawn appends one row group per spawn effect, in effect order
                 if self.role("keys") == Some(i) || is_uniq(e) {
                     // Batch mint uses 1 + max(existing, -1) plus iota. No ceiling or collision check is emitted.
-                    app = Some(format!("((1+⌈´¯1∾{})+↕{})", cur, tot_all.as_deref().unwrap_or("")));
+                    app = Some(format!(
+                        "((1+⌈´¯1∾{})+↕{})",
+                        cur,
+                        tot_all.as_deref().unwrap_or("")
+                    ));
                 } else {
                     for sg in &fx.sp {
-                        let is_proto = sg.proto_name.map_or(false, |pn| self.find(self.rs(pn)) == Some(i));
+                        let is_proto = sg
+                            .proto_name
+                            .map_or(false, |pn| self.find(self.rs(pn)) == Some(i));
                         // the three-layer fill (ruled 2026-07-11): proto value, else
                         // registered default, else the type zero
                         let pe = self.spawn_proto(sg);
@@ -2675,22 +3114,39 @@ impl<'a> Em<'a> {
                             format!("({}⥊1)", sg.tot)
                         } else if let Some(f) = fi {
                             let pi = pe.unwrap_or_default();
-                            let (spelling, numv) = if let RegEntryKind::Proto { fields } = &self.ent(pi).kind {
-                                (fields[f].spelling.as_str(), fields[f].num)
-                            } else {
-                                ("", 0.0)
-                            };
-                            if matches!(e.kind, RegEntryKind::Col { ty: ColType::Sym, .. }) {
+                            let (spelling, numv) =
+                                if let RegEntryKind::Proto { fields } = &self.ent(pi).kind {
+                                    (fields[f].spelling.as_str(), fields[f].num)
+                                } else {
+                                    ("", 0.0)
+                                };
+                            if matches!(
+                                e.kind,
+                                RegEntryKind::Col {
+                                    ty: ColType::Sym,
+                                    ..
+                                }
+                            ) {
                                 format!("({}⥊<\"{}\")", sg.tot, spelling)
                             } else {
                                 format!("({}⥊{})", sg.tot, num_lit(numv))
                             }
                         } else if pe.is_some()
                             && self.role("proto") == Some(i)
-                            && matches!(e.kind, RegEntryKind::Col { ty: ColType::Sym, .. })
+                            && matches!(
+                                e.kind,
+                                RegEntryKind::Col {
+                                    ty: ColType::Sym,
+                                    ..
+                                }
+                            )
                         {
                             // the archetype's noun
-                            format!("({}⥊<\"{}\")", sg.tot, self.ent(pe.unwrap_or_default()).name)
+                            format!(
+                                "({}⥊<\"{}\")",
+                                sg.tot,
+                                self.ent(pe.unwrap_or_default()).name
+                            )
                         } else if sg.proto_expr.is_some() && self.role("proto") == Some(i) {
                             sg.proto_expr.clone().unwrap_or_default()
                         } else if sg.pos.is_some() && self.role("pos") == Some(i) {
@@ -2733,7 +3189,9 @@ impl<'a> Em<'a> {
                 if !fx.sp.is_empty() {
                     let mut papp: Option<String> = None;
                     for sg in &fx.sp {
-                        let mut is_proto = sg.proto_name.map_or(false, |pn| self.find(self.rs(pn)) == Some(i));
+                        let mut is_proto = sg
+                            .proto_name
+                            .map_or(false, |pn| self.find(self.rs(pn)) == Some(i));
                         let pe = self.spawn_proto(sg);
                         if let Some(pi) = pe {
                             if self.proto_field(pi, &e.name).is_some() {
@@ -2754,7 +3212,9 @@ impl<'a> Em<'a> {
         }
         // the hidden idx column rides every structural commit like any other column
         if self.need_idx && structural {
-            let mint = tot_all.as_ref().map(|t| format!("((1+⌈´¯1∾anoIdx)+↕{})", t));
+            let mint = tot_all
+                .as_ref()
+                .map(|t| format!("((1+⌈´¯1∾anoIdx)+↕{})", t));
             match (&keep, &mint) {
                 (Some(k), Some(mm)) => self.stage(format!("anoIdx ↩ ({}/anoIdx)∾{}", k, mm)),
                 (Some(k), None) => self.stage(format!("anoIdx ↩ {}/anoIdx", k)),
@@ -2790,7 +3250,10 @@ impl<'a> Em<'a> {
                 });
             }
             if fx.despawn {
-                let piece = format!("\"kill: -\"∾(AnoTraceNum +´¬{})", keep.as_deref().unwrap_or(""));
+                let piece = format!(
+                    "\"kill: -\"∾(AnoTraceNum +´¬{})",
+                    keep.as_deref().unwrap_or("")
+                );
                 ann = Some(match ann {
                     Some(a) => format!("{}∾\", \"∾{}", a, piece),
                     None => piece,
@@ -2812,7 +3275,14 @@ impl<'a> Em<'a> {
 impl<'a> Em<'a> {
     // The statement barrier (C emitStmt).
     fn emit_stmt(&mut self, st: &Node) -> R<()> {
-        let NodeKind::Stmt { sel, effects, cont, elided, .. } = &st.kind else {
+        let NodeKind::Stmt {
+            sel,
+            effects,
+            cont,
+            elided,
+            ..
+        } = &st.kind
+        else {
             return Ok(());
         };
         self.stmt += 1;
@@ -2832,7 +3302,10 @@ impl<'a> Em<'a> {
             }
         } else if is_cont {
             let Some(ci) = self.find("cursor") else {
-                return Err(fail(st.line, "elided subject with no antecedent and no ^cursor alias"));
+                return Err(fail(
+                    st.line,
+                    "elided subject with no antecedent and no ^cursor alias",
+                ));
             };
             let cv = self.bqnv(ci);
             self.stage(format!("{} ← {}", sv, cv));
@@ -2913,7 +3386,11 @@ impl<'a> Em<'a> {
         }
         self.stmt += 1;
         self.site_kind = 's';
-        self.out.push_str(&format!("\n# s{}: {} rules, one shared barrier\n", self.stmt, rules.len()));
+        self.out.push_str(&format!(
+            "\n# s{}: {} rules, one shared barrier\n",
+            self.stmt,
+            rules.len()
+        ));
         self.pre.clear();
         self.pipe_expand.clear();
         let mut fx = Fx::default();
@@ -2943,7 +3420,10 @@ impl<'a> Em<'a> {
         for r in 1..nr {
             self.set_frame(stmt_sel(rules[r]));
             if self.fr.kind != f0.kind || self.fr.w != f0.w || self.fr.h != f0.h {
-                return Err(fail(rules[r].line, "rule tick: rules select different frames"));
+                return Err(fail(
+                    rules[r].line,
+                    "rule tick: rules select different frames",
+                ));
             }
         }
         self.fr = f0;
@@ -3066,7 +3546,11 @@ impl<'a> Em<'a> {
                 let b0 = w.as_bytes().first().copied().unwrap_or(0);
                 let piece = if b0.is_ascii_digit() || b0 == b'-' || b0 == b'.' {
                     all_str = false;
-                    if b0 == b'-' { format!("¯{}", &w[1..]) } else { w.clone() }
+                    if b0 == b'-' {
+                        format!("¯{}", &w[1..])
+                    } else {
+                        w.clone()
+                    }
                 } else {
                     all_num = false;
                     format!("\"{}\"", w)
@@ -3175,7 +3659,10 @@ impl<'a> Em<'a> {
                     };
                     let cn = self.rs(*callee);
                     let Some(ei) = self.find(cn) else {
-                        return Err(fail(f.line, format!("unregistered '{}' in comprehension filter", cn)));
+                        return Err(fail(
+                            f.line,
+                            format!("unregistered '{}' in comprehension filter", cn),
+                        ));
                     };
                     let rv = self.emit_val(r, Mode::World)?;
                     let opg = match op {
@@ -3185,12 +3672,18 @@ impl<'a> Em<'a> {
                         _ => "≥",
                     };
                     let fv = self.fnv(ei);
-                    self.stage(format!("{} ↩ {}∧(({} {}⌜ {}){}{})", mm, mm, a_i, fv, b_i, opg, rv.v));
+                    self.stage(format!(
+                        "{} ↩ {}∧(({} {}⌜ {}){}{})",
+                        mm, mm, a_i, fv, b_i, opg, rv.v
+                    ));
                 }
                 NodeKind::Call { callee, .. } => {
                     let cn = self.rs(*callee);
                     let Some(ei) = self.find(cn) else {
-                        return Err(fail(f.line, format!("unregistered '{}' in comprehension filter", cn)));
+                        return Err(fail(
+                            f.line,
+                            format!("unregistered '{}' in comprehension filter", cn),
+                        ));
                     };
                     let fv = self.fnv(ei);
                     self.stage(format!("{} ↩ {}∧({} {}⌜ {})", mm, mm, a_i, fv, b_i));
@@ -3216,7 +3709,13 @@ impl<'a> Em<'a> {
         if let NodeKind::EVerb { name, args } = &effect.kind {
             if args.is_empty() {
                 if let Some(ci) = self.find(self.rs(*name)) {
-                    if matches!(self.ent(ci).kind, RegEntryKind::Col { ty: ColType::Bool, .. }) {
+                    if matches!(
+                        self.ent(ci).kind,
+                        RegEntryKind::Col {
+                            ty: ColType::Bool,
+                            ..
+                        }
+                    ) {
                         let t = self.tv();
                         let cv = self.bqnv(ci);
                         self.stage(format!("{} ← {}∨{}", t, cv, side));
@@ -3246,18 +3745,33 @@ impl<'a> Em<'a> {
 
 impl<'a> Em<'a> {
     // One column/field fixture line (+ presence), pair detection seeding is_pair.
-    fn fixture_colfield(&mut self, i: usize, ty: ColType, nums: &[f64], syms: &[String], pres: Option<&[f64]>, nlen: i32, cm: &str) {
+    fn fixture_colfield(
+        &mut self,
+        i: usize,
+        ty: ColType,
+        nums: &[f64],
+        syms: &[String],
+        pres: Option<&[f64]>,
+        nlen: i32,
+        cm: &str,
+    ) {
         let v = self.bqnv(i);
         match ty {
             ColType::Sym => {
                 self.out.push_str(&format!("{} ← ⟨", v));
                 for (k, s) in syms.iter().enumerate() {
-                    self.out.push_str(&format!("{}\"{}\"", if k > 0 { ", " } else { "" }, s));
+                    self.out
+                        .push_str(&format!("{}\"{}\"", if k > 0 { ", " } else { "" }, s));
                 }
                 self.out.push_str(&format!("⟩{}\n", cm));
             }
             ColType::Char => {
-                self.out.push_str(&format!("{} ← \"{}\"{}\n", v, syms.first().map(|s| s.as_str()).unwrap_or(""), cm));
+                self.out.push_str(&format!(
+                    "{} ← \"{}\"{}\n",
+                    v,
+                    syms.first().map(|s| s.as_str()).unwrap_or(""),
+                    cm
+                ));
             }
             _ => {
                 if nlen > 0 && nums.len() == 2 * nlen as usize {
@@ -3266,13 +3780,18 @@ impl<'a> Em<'a> {
                     for k in 0..nlen as usize {
                         let a = num_lit(nums[2 * k]);
                         let b = num_lit(nums[2 * k + 1]);
-                        self.out.push_str(&format!("{}{}‿{}", if k > 0 { ", " } else { "" }, a, b));
+                        self.out
+                            .push_str(&format!("{}{}‿{}", if k > 0 { ", " } else { "" }, a, b));
                     }
                     self.out.push_str(&format!("⟩{}\n", cm));
                 } else {
                     self.out.push_str(&format!("{} ← ⟨", v));
                     for (k, x) in nums.iter().enumerate() {
-                        self.out.push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(*x)));
+                        self.out.push_str(&format!(
+                            "{}{}",
+                            if k > 0 { ", " } else { "" },
+                            num_lit(*x)
+                        ));
                     }
                     self.out.push_str(&format!("⟩{}\n", cm));
                 }
@@ -3283,7 +3802,8 @@ impl<'a> Em<'a> {
             self.out.push_str(&format!("{} ← ⟨", pv));
             for k in 0..self.reg.n as usize {
                 let x = p.get(k).copied().unwrap_or(0.0);
-                self.out.push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(x)));
+                self.out
+                    .push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(x)));
             }
             self.out.push_str(&format!("⟩{}\n", cm));
         }
@@ -3307,34 +3827,65 @@ impl<'a> Em<'a> {
             let e = self.ent(i);
             let v = self.bqnv(i);
             // mangled entries keep their human spelling as a comment on the definition line
-            let cm = if bqnlegal(&e.name) { String::new() } else { format!("  # {}", e.name) };
+            let cm = if bqnlegal(&e.name) {
+                String::new()
+            } else {
+                format!("  # {}", e.name)
+            };
             match &e.kind {
-                RegEntryKind::Col { ty, nums, syms, pres, .. } => {
+                RegEntryKind::Col {
+                    ty,
+                    nums,
+                    syms,
+                    pres,
+                    ..
+                } => {
                     self.fixture_colfield(i, *ty, nums, syms, pres.as_deref(), r.n, &cm);
                 }
                 RegEntryKind::Field { ty, nums, syms, .. } => {
-                    self.fixture_colfield(i, *ty, nums, syms, None, r.lat_w.wrapping_mul(r.lat_h), &cm);
+                    self.fixture_colfield(
+                        i,
+                        *ty,
+                        nums,
+                        syms,
+                        None,
+                        r.lat_w.wrapping_mul(r.lat_h),
+                        &cm,
+                    );
                 }
                 RegEntryKind::Rel { targets, .. } => {
                     self.out.push_str(&format!("{} ← ⟨", v));
                     for (k, x) in targets.iter().enumerate() {
-                        self.out.push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(*x)));
+                        self.out.push_str(&format!(
+                            "{}{}",
+                            if k > 0 { ", " } else { "" },
+                            num_lit(*x)
+                        ));
                     }
                     self.out.push_str(&format!("⟩{}\n", cm));
                 }
                 RegEntryKind::AliasMask { mask } => {
                     self.out.push_str(&format!("{} ← ⟨", v));
                     for (k, x) in mask.iter().enumerate() {
-                        self.out.push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(*x)));
+                        self.out.push_str(&format!(
+                            "{}{}",
+                            if k > 0 { ", " } else { "" },
+                            num_lit(*x)
+                        ));
                     }
                     self.out.push_str(&format!("⟩{}\n", cm));
                 }
                 RegEntryKind::SRel { fib, .. } => {
                     self.out.push_str(&format!("{} ← ⟨", v));
                     for (f, fiber) in fib.iter().enumerate() {
-                        self.out.push_str(&format!("{}⟨", if f > 0 { ", " } else { "" }));
+                        self.out
+                            .push_str(&format!("{}⟨", if f > 0 { ", " } else { "" }));
                         for (k, x) in fiber.iter().enumerate() {
-                            self.out.push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(*x)));
+                            self.out.push_str(&format!(
+                                "{}{}",
+                                if k > 0 { ", " } else { "" },
+                                num_lit(*x)
+                            ));
                         }
                         self.out.push_str("⟩");
                     }
@@ -3344,12 +3895,21 @@ impl<'a> Em<'a> {
                     BindKind::Mask | BindKind::Vec => {
                         self.out.push_str(&format!("{} ← ⟨", v));
                         for (k, x) in vals.iter().enumerate() {
-                            self.out.push_str(&format!("{}{}", if k > 0 { ", " } else { "" }, num_lit(*x)));
+                            self.out.push_str(&format!(
+                                "{}{}",
+                                if k > 0 { ", " } else { "" },
+                                num_lit(*x)
+                            ));
                         }
                         self.out.push_str(&format!("⟩{}\n", cm));
                     }
                     BindKind::Num => {
-                        self.out.push_str(&format!("{} ← {}{}\n", v, num_lit(vals.first().copied().unwrap_or(0.0)), cm));
+                        self.out.push_str(&format!(
+                            "{} ← {}{}\n",
+                            v,
+                            num_lit(vals.first().copied().unwrap_or(0.0)),
+                            cm
+                        ));
                     }
                     _ => {}
                 },
@@ -3358,7 +3918,8 @@ impl<'a> Em<'a> {
                     if let Some(bp) = raw.find('{') {
                         let fv = self.fnv(i);
                         if bp != 0 {
-                            self.out.push_str(&format!("{} ← {}{}\n", fv, &raw[bp..], cm));
+                            self.out
+                                .push_str(&format!("{} ← {}{}\n", fv, &raw[bp..], cm));
                         } else {
                             self.out.push_str(&format!("{} ← {}{}\n", fv, raw, cm));
                         }
@@ -3369,9 +3930,11 @@ impl<'a> Em<'a> {
         }
         // --trace: the debug observability prelude — 0x1F-prefixed diagnostic lines
         if self.dirs.trace {
-            self.out.push_str("\n# trace (--trace): 0x1F-prefixed diagnostic lines\n");
+            self.out
+                .push_str("\n# trace (--trace): 0x1F-prefixed diagnostic lines\n");
             self.out.push_str("anoTraceSep ← @+31\n");
-            self.out.push_str("AnoTraceNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
+            self.out
+                .push_str("AnoTraceNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
             // u is the use suffix: one crossing, many rows, all sharing one USE id
             self.out.push_str("AnoTraceDead ← {n‿o‿s‿u: o {•Out anoTraceSep∾\"RELATION \"∾n∾\" \"∾(AnoTraceNum 𝕨)∾\" -> \"∾(AnoTraceNum 𝕩)∾\" IS DEAD ! \"∾u}¨ s}\n");
             self.out.push_str("AnoTraceEmpty ← {n‿o‿u: {•Out anoTraceSep∾\"FIBER \"∾n∾\" \"∾(AnoTraceNum 𝕩)∾\" IS EMPTY ! \"∾u}¨ o}\n");
@@ -3382,7 +3945,9 @@ impl<'a> Em<'a> {
     fn emit_expects(&mut self) -> R<()> {
         self.out.push_str("\n# expectations\n");
         for ex in self.dirs.expects.iter() {
-            let Expect::Col { col, vals } = ex else { continue };
+            let Expect::Col { col, vals } = ex else {
+                continue;
+            };
             let Some(ei) = self.find(col) else {
                 return Err(Diag::refuse(format!("expect: unknown column '{}'", col)));
             };
@@ -3399,7 +3964,8 @@ impl<'a> Em<'a> {
             if chr {
                 // char column: the pin is the glyph run (space-joined when written in parts)
                 let s = vals.join(" ");
-                self.out.push_str(&format!("\"expect {}\" ! \"{}\" ≡ {}\n", col, s, v));
+                self.out
+                    .push_str(&format!("\"expect {}\" ! \"{}\" ≡ {}\n", col, s, v));
                 continue;
             }
             let mut lst = String::from("⟨");
@@ -3417,10 +3983,15 @@ impl<'a> Em<'a> {
                 lst.push_str(&piece);
             }
             lst.push('⟩');
-            let rhs = if self.is_pair[ei] { format!("∾{}", v) } else { v };
+            let rhs = if self.is_pair[ei] {
+                format!("∾{}", v)
+            } else {
+                v
+            };
             // numeric expects compare within 1e-9; sym columns stay exact
             if sym {
-                self.out.push_str(&format!("\"expect {}\" ! {} ≡ {}\n", col, lst, rhs));
+                self.out
+                    .push_str(&format!("\"expect {}\" ! {} ≡ {}\n", col, lst, rhs));
             } else {
                 self.out.push_str(&format!(
                     "\"expect {}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩}} {}\n",
@@ -3429,7 +4000,8 @@ impl<'a> Em<'a> {
             }
         }
         if self.dirs.expect_n >= 0 {
-            self.out.push_str(&format!("\"expect-n\" ! {} ≡ anoN\n", self.dirs.expect_n));
+            self.out
+                .push_str(&format!("\"expect-n\" ! {} ≡ anoN\n", self.dirs.expect_n));
         }
         self.out.push_str("\n\"ok\"\n");
         Ok(())
@@ -3438,11 +4010,14 @@ impl<'a> Em<'a> {
     // The --save pipe-back serializer: 0x1E-prefixed post-state lines, data-carrying entries
     // in declaration order; schema never pipes; inverse srels skipped.
     fn emit_save(&mut self) {
-        self.out.push_str("\n# save pipe-back (--save): 0x1E-prefixed post-state lines\n");
+        self.out
+            .push_str("\n# save pipe-back (--save): 0x1E-prefixed post-state lines\n");
         self.out.push_str("anoSaveSep ← @+30\n");
-        self.out.push_str("AnoSaveNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
+        self.out
+            .push_str("AnoSaveNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
         self.out.push_str("AnoSaveRow ← {∾{\" \"∾𝕩}¨𝕩}\n");
-        self.out.push_str("•Out anoSaveSep∾\"n \"∾AnoSaveNum anoN\n");
+        self.out
+            .push_str("•Out anoSaveSep∾\"n \"∾AnoSaveNum anoN\n");
         for i in 0..self.reg.ents.len() {
             let e = self.ent(i);
             let v = self.bqnv(i);
@@ -3457,7 +4032,10 @@ impl<'a> Em<'a> {
                     self.save_colfield("field", i, ty, false, &v, &e.name);
                 }
                 RegEntryKind::Rel { .. } => {
-                    self.out.push_str(&format!("•Out anoSaveSep∾\"rel {}\"∾AnoSaveRow AnoSaveNum¨{}\n", e.name, v));
+                    self.out.push_str(&format!(
+                        "•Out anoSaveSep∾\"rel {}\"∾AnoSaveRow AnoSaveNum¨{}\n",
+                        e.name, v
+                    ));
                 }
                 RegEntryKind::SRel { inv_of, .. } => {
                     if inv_of.is_some() {
@@ -3477,22 +4055,35 @@ impl<'a> Em<'a> {
     fn save_colfield(&mut self, kw: &str, i: usize, ty: ColType, hp: bool, v: &str, name: &str) {
         match ty {
             ColType::Sym => {
-                self.out.push_str(&format!("•Out anoSaveSep∾\"{} {}\"∾AnoSaveRow {}\n", kw, name, v));
+                self.out.push_str(&format!(
+                    "•Out anoSaveSep∾\"{} {}\"∾AnoSaveRow {}\n",
+                    kw, name, v
+                ));
             }
             ColType::Char => {
-                self.out.push_str(&format!("•Out anoSaveSep∾\"{} {} \"∾{}\n", kw, name, v));
+                self.out
+                    .push_str(&format!("•Out anoSaveSep∾\"{} {} \"∾{}\n", kw, name, v));
             }
             _ => {
                 if self.is_pair[i] {
-                    self.out.push_str(&format!("•Out anoSaveSep∾\"{} {}\"∾AnoSaveRow AnoSaveNum¨∾{}\n", kw, name, v));
+                    self.out.push_str(&format!(
+                        "•Out anoSaveSep∾\"{} {}\"∾AnoSaveRow AnoSaveNum¨∾{}\n",
+                        kw, name, v
+                    ));
                 } else {
-                    self.out.push_str(&format!("•Out anoSaveSep∾\"{} {}\"∾AnoSaveRow AnoSaveNum¨{}\n", kw, name, v));
+                    self.out.push_str(&format!(
+                        "•Out anoSaveSep∾\"{} {}\"∾AnoSaveRow AnoSaveNum¨{}\n",
+                        kw, name, v
+                    ));
                 }
             }
         }
         if hp {
             let pv = self.presv(i);
-            self.out.push_str(&format!("•Out anoSaveSep∾\"pres {}\"∾AnoSaveRow AnoSaveNum¨{}\n", name, pv));
+            self.out.push_str(&format!(
+                "•Out anoSaveSep∾\"pres {}\"∾AnoSaveRow AnoSaveNum¨{}\n",
+                name, pv
+            ));
         }
     }
 
@@ -3520,7 +4111,9 @@ impl<'a> Em<'a> {
             return false;
         }
         match &nd.kind {
-            NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => return self.scan_idx_name(*s, has_id, depth),
+            NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => {
+                return self.scan_idx_name(*s, has_id, depth);
+            }
             NodeKind::SetHop { rel } => {
                 if !has_id {
                     if let Some(ei) = self.find(self.rs(*rel)) {
@@ -3541,7 +4134,9 @@ impl<'a> Em<'a> {
             NodeKind::CmpAny { name } => return self.scan_idx_name(*name, has_id, depth),
             _ => {}
         }
-        children(nd).into_iter().any(|k| self.scan_idx_use(k, has_id, depth))
+        children(nd)
+            .into_iter()
+            .any(|k| self.scan_idx_use(k, has_id, depth))
     }
 
     // Whole-program pre-scan arming anoIdx: statements strictly after the first
@@ -3573,7 +4168,11 @@ impl<'a> Em<'a> {
             if self.need_idx {
                 break;
             }
-            let body: &Node = if let NodeKind::DefStmt { body, .. } = &st.kind { body } else { st };
+            let body: &Node = if let NodeKind::DefStmt { body, .. } = &st.kind {
+                body
+            } else {
+                st
+            };
             let is_rule = matches!(body.kind, NodeKind::Stmt { rule: true, .. });
             if is_rule {
                 if self.scan_idx_use(body, has_id, 0) {
@@ -3651,7 +4250,11 @@ fn emit_lowered(
         site_kind: 's',
     };
     let empty: [Node; 0] = [];
-    let kids: &[Node] = if let NodeKind::Program(v) = &prog.kind { v } else { &empty };
+    let kids: &[Node] = if let NodeKind::Program(v) = &prog.kind {
+        v
+    } else {
+        &empty
+    };
     em.scan_need_idx(kids);
     em.emit_fixture();
     // Each run of new installations fires all installed rules once before the next performed
@@ -3692,7 +4295,12 @@ fn emit_lowered(
             NodeKind::Stmt { .. } => em.emit_stmt(st)?,
             NodeKind::Query(_) => em.emit_query(st)?,
             NodeKind::Compr { .. } => em.emit_compr(st)?,
-            k => return Err(Diag::refuse(format!("emit: unexpected top-level node {}", k.c_kind()))),
+            k => {
+                return Err(Diag::refuse(format!(
+                    "emit: unexpected top-level node {}",
+                    k.c_kind()
+                )));
+            }
         }
     }
     if fresh {
@@ -3711,7 +4319,9 @@ fn emit_lowered(
 // publishes, or None for anything else — including a longer name that merely starts that way.
 fn staged_serial(rhs: &str) -> Option<usize> {
     let digits = rhs.strip_prefix("anoRelStage")?;
-    let end = digits.find(|c: char| !c.is_ascii_digit()).unwrap_or(digits.len());
+    let end = digits
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(digits.len());
     if end == 0 || digits[end..].starts_with(ident_char) {
         return None;
     }
@@ -3742,7 +4352,11 @@ fn audit_relationship_writes(bqn: &str, reg: &Registry, staged: usize) -> R<()> 
         if !watched {
             continue;
         }
-        let var = if bqnlegal(&e.name) { lc(&e.name) } else { format!("jp{}", i) };
+        let var = if bqnlegal(&e.name) {
+            lc(&e.name)
+        } else {
+            format!("jp{}", i)
+        };
         let write = format!("{} ↩ ", var);
         let mut at = 0usize;
         while let Some(hit) = bqn[at..].find(&write) {
@@ -3788,19 +4402,32 @@ mod tests {
             ents: vec![RegEntry {
                 name: "Mentor".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Rel { targets: vec![0.0], key_of: None },
+                kind: RegEntryKind::Rel {
+                    targets: vec![0.0],
+                    key_of: None,
+                },
             }],
             ..Registry::default()
         };
         let sealed = "anoRelStage0 ← t0\n\"relationship Mentor\" ! 1\nmentor ↩ anoRelStage0\n";
         assert!(audit_relationship_writes(sealed, &reg, 1).is_ok());
         let bare = "mentor ↩ t0\n";
-        let refusal = audit_relationship_writes(bare, &reg, 0).expect_err("bare write").msg;
-        assert!(refusal.contains("'Mentor' is written outside the validity seal"), "{}", refusal);
+        let refusal = audit_relationship_writes(bare, &reg, 0)
+            .expect_err("bare write")
+            .msg;
+        assert!(
+            refusal.contains("'Mentor' is written outside the validity seal"),
+            "{}",
+            refusal
+        );
         let unpublished = audit_relationship_writes("anoRelStage0 ← t0\n", &reg, 1)
             .expect_err("unpublished stage")
             .msg;
-        assert!(unpublished.contains("1 relationship writes were staged"), "{}", unpublished);
+        assert!(
+            unpublished.contains("1 relationship writes were staged"),
+            "{}",
+            unpublished
+        );
     }
 
     // The shapes a write could hide in.  A publication is a publication wherever it sits, one
@@ -3813,24 +4440,45 @@ mod tests {
             ents: vec![RegEntry {
                 name: "Mentor".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Rel { targets: vec![0.0], key_of: None },
+                kind: RegEntryKind::Rel {
+                    targets: vec![0.0],
+                    key_of: None,
+                },
             }],
             ..Registry::default()
         };
         let nested = "t0 ← {mentor ↩ 𝕩}¨fib\n";
-        let refusal = audit_relationship_writes(nested, &reg, 0).expect_err("write in a lambda").msg;
-        assert!(refusal.contains("'Mentor' is written outside the validity seal"), "{}", refusal);
+        let refusal = audit_relationship_writes(nested, &reg, 0)
+            .expect_err("write in a lambda")
+            .msg;
+        assert!(
+            refusal.contains("'Mentor' is written outside the validity seal"),
+            "{}",
+            refusal
+        );
         let sequenced = "t0 ← ⟨⟩ ⋄ mentor ↩ t1\n";
-        assert!(audit_relationship_writes(sequenced, &reg, 0).is_err(), "sequenced write");
+        assert!(
+            audit_relationship_writes(sequenced, &reg, 0).is_err(),
+            "sequenced write"
+        );
         // one stage, published twice: the second publication is a write the seal never covered
         let doubled = "anoRelStage0 ← t0\nmentor ↩ anoRelStage0\nmentor ↩ anoRelStage0\n";
-        assert!(audit_relationship_writes(doubled, &reg, 2).is_err(), "doubled publication");
+        assert!(
+            audit_relationship_writes(doubled, &reg, 2).is_err(),
+            "doubled publication"
+        );
         // a staged binding whose name only starts like one is not that binding
         let lookalike = "mentor ↩ anoRelStage0b\n";
-        assert!(audit_relationship_writes(lookalike, &reg, 1).is_err(), "lookalike stage");
+        assert!(
+            audit_relationship_writes(lookalike, &reg, 1).is_err(),
+            "lookalike stage"
+        );
         // and a wider name that ends in the variable is not the variable
         let other = "anoRelStage0 ← t0\nmentor ↩ anoRelStage0\npres_mentor ↩ t1\namentor ↩ t2\n";
-        assert!(audit_relationship_writes(other, &reg, 1).is_ok(), "neighbouring names");
+        assert!(
+            audit_relationship_writes(other, &reg, 1).is_ok(),
+            "neighbouring names"
+        );
     }
 
     // Native byte-exact emission contract for a symbol query over the empty world.
@@ -3857,7 +4505,10 @@ mod tests {
     fn label_query_emits_the_native_contract() {
         let mut it = Interner::new();
         let foo = it.intern("Foo");
-        let q = Node::new(NodeKind::Query(Box::new(Node::new(NodeKind::Sym(foo), 1))), 1);
+        let q = Node::new(
+            NodeKind::Query(Box::new(Node::new(NodeKind::Sym(foo), 1))),
+            1,
+        );
         let prog = Node::new(NodeKind::Program(vec![q]), 1);
         let reg = Registry::default();
         let mut dirs = Directives::default();
@@ -3875,11 +4526,16 @@ mod tests {
     fn out_pin_emits_the_native_contract() {
         let mut it = Interner::new();
         let foo = it.intern("Foo");
-        let q = Node::new(NodeKind::Query(Box::new(Node::new(NodeKind::Sym(foo), 2))), 2);
+        let q = Node::new(
+            NodeKind::Query(Box::new(Node::new(NodeKind::Sym(foo), 2))),
+            2,
+        );
         let prog = Node::new(NodeKind::Program(vec![q]), 2);
         let reg = Registry::default();
         let mut dirs = Directives::default();
-        dirs.expects.push(Expect::Out { vals: vec!["Foo".to_string()] });
+        dirs.expects.push(Expect::Out {
+            vals: vec!["Foo".to_string()],
+        });
         let out = emit(&prog, &reg, &dirs, &it).expect("emit");
         assert_eq!(
             out,
@@ -3899,7 +4555,14 @@ mod trace_domains {
         let col = |name: &str, ty: ColType, uniq: bool, nums: Vec<f64>| RegEntry {
             name: name.to_string(),
             defval: 0.0,
-            kind: RegEntryKind::Col { ty, uniq, nums, syms: Vec::new(), pres: None, rng: None },
+            kind: RegEntryKind::Col {
+                ty,
+                uniq,
+                nums,
+                syms: Vec::new(),
+                pres: None,
+                rng: None,
+            },
         };
         Registry {
             n: 4,
@@ -3927,7 +4590,10 @@ mod trace_domains {
         reg.ents.push(RegEntry {
             name: "mentor".to_string(),
             defval: 0.0,
-            kind: RegEntryKind::Rel { targets: vec![-1.0, 1.0, 9.0, 0.0], key_of: None },
+            kind: RegEntryKind::Rel {
+                targets: vec![-1.0, 1.0, 9.0, 0.0],
+                key_of: None,
+            },
         });
         reg
     }
@@ -3973,7 +4639,10 @@ mod trace_domains {
 
     fn use_lines(bqn: &str) -> Vec<String> {
         bqn.lines()
-            .filter_map(|l| l.find("TRACE-USE ").map(|i| l[i..].trim_end_matches('"').to_string()))
+            .filter_map(|l| {
+                l.find("TRACE-USE ")
+                    .map(|i| l[i..].trim_end_matches('"').to_string())
+            })
             .collect()
     }
 
@@ -3990,7 +4659,10 @@ mod trace_domains {
             assert!(!masks[0].contains("s1m"), "{}", masks[0]);
         }
         assert_eq!(use_lines(&a), use_lines(&b));
-        assert_eq!(use_lines(&a), vec!["TRACE-USE 0 s1:1 PREDICATE SOURCE mentor"]);
+        assert_eq!(
+            use_lines(&a),
+            vec!["TRACE-USE 0 s1:1 PREDICATE SOURCE mentor"]
+        );
     }
 
     // An effect crossing conjoins the STATEMENT mask, never the guard-refined one.
@@ -4001,7 +4673,10 @@ mod trace_domains {
         let masks = dead_masks(&bqn);
         assert_eq!(masks.len(), 1, "{}", bqn);
         assert!(masks[0].starts_with("s1m∧"), "{}", masks[0]);
-        assert_eq!(use_lines(&bqn), vec!["TRACE-USE 0 s1:1 EFFECT SELECTED mentor"]);
+        assert_eq!(
+            use_lines(&bqn),
+            vec!["TRACE-USE 0 s1:1 EFFECT SELECTED mentor"]
+        );
     }
 
     // One relation crossed in both phases records twice, with distinct ids and domains.
@@ -4063,8 +4738,15 @@ mod trace_domains {
         let reg = unkeyed_registry();
         let bqn = traced("Flag , Gold = mentor.Gold\n", &reg);
         assert!(bqn.contains("((≠gold)|0⌈mentor)⊏gold"), "{}", bqn);
-        assert!(bqn.contains("((¯1≠mentor)∧(0≤mentor)∧(mentor<anoN))"), "{}", bqn);
-        assert_eq!(use_lines(&bqn), vec!["TRACE-USE 0 s1:1 EFFECT SELECTED mentor"]);
+        assert!(
+            bqn.contains("((¯1≠mentor)∧(0≤mentor)∧(mentor<anoN))"),
+            "{}",
+            bqn
+        );
+        assert_eq!(
+            use_lines(&bqn),
+            vec!["TRACE-USE 0 s1:1 EFFECT SELECTED mentor"]
+        );
     }
 
     // The flag gates whole blocks: with it off no trace text is emitted at all.
@@ -4304,27 +4986,59 @@ mod normalize {
 
         fn carrier_of_entry(&self, index: usize) -> SemanticCarrier {
             match &self.reg.ents[index].kind {
-                RegEntryKind::Col { ty: ColType::Bool, .. }
-                | RegEntryKind::Field { ty: ColType::Bool, .. }
+                RegEntryKind::Col {
+                    ty: ColType::Bool, ..
+                }
+                | RegEntryKind::Field {
+                    ty: ColType::Bool, ..
+                }
                 | RegEntryKind::AliasMask { .. }
                 | RegEntryKind::Tag { .. }
-                | RegEntryKind::Bind { kind: BindKind::Mask, .. } => SemanticCarrier::Mask,
-                RegEntryKind::Col { ty: ColType::Num, .. }
-                | RegEntryKind::Col { ty: ColType::Nat, .. }
-                | RegEntryKind::Col { ty: ColType::Int, .. }
-                | RegEntryKind::Field { ty: ColType::Num, .. }
-                | RegEntryKind::Field { ty: ColType::Nat, .. }
-                | RegEntryKind::Field { ty: ColType::Int, .. }
+                | RegEntryKind::Bind {
+                    kind: BindKind::Mask,
+                    ..
+                } => SemanticCarrier::Mask,
+                RegEntryKind::Col {
+                    ty: ColType::Num, ..
+                }
+                | RegEntryKind::Col {
+                    ty: ColType::Nat, ..
+                }
+                | RegEntryKind::Col {
+                    ty: ColType::Int, ..
+                }
+                | RegEntryKind::Field {
+                    ty: ColType::Num, ..
+                }
+                | RegEntryKind::Field {
+                    ty: ColType::Nat, ..
+                }
+                | RegEntryKind::Field {
+                    ty: ColType::Int, ..
+                }
                 | RegEntryKind::Rel { .. }
                 | RegEntryKind::Bind {
                     kind: BindKind::Entity,
                     ..
                 }
-                | RegEntryKind::Bind { kind: BindKind::Point, .. }
-                | RegEntryKind::Bind { kind: BindKind::Num, .. }
-                | RegEntryKind::Bind { kind: BindKind::Vec, .. } => SemanticCarrier::Number,
-                RegEntryKind::Col { ty: ColType::Char, .. }
-                | RegEntryKind::Field { ty: ColType::Char, .. } => SemanticCarrier::Char,
+                | RegEntryKind::Bind {
+                    kind: BindKind::Point,
+                    ..
+                }
+                | RegEntryKind::Bind {
+                    kind: BindKind::Num,
+                    ..
+                }
+                | RegEntryKind::Bind {
+                    kind: BindKind::Vec,
+                    ..
+                } => SemanticCarrier::Number,
+                RegEntryKind::Col {
+                    ty: ColType::Char, ..
+                }
+                | RegEntryKind::Field {
+                    ty: ColType::Char, ..
+                } => SemanticCarrier::Char,
                 _ => SemanticCarrier::Other,
             }
         }
@@ -4342,9 +5056,9 @@ mod normalize {
                         .map(|index| self.carrier_of_entry(index))
                         .unwrap_or(SemanticCarrier::Other)
                 }
-                NodeKind::Cmp { .. }
-                | NodeKind::CmpAny { .. }
-                | NodeKind::Not(..) => SemanticCarrier::Mask,
+                NodeKind::Cmp { .. } | NodeKind::CmpAny { .. } | NodeKind::Not(..) => {
+                    SemanticCarrier::Mask
+                }
                 // a string literal is a run of glyphs, and reads on the char carrier
                 NodeKind::Str(..) => SemanticCarrier::Char,
                 NodeKind::And(left, right) | NodeKind::Or(left, right) => {
@@ -4457,7 +5171,11 @@ mod normalize {
             let line = node.line;
             match node.kind {
                 NodeKind::Scope { l, r, origin } => Node::new(
-                    NodeKind::Scope { l: Box::new(Self::presence(*l)), r, origin },
+                    NodeKind::Scope {
+                        l: Box::new(Self::presence(*l)),
+                        r,
+                        origin,
+                    },
                     line,
                 ),
                 _ => Self::presence(node),
@@ -4472,9 +5190,13 @@ mod normalize {
         fn fiber_presence(node: Node) -> Node {
             let line = node.line;
             match node.kind {
-                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => {
-                    Node::new(NodeKind::Hop { l, r: Box::new(Self::presence(*r)) }, line)
-                }
+                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => Node::new(
+                    NodeKind::Hop {
+                        l,
+                        r: Box::new(Self::presence(*r)),
+                    },
+                    line,
+                ),
                 kind => Node::new(kind, line),
             }
         }
@@ -4492,7 +5214,9 @@ mod normalize {
             if spelling == "#" {
                 return Carrier::Presence;
             }
-            self.infer(operand).reducer_carrier().unwrap_or(Carrier::Number)
+            self.infer(operand)
+                .reducer_carrier()
+                .unwrap_or(Carrier::Number)
         }
 
         // THE fold/scan head resolution point. Inputs: spelling, form, operand, line. Output: the
@@ -4522,12 +5246,17 @@ mod normalize {
             let line = node.line;
             let kind = match &node.kind {
                 NodeKind::Num(value) => NodeKind::Num(*value),
-                NodeKind::Counter { val, unit } => NodeKind::Counter { val: *val, unit: *unit },
+                NodeKind::Counter { val, unit } => NodeKind::Counter {
+                    val: *val,
+                    unit: *unit,
+                },
                 NodeKind::Sym(symbol) => NodeKind::Sym(*symbol),
                 NodeKind::Str(symbol) => NodeKind::Str(*symbol),
                 // bare lookup never touches the dynamic-alias overlay
                 NodeKind::Name(symbol) => NodeKind::Name(*symbol),
-                NodeKind::Alias { look: symbol, .. } => return self.resolve_alias_or_bare(*symbol, line),
+                NodeKind::Alias { look: symbol, .. } => {
+                    return self.resolve_alias_or_bare(*symbol, line);
+                }
                 NodeKind::Wild => NodeKind::Wild,
                 NodeKind::Not(inner) => {
                     NodeKind::Not(Box::new(self.normalize(inner, Context::Mask, phase)?))
@@ -4562,8 +5291,11 @@ mod normalize {
                             && lc.reducer_carrier().is_some()
                             && rc.reducer_carrier().is_some();
                         if mixed_value || mixed_char {
-                            let (first, second) =
-                                if lc.rank() <= rc.rank() { (lc, rc) } else { (rc, lc) };
+                            let (first, second) = if lc.rank() <= rc.rank() {
+                                (lc, rc)
+                            } else {
+                                (rc, lc)
+                            };
                             return Err(super::fail(
                                 line,
                                 format!(
@@ -4577,7 +5309,10 @@ mod normalize {
                         if (numeric(lc) && numeric(rc)) || (chars(lc) && chars(rc)) {
                             let desc = self.resolve_head(spelling, Form::Direct, &left, line)?;
                             let callee = self.function(&desc, greater);
-                            NodeKind::Call { callee, args: vec![left, right] }
+                            NodeKind::Call {
+                                callee,
+                                args: vec![left, right],
+                            }
                         } else if matches!(&node.kind, NodeKind::And(..)) {
                             NodeKind::And(Box::new(left), Box::new(right))
                         } else {
@@ -4600,7 +5335,9 @@ mod normalize {
                     l: Box::new(self.normalize(l, context, phase)?),
                     r: Box::new(self.normalize(r, Context::Neutral, phase)?),
                     origin: match origin {
-                        Some(origin) => Some(Box::new(self.normalize(origin, Context::Neutral, phase)?)),
+                        Some(origin) => {
+                            Some(Box::new(self.normalize(origin, Context::Neutral, phase)?))
+                        }
                         None => None,
                     },
                 },
@@ -4621,7 +5358,11 @@ mod normalize {
                 // retrieves the object that was checked here and can hold no second table.
                 NodeKind::Fold { op, operand } => {
                     let spelling = self.spelling(*op).to_string();
-                    let operand_context = if spelling == "#" { Context::Mask } else { Context::Value };
+                    let operand_context = if spelling == "#" {
+                        Context::Mask
+                    } else {
+                        Context::Value
+                    };
                     let operand = self.normalize(operand, operand_context, phase)?;
                     let desc = self.resolve_head(&spelling, Form::Fold, &operand, line)?;
                     let operand = match desc.machine().map(|machine| machine.kind) {
@@ -4629,11 +5370,18 @@ mod normalize {
                         _ => operand,
                     };
                     let op = self.intern(desc.spelling());
-                    NodeKind::Fold { op, operand: Box::new(operand) }
+                    NodeKind::Fold {
+                        op,
+                        operand: Box::new(operand),
+                    }
                 }
                 NodeKind::ScanExpr { op, operand } => {
                     let spelling = self.spelling(*op).to_string();
-                    let operand_context = if spelling == "#" { Context::Mask } else { Context::Value };
+                    let operand_context = if spelling == "#" {
+                        Context::Mask
+                    } else {
+                        Context::Value
+                    };
                     let operand = self.normalize(operand, operand_context, phase)?;
                     let desc = self.resolve_head(&spelling, Form::Scan, &operand, line)?;
                     let plus = self.intern("+");
@@ -4673,7 +5421,11 @@ mod normalize {
                 }
                 NodeKind::ScanAlong { op, col, order } => {
                     let spelling = self.spelling(*op).to_string();
-                    let col_context = if spelling == "#" { Context::Mask } else { Context::Value };
+                    let col_context = if spelling == "#" {
+                        Context::Mask
+                    } else {
+                        Context::Value
+                    };
                     let col = self.normalize(col, col_context, phase)?;
                     let order = self.normalize(order, Context::Value, phase)?;
                     let desc = self.resolve_head(&spelling, Form::ScanAlong, &col, line)?;
@@ -4732,7 +5484,9 @@ mod normalize {
                 NodeKind::To { shape, poured } => NodeKind::To {
                     shape: Box::new(self.normalize(shape, Context::Value, phase)?),
                     poured: match poured {
-                        Some(poured) => Some(Box::new(self.normalize(poured, Context::Value, phase)?)),
+                        Some(poured) => {
+                            Some(Box::new(self.normalize(poured, Context::Value, phase)?))
+                        }
                         None => None,
                     },
                 },
@@ -4770,7 +5524,11 @@ mod normalize {
                 },
                 NodeKind::EAssign { op, target, rhs } => NodeKind::EAssign {
                     op: *op,
-                    target: Box::new(self.normalize(target, Context::Neutral, TracePhase::Effect)?),
+                    target: Box::new(self.normalize(
+                        target,
+                        Context::Neutral,
+                        TracePhase::Effect,
+                    )?),
                     rhs: Box::new(self.normalize(rhs, Context::Value, TracePhase::Effect)?),
                 },
                 NodeKind::EAdd(symbol) => NodeKind::EAdd(*symbol),
@@ -4806,7 +5564,13 @@ mod normalize {
                     f: *f,
                     col: Box::new(self.normalize(col, Context::Value, TracePhase::Effect)?),
                 },
-                NodeKind::Stmt { sel, effects, rule, cont, elided } => NodeKind::Stmt {
+                NodeKind::Stmt {
+                    sel,
+                    effects,
+                    rule,
+                    cont,
+                    elided,
+                } => NodeKind::Stmt {
                     sel: match sel {
                         Some(sel) => Some(Box::new(self.normalize(
                             sel,
@@ -4834,7 +5598,11 @@ mod normalize {
                 )?)),
                 NodeKind::Compr { sel, effect, rest } => NodeKind::Compr {
                     sel: Box::new(self.normalize(sel, Context::Mask, TracePhase::Predicate)?),
-                    effect: Box::new(self.normalize(effect, Context::Neutral, TracePhase::Effect)?),
+                    effect: Box::new(self.normalize(
+                        effect,
+                        Context::Neutral,
+                        TracePhase::Effect,
+                    )?),
                     rest: rest
                         .iter()
                         .map(|item| {
@@ -4927,7 +5695,10 @@ mod normalize {
             };
             Registry {
                 n: 3,
-                ents: vec![col("Gold", vec![1.0, 2.0, 3.0]), col("Silver", vec![0.0, 0.0, 0.0])],
+                ents: vec![
+                    col("Gold", vec![1.0, 2.0, 3.0]),
+                    col("Silver", vec![0.0, 0.0, 0.0]),
+                ],
                 ..Registry::default()
             }
         }
@@ -4953,7 +5724,9 @@ mod normalize {
             nodes(node, &mut all);
             all.iter()
                 .filter_map(|n| match &n.kind {
-                    NodeKind::Alias { look: symbol, .. } => Some(normalizer.spelling(*symbol).to_string()),
+                    NodeKind::Alias { look: symbol, .. } => {
+                        Some(normalizer.spelling(*symbol).to_string())
+                    }
                     _ => None,
                 })
                 .collect()
@@ -4970,9 +5743,14 @@ mod normalize {
                 .collect()
         }
 
-        fn normalized(source: &str, environment: &AliasEnvironment, reg: &Registry) -> (Normalizer, Node) {
+        fn normalized(
+            source: &str,
+            environment: &AliasEnvironment,
+            reg: &Registry,
+        ) -> (Normalizer, Node) {
             let (prog, it) = program(source);
-            let mut normalizer = Normalizer::new(reg, &it, environment.snapshot(reg).expect("snapshot"));
+            let mut normalizer =
+                Normalizer::new(reg, &it, environment.snapshot(reg).expect("snapshot"));
             let out = normalizer
                 .normalize(&prog, Context::Neutral, TracePhase::Predicate)
                 .expect("normalize");
@@ -5001,7 +5779,9 @@ mod normalize {
             reg.ents.push(RegEntry {
                 name: "threat".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Fn { body: Some("{𝕨⌈𝕩}".to_string()) },
+                kind: RegEntryKind::Fn {
+                    body: Some("{𝕨⌈𝕩}".to_string()),
+                },
             });
             reg
         }
@@ -5009,7 +5789,14 @@ mod normalize {
         fn emitted_with(source: &str, reg: &Registry, dirs: &Directives) -> String {
             let (prog, it) = program(source);
             let environment = AliasEnvironment::for_registry(reg);
-            emit(&prog, reg, dirs, &it, environment.snapshot(reg).expect("snapshot")).expect("emit")
+            emit(
+                &prog,
+                reg,
+                dirs,
+                &it,
+                environment.snapshot(reg).expect("snapshot"),
+            )
+            .expect("emit")
         }
 
         fn emitted(source: &str) -> String {
@@ -5021,9 +5808,15 @@ mod normalize {
             let (prog, it) = program(source);
             let dirs = Directives::default();
             let environment = AliasEnvironment::for_registry(&reg);
-            emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
-                .expect_err("must refuse")
-                .msg
+            emit(
+                &prog,
+                &reg,
+                &dirs,
+                &it,
+                environment.snapshot(&reg).expect("snapshot"),
+            )
+            .expect_err("must refuse")
+            .msg
         }
 
         // The statement body of an emission: the prelude and the fixture are not under test.
@@ -5058,8 +5851,10 @@ mod normalize {
         fn scoped_machines_scan_the_scoped_domain() {
             assert!(emitted("#\\ Gold @ Path\n").contains("q1 ← (+`path/(¬(¬(1¨gold))))"));
             // the mean's two prefix sums sit under one compression, so they align by construction
-            assert!(emitted("avg\\ Gold @ Path\n")
-                .contains("q1 ← ((+`path/gold)÷(+`path/(¬(¬(1¨gold)))))"));
+            assert!(
+                emitted("avg\\ Gold @ Path\n")
+                    .contains("q1 ← ((+`path/gold)÷(+`path/(¬(¬(1¨gold)))))")
+            );
             // a numeric operand is the all-true membership stream: zeros do not skip
             assert!(emitted("#\\ Gold\n").contains("q1 ← (+`(¬(¬(1¨gold))))"));
         }
@@ -5068,8 +5863,10 @@ mod normalize {
         // operands carry one and the same order, so composing them is one domain.
         #[test]
         fn scan_along_resolves_through_the_same_table() {
-            assert!(emitted("scan(avg) Gold along Silver\n")
-                .contains("q1 ← ((+`(silver)⊏gold)÷(+`(silver)⊏(¬(¬(1¨gold)))))"));
+            assert!(
+                emitted("scan(avg) Gold along Silver\n")
+                    .contains("q1 ← ((+`(silver)⊏gold)÷(+`(silver)⊏(¬(¬(1¨gold)))))")
+            );
             assert!(emitted("scan(&) Burning along Silver\n").contains("∧`"));
             assert!(emitted("scan(threat) Gold along Silver\n").contains("Fn_threat`"));
         }
@@ -5077,7 +5874,12 @@ mod normalize {
         // One carrier gate for every form: the fold path's refusal now covers scan and along.
         #[test]
         fn carrier_gates_agree_across_forms() {
-            for source in ["+\\ Burning\n", "*\\ Burning\n", "avg\\ Burning\n", "+/ Burning\n"] {
+            for source in [
+                "+\\ Burning\n",
+                "*\\ Burning\n",
+                "avg\\ Burning\n",
+                "+/ Burning\n",
+            ] {
                 let message = refused(source);
                 assert!(
                     message.contains("is not defined on Mask"),
@@ -5087,7 +5889,9 @@ mod normalize {
                 );
             }
             assert!(refused("max/ Burning\n").contains("reducer 'max' is not defined on Mask"));
-            assert!(refused("threat\\ Burning\n").contains("reducer 'threat' is not defined on Mask"));
+            assert!(
+                refused("threat\\ Burning\n").contains("reducer 'threat' is not defined on Mask")
+            );
             // a name is admitted by the registry, never by being a name
             assert!(refused("nope/ Gold\n").contains("unknown reducer 'nope'"));
             assert!(refused("nope\\ Gold\n").contains("unknown reducer 'nope'"));
@@ -5098,7 +5902,8 @@ mod normalize {
         fn mixed_carrier_greater_lesser_refuses_in_value_position() {
             let message = refused("Silver = (Gold | Burning)\n");
             assert!(
-                message.contains("'|' mixes mask and number operands; there is no carrier coercion"),
+                message
+                    .contains("'|' mixes mask and number operands; there is no carrier coercion"),
                 "{}",
                 message
             );
@@ -5131,7 +5936,11 @@ mod normalize {
             )
             .expect_err("must refuse")
             .msg;
-            assert!(message.contains("scan over fibers is not yet supported"), "{}", message);
+            assert!(
+                message.contains("scan over fibers is not yet supported"),
+                "{}",
+                message
+            );
         }
 
         // A12 at the only layer that can express runtime skipping: the guard is staged once and
@@ -5152,7 +5961,11 @@ mod normalize {
                 "{}",
                 labelled
             );
-            assert!(!labelled.contains("\n•Out (@+29)∾\"q1@1\"\n"), "{}", labelled);
+            assert!(
+                !labelled.contains("\n•Out (@+29)∾\"q1@1\"\n"),
+                "{}",
+                labelled
+            );
 
             let mut pinned = Directives::default();
             pinned.expects.push(crate::Expect::Out { vals: Vec::new() });
@@ -5165,7 +5978,11 @@ mod normalize {
         // Identity-bearing folds keep their real scalar results and stage no guard at all.
         #[test]
         fn identity_bearing_folds_stay_unguarded() {
-            for source in ["+/ Gold @ Burning\n", "*/ Gold @ Burning\n", "#/ Gold @ Burning\n"] {
+            for source in [
+                "+/ Gold @ Burning\n",
+                "*/ Gold @ Burning\n",
+                "#/ Gold @ Burning\n",
+            ] {
                 let bqn = emitted(source);
                 assert!(!bqn.contains("q1v"), "{}: {}", source, bqn);
                 assert!(bqn.contains("•Show q1"), "{}: {}", source, bqn);
@@ -5176,9 +5993,18 @@ mod normalize {
         // This is the 038 control, pinned as a string.
         #[test]
         fn unguarded_mask_scan_emits_byte_identically() {
-            assert_eq!(body(&emitted("|\\ Burning @ Path\n")), "\n# q1\nq1 ← (∨`path/burning)\n•Show q1\n");
-            assert_eq!(body(&emitted("|/ Burning @ Path\n")), "\n# q1\nq1 ← (AnoLeftOr (path/burning))\n•Show q1\n");
-            assert_eq!(body(&emitted("&/ Burning @ Path\n")), "\n# q1\nq1 ← (AnoLeftAnd (path/burning))\n•Show q1\n");
+            assert_eq!(
+                body(&emitted("|\\ Burning @ Path\n")),
+                "\n# q1\nq1 ← (∨`path/burning)\n•Show q1\n"
+            );
+            assert_eq!(
+                body(&emitted("|/ Burning @ Path\n")),
+                "\n# q1\nq1 ← (AnoLeftOr (path/burning))\n•Show q1\n"
+            );
+            assert_eq!(
+                body(&emitted("&/ Burning @ Path\n")),
+                "\n# q1\nq1 ← (AnoLeftAnd (path/burning))\n•Show q1\n"
+            );
         }
 
         // An overlay miss keeps the sigiled request as an Alias node; the bare spelling never
@@ -5200,7 +6026,9 @@ mod normalize {
         fn dynamic_alias_entry_resolves_to_target_symbol() {
             let reg = registry();
             let mut environment = AliasEnvironment::for_registry(&reg);
-            environment.install_binding(&reg, "focus", "Gold").expect("install");
+            environment
+                .install_binding(&reg, "focus", "Gold")
+                .expect("install");
             let (normalizer, out) = normalized("^focus , Silver = 0\n", &environment, &reg);
             assert_eq!(alias_stems(&normalizer, &out), vec!["Gold".to_string()]);
         }
@@ -5210,9 +6038,14 @@ mod normalize {
         fn dynamic_alias_mask_materializes_reserved_entry() {
             let reg = registry();
             let mut environment = AliasEnvironment::for_registry(&reg);
-            environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).expect("install");
+            environment
+                .install_mask(&reg, "hot", &[1.0, 0.0, 1.0])
+                .expect("install");
             let (normalizer, out) = normalized("^hot , Silver = 0\n", &environment, &reg);
-            assert_eq!(alias_stems(&normalizer, &out), vec!["AnoDynMask0".to_string()]);
+            assert_eq!(
+                alias_stems(&normalizer, &out),
+                vec!["AnoDynMask0".to_string()]
+            );
             assert!(normalizer.generated.contains("AnoDynMask0"));
             let entry = normalizer
                 .reg
@@ -5220,7 +6053,9 @@ mod normalize {
                 .iter()
                 .find(|e| e.name == "AnoDynMask0")
                 .expect("materialized entry");
-            assert!(matches!(&entry.kind, RegEntryKind::AliasMask { mask } if mask == &[1.0, 0.0, 1.0]));
+            assert!(
+                matches!(&entry.kind, RegEntryKind::AliasMask { mask } if mask == &[1.0, 0.0, 1.0])
+            );
         }
 
         // An overlay entry spelled like a column is invisible to the bare spelling (work 3).
@@ -5228,7 +6063,9 @@ mod normalize {
         fn bare_name_never_consults_overlay() {
             let reg = registry();
             let mut environment = AliasEnvironment::for_registry(&reg);
-            environment.install_binding(&reg, "gold", "Silver").expect("install");
+            environment
+                .install_binding(&reg, "gold", "Silver")
+                .expect("install");
             let (normalizer, out) = normalized("Gold , Silver = 0\n", &environment, &reg);
             assert!(alias_stems(&normalizer, &out).is_empty());
             assert!(name_stems(&normalizer, &out).iter().any(|n| n == "Gold"));
@@ -5254,10 +6091,15 @@ mod normalize {
             reg.ents.push(RegEntry {
                 name: "spot".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Bind { kind: BindKind::Point, vals: vec![1.0, 2.0] },
+                kind: RegEntryKind::Bind {
+                    kind: BindKind::Point,
+                    vals: vec![1.0, 2.0],
+                },
             });
             let mut environment = AliasEnvironment::for_registry(&reg);
-            environment.install_binding(&reg, "focus", "spot").expect("install");
+            environment
+                .install_binding(&reg, "focus", "spot")
+                .expect("install");
 
             let (normalizer, out) = normalized("!^focus , Silver = 0\n", &environment, &reg);
             assert_eq!(alias_stems(&normalizer, &out), vec!["spot".to_string()]);
@@ -5265,10 +6107,18 @@ mod normalize {
 
             let (prog, it) = program("!^focus , Silver = 0\n");
             let dirs = Directives::default();
-            let error = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
-                .expect_err("must refuse");
+            let error = emit(
+                &prog,
+                &reg,
+                &dirs,
+                &it,
+                environment.snapshot(&reg).expect("snapshot"),
+            )
+            .expect_err("must refuse");
             assert!(
-                error.msg.contains("'^focus' resolves to binding 'spot' (point), not a mask"),
+                error
+                    .msg
+                    .contains("'^focus' resolves to binding 'spot' (point), not a mask"),
                 "unexpected diagnostic: {}",
                 error.msg
             );
@@ -5289,7 +6139,10 @@ mod normalize {
                 )
                 .expect("install");
             let (normalizer, out) = normalized("^focus , Silver = 0\n", &environment, &reg);
-            assert_eq!(alias_stems(&normalizer, &out), vec!["AnoDynEnt0".to_string()]);
+            assert_eq!(
+                alias_stems(&normalizer, &out),
+                vec!["AnoDynEnt0".to_string()]
+            );
             assert_eq!(alias_reqs(&normalizer, &out), vec!["focus".to_string()]);
             assert!(normalizer.generated.contains("AnoDynEnt0"));
             let entry = normalizer
@@ -5311,15 +6164,29 @@ mod normalize {
         fn alias_trace_provenance_is_gated() {
             let reg = registry();
             let mut environment = AliasEnvironment::for_registry(&reg);
-            environment.install_binding(&reg, "focus", "Gold").expect("install");
+            environment
+                .install_binding(&reg, "focus", "Gold")
+                .expect("install");
             let (prog, it) = program("^focus > 1 & ^Silver < 2 , Silver = 0\n");
 
             let mut dirs = Directives::default();
-            let quiet = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
-                .expect("emit");
+            let quiet = emit(
+                &prog,
+                &reg,
+                &dirs,
+                &it,
+                environment.snapshot(&reg).expect("snapshot"),
+            )
+            .expect("emit");
             dirs.trace = true;
-            let traced = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
-                .expect("emit");
+            let traced = emit(
+                &prog,
+                &reg,
+                &dirs,
+                &it,
+                environment.snapshot(&reg).expect("snapshot"),
+            )
+            .expect("emit");
 
             assert!(!quiet.contains("TRACE-ALIAS"), "{}", quiet);
             let block = concat!(
@@ -5342,11 +6209,19 @@ mod normalize {
         fn reserved_synthetic_name_refuses() {
             let reg = registry();
             let mut environment = AliasEnvironment::for_registry(&reg);
-            environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).expect("install");
+            environment
+                .install_mask(&reg, "hot", &[1.0, 0.0, 1.0])
+                .expect("install");
             let (prog, it) = program("AnoDynMask0 & ^hot , Silver = 0\n");
             let dirs = Directives::default();
-            let error = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
-                .expect_err("must refuse");
+            let error = emit(
+                &prog,
+                &reg,
+                &dirs,
+                &it,
+                environment.snapshot(&reg).expect("snapshot"),
+            )
+            .expect_err("must refuse");
             assert!(
                 error.msg.contains("reserved synthetic name 'AnoDynMask0'"),
                 "unexpected diagnostic: {}",
@@ -5368,12 +6243,7 @@ pub fn emit_with_aliases(
 }
 
 /// Canonical public emission path.  Alias state is loaded once and frozen before any lowering.
-pub fn emit(
-    prog: &Node,
-    reg: &Registry,
-    dirs: &Directives,
-    it: &Interner,
-) -> Result<String, Diag> {
+pub fn emit(prog: &Node, reg: &Registry, dirs: &Directives, it: &Interner) -> Result<String, Diag> {
     crate::relationship::validate_registry(reg)?;
     let aliases = if dirs.aliases.is_empty() {
         crate::alias::AliasEnvironment::for_registry(reg)

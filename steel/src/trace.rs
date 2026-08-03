@@ -106,7 +106,6 @@ impl TracePlan {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,7 +113,13 @@ mod tests {
     #[test]
     fn crossings_are_recorded_without_deduplication() {
         let mut plan = TracePlan::default();
-        plan.record(TracePhase::Predicate, TraceDomain::Source, "s1", 3, "parent");
+        plan.record(
+            TracePhase::Predicate,
+            TraceDomain::Source,
+            "s1",
+            3,
+            "parent",
+        );
         plan.record(TracePhase::Effect, TraceDomain::Selected, "s1", 3, "parent");
         assert_eq!(plan.uses().len(), 2);
         assert_eq!(plan.uses()[0].domain, TraceDomain::Source);
@@ -130,6 +135,10 @@ mod tests {
         plan.record(TracePhase::Effect, TraceDomain::Selected, "s1", 1, "b");
         plan.truncate(mark);
         assert_eq!(plan.len(), 1);
-        assert_eq!(plan.record(TracePhase::Effect, TraceDomain::Selected, "s1", 1, "c").0, 1);
+        assert_eq!(
+            plan.record(TracePhase::Effect, TraceDomain::Selected, "s1", 1, "c")
+                .0,
+            1
+        );
     }
 }

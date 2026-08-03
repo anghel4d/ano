@@ -4,18 +4,27 @@
 // BQN witnesses out as semantic oracles, so the two things under test are the emitted plan and
 // the descriptor table itself; the property group holds a Rust reference beside the descriptors.
 
-use steel::reducer::{self, Carrier, Form, OpDesc};
 use steel::alias::AliasEnvironment;
 use steel::emit::emit_with_aliases;
 use steel::lex::lex;
 use steel::parse::parse;
-use steel::{AliasRow, ColType, Diag, Directives, Expect, Interner, RegEntry, RegEntryKind, Registry};
+use steel::reducer::{self, Carrier, Form, OpDesc};
+use steel::{
+    AliasRow, ColType, Diag, Directives, Expect, Interner, RegEntry, RegEntryKind, Registry,
+};
 
 fn col(name: &str, ty: ColType, nums: Vec<f64>) -> RegEntry {
     RegEntry {
         name: name.to_string(),
         defval: 0.0,
-        kind: RegEntryKind::Col { ty, uniq: false, nums, syms: Vec::new(), pres: None, rng: None },
+        kind: RegEntryKind::Col {
+            ty,
+            uniq: false,
+            nums,
+            syms: Vec::new(),
+            pres: None,
+            rng: None,
+        },
     }
 }
 
@@ -50,7 +59,9 @@ fn registry() -> Registry {
             RegEntry {
                 name: "threat".to_string(),
                 defval: 0.0,
-                kind: RegEntryKind::Fn { body: Some("{𝕨⌈𝕩}".to_string()) },
+                kind: RegEntryKind::Fn {
+                    body: Some("{𝕨⌈𝕩}".to_string()),
+                },
             },
             RegEntry {
                 name: "near".to_string(),
@@ -63,9 +74,21 @@ fn registry() -> Registry {
             },
         ],
         aliases: vec![
-            AliasRow { from: "金".to_string(), to: "Gold".to_string(), ja: true },
-            AliasRow { from: "燃".to_string(), to: "Burning".to_string(), ja: true },
-            AliasRow { from: "印".to_string(), to: "Rune".to_string(), ja: true },
+            AliasRow {
+                from: "金".to_string(),
+                to: "Gold".to_string(),
+                ja: true,
+            },
+            AliasRow {
+                from: "燃".to_string(),
+                to: "Burning".to_string(),
+                ja: true,
+            },
+            AliasRow {
+                from: "印".to_string(),
+                to: "Rune".to_string(),
+                ja: true,
+            },
         ],
         ..Registry::default()
     }
@@ -148,9 +171,18 @@ fn numeric_greater_and_lesser_take_columns_and_scalars() {
 // The mask truth tables are untouched by the carrier dispatch: ∧ ∨ ¬ as always.
 #[test]
 fn mask_truth_tables_are_unchanged() {
-    assert_eq!(body(&ok("Burning & Path\n")), "\n# q1\nq1 ← (burning∧path)\n•Show q1\n");
-    assert_eq!(body(&ok("Burning | Path\n")), "\n# q1\nq1 ← (burning∨path)\n•Show q1\n");
-    assert_eq!(body(&ok("!Burning\n")), "\n# q1\nq1 ← (¬burning)\n•Show q1\n");
+    assert_eq!(
+        body(&ok("Burning & Path\n")),
+        "\n# q1\nq1 ← (burning∧path)\n•Show q1\n"
+    );
+    assert_eq!(
+        body(&ok("Burning | Path\n")),
+        "\n# q1\nq1 ← (burning∨path)\n•Show q1\n"
+    );
+    assert_eq!(
+        body(&ok("!Burning\n")),
+        "\n# q1\nq1 ← (¬burning)\n•Show q1\n"
+    );
 }
 
 // Long forms are the same operation as the glyphs, and the ordered non-associative steps lower
@@ -165,7 +197,11 @@ fn long_forms_and_ordered_steps_lower_left() {
 
     let minus = ok("fold(-) Gold\n");
     assert!(minus.contains("AnoLeftSubtract ← {-˜´⌽𝕩}"), "{}", minus);
-    assert!(minus.contains("t0 ← {0=≠𝕩 ? 0 ; AnoLeftSubtract 𝕩} gold"), "{}", minus);
+    assert!(
+        minus.contains("t0 ← {0=≠𝕩 ? 0 ; AnoLeftSubtract 𝕩} gold"),
+        "{}",
+        minus
+    );
     let divide = ok("fold(/) Gold\n");
     assert!(divide.contains("AnoLeftDivide ← {÷˜´⌽𝕩}"), "{}", divide);
     // BQN's scan modifier is natively left-to-right, so the scans need no rewriting
@@ -173,7 +209,10 @@ fn long_forms_and_ordered_steps_lower_left() {
     assert_eq!(body(&ok("/\\ Gold\n")), "\n# q1\nq1 ← (÷`gold)\n•Show q1\n");
     // a registered name folds pairwise left and scans through the same fn
     assert!(ok("fold(threat) Gold\n").contains("Fn_threat˜´⌽𝕩"));
-    assert_eq!(body(&ok("threat\\ Gold\n")), "\n# q1\nq1 ← (Fn_threat`gold)\n•Show q1\n");
+    assert_eq!(
+        body(&ok("threat\\ Gold\n")),
+        "\n# q1\nq1 ← (Fn_threat`gold)\n•Show q1\n"
+    );
 }
 
 // scan(f) col along ord resolves through one table for every instance, including the machines.
@@ -184,32 +223,57 @@ fn scan_along_covers_every_instance() {
         ("scan(*) Gold along Silver\n", "q1 ← (×`(silver)⊏gold)"),
         ("scan(min) Gold along Silver\n", "q1 ← (⌊`(silver)⊏gold)"),
         ("scan(max) Gold along Silver\n", "q1 ← (⌈`(silver)⊏gold)"),
-        ("scan(&) Burning along Silver\n", "q1 ← (∧`(silver)⊏burning)"),
-        ("scan(|) Burning along Silver\n", "q1 ← (∨`(silver)⊏burning)"),
-        ("scan(threat) Gold along Silver\n", "q1 ← (Fn_threat`(silver)⊏gold)"),
+        (
+            "scan(&) Burning along Silver\n",
+            "q1 ← (∧`(silver)⊏burning)",
+        ),
+        (
+            "scan(|) Burning along Silver\n",
+            "q1 ← (∨`(silver)⊏burning)",
+        ),
+        (
+            "scan(threat) Gold along Silver\n",
+            "q1 ← (Fn_threat`(silver)⊏gold)",
+        ),
     ];
     for (source, pin) in cases {
         assert!(ok(source).contains(pin), "{}", source);
     }
     // the mean's two prefix sums carry one and the same order, so composing them is one domain
-    assert!(ok("scan(avg) Gold along Silver\n")
-        .contains("q1 ← ((+`(silver)⊏gold)÷(+`(silver)⊏(¬(¬(1¨gold)))))"));
+    assert!(
+        ok("scan(avg) Gold along Silver\n")
+            .contains("q1 ← ((+`(silver)⊏gold)÷(+`(silver)⊏(¬(¬(1¨gold)))))")
+    );
 }
 
 // Count is a prefix machine over selection presence, not a homogeneous reducer over a payload:
 // a numeric operand is the all-true membership stream, and a scope scopes the presence too.
 #[test]
 fn count_and_average_lower_as_prefix_machines() {
-    assert_eq!(body(&ok("#\\ Gold\n")), "\n# q1\nq1 ← (+`(¬(¬(1¨gold))))\n•Show q1\n");
-    assert_eq!(body(&ok("#\\ Burning\n")), "\n# q1\nq1 ← (+`(¬(¬burning)))\n•Show q1\n");
+    assert_eq!(
+        body(&ok("#\\ Gold\n")),
+        "\n# q1\nq1 ← (+`(¬(¬(1¨gold))))\n•Show q1\n"
+    );
+    assert_eq!(
+        body(&ok("#\\ Burning\n")),
+        "\n# q1\nq1 ← (+`(¬(¬burning)))\n•Show q1\n"
+    );
     assert!(ok("#\\ Gold @ Path\n").contains("q1 ← (+`path/(¬(¬(1¨gold))))"));
     assert!(ok("avg\\ Gold\n").contains("q1 ← ((+`gold)÷(+`(¬(¬(1¨gold)))))"));
     assert!(ok("avg\\ Gold @ Path\n").contains("q1 ← ((+`path/gold)÷(+`path/(¬(¬(1¨gold)))))"));
     // the mean's finish accumulates in the machine's order, so avg/ is the last prefix of avg\
     let mean = ok("avg/ Gold\n");
-    assert!(mean.contains("AnoSemAverage ← {(AnoLeftSum 𝕩)÷≠𝕩}"), "{}", mean);
+    assert!(
+        mean.contains("AnoSemAverage ← {(AnoLeftSum 𝕩)÷≠𝕩}"),
+        "{}",
+        mean
+    );
     assert!(mean.contains("AnoLeftSum ← {+˜´⌽(0∾𝕩)}"), "{}", mean);
-    assert!(mean.contains("t0 ← {0=≠𝕩 ? 0 ; AnoSemAverage 𝕩} gold"), "{}", mean);
+    assert!(
+        mean.contains("t0 ← {0=≠𝕩 ? 0 ; AnoSemAverage 𝕩} gold"),
+        "{}",
+        mean
+    );
     // the fold direction: cardinality, and the machine's registered empty law needs no guard.
     // A 0/1 mask sums to the same value in either order, so the count's finish carries no
     // reversal — the operand buys that, not the machine.
@@ -228,17 +292,27 @@ fn bridge_spellings_emit_one_program() {
     assert_eq!(ok("min\\ Gold\n"), ok("&\\ Gold\n"));
     assert_eq!(ok("fold(max) Gold\n"), ok("fold(|) Gold\n"));
     assert_eq!(ok("fold(min) Gold\n"), ok("fold(&) Gold\n"));
-    assert_eq!(ok("scan(max) Gold along Silver\n"), ok("scan(|) Gold along Silver\n"));
-    assert_eq!(ok("scan(min) Gold along Silver\n"), ok("scan(&) Gold along Silver\n"));
+    assert_eq!(
+        ok("scan(max) Gold along Silver\n"),
+        ok("scan(|) Gold along Silver\n")
+    );
+    assert_eq!(
+        ok("scan(min) Gold along Silver\n"),
+        ok("scan(&) Gold along Silver\n")
+    );
 }
 
 // The current numeric extrema descriptors carry no empty identity, so no seed is prepended and
 // no infinity is manufactured merely to answer emptiness.
 #[test]
 fn extrema_never_seed_and_never_manufacture_infinity() {
-    for source in
-        ["max/ Gold\n", "min/ Gold\n", "max\\ Gold\n", "min\\ Gold\n", "max/ Gold @ Burning\n"]
-    {
+    for source in [
+        "max/ Gold\n",
+        "min/ Gold\n",
+        "max\\ Gold\n",
+        "min\\ Gold\n",
+        "max/ Gold @ Burning\n",
+    ] {
         let text = ok(source);
         assert!(!text.contains('∞'), "{}: {}", source, text);
         assert!(!text.contains("⌈˜´⌽("), "{}: {}", source, text);
@@ -261,23 +335,55 @@ fn extrema_never_seed_and_never_manufacture_infinity() {
 #[test]
 fn char_greater_and_lesser_step_through_code_points() {
     let greater = ok("max/ Rune\n");
-    assert!(greater.contains("AnoCharGreater ← {@+(𝕨-@)⌈𝕩-@}"), "{}", greater);
-    assert!(greater.contains("AnoLeftCharMaximum ← {AnoCharGreater˜´⌽𝕩}"), "{}", greater);
+    assert!(
+        greater.contains("AnoCharGreater ← {@+(𝕨-@)⌈𝕩-@}"),
+        "{}",
+        greater
+    );
+    assert!(
+        greater.contains("AnoLeftCharMaximum ← {AnoCharGreater˜´⌽𝕩}"),
+        "{}",
+        greater
+    );
     let lesser = ok("min/ Rune\n");
-    assert!(lesser.contains("AnoCharLesser ← {@+(𝕨-@)⌊𝕩-@}"), "{}", lesser);
-    assert!(lesser.contains("AnoLeftCharMinimum ← {AnoCharLesser˜´⌽𝕩}"), "{}", lesser);
+    assert!(
+        lesser.contains("AnoCharLesser ← {@+(𝕨-@)⌊𝕩-@}"),
+        "{}",
+        lesser
+    );
+    assert!(
+        lesser.contains("AnoLeftCharMinimum ← {AnoCharLesser˜´⌽𝕩}"),
+        "{}",
+        lesser
+    );
     // the bridges are the same operation, so they are the same program
     assert_eq!(ok("|/ Rune\n"), greater);
     assert_eq!(ok("&/ Rune\n"), lesser);
     // BQN's scan is already the left recurrence, so a scan owes only the step's declaration
-    assert!(body(&ok("|\\ Rune\n")).contains("q1 ← (AnoCharGreater`rune)"), "{}", ok("|\\ Rune\n"));
-    assert!(body(&ok("&\\ Rune\n")).contains("q1 ← (AnoCharLesser`rune)"), "{}", ok("&\\ Rune\n"));
+    assert!(
+        body(&ok("|\\ Rune\n")).contains("q1 ← (AnoCharGreater`rune)"),
+        "{}",
+        ok("|\\ Rune\n")
+    );
+    assert!(
+        body(&ok("&\\ Rune\n")).contains("q1 ← (AnoCharLesser`rune)"),
+        "{}",
+        ok("&\\ Rune\n")
+    );
     assert_eq!(ok("max\\ Rune\n"), ok("|\\ Rune\n"));
     assert_eq!(ok("min\\ Rune\n"), ok("&\\ Rune\n"));
     // and the direct dyad materializes ONE registry fn carrying that same body
     let direct = ok("Rune | Rune\n");
-    assert!(direct.contains("Fn_AnoSemCharGreater0 ← {@+(𝕨-@)⌈𝕩-@}"), "{}", direct);
-    assert!(body(&direct).contains("(rune Fn_AnoSemCharGreater0¨rune)"), "{}", direct);
+    assert!(
+        direct.contains("Fn_AnoSemCharGreater0 ← {@+(𝕨-@)⌈𝕩-@}"),
+        "{}",
+        direct
+    );
+    assert!(
+        body(&direct).contains("(rune Fn_AnoSemCharGreater0¨rune)"),
+        "{}",
+        direct
+    );
     assert!(ok("Rune & Rune\n").contains("Fn_AnoSemCharLesser0 ← {@+(𝕨-@)⌊𝕩-@}"));
     // a string literal is a glyph run and reads on the same carrier
     assert!(ok("\"sat\" | \"cow\"\n").contains("Fn_AnoSemCharGreater0 ← {@+(𝕨-@)⌈𝕩-@}"));
@@ -287,13 +393,22 @@ fn char_greater_and_lesser_step_through_code_points() {
 // the empty scope reaches the validity channel, and no code-point zero is ever manufactured.
 #[test]
 fn char_extrema_declare_no_identity() {
-    for source in ["max/ Rune\n", "min/ Rune\n", "max/ Rune @ Path\n", "|\\ Rune\n"] {
+    for source in [
+        "max/ Rune\n",
+        "min/ Rune\n",
+        "max/ Rune @ Path\n",
+        "|\\ Rune\n",
+    ] {
         let text = ok(source);
         assert!(!text.contains("⌽(@"), "{}: {}", source, text);
         assert!(!text.contains('∞'), "{}: {}", source, text);
     }
     let guarded = ok("max/ Rune @ Path\n");
-    assert!(guarded.contains("{0=≠𝕩 ? 0 ; AnoLeftCharMaximum 𝕩} (path/rune)"), "{}", guarded);
+    assert!(
+        guarded.contains("{0=≠𝕩 ? 0 ; AnoLeftCharMaximum 𝕩} (path/rune)"),
+        "{}",
+        guarded
+    );
     assert!(guarded.contains("q1v ← (0<(+´path))"), "{}", guarded);
     assert!(guarded.contains("•Show⍟q1v q1"), "{}", guarded);
 }
@@ -304,12 +419,29 @@ fn char_extrema_declare_no_identity() {
 #[test]
 fn mixed_char_carriers_refuse() {
     for (source, message) in [
-        ("98 | \"a\"\n", "'|' mixes number and char operands; there is no carrier coercion"),
-        ("Rune | Gold\n", "'|' mixes number and char operands; there is no carrier coercion"),
-        ("Rune & Burning\n", "'&' mixes mask and char operands; there is no carrier coercion"),
-        ("Silver = (Gold | Rune)\n", "'|' mixes number and char operands; there is no carrier coercion"),
+        (
+            "98 | \"a\"\n",
+            "'|' mixes number and char operands; there is no carrier coercion",
+        ),
+        (
+            "Rune | Gold\n",
+            "'|' mixes number and char operands; there is no carrier coercion",
+        ),
+        (
+            "Rune & Burning\n",
+            "'&' mixes mask and char operands; there is no carrier coercion",
+        ),
+        (
+            "Silver = (Gold | Rune)\n",
+            "'|' mixes number and char operands; there is no carrier coercion",
+        ),
     ] {
-        assert_eq!(err(source), format!("emit: line 1: {}", message), "{}", source);
+        assert_eq!(
+            err(source),
+            format!("emit: line 1: {}", message),
+            "{}",
+            source
+        );
     }
     // and the mask/number rule is unchanged, named in the same fixed carrier order
     assert_eq!(
@@ -330,15 +462,33 @@ fn char_admits_only_greater_and_lesser() {
         ("avg/ Rune\n", "reducer 'avg' is not defined on Char"),
         ("avg\\ Rune\n", "reducer 'avg' is not defined on Char"),
         ("threat/ Rune\n", "reducer 'threat' is not defined on Char"),
-        ("scan(+) Rune along Gold\n", "reducer '+' is not defined on Char"),
+        (
+            "scan(+) Rune along Gold\n",
+            "reducer '+' is not defined on Char",
+        ),
     ] {
-        assert_eq!(err(source), format!("emit: line 1: {}", message), "{}", source);
+        assert_eq!(
+            err(source),
+            format!("emit: line 1: {}", message),
+            "{}",
+            source
+        );
     }
     // the canonical char spellings are internal: no surface admits them as written
-    assert_eq!(err("charmax/ Rune\n"), "emit: line 1: unknown reducer 'charmax'");
-    assert_eq!(err("charmin/ Gold\n"), "emit: line 1: unknown reducer 'charmin'");
+    assert_eq!(
+        err("charmax/ Rune\n"),
+        "emit: line 1: unknown reducer 'charmax'"
+    );
+    assert_eq!(
+        err("charmin/ Gold\n"),
+        "emit: line 1: unknown reducer 'charmin'"
+    );
     // count consumes presence whatever the payload is, so it counts glyphs
-    assert!(body(&ok("#/ Rune\n")).contains("q1 ← (+´(1¨rune))"), "{}", ok("#/ Rune\n"));
+    assert!(
+        body(&ok("#/ Rune\n")).contains("q1 ← (+´(1¨rune))"),
+        "{}",
+        ok("#/ Rune\n")
+    );
 }
 
 /* ---------- 3. empty results ---------- */
@@ -372,13 +522,24 @@ fn identityless_empty_fold_cannot_expose_its_placeholder() {
     let labelled = plan(
         "max/ Gold @ Burning\n",
         false,
-        &Directives { label: true, ..Directives::default() },
+        &Directives {
+            label: true,
+            ..Directives::default()
+        },
     )
     .expect("emit");
     // one conditional carries BOTH the tag line and the value: a false guard emits neither, so
     // Kore receives no QRec and shows no OUTPUTS row
-    assert!(labelled.contains("{•Out (@+29)∾\"q1@1\" ⋄ •Show 𝕩}⍟q1v q1"), "{}", labelled);
-    assert!(!labelled.contains("\n•Out (@+29)∾\"q1@1\"\n"), "{}", labelled);
+    assert!(
+        labelled.contains("{•Out (@+29)∾\"q1@1\" ⋄ •Show 𝕩}⍟q1v q1"),
+        "{}",
+        labelled
+    );
+    assert!(
+        !labelled.contains("\n•Out (@+29)∾\"q1@1\"\n"),
+        "{}",
+        labelled
+    );
 
     let pinned = plan(
         "max/ Gold @ Burning\n",
@@ -396,9 +557,13 @@ fn identityless_empty_fold_cannot_expose_its_placeholder() {
 
     // every identityless head reaches the same channel: extrema, mean, a registered step, and
     // the ordered non-associative steps
-    for source in
-        ["min/ Gold\n", "avg/ Gold\n", "threat/ Gold\n", "-/ Gold\n", "fold(/) Gold\n"]
-    {
+    for source in [
+        "min/ Gold\n",
+        "avg/ Gold\n",
+        "threat/ Gold\n",
+        "-/ Gold\n",
+        "fold(/) Gold\n",
+    ] {
         let text = ok(source);
         assert!(text.contains("q1v ← "), "{}: {}", source, text);
         assert!(text.contains("•Show⍟q1v q1"), "{}: {}", source, text);
@@ -409,9 +574,18 @@ fn identityless_empty_fold_cannot_expose_its_placeholder() {
 // assignment path, which already drops those rows from the scatter mask.
 #[test]
 fn grouped_query_compresses_empty_fibers() {
-    for source in ["max/ near'.Gold\n", "min/ near'.Gold\n", "avg/ near'.Gold\n"] {
+    for source in [
+        "max/ near'.Gold\n",
+        "min/ near'.Gold\n",
+        "avg/ near'.Gold\n",
+    ] {
         let text = ok(source);
-        assert!(text.contains("q1 ← ((0<≠¨near))/t0"), "{}: {}", source, text);
+        assert!(
+            text.contains("q1 ← ((0<≠¨near))/t0"),
+            "{}: {}",
+            source,
+            text
+        );
         assert!(text.contains("\n•Show q1\n"), "{}: {}", source, text);
     }
 }
@@ -421,12 +595,23 @@ fn grouped_query_compresses_empty_fibers() {
 // rather than dropping one row.  A12 rules the answer is no result row.
 #[test]
 fn row_fold_without_an_identity_drops_its_empty_rows() {
-    for (source, helper) in
-        [("max/ near@row\n", "AnoLeftMaximum"), ("min/ near@row\n", "AnoLeftMinimum")]
-    {
+    for (source, helper) in [
+        ("max/ near@row\n", "AnoLeftMaximum"),
+        ("min/ near@row\n", "AnoLeftMinimum"),
+    ] {
         let text = ok(source);
-        assert!(text.contains(&format!("{{0=≠𝕩 ? 0 ; {} 𝕩}}¨near", helper)), "{}: {}", source, text);
-        assert!(text.contains("q1 ← ((0<≠¨near))/t0"), "{}: {}", source, text);
+        assert!(
+            text.contains(&format!("{{0=≠𝕩 ? 0 ; {} 𝕩}}¨near", helper)),
+            "{}: {}",
+            source,
+            text
+        );
+        assert!(
+            text.contains("q1 ← ((0<≠¨near))/t0"),
+            "{}: {}",
+            source,
+            text
+        );
         assert!(text.contains("\n•Show q1\n"), "{}: {}", source, text);
     }
     // an identity answers the empty fiber itself, so that form stays unguarded and total
@@ -444,11 +629,19 @@ fn row_fold_without_an_identity_drops_its_empty_rows() {
 #[test]
 fn count_over_a_fiber_hop_counts_rather_than_sums() {
     let counted = body(&ok("#/ near'.Silver\n"));
-    assert!(counted.contains("t0 ← {+´𝕩⊏(¬(¬(1¨silver)))}¨near"), "{}", counted);
+    assert!(
+        counted.contains("t0 ← {+´𝕩⊏(¬(¬(1¨silver)))}¨near"),
+        "{}",
+        counted
+    );
     // the payload itself never reaches the reduction
     assert!(!counted.contains("+´𝕩⊏silver"), "{}", counted);
     // a bare fiber counts its members, and the hop through a total column agrees with it
-    assert!(body(&ok("#/ near'\n")).contains("(≠¨"), "{}", ok("#/ near'\n"));
+    assert!(
+        body(&ok("#/ near'\n")).contains("(≠¨"),
+        "{}",
+        ok("#/ near'\n")
+    );
     // over a mask the machine advances on the true rows, which is the same presence stream
     assert!(body(&ok("#/ near'.Burning\n")).contains("{+´𝕩⊏(¬(¬burning))}¨near"));
     // the sum is still the sum: only count was ever meant to consume presence
@@ -461,7 +654,11 @@ fn count_over_a_fiber_hop_counts_rather_than_sums() {
 fn guarded_assignment_refines_the_scatter_mask() {
     let text = ok("Burning , Gold = max/ Silver @ Path\n");
     assert!(text.contains("t1 ← s1m∧(0<(+´path))"), "{}", text);
-    assert!(text.contains("t3 ← t1‿((+´t1)⥊t2) AnoScat gold"), "{}", text);
+    assert!(
+        text.contains("t3 ← t1‿((+´t1)⥊t2) AnoScat gold"),
+        "{}",
+        text
+    );
     // an unguarded right-hand side stages no probe conjunction at all
     let plain = ok("Burning , Gold = +/ Silver @ Path\n");
     assert!(!plain.contains("s1m∧"), "{}", plain);
@@ -497,7 +694,12 @@ fn empty_scans_are_empty_columns_for_every_instance() {
 // (todo/03:76-97), so fold, scan, and scan-along refuse alike.
 #[test]
 fn carrier_gate_is_one_message_family_across_forms() {
-    let heads = [("max", "max"), ("min", "min"), ("avg", "avg"), ("threat", "threat")];
+    let heads = [
+        ("max", "max"),
+        ("min", "min"),
+        ("avg", "avg"),
+        ("threat", "threat"),
+    ];
     for (spelling, named) in heads {
         let expected = format!("reducer '{}' is not defined on Mask", named);
         for source in [
@@ -507,13 +709,28 @@ fn carrier_gate_is_one_message_family_across_forms() {
             format!("fold({}) Burning\n", spelling),
         ] {
             let message = err(&source);
-            assert!(message.contains(&expected), "{}: {}", source.trim_end(), message);
+            assert!(
+                message.contains(&expected),
+                "{}: {}",
+                source.trim_end(),
+                message
+            );
         }
     }
     // the arithmetic reducers converge with them: `+\ mask` now refuses like `+/ mask`
-    for source in ["+/ Burning\n", "+\\ Burning\n", "*/ Burning\n", "*\\ Burning\n"] {
+    for source in [
+        "+/ Burning\n",
+        "+\\ Burning\n",
+        "*/ Burning\n",
+        "*\\ Burning\n",
+    ] {
         let message = err(source);
-        assert!(message.contains("is not defined on Mask"), "{}: {}", source, message);
+        assert!(
+            message.contains("is not defined on Mask"),
+            "{}: {}",
+            source,
+            message
+        );
     }
 }
 
@@ -528,7 +745,12 @@ fn unknown_reducer_refuses_identically_in_every_form() {
         "scan(nope) Gold\n",
         "scan(nope) Gold along Silver\n",
     ] {
-        assert_eq!(err(source), "emit: line 1: unknown reducer 'nope'", "{}", source);
+        assert_eq!(
+            err(source),
+            "emit: line 1: unknown reducer 'nope'",
+            "{}",
+            source
+        );
     }
 }
 
@@ -536,10 +758,14 @@ fn unknown_reducer_refuses_identically_in_every_form() {
 // Only a genuine value position refuses: a bare column in selection position keeps presence semantics.
 #[test]
 fn mixed_direct_carriers_refuse() {
-    assert!(err("Silver = (Gold | Burning)\n")
-        .contains("'|' mixes mask and number operands; there is no carrier coercion"));
-    assert!(err("Silver = (Gold & Burning)\n")
-        .contains("'&' mixes mask and number operands; there is no carrier coercion"));
+    assert!(
+        err("Silver = (Gold | Burning)\n")
+            .contains("'|' mixes mask and number operands; there is no carrier coercion")
+    );
+    assert!(
+        err("Silver = (Gold & Burning)\n")
+            .contains("'&' mixes mask and number operands; there is no carrier coercion")
+    );
     assert!(ok("Burning & Gold , +Path\n").contains("burning∧"));
 }
 
@@ -553,8 +779,16 @@ fn absent_surfaces_refuse() {
     // `>` stays comparison; `>/` is not a reducer spelling
     assert!(err(">/ Gold\n").contains("unexpected token"));
     // no long count spelling: bare '#' keeps its lex refusal
-    for source in ["fold(#) Gold\n", "scan(#) Gold\n", "scan(#) Gold along Silver\n"] {
-        assert!(err(source).contains("'#' begins only '#/' or '#\\'"), "{}", source);
+    for source in [
+        "fold(#) Gold\n",
+        "scan(#) Gold\n",
+        "scan(#) Gold along Silver\n",
+    ] {
+        assert!(
+            err(source).contains("'#' begins only '#/' or '#\\'"),
+            "{}",
+            source
+        );
     }
     // a per-fiber scan needs a ragged result representation that does not exist yet
     assert!(err("+\\ near'.Gold\n").contains("scan over fibers is not yet supported"));
@@ -647,15 +881,29 @@ fn fold_is_the_last_prefix_of_the_scan() {
             let sample: &[f64] = if spelling == "/" { &nz } else { &xs };
             let scan = scan_reference(step, sample);
             assert_eq!(scan.len(), sample.len(), "{} preserves length", spelling);
-            assert_eq!(fold_reference(step, sample), scan.last().copied(), "{}", spelling);
+            assert_eq!(
+                fold_reference(step, sample),
+                scan.last().copied(),
+                "{}",
+                spelling
+            );
         }
         for spelling in masked {
             let desc = descriptor(spelling, Carrier::Mask);
             let step = reference_step(desc.reducer().unwrap().step);
             let scan = scan_reference(step, &bits);
             assert_eq!(scan.len(), bits.len(), "{} preserves length", spelling);
-            assert_eq!(fold_reference(step, &bits), scan.last().copied(), "{}", spelling);
-            assert!(scan.iter().all(|v| *v == 0.0 || *v == 1.0), "{} stays on the carrier", spelling);
+            assert_eq!(
+                fold_reference(step, &bits),
+                scan.last().copied(),
+                "{}",
+                spelling
+            );
+            assert!(
+                scan.iter().all(|v| *v == 0.0 || *v == 1.0),
+                "{} stays on the carrier",
+                spelling
+            );
         }
     }
 }
@@ -665,29 +913,65 @@ fn fold_is_the_last_prefix_of_the_scan() {
 #[test]
 fn declared_identities_are_neutral_for_the_seeded_lowering() {
     let mut rng = Rng(0x9E3779B97F4A7C15);
-    let cases =
-        [("+", Carrier::Number), ("*", Carrier::Number), ("&", Carrier::Mask), ("|", Carrier::Mask)];
+    let cases = [
+        ("+", Carrier::Number),
+        ("*", Carrier::Number),
+        ("&", Carrier::Mask),
+        ("|", Carrier::Mask),
+    ];
     for _ in 0..100 {
         let n = rng.len();
         for (spelling, carrier) in cases {
             let desc = descriptor(spelling, carrier);
             let reducer = desc.reducer().unwrap();
             let step = reference_step(reducer.step);
-            let identity: f64 =
-                reducer.identity.expect(spelling).bqn.parse().expect("identity literal");
+            let identity: f64 = reducer
+                .identity
+                .expect(spelling)
+                .bqn
+                .parse()
+                .expect("identity literal");
             let xs: Vec<f64> = (0..n)
-                .map(|_| if carrier == Carrier::Mask { rng.bit() } else { rng.number() })
+                .map(|_| {
+                    if carrier == Carrier::Mask {
+                        rng.bit()
+                    } else {
+                        rng.number()
+                    }
+                })
                 .collect();
             let mut seeded = vec![identity];
             seeded.extend_from_slice(&xs);
-            assert_eq!(fold_reference(step, &seeded), fold_reference(step, &xs), "{}", spelling);
+            assert_eq!(
+                fold_reference(step, &seeded),
+                fold_reference(step, &xs),
+                "{}",
+                spelling
+            );
             // and on empty input the seeded fold IS the declared empty result
-            assert_eq!(fold_reference(step, &[identity]), Some(identity), "{}", spelling);
+            assert_eq!(
+                fold_reference(step, &[identity]),
+                Some(identity),
+                "{}",
+                spelling
+            );
         }
     }
     // the extrema declare none, so nothing may be seeded for them
-    assert!(descriptor("max", Carrier::Number).reducer().unwrap().identity.is_none());
-    assert!(descriptor("min", Carrier::Number).reducer().unwrap().identity.is_none());
+    assert!(
+        descriptor("max", Carrier::Number)
+            .reducer()
+            .unwrap()
+            .identity
+            .is_none()
+    );
+    assert!(
+        descriptor("min", Carrier::Number)
+            .reducer()
+            .unwrap()
+            .identity
+            .is_none()
+    );
 }
 
 // The count machine: state starts at 0, advances by 1 for each admitted row, emits per prefix.
@@ -706,7 +990,10 @@ fn count_machine(mask: &[f64]) -> Vec<f64> {
 #[test]
 fn count_machine_emits_prefix_cardinalities() {
     // the charter's own example (todo/03:58)
-    assert_eq!(count_machine(&[1.0, 0.0, 1.0, 1.0]), vec![1.0, 1.0, 2.0, 3.0]);
+    assert_eq!(
+        count_machine(&[1.0, 0.0, 1.0, 1.0]),
+        vec![1.0, 1.0, 2.0, 3.0]
+    );
     // an implicit all-true membership stream yields 1..n
     let all_true = vec![1.0; 9];
     assert_eq!(
@@ -813,9 +1100,19 @@ fn nihongo_words_emit_their_ascii_twins() {
         ("累皆 金\n", "&\\ Gold\n"),
         ("累或 金\n", "|\\ Gold\n"),
     ];
-    assert_eq!(numeric.len(), 16, "every word in the fold/scan block of JATAB");
+    assert_eq!(
+        numeric.len(),
+        16,
+        "every word in the fold/scan block of JATAB"
+    );
     for (ja, ascii) in numeric {
-        assert_eq!(ok_ja(ja), ok(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+        assert_eq!(
+            ok_ja(ja),
+            ok(ascii),
+            "{} vs {}",
+            ja.trim_end(),
+            ascii.trim_end()
+        );
     }
     // the mask carrier, for the instances that have one
     let masked = [
@@ -827,7 +1124,13 @@ fn nihongo_words_emit_their_ascii_twins() {
         ("累或 燃\n", "|\\ Burning\n"),
     ];
     for (ja, ascii) in masked {
-        assert_eq!(ok_ja(ja), ok(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+        assert_eq!(
+            ok_ja(ja),
+            ok(ascii),
+            "{} vs {}",
+            ja.trim_end(),
+            ascii.trim_end()
+        );
     }
     // and the char carrier, which admits Greater, Lesser and their two bridges
     let runes = [
@@ -843,7 +1146,13 @@ fn nihongo_words_emit_their_ascii_twins() {
         ("印 と 印\n", "Rune & Rune\n"),
     ];
     for (ja, ascii) in runes {
-        assert_eq!(ok_ja(ja), ok(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+        assert_eq!(
+            ok_ja(ja),
+            ok(ascii),
+            "{} vs {}",
+            ja.trim_end(),
+            ascii.trim_end()
+        );
     }
 }
 
@@ -863,14 +1172,34 @@ fn nihongo_refusals_match_their_ascii_twins() {
         ("累積 燃\n", "*\\ Burning\n"),
     ];
     for (ja, ascii) in pairs {
-        assert_eq!(err_ja(ja), err(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+        assert_eq!(
+            err_ja(ja),
+            err(ascii),
+            "{} vs {}",
+            ja.trim_end(),
+            ascii.trim_end()
+        );
     }
-    assert_eq!(err_ja("累大 燃\n"), "emit: line 1: reducer 'max' is not defined on Mask");
+    assert_eq!(
+        err_ja("累大 燃\n"),
+        "emit: line 1: reducer 'max' is not defined on Mask"
+    );
     // the char gate and the carrier mixture refuse identically on both surfaces
-    for (ja, ascii) in
-        [("総和 印\n", "+/ Rune\n"), ("平均 印\n", "avg/ Rune\n"), ("印 か 金\n", "Rune | Gold\n")]
-    {
-        assert_eq!(err_ja(ja), err(ascii), "{} vs {}", ja.trim_end(), ascii.trim_end());
+    for (ja, ascii) in [
+        ("総和 印\n", "+/ Rune\n"),
+        ("平均 印\n", "avg/ Rune\n"),
+        ("印 か 金\n", "Rune | Gold\n"),
+    ] {
+        assert_eq!(
+            err_ja(ja),
+            err(ascii),
+            "{} vs {}",
+            ja.trim_end(),
+            ascii.trim_end()
+        );
     }
-    assert_eq!(err_ja("累平均 印\n"), "emit: line 1: reducer 'avg' is not defined on Char");
+    assert_eq!(
+        err_ja("累平均 印\n"),
+        "emit: line 1: reducer 'avg' is not defined on Char"
+    );
 }
