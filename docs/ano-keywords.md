@@ -1,8 +1,8 @@
 # Ano keywords
 
-The closed grammar of both surfaces, catalogued. Ano has two closed vocabularies. The language owns exactly seventeen reserved words. Everything else is a name resolved against the world. The registry (`.reg` files) owns a separate set of line directives plus a handful of type and kind sub-words. The two meet where a registry schema becomes the nouns of an Ano sentence. This file is the atlas; `ano-language.md` is the spec it derives from, `ano-manual.md` the tutorial. Where this file and `ano-language.md` disagree, the spec wins.
+The closed grammar of both surfaces, catalogued. Ano has two closed vocabularies. The language owns exactly eighteen reserved words. Everything else is a name resolved against the world. The registry (`.reg` files) owns a separate set of line directives plus a handful of type and kind sub-words. The two meet where a registry schema becomes the nouns of an Ano sentence. This file is the atlas; `ano-language.md` is the spec it derives from, `ano-manual.md` the tutorial. Where this file and `ano-language.md` disagree, the spec wins.
 
-What counts as a keyword. Per GRAMMAR.md: the closed keyword set is `def spawn at to via along order by take desc top grade fold scan cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. The seventeen below are the keywords. The structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes.
+What counts as a keyword. The closed keyword set is `def undef spawn at to via along order by take desc top grade fold scan cross expand til`; everything else, `index rank prev neighbor char x y row` included, is a name resolved by the registry or the prelude. The eighteen below are the keywords. The structural glyphs (`, => ; |> & | ! @ . ' ~`) are operators, and the contextual specials (`index`, `rank`, `eval`) are names. Habitat and carrier capabilities do not create keyword classes.
 
 ## Atlas: language keywords
 
@@ -11,6 +11,7 @@ Each keyword carries its Japanese spelling. The `--! ja` skin converges on share
 | Keyword | 日本語 | Token | Cluster | Role |
 |---|---|---|---|---|
 | `def` | 定義 | `T_DEF` | definition | name a predicate or derived column (inlined at use); with `=>`, install a standing rule |
+| `undef` | 解除 | `T_UNDEF` | definition | retract exactly one installed named rule at a barrier |
 | `spawn` | 生成 | `T_SPAWN` | generation | mint new entity rows; the only thing that invents keys |
 | `at` | 於 | `T_ATKW` | generation | place spawned rows (`spawn X at pos`); fill an anchored frame's origin |
 | `to` | 至 | `T_TO` | generation | reshape — pour an ordered selection into a shape, minting nothing |
@@ -55,7 +56,7 @@ Structural operators, glyphs and not keywords, for completeness. Each carries it
 | `+Comp` `-Comp` | 付 除 | presence writes (add or remove a component) |
 | `<-` | `<-` | comprehension binder |
 | `= += -= *= /=` | にする たす ひく かける わる | assignment family |
-| `== != < <= > >=` | 同 不同 未満 以下 超・より 以上 | comparisons |
+| `== != < <= > >=` | 同 不同 未満 以下 より 以上 | comparisons |
 | `/` `\` | — | fold and scan markers — fuse to a name or operator; see the fold and scan table |
 
 Fold and scan operators, the closed reducer family. Each is a fold under `/` and a scan under `\`, carrying its own word on the `--! ja` fold and scan skins. Full semantics, empty-scope law, and compiler liveness live in the Operators sections below.
@@ -111,7 +112,24 @@ Sub-word vocabularies, filling the second slot of a directive and equally closed
 | roles | `keys` `id` `parent` `proto` `pos` | `role` role slot |
 | reap policies | `seal` `host` | `reap` policy slot |
 
-The refined numeric carriers: `nat` is ℕ ∩ [0, 2⁵³], `int` is ℤ ∩ [−2⁵³, 2⁵³], and `bool` is {0,1}. Steel currently admits finite doubles for `num`; admission of `±∞` and NaN remains open. Out-of-carrier rest data refuses at load; it does not repair.
+The refined numeric carriers: `nat` is ℕ ∩ [0, 2⁵³], `int` is ℤ ∩ [−2⁵³, 2⁵³], and `bool` is {0,1}. `num` is finite IEEE float64 plus `±∞`, never NaN or absence, with one canonical zero: either machine signed zero enters and persists as `0`. Out-of-carrier rest data refuses at load; computed NaN refuses before numeric publication; refinements retract only under their declared commit law. Infinity remains a value, never an implicit extrema identity.
+
+### Host sidecars and schema replacement
+
+The text registry remains the schema and world boundary; host session and migration state do not become new `.reg` directives or Ano keywords.
+
+| path | owner and role |
+|---|---|
+| `<world>.reg.aliases` | live `^name` overlay, environment version, complete structural schema fingerprint, resolver service and frozen host input |
+| `<world>.reg.schema` | schema version plus one stable declaration ID per registry entry |
+| `<world>.reg.migrations` | append-only deterministic migration event records |
+| `<world>.reg.migration-journal` | transient Kore recovery journal; absent after commit or rollback |
+
+`kore migrate live.reg candidate.reg migration.map` is the implemented schema barrier. The map is a separate host language with `preserve OLD [NEW]`, `rename OLD NEW`, `widen OLD NEW`, `drop OLD`, `discard OLD`, `add NEW`, and `unalias NAME`. It must account for every old and candidate declaration exactly once. `drop` refuses live data, `discard` names intentional loss, and a removed declaration targeted by the live overlay requires `unalias`. Supported pre-spatial widening is exactly `bool → nat|int|num`, `nat → int|num`, and `int → num`; all other carrier changes refuse. Relationship endpoints must map to the same stable endpoint declaration, callable bodies must remain byte-identical, and every migrated relationship value is sealed again before publication.
+
+Kore stages and validates the migrated `.reg`, overlay, schema manifest, and event log, then publishes all four under one durable journal. A failure or recovered `prepared` journal restores every old byte without consuming its backups; a durable `rolled-back` marker makes that restoration restartable after a second crash. Recovered `committed` and `rolled-back` journals only remove transaction debris. Plans, callable handles, view descriptors, and service tokens are invalidated or revalidated against the new schema identity. The typed extension boundary deliberately refuses lattice changes until task `99` supplies the spatial descriptors and conversions.
+
+This mechanism does not approve the general registry taxonomy. Callable signatures, effects, determinism, service trust, enum identities, checked constructors, resident array domains, and the canonical extension remain author-gated; the loader does not accept inert metadata as a capability.
 
 ## How the two vocabularies intersect
 
@@ -138,6 +156,15 @@ def threat = Damage * Speed / Range          -- a derived column, inlined at use
 def master = Human & Nord & TwoHanded > 60   -- a named predicate
 def kin = #/ (moore' & Planted)              -- a grouped-fold column (Conway neighbor count)
 def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~   -- a rule
+```
+
+### `undef` — 解除
+
+Retracts exactly one installed named standing rule at a statement barrier. It is a top-level control edge, not an effect: it has no selection mask, cannot race a rule inside the shared rule barrier, and cannot target an anonymous rule. An unknown name or a second live installation of one name refuses. When a fresh installation is followed immediately by its retraction, its already-scheduled first barrier step seals before removal.
+
+```haskell
+def spread = Plot & !Planted => +Planted
+undef spread
 ```
 
 ### `spawn` — 生成
@@ -254,7 +281,7 @@ Plot , Moisture = avg/ neighbors'.Moisture    -- grouped: per-plot mean
 
 ### `scan` — 走査
 
-The long form of the scan, `scan(f) col along order`. Unlike a fold, a scan is length-preserving — one running value per selected cell — so it needs an order, from the view or from `along`. One descriptor table governs both spellings: the glyph `f\` and the long `scan(f) …` admit `+ * - / max min & |`, `#`, `avg`, and registered reducers alike, over whichever carrier the head is defined on. `along` is optional — `scan(f) col` takes its order from the view, exactly as the glyph does. `-` and `/` are exact ordered left steps and are refused only by a strategy that would regroup or reorder them. The barrier trap the repository pins four ways: `offset = prev.offset + prev.prev.offset` is not a recurrence — the comma is a barrier and every read observes pre-state, so `prev` is a parallel shift, not a carry. Recurrences belong in a callable or across ticks.
+The long form of the scan, `scan(f) col along order`. Unlike a fold, a scan is domain-preserving — one running value per ordered source row — so it needs an order, from the view or from `along`. One descriptor table governs both spellings: the glyph `f\` and the long `scan(f) …` admit `+ * - / max min & |`, `#`, `avg`, and registered reducers alike, over whichever carrier the head is defined on. `along` is optional — `scan(f) col` takes its order from the view, exactly as the glyph does. `-` and `/` are exact ordered left steps and are refused only by a strategy that would regroup or reorder them. This read-side exact-left scan is Ano's within-statement recurrence, including non-associative steps; an effect may consume it only when its read footprint is disjoint from the destination and its ordered row witness equals the statement's selected rows after inverse grading. Obvious nominal mismatches refuse during planning; dynamic views seal exact row identity at the barrier, because equal width is insufficient. `prev` remains a parallel shift, not a carry.
 
 ```haskell
 +\ Weight @ Route            -- running pack weight along a route
@@ -265,7 +292,7 @@ scan(+) Weight along pathCells
 
 ### `cross` — 交差
 
-The outer product: `cross f A B` applies `f` to every pair (a ∈ A, b ∈ B), yielding the matrix of results as a value. Its filtered, selection-shaped sibling is the comprehension `[ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]`, the theta-join σ_p(A × B).
+The outer product: `cross f A B` applies `f` to every pair (a ∈ A, b ∈ B), yielding a rank-2 matrix with product lineage. Lowering never flattens it, and an effect cannot scatter it into an entity-aligned world column. Its filtered, selection-shaped sibling is the comprehension `[ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]`, the theta-join σ_p(A × B).
 
 ```haskell
 cross dist Tower Creep     -- the full tower×creep distance matrix
@@ -304,7 +331,7 @@ Nord & TwoHanded > 60 , Gold += 1000 ; +Blessed
 
 ### `=>` — the rule hinge (なる)
 
-Installs an anonymous standing rule, `<selection> => <effects>`, which the clock fires each tick. The named form is `def <name> = <selection> => <effects>`. Every installed rule fires every tick in one shared barrier.
+Installs an anonymous standing rule, `<selection> => <effects>`, which the clock fires each tick. The named form is `def <name> = <selection> => <effects>`; only that form may later be withdrawn by `undef name`. Every installed rule fires every tick in one shared barrier.
 
 ```haskell
 def bloom = Plot & !Planted & kin == 3 => +Planted
@@ -331,7 +358,7 @@ Spawner |> expand Count , spawn Minion
 
 ### `&` — and (と)
 
-Conjunction over masks; precedence level 6, tighter than `|`. Ano's boolean reading is k's `&` (min over numerics) restricted to masks.
+Lesser with precedence level 6, tighter than `|`: conjunction on masks, pointwise minimum on numbers, and pointwise lesser rune on chars. In value position mixed operands join `mask < number < char`; selection position retains the mask reading.
 
 ```haskell
 Nord & Dead & Soul , Soul = 0 ; spawn Ghost
@@ -340,7 +367,7 @@ Nord & Dead & Soul , Soul = 0 ; spawn Ghost
 
 ### `|` — or (か)
 
-Disjunction over masks; level 5, looser than `&`. k's `|` (max over numerics) restricted to masks. (Inside a `.reg` line `|` separates vec and srel fibers instead — a registry glyph, not this operator.)
+Greater with level 5, looser than `&`: disjunction on masks, pointwise maximum on numbers, and pointwise greater rune on chars. In value position mixed operands join `mask < number < char`. Inside a `.reg` line `|` instead separates vec and srel fibers.
 
 ```haskell
 def life = Plot => Planted = kin == 3 | Planted & kin == 2
@@ -355,9 +382,9 @@ SparkBolt & Hit & !Trigger , ~
 (Nord, !TwoHanded) , +Untrained
 ```
 
-### `== != < <= > >=` — comparisons (同 不同 未満 以下 超・より 以上)
+### `== != < <= > >=` — comparisons (同 不同 未満 以下 より 以上)
 
-Comparisons over column expressions, returning bool masks; selection-position, level 8. On the Japanese surface each is postfix on its comparand, re-rooted before it in normalization.
+Comparisons over column expressions, returning bool masks; selection-position, level 8. Chars compare by Unicode code point, masks and numbers numerically, and symbols only by same-carrier equality or inequality. On the Japanese surface each is postfix on its comparand and re-rooted before normalization; `より` is the sole executable greater-than spelling, while bare `超` remains an ordinary name.
 
 ```haskell
 Aged > 3mo
@@ -517,7 +544,7 @@ Target , Hits += #/ attackers'         -- in-degree: count per target
 
 ### `max/`  `max\` — maximum, running peak
 
-`max/` and `max\` remain numeric bridges for `|/` and `|\`. Numeric maximum is currently registered without an empty identity, so an empty scope drops the row.
+`max/` and `max\` bridge the numeric and char instances of `|/` and `|\`. Neither ordered carrier has a greatest value registered as an empty identity, so an empty scope drops the row.
 
 ```haskell
 max/ Height @ Ray            -- the tallest along the ray
@@ -526,7 +553,7 @@ max\ Height @ Ray            -- the running skyline up the sightline
 
 ### `min/`  `min\` — minimum, running floor
 
-`min/` and `min\` remain numeric bridges for `&/` and `&\`, and `scan(min) X along order` is the same operation under a named order. Numeric minimum is currently registered without an empty identity, so an empty scope drops the row; the current descriptor prepends no seed and manufactures no infinity.
+`min/` and `min\` bridge the numeric and char instances of `&/` and `&\`, and `scan(min) X along order` is the same operation under a named order. Neither ordered carrier has a least value registered as an empty identity, so an empty scope drops the row; the descriptor prepends no seed and manufactures no infinity or null rune.
 
 ```haskell
 Spell & Proj & Member & Slot == min/ Slot @ (Spell & Proj & Member) , Damage += 10
@@ -721,7 +748,7 @@ alias frontline 1 1 0 0 1
 
 ### `bind` — named constant
 
-`bind <name> <kind> <values…>`, a constant of a declared kind: `entity` (one id), `num` (one number), `point` (two, an x,y pair usable as a frame origin), `mask` (`n` bits), `vec` (any-arity sequence).
+`bind <name> <kind> <values…>`, a constant with exactly one declared face: `entity` (one stable key resolved uniquely through the current key role), `num` (one number), `point` (two, an x,y pair usable as a frame origin), `mask` (`n` bits), or `vec` (an any-arity sequence). Context never reinterprets one binding as another face, and entity keys never degrade to row offsets.
 
 ```
 bind cursor entity 3
@@ -780,7 +807,7 @@ Spawner , spawn Marine * Count      -- fills through the proto, then default, th
 
 ### `reap` — reclamation policy
 
-`reap <seal|host>`, the world-level policy for `~` despawn reclamation, declared once. `seal`, the default, reaps at tick seal; `host` hands reclamation to the host. Schema-only in anoc — the mask-level meaning of `~` never changes, whichever is chosen.
+`reap <seal|host>`, the world-wide policy for `~` despawn reclamation, declared once. `seal`, the default, reaps the shared entity-row free list at tick seal; `host` hands that one reclamation step to the host. Per-archetype and per-column policies are rejected because aligned columns share row identity. Schema-only in anoc — the mask-level meaning of `~` never changes.
 
 ```
 reap seal

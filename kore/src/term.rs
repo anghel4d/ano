@@ -1,6 +1,7 @@
 // Terminal layer over sys.rs: Cell grid, frame composition, one assembled frame buffer, and
 // input decoding for keys, SGR mouse, and UTF-8. Escape strings and palette values are protocol.
 
+use crate::palette::{Color, Palette};
 use crate::sys;
 use crate::text;
 
@@ -62,13 +63,7 @@ impl Cell {
     pub fn blank() -> Cell {
         let mut g = [0u8; 8];
         g[0] = b' ';
-        Cell {
-            g,
-            attr: 0,
-            fg: 0,
-            bg: 0,
-            cont: false,
-        }
+        Cell { g, attr: 0, fg: 0, bg: 0, cont: false }
     }
 
     // The glyph's NUL-terminated byte run.
@@ -80,13 +75,7 @@ impl Cell {
 
 // All-zero cell used for fresh grids and as the base of continuation cells.
 fn cell_zeroed() -> Cell {
-    Cell {
-        g: [0; 8],
-        attr: 0,
-        fg: 0,
-        bg: 0,
-        cont: false,
-    }
+    Cell { g: [0; 8], attr: 0, fg: 0, bg: 0, cont: false }
 }
 
 // The terminal state (kore.c `T`): grid row-major grid[y*cols+x]; out is the frame
@@ -100,6 +89,7 @@ pub struct Term {
     pub cur_x: i32,
     pub cur_y: i32,
     pub cur_shape: i32,
+    palette: Palette,
 }
 
 // Event model (kore.c). C-style discriminants: the decode tree ports 1:1.
@@ -145,15 +135,7 @@ pub struct Ev {
 
 impl Ev {
     pub fn none() -> Ev {
-        Ev {
-            etype: EV_NONE,
-            key: 0,
-            mkind: 0,
-            mx: 0,
-            my: 0,
-            ch: 0,
-            u8b: [0; 8],
-        }
+        Ev { etype: EV_NONE, key: 0, mkind: 0, mx: 0, my: 0, ch: 0, u8b: [0; 8] }
     }
 }
 
@@ -168,6 +150,7 @@ impl Term {
             cur_x: 0,
             cur_y: 0,
             cur_shape: 0,
+            palette: Palette::default(),
         }
     }
 
@@ -185,6 +168,7 @@ impl Term {
         if !sys::term_enter() {
             return false;
         }
+        self.palette = Palette::probe();
         self.size();
         true
     }
@@ -338,14 +322,7 @@ impl Term {
         }
         if !title.is_empty() {
             self.put(x + 2, y, a | A_BOLD, fg, "╴".as_bytes(), 1);
-            let tw = self.put(
-                x + 3,
-                y,
-                if focused { A_BOLD } else { 0 },
-                fg,
-                title.as_bytes(),
-                w - 6,
-            );
+            let tw = self.put(x + 3, y, if focused { A_BOLD } else { 0 }, fg, title.as_bytes(), w - 6);
             self.put(x + 3 + tw, y, a | A_BOLD, fg, "╶".as_bytes(), 1);
         }
     }
@@ -363,11 +340,7 @@ impl Term {
             thumb = 1;
         }
         let max_top = total - vis;
-        let mut at = if max_top > 0 {
-            top * (track - thumb) / max_top
-        } else {
-            0
-        };
+        let mut at = if max_top > 0 { top * (track - thumb) / max_top } else { 0 };
         if at > track - thumb {
             at = track - thumb;
         }
@@ -387,12 +360,13 @@ impl Term {
     // Compose the whole frame into self.out and write(1) once: head "\x1b[?25l\x1b[H", rows
     // joined by "\r\n", cont cells skipped, SGR runs coalesced over (attr,fg,bg) seeded
     // invalid — on change emit "\x1b[0;48;5;<bg>" + ";2"? + ";1"? + ";7"? + ";38;5;<fg>" + "m"
-    // with bg?:C_BG, fg?:C_TEXT; tail "\x1b[0m"; then when cur_shape != 0:
+    // with bg?:C_BG, fg?:C_TEXT under the deterministic fallback, or 49/39 for the validated
+    // terminal defaults and readable projected accents; tail "\x1b[0m"; then when cur_shape != 0:
     // "\x1b[<y+1>;<x+1>H\x1b[<shape> q\x1b[?25h". No diffing. kore.c flush_frame.
     pub fn flush_frame(&mut self) {
         self.out.clear();
         self.out.extend_from_slice(b"\x1b[?25l\x1b[H");
-        let mut cur: (i32, i32, i32) = (-1, -1, -1);
+        let mut cur: Option<(u8, Color, Color)> = None;
         for y in 0..self.rows {
             if y > 0 {
                 self.out.extend_from_slice(b"\r\n");
@@ -402,12 +376,18 @@ impl Term {
                 if c.cont {
                     continue;
                 }
-                let key = (c.attr as i32, c.fg as i32, c.bg as i32);
-                if key != cur {
-                    let bg = if c.bg != 0 { c.bg } else { C_BG };
-                    let fg = if c.fg != 0 { c.fg } else { C_TEXT };
-                    self.out.extend_from_slice(b"\x1b[0;48;5;");
-                    self.out.extend_from_slice(bg.to_string().as_bytes());
+                let fg = self.palette.foreground(c.fg);
+                let bg = self.palette.background(c.bg);
+                let key = (c.attr, fg, bg);
+                if Some(key) != cur {
+                    self.out.extend_from_slice(b"\x1b[0");
+                    match bg {
+                        Color::Default => self.out.extend_from_slice(b";49"),
+                        Color::Indexed(index) => {
+                            self.out.extend_from_slice(b";48;5;");
+                            self.out.extend_from_slice(index.to_string().as_bytes());
+                        }
+                    }
                     if c.attr & A_DIM != 0 {
                         self.out.extend_from_slice(b";2");
                     }
@@ -417,22 +397,22 @@ impl Term {
                     if c.attr & A_REV != 0 {
                         self.out.extend_from_slice(b";7");
                     }
-                    self.out.extend_from_slice(b";38;5;");
-                    self.out.extend_from_slice(fg.to_string().as_bytes());
+                    match fg {
+                        Color::Default => self.out.extend_from_slice(b";39"),
+                        Color::Indexed(index) => {
+                            self.out.extend_from_slice(b";38;5;");
+                            self.out.extend_from_slice(index.to_string().as_bytes());
+                        }
+                    }
                     self.out.push(b'm');
-                    cur = key;
+                    cur = Some(key);
                 }
                 self.out.extend_from_slice(c.glyph());
             }
         }
         self.out.extend_from_slice(b"\x1b[0m");
         if self.cur_shape != 0 {
-            let park = format!(
-                "\x1b[{};{}H\x1b[{} q\x1b[?25h",
-                self.cur_y + 1,
-                self.cur_x + 1,
-                self.cur_shape
-            );
+            let park = format!("\x1b[{};{}H\x1b[{} q\x1b[?25h", self.cur_y + 1, self.cur_x + 1, self.cur_shape);
             self.out.extend_from_slice(park.as_bytes());
         }
         sys::write_stdout(&self.out);

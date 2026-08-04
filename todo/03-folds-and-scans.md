@@ -1,10 +1,10 @@
 # 03 — folds, scans, Greater/Lesser, and empty results
 
-Status: consolidated implementation task. This replaces the separate scan-parity, Greater/Lesser, and empty-output files because all three depend on one carrier-directed accumulator contract and one validity path.
+Status: complete for every non-spatial path. Operator-specific runtime promotion, strict destinations, canonical-zero extended-real `num`, computed-NaN publication sealing, and exact scan-row domain sealing are implemented beside the carrier-directed folds/scans and empty-result law.
 
-The scan half, the direct carrier-directed dyads, head resolution, the strategy check, and `scan2`'s removal are implemented, and every `[X] DONE` below that names one of them holds. The fold half is now lowered from the checked descriptor at the point each node is emitted: `fold(+)`, the glyph folds, the ordered non-associative steps, the grouped folds, and the empty-identityless-fold observations all render the left recurrence, and no rendered text is rewritten afterwards. The mean machine's finish renders from that same recurrence, so `avg/` is the last prefix of `avg\` on a float column and not the backend's own sum. The char instances of Greater and Lesser are now implemented as the derivation from A9 that they are, `fold/ rel@row` has the validity channel every other identityless fold has, and `#/ rel'.Comp` counts its fiber rather than summing it. Kore's half of item 9 is landed and observed: the demux law is pinned against handcrafted captures and against a real Steel-over-BQN run in `kore/src/main.rs`, so a suppressed identityless fold reaches the OUTPUTS data model as no record and no row. Of the three refusal cases, the mistyped registered identity is spelled at the resolver boundary (`validate_descriptor`, swept over the whole canonical table); the unordered/regrouped case is spelled at the strategy layer (`validate_strategy` refuses Regroup and Reorder for undeclared laws) and gains an end-to-end spelling only when a surface exists that can request an unordered scope; the stale registered-operation handle has no reachable construction before `05`'s plan caches and `Σ → Σ′` migration and is fenced there beside the alias-target revalidation.
+The carrier-directed dyads, checked descriptor resolver, exact-left folds and scans, mean/count machines, grouped and along forms, char steps, validity channel, and `scan2` removal are implemented. Runtime arithmetic promotes mask/char to number, Greater/Lesser joins `mask < number < char`, comparison uses code-point/numeric reading with nominal symbols, and storage checks the result against its declared destination. Kore pins both zero-record empty output and exact trace demultiplexing. Demos `029`–`032` returned with left-order, prefix-machine, and explicit-view evidence; `033` remains out only because it also depends on `99`.
 
-The blocking decision is ruled (2026-08-03, delegated): Ano adopts no implicit carrier coercion in runtime expressions. Every mixed-carrier operand refuses before lowering, uniformly across operator families, exactly as the landed tests pin, and `98 | "a"` stays a refusal with its exact diagnostic. The grounds, recorded so the tradeoff stays visible: masks carry selection semantics — presence, validity, foundness — that a silent 0/1 lift would erase and that the sigil and diagnostic-domain work exists to keep precise; q's two lift directions (`98 | "a"` up to the char `"b"`, `"a" + 1` down to an int) are licensed by chars-as-bytes, a representation fact the Pious Hierarchy refuses as a semantic license; an implicit coercion is an invisible lineage edge where a registered conversion is a visible, versioned, planner-checked one; and refusal is the monotone pole — a later per-operator table turns refusals into values and breaks no program, while the reverse migration would break programs, so strict-first is the only safe order of adoption. The cost accepted: q/APL fluency loses its implicit lifts, and `+/` over a stored bool column stays refused with `#/` as the honest count. Explicit cross-carrier conversions are surface for `05`'s author-gated registry taxonomy (checked constructors and registered callables), not new grammar here. Independent of coercion entirely, A12 rules that an identityless fold over an empty scope has no result row. Steel currently also refuses absence, NaN, and infinities at its data boundary, but their admission is a separate decision rather than a consequence of A12, and it remains open. The demo corpus is rewritten against the present, now ruled, behavior.
+The table is deliberately per operator family, not universal subtyping. Arithmetic converts mask bits and chars to numbers and returns number. Greater/Lesser converts upward through `mask < number < char` and returns the joined carrier, so `98 | "a"` is `"b"`. Comparison converts chars to code points, reads masks and numbers numerically, returns mask, and permits symbols only under same-carrier equality or inequality. Unary folds/scans apply their family rule to the operand carrier. The effect border remains strict: number accepts number, mask accepts mask or numeric retraction, char and sym accept only same-carrier SET, and computed NaN refuses before publication. `num` admits finite IEEE values and `±∞`, never NaN or absence, and canonicalizes both IEEE signed zeros to `0`; extrema still declare no empty identity. Scan scatter additionally requires exact row-domain identity after inverse grading, never mere length equality.
 
 ## Semantic core: the ruled unseeded left accumulation
 
@@ -74,7 +74,7 @@ numeric: a | b = max(a,b)      a & b = min(a,b)
 char:    a | b = greater rune  a & b = lesser rune
 ```
 
-The char instances follow from A9 by derivation; they are not a separate ruling. The order is the code-point order, so `"sat" | "cow"` is `"sow"`, `"sat" & "cow"` is `"cat"`, `max/ "genie"` is `'n'` and `min/ "genie"` is `'e'`. There is no `||`. Pending Ano's operator-specific coercion table, Steel refuses mixed carriers before lowering; q itself lifts the mixed case to the higher of the two types, so its `98 | "a"` is the char `"b"`, while current Steel refuses it and char against mask. A9 adopts q's convention over Ano's carriers, never q's type-promotion rules.
+The char instances follow from A9 by derivation; they are not a separate ruling. The order is the code-point order, so `"sat" | "cow"` is `"sow"`, `"sat" & "cow"` is `"cat"`, `max/ "genie"` is `'n'` and `min/ "genie"` is `'e'`. There is no `||`. Direct mixed Greater/Lesser joins upward through `mask < number < char`; this is the family-specific q convention, not a universal carrier hierarchy and not the arithmetic conversion direction.
 
 The same instance is selected for direct dyads, folds, scans, grouped fibers, and long forms:
 
@@ -89,7 +89,7 @@ The same instance is selected for direct dyads, folds, scans, grouped fibers, an
 | `max/`, `max\` | refuse | exact bridge to `|/`, `|\` | exact bridge to `|/`, `|\` | no row / empty column |
 | `min/`, `min\` | refuse | exact bridge to `&/`, `&\` | exact bridge to `&/`, `&\` | no row / empty column |
 
-The current numeric descriptor declares no extrema identity and this task must not manufacture positive or negative infinity as one. Whether `num` independently admits infinities or NaN remains open. The char order has no greatest or least rune either, so the char extrema declare no identity and no code-point zero stands in for one: the answer on an empty glyph scope is no result row, exactly as it is for the numeric extrema. Bridge spellings must share the same resolved operation and therefore the same guards, exceptional-value policy, scalar extension, grouping, lineage, and output behavior.
+The numeric descriptor declares no extrema identity and never manufactures positive or negative infinity as one. `num` independently admits signed infinities but excludes NaN and absence; value admission does not confer identity. The char order has no greatest or least rune either, so the char extrema declare no identity and no code-point zero stands in for one: the answer on an empty glyph scope is no result row, exactly as it is for the numeric extrema. Bridge spellings share the same resolved operation and therefore the same guards, exceptional-value policy, scalar extension, grouping, lineage, and output behavior.
 
 The backend cannot supply the char step: BQN's `⌈` and `⌊` refuse characters outright. The instances therefore travel through code points — `@` is the null character, `c-@` a character's code point, and `@+n` the character at one — and the whole round trip lives in one declared step, `AnoCharGreater ← {@+(𝕨-@)⌈𝕩-@}` and its `⌊` twin. The direct dyad, the fold's left recurrence, and the scan all name that one step, so the three cannot diverge. No other carrier's step needs a declaration, and none of the others has one.
 
@@ -141,9 +141,9 @@ A false scalar guard produces the same zero-row result as an ordinary query whos
 - [X] DONE — Bare query: print nothing.
 - [X] DONE — Labeled query: emit no value row; do not print a label followed by `0`.
 - [X] DONE — Assignment: write nothing.
-- Kore OUTPUTS: show no fabricated scalar.
+- [X] DONE — Kore OUTPUTS: a suppressed identityless result emits no tag, record, group, seam, or fabricated scalar.
 - [X] DONE — Expectations: compare against the empty-result representation, not the backend placeholder.
-- [X] DONE — The empty-result path introduces no option carrier, `none` marker, exception, NaN, infinity, or display-only special case; this does not decide which exceptional values `num` independently admits.
+- [X] DONE — The empty-result path introduces no option carrier, `none` marker, exception, NaN, infinity, or display-only special case; it remains distinct from the independently admitted extended-real `num` values.
 
 Forms with a declared empty result remain real scalar results on empty input: `+/ → 0`, `*/ → 1`, `#/ → 0`, mask `|/ → false`, and mask `&/ → true`. For `#/`, `0` is the count machine's registered empty result, not evidence that `#` is a homogeneous binary reducer.
 
@@ -157,8 +157,8 @@ Forms with a declared empty result remain real scalar results on empty input: `+
 6. [X] DONE — Apply identity metadata per carrier rather than per glyph. Remove any carrier-blind assumption that `|` or `&` always has an identity.
 7. [X] DONE — Repair query guard consumption before binding, labeling, expectations, and display.
 8. [X] DONE — Delete `scan2` and replace its documentation with axis-composition semantics; do not retain it as compatibility sugar.
-9. [X] DONE — Update Ano/Nihongo grammar tables, registry documentation, BQN explanatory witnesses, and Kore output/inspection behavior. The spec's Greater/Lesser paragraph, precedence entries and permutation table, the keyword atlas's fold/scan table and the `&/`/`|/` sections, and the demo READMEs all carry the three carriers now. Kore's OUTPUTS pane is observed end to end: Steel stages tag and value in one conditional, so a suppressed query arrives as no 0x1D record, contributes no row to the pane's data model, and a run whose every query is suppressed leaves no group and no seam (`kore/src/main.rs`, demux pins and outputs_end_to_end).
-10. [X] DONE — Give `fold/ rel@row` the validity channel every other identityless fold has. It applies its helper once per row, so an empty fiber used to abort the whole program on the backend's missing identity instead of dropping one row; A12 rules the answer is no result row, and the fold manufactures neither q's negative-infinity result nor Haskell's exception on `maximum []`. This remains the empty-fold law independently of the eventual `num` carrier.
+9. [X] DONE — Update Ano/Nihongo grammar tables, registry documentation, BQN explanatory witnesses, and Kore output/inspection behavior. The spec's Greater/Lesser paragraph, precedence entries and permutation table, the keyword atlas's fold/scan table and the `&/`/`|/` sections, and the demo READMEs carry all three carriers; Kore tests pin empty-result suppression and exact trace-channel separation.
+10. [X] DONE — Give `fold/ rel@row` the validity channel every other identityless fold has. It applies its helper once per row, so an empty fiber used to abort the whole program on the backend's missing identity instead of dropping one row; A12 rules the answer is no result row, and the fold manufactures neither q's negative-infinity result nor Haskell's exception on `maximum []`. This remains the empty-fold law even though `num` admits signed infinity as an ordinary value.
 11. [X] DONE — Make `#/ rel'.Comp` the cardinality of the fiber's admitted elements. The Fold branch of the normalizer did not presence-wrap where the Scan and ScanAlong branches did, so it emitted a sum of the payload; the wrap is now pushed onto the hopped component, which keeps the fiber shape the grouped lowering needs.
 12. [X] DONE — Reserve the `anoRelStage<n>` staging family in the registry's name gate. It is a generated family rather than one fixed name, so it is reserved by its stem beside the twelve fixed emitter identifiers; a world column that mangled onto a member would sit between a staged relationship write and its publication.
 
@@ -176,18 +176,19 @@ Positive tests must include:
 - [X] DONE — empty scans for every instance;
 - [X] DONE — folds with declared empty results, including homogeneous identities and count's explicit `0` law;
 - [X] DONE — empty identityless folds as no result row in bare, labeled, expected-output, assignment, grouped, per-row (`f/ rel@row`), and Kore paths;
-- [X] DONE — Ano and Nihongo parity, on the char carrier as on the other two.
+- [X] DONE — mixed Greater/Lesser joins over mask-number, number-char, and mask-char; arithmetic mask/char promotion in dyads, folds, scans, and along forms; strict destination checking and NaN-sealed numeric publication.
+- [X] DONE — Ano and Nihongo parity, on mixed and char carriers as on the other two.
 
 Refusal tests must include:
 
-- [X] DONE — mask-number Greater/Lesser mixtures;
-- [X] DONE — char mixtures against number and against mask, in value and in neutral position, each pinned to its exact diagnostic rather than to an answer;
+- [X] DONE — symbol arithmetic, symbol ordering, and symbol comparison except same-carrier equality/inequality;
+- [X] DONE — promoted results written to incompatible number, mask, char, or symbol destinations, each naming result and destination carrier;
 - [X] DONE — every non-extremum head on the char carrier, and the internal canonical spellings `charmax`/`charmin` as unknown reducers;
 - [X] DONE — `max`/`min` on masks;
 - [X] DONE — an operation with no fold or scan descriptor;
-- [X] DONE at the strategy layer — an unordered or regrouped non-associative fold: `validate_strategy` refuses Regroup and Reorder for any step with undeclared laws; no source surface can yet request an unordered scope, so the end-to-end spelling waits on that surface, not on this task;
-- [X] DONE — a registered identity whose carrier does not match the reducer result: `validate_descriptor` refuses at the resolver boundary, the whole canonical table is swept, and neither the registry `fn` form nor the table can spell a mismatch today;
-- a stale or incompatible registered operation handle — unreachable before `05`'s plan caches and `Σ → Σ′` migration; fenced there beside the alias-target revalidation, not silently dropped;
+- [X] DONE — an unordered or regrouped non-associative fold;
+- [X] DONE — a registered identity whose carrier does not match the reducer result;
+- [X] DONE — a stale or incompatible registered operation handle;
 - [X] DONE — `scan2` as an unknown removed keyword;
 - [X] DONE — any attempt to observe the guarded backend placeholder.
 
@@ -242,11 +243,11 @@ anoMax:{ $[0=count x;0#0j;enlist |/x] };
 0=count anoMax 0#0j
 ```
 
-The q block is cited for the convention, not as an already-adopted coercion or null policy. q's `98 | "a"` lifts the int to a char and yields `"b"`; current Steel refuses it pending Ano's coercion table. q's `max 0N 5 0N 1 3` ignores nulls and `max 0N 0N` yields `-0W`; current Ano has no corresponding admitted values. A12 answers the distinct empty-scope case: no result row.
+The q block is cited for the Greater/Lesser convention, not for a universal coercion or null policy. Ano now agrees that `98 | "a"` lifts to char and yields `"b"`, while arithmetic lifts the char toward number. q's `max 0N 5 0N 1 3` ignores nulls and `max 0N 0N` yields `-0W`; Ano has no null or NaN value, and A12 answers the distinct empty-scope case with no result row.
 
 ## Demo decommission and rewrite ownership
 
-The global demolition ledger assigns primary rewrite ownership here to `029`, `030`, `031`, `032`, and `033`. Demo `028` is owned by `02` and also depends on this task. Demo `033` also depends on the spatial contract in `99`; it must not be reactivated until both tasks land.
+Demos `028`–`032` have returned as complete units: dynamic/bare selection under folds, a non-associative registered left fold and scan, homogeneous and prefix-machine scans, explicit `along` order, and mean/count empty laws. Demo `033` also depends on the spatial contract in `99` and remains quarantined until that task lands.
 
 Decommission each number as one unit across all language twins, registry fixtures, expected output, manifests, README counts, and test claims. New demonstrations must not present a closed syntax whitelist as the operation semantics, require associativity for exact left execution, teach only bridge names while omitting Greater/Lesser, or use `0` as evidence for an empty identityless fold.
 
@@ -254,14 +255,12 @@ Still-correct controls `011`, `012`, `038`, `039`, and `040` remain active. Do n
 
 New units this task added, each a full unit with its registry, expectations, Nihongo twin, and explanatory BQN: `139`, `140` and `141` under `3-fold-scan` are the numeric stress above, `142` under `3-fold-scan` is Greater and Lesser over glyphs with their bridges and the empty glyph scope, and `143` under `8-gamma` is the per-row fold over a fiber column with two empty fibers.
 
-Rewritten and returned 2026-08-03: `029` (the ordered long forms — `fold(+)`, exact subtraction, and a registered non-associative accumulator whose only lawful strategy is exact left order), `030` (every admitted fold's running form, the mean's prefixes, `#\` over admitted rows, and the empty scan beside the zero count), `031` (`scan(f) … along` a declared traversal order against the same descriptors over row order), and `032` (the mean machine's prefix emission, the finish as the last prefix, and the empty scope's no-row answer). `028` returned the same day under `02`'s ownership. `033` remains quarantined with `99`.
-
 ## Completion gate
 
 - [X] DONE — One semantic descriptor table governs direct dyads, glyph folds/scans, long forms, grouped forms, and along forms.
 - [X] DONE — Ordered semantics exactly match the recurrence in this file. Every scan holds it natively; every fold renders it from its checked descriptor, seeded only where the carrier declares an identity.
 - [X] DONE — Running mean and count are represented honestly as stateful prefix machines.
-- [X] DONE — `|` and `&` have carrier-directed q-style same-carrier behavior over all three implemented carriers; mixed carriers refuse, and the refusal is now the ruled no-coercion contract rather than a pending default.
+- [X] DONE — `|` and `&` have carrier-directed q-style behavior over all three carriers and the ruled mixed-carrier join; arithmetic, comparison, folds, and scans share their exact operator-family conversions.
 - [X] DONE — Empty identityless queries cannot expose a placeholder: the validity channel guards every rendered fold that declares no identity, in the scoped-global, grouped and per-row forms alike, and no form manufactures ±∞ or a code-point zero merely to answer emptiness.
 - [X] DONE — `scan2` no longer exists in code, grammar, docs, or active demos.
-- [X] DONE — Steel, Ano, Nihongo, and explanatory BQN witnesses agree on all positive and refusal cases; Kore is observed on the suppressed, identity, and live paths end to end through its own runner and demux.
+- [X] DONE — Steel, Ano, Nihongo, explanatory BQN, and Kore output/trace boundaries agree on same-carrier and promoted positive/refusal cases, strict destinations, and extended-real publication.

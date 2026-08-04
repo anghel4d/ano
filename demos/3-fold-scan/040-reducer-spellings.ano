@@ -1,4 +1,4 @@
--- The same enemies as 029-named-reducer, damage 12 7 30 9. Register the reducer once and every spelling follows: the fold answers 30 twice, the scan shows the carry arriving there — 12 12 30 30.
+-- The same enemies as 029-ordered-steps, damage 12 7 30 9. Register the reducer once and every spelling follows: the fold answers 30 twice, the scan shows the carry arriving there — 12 12 30 30.
 -- The two fold spellings emit the same reduction. The scan is the running peak under the registered dyad.
 --! registry ../registries/040-reducer-spellings.reg
 

@@ -1,34 +1,20 @@
 --! registry ../registries/028-reductions.reg
 --! ja
 
---! out 150
-総和 金 北 で
-
---! out 155
-総和 金 ^party で
-
 --! out 3
-総数 ^party
+総数 ( 商人 と ホワイトラン ない )
 
-定義 rest = ^party ない
+--! out 2
+総数 ( 商人 と ^Whiterun ない )
 
---! out 55
-総和 金 rest で
+--! out 80
+総和 ( 金 ) ( 商人 と ホワイトラン ない ) で
 
---! out 0.09375
-総積 ( 1 - 抵抗 ) 命中 で
-
---! out 0
-総和 金 ^empty で
-
---! out 1
-総積 ( 1 - 抵抗 ) ^empty で
+--! out 150
+総和 ( 金 ) ( 商人 と ^Whiterun ない ) で
 
 --! out 0
-総数 ^empty
+総和 金 無 で
 
 --! out
-最大 金 ^empty で
-
---! out
-平均 金 ^empty で
+最大 金 無 で

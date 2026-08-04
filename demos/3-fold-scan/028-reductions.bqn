@@ -1,18 +1,26 @@
-# ano: +/ Gold @ ^party, #/ ^party, +/ Gold @ !^party, and the empty live scope ^empty under every fold class.
-# Semantics: a fold's scope may be a live alias mask; the fold itself is the unseeded left recurrence, seeded only where the descriptor declares an identity.
-# Invariant: the sigiled scope and its negation partition the total; an identityless fold over the empty scope has no result row (A12) — the guard is 0<count, never a manufactured value.
+# ano: count and sum over Merchant & !Whiterun beside Merchant & !^Whiterun
+# Semantics: the overlay changes the selection, not the reducer. Sum has numeric identity 0; maximum has no identity, so the empty maximum has no result row.
 
-gold  ← 100‿50‿20‿5‿0‿25‿7‿3
-party ← 1‿1‿0‿1‿0‿0‿0‿0                    # the sidecar's live mask
-empty ← 0‿0‿0‿0‿0‿0‿0‿0
+merchant ← 1‿1‿0‿1‿0‿1‿0‿0
+bare     ← 1‿0‿1‿0‿0‿0‿1‿0
+live     ← 0‿0‿0‿1‿0‿1‿0‿0
+gold     ← 100‿50‿20‿5‿0‿25‿7‿3
+none     ← 8⥊0
 
+bareSel ← merchant ∧ ¬bare
+liveSel ← merchant ∧ ¬live
 LeftSum ← {+˜´⌽(0∾𝕩)}
-NoRow   ← {0=≠𝕩 ? ⟨⟩ ; ⟨⌈˜´⌽𝕩⟩}
+NoMaximum ← {0=≠𝕩 ? ⟨⟩ ; ⟨⌈˜´⌽𝕩⟩}
 
-! 155 ≡ LeftSum party/gold
-! 3 ≡ +´ party
-! 55 ≡ LeftSum (¬party)/gold
-! 210 ≡ 155+55                             # the partition law
-! 0 ≡ LeftSum empty/gold                   # + declares identity 0
-! 0 ≡ +´ empty                             # count declares 0
-! 0 = ≠ NoRow empty/gold                   # max declares none: no result row
+! 3 ≡ +´bareSel
+! 2 ≡ +´liveSel
+! 80 ≡ LeftSum bareSel/gold
+! 150 ≡ LeftSum liveSel/gold
+! 0 ≡ LeftSum none/gold
+! 0 = ≠ NoMaximum none/gold
+
+# Deleting the live entry exposes the unchanged bare mask again.
+Resolve ← {𝕨 ? 𝕩 ; bare}
+! live ≡ 1 Resolve live
+! bare ≡ 0 Resolve live
+! bare ≡ 1‿0‿1‿0‿0‿0‿1‿0

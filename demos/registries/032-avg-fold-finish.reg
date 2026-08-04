@@ -3,8 +3,8 @@
 # empty result and yields no row; the count declares 0.
 n 6
 col cow bool 1 1 0 1 1 0
-col weight num 400 500 50 600 900 70
 col none bool 0 0 0 0 0 0
+col weight num 400 500 50 600 900 70
 ja 牛 cow
-ja 重量 weight
 ja 無 none
+ja 重量 weight

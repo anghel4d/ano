@@ -87,6 +87,8 @@ ja 北 nord                         # Japanese alias for the ja skin
 
 That list is also a census of the ways a name reaches the host: a mutable column, a readonly column (write footprint declared empty: physics positions you may predicate on but never move), a callable, an alias, a binding, and a proto — the archetype noun `spawn` fills through. The bare namespace is flat, and sentence position alone decides what a name is doing. Applied to arguments it is a callable, in a value position a column, bare in a predicate a mask, a proper noun in source position a binding. No sigil marks provenance: `polar` from the prelude and `phyllotaxis` from the host read identically, the way C holds `sin` from libm and your own function in one identifier space. The one sigil, `^`, selects the dynamic alias overlay. `^cursor` moves with the context. `^Whiterun` reads a live alias named `Whiterun` when one exists and otherwise falls through to bare `Whiterun`; rebinding or deleting the alias never changes the registered name.
 
+One statement runs under one fixed registry schema. Live aliases are session state in `<world>.reg.aliases`, not `alias` directives; stable declaration IDs and the schema version live in `<world>.reg.schema`. A schema replacement is the host command `kore migrate live.reg candidate.reg migration.map`, never syntax to the right of a comma. Its complete explicit map migrates compatible columns, presence, relationships, bindings, and overlay targets, invalidates old plans and handles, then journal-publishes the registry, alias environment, schema manifest, and deterministic event log together. A failed conversion or partial publication restores the exact old bundle. Spatial conversion remains behind its typed task-`99` extension boundary.
+
 ## Selection
 
 Everything left of the comma. A bare component name is the set of entities carrying it, `&` `|` `!` build masks out of masks, and comparisons build masks out of columns. These lines are `demos/1-selection` and the world's most honest query language:
@@ -101,7 +103,7 @@ Merchant @ Whiterun , Gold += 5000
 
 Four small rules carry all of that. The colon is the atom literal of Erlang and Ruby: `:Bandit` is the enum value, `Bandit` the component mask, decided lexically, never by lookup. The equals glyph is positional, the SQL rule: left of the hinge `=` compares (identical to `==`, which stays legal everywhere), right of it assigns. So `NPC & Tunic = :Red , Gold = 0` reads one comparison, one assignment. `@` and `^` get their own paragraphs in a moment. Precedence runs loosest-to-tightest through hinge, `;`, `|>`, effect verbs, `|`, `&`, `!`, comparisons, fold prefixes, `+ -`, `* / %`, `@`, dot. So `Cheese @ cellar & Aged > 3mo` is `(Cheese @ cellar) & (Aged > 3mo)` and you can stop counting parentheses. The full fourteen-level table is the spec appendix.
 
-The sigil first. `^cursor` is a dynamic alias. `bind Player entity 2` is a proper noun fixed at registration. `^cursor` is the word "you". Who it refers to is decided at the moment of speaking, by the engine, not the script. Concretely, the host registers a resolver (a tiny function like "raycast from the mouse") and every gather re-runs it. So `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: you must know this name can move between statements. In C# it is an expression-bodied property, never a field. `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, the way `DateTime.Now` differs from a stored timestamp. In Haskell it is `asks cursor` in a Reader: the script is a function of an environment the engine rebuilds each tick. The host may install, rebind, or delete the alias between statement steps. In filesystem terms, `Player` is `/home/pyrus` and `^cursor` is `./`. Against `Nord` the difference is arity. A component name is a mask over many rows. `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`). A sigiled name first reads the live alias overlay and falls through to its bare namesake when no alias exists. `^` glued to a name is one identifier and appears nowhere else, so nothing has to guess.
+The sigil first. `^cursor` is a dynamic alias. `bind Player entity 2` is a proper noun fixed at registration. `^cursor` is the word "you". Who it refers to is decided at the moment of speaking, by the engine, not the script. Concretely, the host registers a resolver (a tiny function like "raycast from the mouse") and every gather re-runs it. So `^cursor , Health = 0` kills whatever is under the mouse at that gather, and two statements mentioning `^cursor` may hit two different entities. That is why it carries a glyph in a language with no other sigils: you must know this name can move between statements. In C# it is an expression-bodied property, never a field. `Entity Cursor => Physics.Raycast(mouse)` re-raycasts on every read, the way `DateTime.Now` differs from a stored timestamp. In Haskell it is `asks cursor` in a Reader: the script is a function of an environment the engine rebuilds each tick. The host may install, rebind, or delete the alias between statement steps. In filesystem terms, `Player` is `/home/pyrus` and `^cursor` is `./`. Against `Nord` the difference is arity. A component name is a mask over many rows. `^cursor` resolves to a referent, usable anywhere a selection or a mirror-read root goes (`^cursor.pos`). A sigiled name first reads the live alias overlay and falls through to its bare namesake when no alias exists. `^` glued to a name is one identifier and appears nowhere else, so nothing has to guess. Steel fixes the host contract with service-v1 `deictic.cursor`, `deictic.observer`, `deictic.selected`, and `deictic.world`: entity, entity, mask, and all-world mask respectively, each evaluated only against one frozen statement input. A cold omitted subject is exactly `^cursor`; a continuation is not cold and still needs its prior mask.
 
 `@` is the scope operator, and it has exactly one meaning, always: evaluate the left thing within this scope. The Japanese surface keeps them as separate words: the operator is the particle で ("at"), the sigil a demonstrative ("this one here"). What varies across the operator's uses is what you asked it to evaluate, never what `@` does:
 
@@ -192,29 +194,29 @@ fold(threat) Damage @ Enemies    -- the long form, same fold
 
 Two honesty rules. A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. An identity is needed only to produce a value on empty input. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` are currently registered without an empty identity, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel consumes the validity guard before binding, labeling, comparison, and display, so the backend placeholder behind a false guard is unobservable.
 
-A scan accumulates and returns a column of equal length, which means it needs an order, and an abstract selection has none. Either the source view carries one, or you name one.
+A scan accumulates and returns one value per row of its ordered source domain; an abstract selection has no order, so either the source view carries one or you name one. This exact-left read-side form is the admitted within-statement recurrence. Every scan result retains its ordered world-row witness: assignment grades values and witness together, refuses an obvious nominal mismatch while planning, and seals exact witness equality with the statement selection at the barrier. Equal length never proves alignment, and duplicate, omitted, or foreign rows cannot scatter. If an effect writes the column the scan reads, Steel first refuses the intersecting footprints instead of smuggling a carry through the barrier.
 
 ```haskell
 +\ Weight @ (↕steps |> route A B)    -- the view is ordered, scan along it
 scan(+) Weight along pathCells       -- the order named explicitly
 ```
 
-The whole family fits one table. Ano adopts q's Greater and Lesser operations directly. `|` is OR on masks and pointwise maximum on numbers. `&` is AND on masks and pointwise minimum on numbers. Mixed carriers refuse: the ruled contract is no implicit coercion, with explicit registered conversions as the cross-carrier path. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
+The whole family fits one operator-specific promotion table. `|` is OR on masks, pointwise maximum on numbers, and the greater code point on glyphs; `&` is AND, minimum, and lesser rune. Their mixed value operands join `mask < number < char`, while arithmetic promotes masks and glyphs to number and comparison reads glyphs by code point. This is not universal storage subtyping: a result must still inhabit its declared destination. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches; glyph scans are running extrema through the one declared code-point step because the BQN primitives do not accept characters. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
 
 | f | `f/` fold | `f\` scan | empty-scope identity |
 |---|---|---|---|
 | `+` | sum | running sum | 0 |
 | `*` | product | running product | 1 |
-| `&` | ALL on masks, minimum on numbers | still-all on masks, running minimum on numbers | mask true, number none → row drops |
-| `\|` | ANY on masks, maximum on numbers | ever-any on masks, running maximum on numbers | mask false, number none → row drops |
+| `&` | ALL on masks, minimum on numbers, least rune on glyphs | still-all, running minimum, running least rune | mask true, number/char none → row drops |
+| `\|` | ANY on masks, maximum on numbers, greatest rune on glyphs | ever-any, running maximum, running greatest rune | mask false, number/char none → row drops |
 | `#` | count | running count | 0 |
-| `max` | numeric bridge for `\|/` | numeric bridge for `\|\` | none → row drops |
-| `min` | numeric bridge for `&/` | numeric bridge for `&\` | none → row drops |
+| `max` | numeric/char bridge for `\|/` | numeric/char bridge for `\|\` | none → row drops |
+| `min` | numeric/char bridge for `&/` | numeric/char bridge for `&\` | none → row drops |
 | `avg` | fold-and-finish mean | running mean | none → row drops |
 | `-` | ordered left subtraction; unordered refused | running subtraction | none → row drops |
 | `/` (divide) | `fold(/)` is ordered left division; unordered refused; `//` remains unlexable | `scan(/)` is running division | none → row drops |
 
-A scan needs no identity. Empty input yields an empty column. `|` is boolean OR and numeric maximum. `&` mirrors it as AND and numeric minimum. There is no `||`. `max/`, `max\`, `min/`, and `min\` remain numeric bridges. Steel implements numeric `|` and `&` in direct, fold, scan, and along form, and `min\`, `avg\`, and `#\` are live; the mean and the count are stateful prefix machines rather than homogeneous reducers.
+A scan needs no identity. Empty input yields an empty column. `|` is boolean OR, numeric maximum, or the greater rune; `&` mirrors it as AND, numeric minimum, or the lesser rune. There is no `||`. `max/`, `max\`, `min/`, and `min\` bridge both numeric and char extrema. Steel implements the same resolved operation in direct, fold, scan, grouped, and along form, and `min\`, `avg\`, and `#\` are live; the mean and the count are stateful prefix machines rather than homogeneous reducers.
 
 The parenthesized head of `fold(f)` and `scan(f)` is any admitted operator or registered reducer, not a one-off allowance for `+`. Like Haskell folds and scans or LINQ Aggregate, the head denotes the accumulator operation. Ano then applies its own laws: an unordered fold still requires associativity, and parallel reassociation still requires commutativity. Steel resolves the long head through the same table as the glyph, so `fold(+)` is `+/` and `scan(min) col along ord` is `min\` under a named order; `along` is optional, and `scan(f) col` takes its order from the view.
 
@@ -255,6 +257,12 @@ Pairwise work is the comprehension, a statement form whose two generators and fi
 
 ```haskell
 [ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
+```
+
+When the result itself is wanted rather than pair-shaped effects, `cross` materializes the outer product without flattening:
+
+```haskell
+cross dist Tower Creep
 ```
 
 
@@ -322,12 +330,12 @@ Cheese @ cellar & Aged > 3mo , Price *= 2
 
 All rules active in a tick share ONE barrier, the `;` law lifted to the rule set, and overlapping writes are admitted three ways, statically: disjoint registered footprints, a merge law (you know these), or complementary guard literals proving the masks row-disjoint. The third is the elegant one.
 
-One honest note about running rules here, since Steel reads a file top to bottom and the real engine has a clock: the harness pretends the clock beats once at the end of each unbroken run of `def` lines, and every rule installed so far fires at each beat. Installs persist, so a rule installed early fires again at a later beat, exactly as the engine would have it. What a file cannot do is let ticks pass without installing something new. `ISSUES.md` states the residue plainly.
+One honest note about running rules here, since Steel reads a file top to bottom and the real engine has a clock: the harness makes the clock beat once at the end of each unbroken run of rule `def` lines, and every rule installed so far fires at each beat. Installs persist. `undef name`, 日本語 `解除 name`, first seals any already-scheduled beat and then removes exactly that named rule for later beats; unknown and duplicate live names refuse. What a file cannot do is let ticks pass without an installation edge.
 
 
 ## Where the edges are
 
 
-Ano numbers use IEEE 754 float64 storage. Integers are contiguous through 2^53. Above that, small additions may be absorbed by the local spacing. Steel's current registry-load and save boundaries refuse overflow and non-finite values, and a failed save leaves the world file untouched. Load ∘ save is the identity on the admitted finite domain, negative zero included. `src/refusals/` pins that implemented boundary; admission of `±∞` and NaN remains open and is separate from absence. Host float replay needs recorded input bits or an explicit quantization rule; the host binding is unbuilt.
+Ano numbers use IEEE 754 float64 storage. Integers are contiguous through 2^53; above that, small additions may be absorbed by the local spacing. The `num` carrier is the extended real represented by finite doubles and signed infinities. NaN and absence are not values: registry load, migration, save, and numeric publication refuse them, and a failed save leaves the world file untouched. The mathematical carrier has one zero: either IEEE signed-zero input canonicalizes to `0` at the language and persistence border because its sign is not observable Ano data. Load ∘ save is the identity on that admitted canonical domain, infinities included. Refined `bool`, `nat`, and `int` remain finite, and admitted infinities never seed an empty extrema fold. Host float replay needs recorded input bits or an explicit quantization rule; the host binding is unbuilt.
 
 Where to go next: `ano-language.md` is the spec this manual has been quoting. `spatialmaths.md` derives habitats, fields, lineage, lattices, placement, boundaries. `proofs/foundations.md` states the active obligations, `ano_nihongo.md` carries the Japanese surface, and `demos/` holds the executable witnesses. Go address something by description.

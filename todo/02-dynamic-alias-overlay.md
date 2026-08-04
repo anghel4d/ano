@@ -1,8 +1,8 @@
 # 02 — dynamic alias overlay
 
-Status: the core overlay, the resolver framework (`input.entity` and `input.mask`, a frozen `HostInput`, service versions), the host boundary, replay (persist-environment with barrier-stamped `-- alias@<barrier>` records and per-version sidecar snapshots), the ruled `^cursor` cold default at the elided-subject site (alias-first with bare fallback, wired at the one resolver consultation boundary in the normalizer), and Kore's display are landed in Steel and Kore. Demos `005`, `019`, `028`, and `103` are rewritten and returned to the active surface. Remaining: the concrete deictic resolvers alongside `99`'s host services, and demos `071` and `093`, quarantined behind `99`.
+Status: complete for the non-spatial runtime. The overlay, concrete service-v1 deictics, cold `^cursor`, frozen `HostInput`, host lifecycle, replay, persistence, schema migration, Kore display, and rewritten demos `005`, `019`, `028`, and `103` are landed. Demos `071` and `093` remain quarantined only because they also require task `99`.
 
-The overlay itself is untouched by the fold and foundness work in flight. The end-to-end CLI sidecar test passes under `03`'s landed fold renderer.
+The end-to-end CLI sidecar fixture now runs through fold rendering, so the overlay contract is exercised at the same command boundary as ordinary registry loading and no longer has an external fixture dependency.
 
 ## Ruling
 
@@ -55,12 +55,12 @@ The concrete ownership and arena design may differ. The required properties are:
 - [X] DONE — installation validates the target before publishing a new environment;
 - [X] DONE — rebinding is atomic replacement of one key;
 - [X] DONE — deletion is idempotent at the host API or reports a clear host error, but never touches the bare namespace;
-- stale registry-bound targets are invalidated or revalidated across a `Σ → Σ′` migration described in `05`.
+- [X] DONE — stale registry-bound targets are invalidated or revalidated across a `Σ → Σ′` migration described in `05`.
 
 ## Host and replay boundary
 
 1. [X] DONE — Expose host operations to install, rebind, inspect, and delete a dynamic alias between statement steps. The exact Steel CLI, API, and Kore command spelling is a host-interface decision, not Ano grammar.
-2. [X] DONE — Apply an alias transition only after its target has resolved and validated. A failed transition leaves the old environment unchanged: version, schema, and entries alike, pinned for the unknown-target, wrong-shape-mask, non-Boolean-mask, unknown-resolver, malformed-input, and wrong-schema refusals.
+2. [X] DONE — Apply an alias transition only after its target has resolved and validated. A failed transition leaves the old environment unchanged.
 3. [X] DONE — Add each successful transition to the deterministic session/input log with the statement barrier and environment version at which it became visible. Resolver-backed aliases also require the resolver version and the frozen host-input events needed to reproduce each statement.
 4. [X] DONE — Save/reload must choose one explicit policy and test it end to end:
    - persist the alias environment as session state; or
@@ -75,7 +75,7 @@ The concrete ownership and arena design may differ. The required properties are:
 - [X] DONE — `^name` checks the captured overlay first, then runs the exact bare resolver path only when the canonical key is absent. An invalid present entry is an alias-resolution refusal, not a miss.
 - [X] DONE — A spelling alias may still participate in resolving the bare target according to the existing registry rules; it must not become a live alias entry merely because the word “alias” is shared.
 - [X] DONE — `!^name` resolves first and then negates the resulting mask.
-- [X] DONE — An overlay mask with the wrong query domain follows the ordinary alignment/lineage rules; the overlay is not permission to align equal-length buffers. Structural: a dynamic mask lowers through the same `RegEntryKind::AliasMask` vehicle as a static fixture, pinned by name-substituted plan identity, so it inherits exactly the rules the static mask answers to; a mask whose row count differs from the world cannot even install.
+- [X] DONE — An overlay mask with the wrong query domain follows the ordinary alignment/lineage rules; the overlay is not permission to align equal-length buffers.
 - [X] DONE — Diagnostics identify whether the value came from a binding, materialized mask, resolver, or bare fallback and include the captured overlay, resolver, and host-input versions when tracing is enabled.
 
 ## Tests
@@ -90,7 +90,7 @@ Add Steel, host/API, replay, and Kore tests for:
 - [X] DONE — ASCII case-fold equivalence and non-ASCII controls matching registry behavior;
 - [X] DONE — a statement that performs multiple gathers while the host queues a rebind, proving one overlay snapshot is observed;
 - [X] DONE — a resolver-backed deictic invoked by multiple gathers, proving that it may rerun but receives one frozen world/host-input snapshot, followed by a later statement that observes changed host input;
-- [X] DONE — failed installation of an unknown, stale, wrong-carrier, or wrong-schema target with no environment change, plus a stale present entry proving that lookup refuses rather than falling through — at the snapshot barrier and at sidecar load, over a deliberately shadowed live bare column;
+- [X] DONE — failed installation of an unknown, stale, wrong-carrier, or wrong-schema target with no environment change, plus a stale present entry proving that lookup refuses rather than falling through;
 - [X] DONE — deterministic log replay and save/reload under the chosen policy;
 - [X] DONE — coexistence with a spelling alias and a static `AliasMask` fixture of related names.
 
@@ -118,11 +118,7 @@ bare~1010b
 
 ## Demo decommission and rewrite ownership
 
-Decommission demo numbers `005`, `019`, `028`, `071`, `093`, and `103` as complete numbered units: Ano, Nihongo, BQN, registry, expected output, manifest, README claim, and any golden sibling. Do not patch their old outputs in place or count a surviving sibling as evidence.
-
-Rewrite them only after the overlay implementation lands. New witnesses must prove fallback, shadowing, rebinding between steps, deletion, bare-name survival, and statement snapshots. Demo `028` also depends on `03`; demos `071` and `093` also depend on `99`. Each number is counted once in the global quarantine ledger in `TODO.md`.
-
-Rewritten and returned 2026-08-03: `005` (overlay-first lookup, same-stem shadowing and bare survival, the `^cursor` cold default on an elided first statement, `!name` versus `!^name`, and static alias-mask fallback), `019` (sequenced verbs behind one frozen snapshot — two sigiled statements, one barrier — and negation of the resolved mask), `028` (reductions over live scopes with the identity/no-row split, riding `03`), and `103` (native exact-byte stems beside the ASCII case fold). Their sidecars are minted by `kore alias` against their own registries, so the persisted-environment policy is the fixture format itself; install, rebind, and delete between barriers stay pinned by the Steel and Kore suites, which is where host transitions are drivable. `071` and `093` stay out until `99`.
+Demos `005`, `019`, `028`, and `103` returned as complete numbered units with real `.reg.aliases` fixtures, revised Ano/Nihongo programs, explanatory BQN, expected state, and README claims. Together with the host/API lifecycle tests they prove absent-entry fallback, same-stem shadowing, rebinding and deletion across barriers, bare-name survival, resolver input freezing, and native alias keys. Demos `071` and `093` remain complete-unit quarantined because both also depend on `99`; they are counted once in the global 56-demo ledger.
 
 ## Completion gate
 
@@ -131,4 +127,4 @@ Rewritten and returned 2026-08-03: `005` (overlay-first lookup, same-stem shadow
 - [X] DONE — One statement cannot observe two alias-environment or host-input versions; resolver-backed deictics may rerun only against that frozen snapshot.
 - [X] DONE — Replay and save/reload reproduce the same observations.
 - [X] DONE — The three alias mechanisms are named and tested separately in code and documentation.
-- [X] DONE for `005`, `019`, `028`, and `103` — each passes Steel's quarantine-aware harness (run, twin emission, expectations) and `005` additionally runs through Kore's own runner-and-demux path in a Kore-side test; `071` and `093` remain out of the active evidence surface until `99` lands.
+- [X] DONE for every non-`99` unit — rewritten demos `005`, `019`, `028`, and `103` pass through Steel, Kore sidecar loading, Ano/Nihongo parity, and BQN; `071` and `093` await their independent spatial prerequisite.

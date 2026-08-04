@@ -9,31 +9,30 @@ The world is a value on a tick axis. One tick is one rule barrier plus the queue
 
 kdb+ partitions tables by date and answers "as of" with `aj`; Anoptic can partition columns by tick. Sealed ticks are immutable, which buys a strong claim: a read against tick t−k cannot intersect the current barrier's write footprint, because the partition it reads is closed. History reads are read-side by construction — the same shape as the generator-subclause argument, and a foundations-grade claim once stated precisely.
 
-Ground to work out:
+Rulings:
 
-- The temporal-read surface. Something must mark "as of t−1" on a predicate or a gather. Options: a tick scope on `@` (`@ t-1`, but `@` already carries two meanings), a dedicated particle, or explicit keying off the axis. The Japanese tiebreaker cuts here: time in Japanese is case-marked — に on time points, から/まで on ranges, た for the past — so the nihongo answer is that history is a case role, not a function call. に is already claimed by the effect frame; that collision is real and needs writing out.
-- Window reads. "Damage taken over the last 60 ticks" is q's `wj`: a fold along the tick axis per entity. The history habitat carries a declared tick order, so window folds are §12 folds over one more ordered domain, not a new form. Entity lineage still determines which history fiber belongs to which current row. To be worked, not assumed.
-- Retention. Full history, ring buffer of k ticks, or keyframe plus replay-from-log. Replay makes history recomputable — the Nix insight again — provided every trusted input is retained alongside the log.
-- The host binding. History columns are the readonly data-store's natural cargo: written by the clock, predicated on by scripts, never a scatter target.
-- Identity via the axis. The as-of join answer to "the same bandit as last tick" is recorded in the spec's Identity entry; if the temporal surface exists, that entry's third option gets its syntax for free.
+- The temporal-read surface is relational, not a new operator. The clock prelude registers `ago(k)`, a stable-keyed functional relation from each current entity to its row at sealed tick t−k, and `window(k)`, a stable-keyed ordered fiber over ticks [t−k,t). `ago(1).Health` is the same entity's last sealed health; `+/ window(60)'.Damage` is damage over its last sixty ticks. Existing dot, tick, fold, scope, and lineage laws do all the work. Japanese uses the ordinary genitive relation, 一刻前の体力, rather than overloading effect-side に.
+- A history partition is immutable and readonly. The clock alone appends it at tick seal; scripts may gather and predicate over it but never scatter into it. Functional `ago` is silent when the stable key did not exist at that tick, and `window` simply has a shorter fiber at birth.
+- Logical retention is part of the mission lock: a declared horizon h makes every query with k≤h reproducible. Physical storage is a materialized ring plus content-addressed checkpoints and the complete trusted-input/command log; the host may replay missing sealed partitions without changing answers. A query beyond the declared horizon refuses instead of silently shortening. Full history is h=∞, not a different semantics.
+- Identity across ticks is therefore extensional data. Stable keys and `ago` answer “the same bandit as last tick”; no predicate result or selection handle survives the barrier.
 
 ## The Noita reading (missions in emergent worlds)
 
 The falling-sand world is the friendly case, and the claims here should be tested against it. Materials are fields on one named lattice habitat; per-material behavior is standing rules over explicit neighborhood relations and boundaries; and a quest in such a world is a predicate over emergent state — "every gold deposit in the lake has melted" is address-by-description with no scripting glue, the selection is the objective. Repeated ticks must preserve the field habitat and rank.
 
-Ground to work out:
+Rulings:
 
-- Stage advance and retraction. A stage rule must withdraw itself on firing; the retraction surface is the spec's open question and the mission register is where it earns its answer. What the register owes: install, withdraw, and a stance on rules that install rules — which is the staging/quotation question, not a new one.
-- Generated missions. Host callbacks (`fib`, noise, spatial queries) key content off indexes; the generator subclause would bring bounded corecursion in-calculus. Both live in the Recurrences entry. The mission case sharpens the requirement: generation must be deterministic per seed or replay dies.
-- The mission file format. Registry declarations, defs, standing rules, a schedule, a seed. Beyond that it owes a tick-0 snapshot reference, input references, and version pinning — the lockfile of a mission.
+- Stage advance and retraction are separate barrier records. A named stage rule advances data; after that tick seals, the schedule records `undef stageN` before installing the next stage's rules. Rules never install or retract rules from inside their shared effect barrier.
+- Generated missions stay host-side registered functions, not a generator subclause. Every generator declares a semantic version, closed input signature, seed stream, and deterministic output; the mission lock pins all four. An unseeded or environment-reading callback is not replayable and cannot enter a mission.
+- A `.mission` file is a host manifest, not Ano code as data. It pins the schema fingerprint, compiler/runtime semantic version, tick-0 snapshot digest, ordered rule/command bundle digests, tick schedule, root seed plus named seed streams, trusted-input log digests, history horizon, and checkpoint policy. Ano source remains ordinary referenced text. Kore may inspect and diff manifests; publication or hot-swap is one validated barrier transaction, never an expression value.
 
 ## The transformation reading (F itself)
 
-F is the merge of the installed rule set under the one rule barrier — the `;` commutation law lifted to the whole program. Two questions fall out. Whether F is nameable — a mission as a value the console can inspect, diff, and hot-swap — is the staging/quotation question wearing its most useful clothes. And time-travel debugging comes free once partitions exist: the console querying tick t is the distal demonstrative pointed at the past, and the こそあど reading extends — その時 at that time, あの時 back then, the shared-knowledge あ again. The nihongo doc gets a temporal-deixis section when this firms up.
+F is the merge of the installed rule set under the one rule barrier — the `;` commutation law lifted to the whole program. F is nameable only as a schema-stamped host plan and mission-manifest digest, never as an Ano string or first-class code value. Kore may inspect, diff, validate, and atomically hot-swap such plans at a barrier. Time-travel debugging follows from sealed partitions: the console querying tick t is the distal demonstrative pointed at the past, and the こそあど reading extends — その時 at that time, あの時 back then, the shared-knowledge あ again.
 
 ## Next steps
 
-- A demos/mission/ cluster: a three-stage scenario as a tick-loop fold in BQN — stage rules, retraction on advance, replay determinism asserted (same pinned inputs, same trajectory), an as-of join answering last-tick identity.
-- State the sealed-partition claim (history reads never meet the barrier) precisely enough for proofs/foundations.md.
-- Pick a provisional temporal-read surface so examples can be written; mark it provisional.
-- Nihongo: temporal case marking (に/から/まで/た) and こそあど over the time axis.
+- Implement the clock-prelude `ago(k)` and `window(k)` relationship families with stable-key lineage, horizon refusal, and immutable partition stamps.
+- Add the sealed-partition noninterference theorem and keyed as-of/fiber laws to `proofs/foundations.md`.
+- Implement and validate the line-oriented `.mission` lock manifest, then add a three-stage replay demo with explicit `undef`, deterministic seed streams, last-tick identity, and window aggregation.
+- Add Nihongo temporal genitives and こそあど examples without adding a temporal keyword or reclaiming effect-side に.

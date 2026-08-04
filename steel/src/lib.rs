@@ -7,6 +7,7 @@ pub mod alias;
 pub mod emit;
 pub mod fs;
 pub mod lex;
+pub mod migration;
 pub mod num;
 pub mod parse;
 pub mod reducer;
@@ -33,10 +34,7 @@ pub struct Diag {
 impl Diag {
     // Inputs: byte-exact message. Output: a refusal — exit code 2, the module-error code.
     pub fn refuse(msg: impl Into<String>) -> Diag {
-        Diag {
-            msg: msg.into(),
-            code: 2,
-        }
+        Diag { msg: msg.into(), code: 2 }
     }
 }
 
@@ -68,10 +66,7 @@ pub struct Interner {
 impl Interner {
     // Output: a pool with "" pre-interned as Symbol::EMPTY.
     pub fn new() -> Interner {
-        let mut it = Interner {
-            map: std::collections::HashMap::new(),
-            spellings: Vec::new(),
-        };
+        let mut it = Interner { map: std::collections::HashMap::new(), spellings: Vec::new() };
         let e = it.intern("");
         debug_assert_eq!(e, Symbol::EMPTY);
         it
@@ -119,7 +114,7 @@ pub enum TokKind {
     Wild,
     // structure
     Comma,
-    Arrow, // =>
+    Arrow,  // =>
     Semi,
     PipeGt, // |>
     Amp,
@@ -155,6 +150,7 @@ pub enum TokKind {
     Iota,   // til
     // keywords (closed set; GRAMMAR.md)
     Def,
+    Undef,
     Spawn,
     AtKw, // at
     To,
@@ -168,7 +164,7 @@ pub enum TokKind {
     Grade,
     FoldKw, // fold
     ScanKw, // scan
-    Cross,
+Cross,
     Expand,
 }
 
@@ -222,6 +218,7 @@ impl TokKind {
             TokKind::ScanOp => "T_SCANOP",
             TokKind::Iota => "T_IOTA",
             TokKind::Def => "T_DEF",
+            TokKind::Undef => "T_UNDEF",
             TokKind::Spawn => "T_SPAWN",
             TokKind::AtKw => "T_ATKW",
             TokKind::To => "T_TO",
@@ -330,146 +327,58 @@ impl Node {
 pub enum NodeKind {
     // atoms
     Num(f64),
-    Counter {
-        val: f64,
-        unit: Symbol,
-    }, // 3mo: num=value, name=unit
-    Sym(Symbol),  // :Name, sigil stripped by lexer
-    Str(Symbol),  // body, no escapes
-    Name(Symbol), // surface spelling, resolved at emit
+    Counter { val: f64, unit: Symbol }, // 3mo: num=value, name=unit
+    Sym(Symbol),                        // :Name, sigil stripped by lexer
+    Str(Symbol),                        // body, no escapes
+    Name(Symbol),                       // surface spelling, resolved at emit
     // ^name dynamic-alias request, sigil stripped. `look` is the name lowering resolves (the
     // stem on bare fallback, the target on an overlay hit); `req` is always the requested stem,
     // so a refusal can still spell `^req` after the overlay moved the lookup elsewhere.
-    Alias {
-        look: Symbol,
-        req: Symbol,
-    },
-    Wild, // _
+    Alias { look: Symbol, req: Symbol },
+    Wild,                               // _
     // expressions
     Not(Box<Node>),
     And(Box<Node>, Box<Node>),
     Or(Box<Node>, Box<Node>),
-    Cmp {
-        op: CmpOp,
-        l: Box<Node>,
-        r: Box<Node>,
-    },
-    CmpAny {
-        name: Symbol,
-    }, // C N_CMP op '_', kids[0]=NAME — the presence-any tuple element (TwoHanded _)
-    Arith {
-        op: ArithOp,
-        l: Box<Node>,
-        r: Box<Node>,
-    },
-    Scope {
-        l: Box<Node>,
-        r: Box<Node>,
-        origin: Option<Box<Node>>,
-    }, // l @ r; origin = anchored-frame kids[2]
-    Hop {
-        l: Box<Node>,
-        r: Box<Node>,
-    }, // l . r; r is Name, SetHop (tick rewrite), or the chain nests in l
-    SetHop {
-        rel: Symbol,
-    }, // name'; C kids[0] was the same N_NAME — the Symbol carries it
-    Call {
-        callee: Symbol,
-        args: Vec<Node>,
-    },
+    Cmp { op: CmpOp, l: Box<Node>, r: Box<Node> },
+    CmpAny { name: Symbol }, // C N_CMP op '_', kids[0]=NAME — the presence-any tuple element (TwoHanded _)
+    Arith { op: ArithOp, l: Box<Node>, r: Box<Node> },
+    Scope { l: Box<Node>, r: Box<Node>, origin: Option<Box<Node>> }, // l @ r; origin = anchored-frame kids[2]
+    Hop { l: Box<Node>, r: Box<Node> }, // l . r; r is Name, SetHop (tick rewrite), or the chain nests in l
+    SetHop { rel: Symbol },             // name'; C kids[0] was the same N_NAME — the Symbol carries it
+    Call { callee: Symbol, args: Vec<Node> },
     // op carries the SURFACE spelling until normalize resolves the head against the operand
     // carrier and rebinds it to the descriptor's canonical spelling (reducer::resolve_head);
     // @scope binds INSIDE operand as Scope. Count and average leave as prefix-machine rewrites.
-    Fold {
-        op: Symbol,
-        operand: Box<Node>,
-    },
-    ScanExpr {
-        op: Symbol,
-        operand: Box<Node>,
-    },
-    ScanAlong {
-        op: Symbol,
-        col: Box<Node>,
-        order: Box<Node>,
-    },
-    IotaX(Box<Node>), // til expr
-    Shape(Vec<Node>), // 1-2 dims, each Num or Wild
-    Tuple(Vec<Node>), // presence tuple or point literal; context decides at emit
-    To {
-        shape: Box<Node>,
-        poured: Option<Box<Node>>,
-    }, // to shape; poured = board-literal Str
-    Grade {
-        key: Box<Node>,
-        desc: bool,
-    },
-    Top {
-        k: f64,
-        inner: Box<Node>,
-    },
-    Pipe {
-        src: Box<Node>,
-        stages: Vec<Node>,
-    },
-    OrderBy {
-        key: Box<Node>,
-        desc: bool,
-    },
-    Take {
-        k: f64,
-    },
+    Fold { op: Symbol, operand: Box<Node> },
+    ScanExpr { op: Symbol, operand: Box<Node> },
+    ScanAlong { op: Symbol, col: Box<Node>, order: Box<Node> },
+    IotaX(Box<Node>),  // til expr
+    Shape(Vec<Node>),  // 1-2 dims, each Num or Wild
+    Tuple(Vec<Node>),  // presence tuple or point literal; context decides at emit
+    To { shape: Box<Node>, poured: Option<Box<Node>> }, // to shape; poured = board-literal Str
+    Grade { key: Box<Node>, desc: bool },
+    Top { k: f64, inner: Box<Node> },
+    Pipe { src: Box<Node>, stages: Vec<Node> },
+    OrderBy { key: Box<Node>, desc: bool },
+    Take { k: f64 },
     Expand(Box<Node>),
-    CrossV {
-        f: Symbol,
-        a: Box<Node>,
-        b: Box<Node>,
-    },
-    Binder {
-        name: Symbol,
-        source: Box<Node>,
-    }, // a <- Source
+    CrossV { f: Symbol, a: Box<Node>, b: Box<Node> },
+    Binder { name: Symbol, source: Box<Node> }, // a <- Source
     // effects
-    EAssign {
-        op: AssignOp,
-        target: Box<Node>,
-        rhs: Box<Node>,
-    }, // target: Name or Hop (pos.x)
+    EAssign { op: AssignOp, target: Box<Node>, rhs: Box<Node> }, // target: Name or Hop (pos.x)
     EAdd(Symbol), // +Comp
     EDel(Symbol), // -Comp
     EDespawn,     // ~
-    ESpawn {
-        what: Box<Node>,
-        count: Option<Box<Node>>,
-        at: Option<Box<Node>>,
-    },
-    EVerb {
-        name: Symbol,
-        args: Vec<Node>,
-    },
-    EVia {
-        f: Symbol,
-        col: Box<Node>,
-    }, // fn via Col; col is a Name node
+    ESpawn { what: Box<Node>, count: Option<Box<Node>>, at: Option<Box<Node>> },
+    EVerb { name: Symbol, args: Vec<Node> },
+    EVia { f: Symbol, col: Box<Node> }, // fn via Col; col is a Name node
     // statements
-    Stmt {
-        sel: Option<Box<Node>>,
-        effects: Vec<Node>,
-        rule: bool,
-        cont: bool,
-        elided: bool,
-    },
-    DefStmt {
-        name: Symbol,
-        body: Box<Node>,
-    }, // body may be Stmt{rule} for standing rules
+    Stmt { sel: Option<Box<Node>>, effects: Vec<Node>, rule: bool, cont: bool, elided: bool },
+    DefStmt { name: Symbol, body: Box<Node> }, // body may be Stmt{rule} for standing rules
+    UndefStmt { name: Symbol }, // explicit standing-rule retraction at a barrier
     Query(Box<Node>),
-    Compr {
-        sel: Box<Node>,
-        effect: Box<Node>,
-        rest: Vec<Node>,
-    }, // rest: Binders and filter exprs in source order
+    Compr { sel: Box<Node>, effect: Box<Node>, rest: Vec<Node> }, // rest: Binders and filter exprs in source order
     Program(Vec<Node>),
 }
 
@@ -519,6 +428,7 @@ impl NodeKind {
             NodeKind::EVia { .. } => 37,
             NodeKind::Stmt { .. } => 38,
             NodeKind::DefStmt { .. } => 39,
+            NodeKind::UndefStmt { .. } => 43,
             NodeKind::Query(..) => 40,
             NodeKind::Compr { .. } => 41,
             NodeKind::Program(..) => 42,
@@ -580,60 +490,27 @@ pub enum RegEntryKind {
     // spawn mints, effects never assign. pres: optional presence mask, n values.
     // rng: the declared `range <col> <lo> <hi>` bounds — a value refinement the barrier
     // clamps writes into and the loader seals data at rest against (num-family only).
-    Col {
-        ty: ColType,
-        uniq: bool,
-        nums: Vec<f64>,
-        syms: Vec<String>,
-        pres: Option<Vec<f64>>,
-        rng: Option<(f64, f64)>,
-    },
+    Col { ty: ColType, uniq: bool, nums: Vec<f64>, syms: Vec<String>, pres: Option<Vec<f64>>, rng: Option<(f64, f64)> },
     // Lattice field, lat_w*lat_h values; no pres, no uniq (load refuses both).
-    Field {
-        ty: ColType,
-        nums: Vec<f64>,
-        syms: Vec<String>,
-        rng: Option<(f64, f64)>,
-    },
+    Field { ty: ColType, nums: Vec<f64>, syms: Vec<String>, rng: Option<(f64, f64)> },
     // Functional rel: n values, -1 dangling; key_of = declared unique key column (canonical
     // spelling) or None = keyed to the row index.
-    Rel {
-        targets: Vec<f64>,
-        key_of: Option<String>,
-    },
-    // Set-valued rel: fibers as written (count NOT checked against n). inv_of = the rel word
+    Rel { targets: Vec<f64>, key_of: Option<String> },
+    // Set-valued rel: exactly n fibers as written. inv_of = the rel word
     // as written when this is an inverse read (fibers recomputed at load, never dumped).
-    SRel {
-        fib: Vec<Vec<f64>>,
-        inv_of: Option<String>,
-        key_of: Option<String>,
-    },
+    SRel { fib: Vec<Vec<f64>>, inv_of: Option<String>, key_of: Option<String> },
     // A static alias mask: a stored mask VALUE (the `alias` line) — not a spelling alias (that
     // table is Registry.aliases) and not the dynamic ^name overlay.
-    AliasMask {
-        mask: Vec<f64>,
-    },
+    AliasMask { mask: Vec<f64> },
     // Named binding: entity/num 1 value, point 2, mask n, vec any count.
-    Bind {
-        kind: BindKind,
-        vals: Vec<f64>,
-    },
+    Bind { kind: BindKind, vals: Vec<f64> },
     // Registered fn; body = the raw .reg line tail verbatim (spaces preserved), None when bodyless.
-    Fn {
-        body: Option<String>,
-    },
+    Fn { body: Option<String> },
     // Derived tag: the equality mask over the live carrier column, recomputed at each use.
     // col = the carrier word AS WRITTEN; carrier_ty = the carrier's type; sym value exact bytes.
-    Tag {
-        col: String,
-        carrier_ty: ColType,
-        num: f64,
-        sym: Option<String>,
-    },
+    Tag { col: String, carrier_ty: ColType, num: f64, sym: Option<String> },
     // Registered archetype (the .reg `def` line): spawn fill layer one.
-    Proto {
-        fields: Vec<ProtoField>,
-    },
+    Proto { fields: Vec<ProtoField> },
 }
 
 // One registry entry. defval lives HERE, not inside Col: the C `default` line has no kind

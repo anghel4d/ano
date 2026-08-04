@@ -2,6 +2,18 @@
 
 Small worlds, one crossing class each, read by `src/check-trace.sh`. Every fixture pins its post-state with `--! expect` so the parity leg can prove that `--trace` changed no value, only the 0x1F stream beside it.
 
+The machine grammar is deliberately presentation-free:
+
+| record | semantic phase | domain | rule |
+|---|---|---|---|
+| `RELATION c origin -> sink IS DEAD ! USE id PREDICATE SOURCE` | predicate | source `X` | every evaluated valid non-`-1` target that fails foundness |
+| `RELATION c origin -> sink IS DEAD ! USE id EFFECT SELECTED` | effect | selected `S` | the same test only after selection restriction |
+| `FIBER c origin IS EMPTY ! USE id PREDICATE SOURCE` | predicate | source `X` | empty identityless fiber use in a predicate |
+| `FIBER c origin IS EMPTY ! USE id EFFECT SELECTED` | effect | selected `S` | empty identityless fiber use in an effect |
+| `TRACE-USE id site:line phase domain c` | either | as declared | stable source-use declaration, one per crossing |
+
+`-1` is the sole silent functional no-link sentinel. Any other carrier-valid target is ordinary data and reports when dead; carrier-invalid storage refuses before execution. Events are ordered by statement, textual use, then stable source identity. Distinct crossings stay distinct. Steel prefixes each line with 0x1F; Kore removes only that byte and places the exact remainder in history. Query tags use 0x1D, saved world records use 0x1E, and no trace line may enter either channel. Presentation may aggregate only downstream, must expose a count, and may change neither exit status nor world state; Kore currently preserves the unaggregated machine stream.
+
 The naming is `<case>.ano` beside `<case>-world.reg`, matching the `src/refusals/` convention.
 
 | fixture | what it witnesses |

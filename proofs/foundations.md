@@ -208,6 +208,15 @@ The three checked milestones discharge these statements:
 10. A heterogeneous `Bundle` admits `n` carrier types on one shared query domain only through sealed fixed/located-field lineage, exact registered weighted interpolation rows with their value law, or certified present live-position rows. `EntityPositionEffect.apply_hit_registered_inputs` composes that n-ary row into the exact point written through an injective live destination; the effect also proves miss, fixed-field, population, and well-formedness laws. Registered lattice assignment currently proves field-level hit and miss only.
 11. Guarded negative witnesses reject foreign equal-shaped habitats and frames, local vectors in world slots, rows as cell references, layouts and raw interpolation legs as lineage, unregistered affine embeddings, foreign-frame interpolation, and raw functions as registered bundle inputs.
 
+The non-spatial compiler bridge accounts for these statements:
+
+1. OPEN — A canonical certificate checker is the sole constructor of `Rewrite<Law>`; checking binds law/version, exact typed signature and endpoints, schema fingerprint, normalized proposition, checker version, and proof payload, and any mismatch invalidates cached authority.
+2. [X] MET — Runtime promotion preserves the operator-specific denotation, destination checking preserves the declared storage carrier, and the extended-real boundary admits finite values and `±∞`, identifies both IEEE signed zeros with the sole Ano zero, and excludes every NaN before world publication.
+3. [X] MET — `cross f A B` lowers to the product domain A×B without raveling, every pure wrapper retains that lineage, and no entity-column scatter accepts it without an explicit compatible destination map.
+4. [X] MET — Every scan result carries the ordered world-row domain of its value column; inverse grading preserves value/witness alignment, and scatter is admitted only when that domain equals the selected destination rows exactly, not merely in cardinality.
+5. [X] MET — Every guard residual crossing a discarded speculative buffer is closed over durable world bindings; a residual naming any probe-local temporary refuses before emission.
+6. OPEN — Sealed history partitions are write-disjoint from the live barrier; stable-keyed `ago(k)` is a partial functional reindexing, `window(k)` is an ordered history fiber, and reconstruction within a declared retention horizon is observationally equal to a materialized partition.
+
 The stronger spatial theory and implementation bridge still owe these statements:
 
 1. Bounded integer-lattice chart and lookup round trips, chart injectivity, displacement lookup, and boundary policies.
@@ -223,7 +232,7 @@ The stronger spatial theory and implementation bridge still owe these statements
 
 ## 16. Current Steel findings
 
-Steel does not yet enforce these obligations. `Frame` is transient statement-emitter state inferred from surface syntax; registry fields are flattened to `lat_w * lat_h`; `Ev` carries value-shape flags but no habitat; `emit_name_val` accepts entity columns and lattice fields through the same branch; assignment checks BQN lengths only when the generated program happens to fault. Save preserves the registry's one global `lattice w h` header but no expression carries that identity through the compiler.
+Steel now enforces the non-spatial promotion, numeric-publication, product-lineage, exact scan-domain, and closed-guard boundaries above. It still has no general nominal habitat type in `Ev`: `Frame` is transient statement-emitter state inferred from surface syntax, registry fields flatten to `lat_w * lat_h`, and entity columns and lattice fields still enter through the same value branch. Save preserves the registry's one global `lattice w h` header but no expression carries that spatial identity through the compiler.
 
 The one-step corpus therefore contains false witnesses. Repeating computed-line once grows the entity world from 12 to 44 and the second assignment faults at `12 ≠ 44`. Repeating spatial top-k once grows 64 entities to 72 and the second lattice mask faults against the 72-row column. Conway repeats because its explicit `moore` fibers and 25-cell field buffers reconstruct the needed adjacency; it does not witness rank-preserving field semantics in the compiler.
 

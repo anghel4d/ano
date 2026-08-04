@@ -222,12 +222,18 @@ fn hex_round(mut m: u64, mut sticky: bool, mut e2: i64, neg: bool) -> f64 {
     }
 }
 
-// Inputs: a word. Output: Some(value) iff strtod consumes the WHOLE word and the result is
-// finite; None on empty, trailing junk, or non-finite. The one number gate: registry.c's
-// wnum and main.c's save_num are both exactly this predicate.
+// Inputs: a word. Output: Some(value) iff the whole word is an extended-real f64: finite or
+// signed infinity, never NaN. Unicode infinity is the backend wire spelling; `inf`/`infinity`
+// are the canonical text spellings. Either signed input zero canonicalizes to Ano's sole zero.
+// None on empty, trailing junk, or NaN.
 pub fn wnum(s: &str) -> Option<f64> {
+    match s {
+        "∞" | "+∞" => return Some(f64::INFINITY),
+        "-∞" | "¯∞" => return Some(f64::NEG_INFINITY),
+        _ => {}
+    }
     let (v, n) = strtod(s);
-    (n == s.len() && n != 0 && v.is_finite()).then_some(v)
+    (n == s.len() && n != 0 && !v.is_nan()).then_some(if v == 0.0 { 0.0 } else { v })
 }
 
 // Inputs: precision p >= 1, a double. Output: printf "%.*g" bytes, glibc-exact: p significant
@@ -281,19 +287,20 @@ fn strip_zeros(s: &str) -> &str {
 
 // Inputs: a double. Output: Some(i) iff -9e15 <= x <= 9e15 and x == trunc(x) — the shared
 // %lld fast-path guard of dnum and emit's numLit (range check BEFORE the cast; the C cast is
-// UB out of range). Note: dnum additionally excludes -0.0 (its own check); numLit does not.
+// UB out of range).
 pub fn int_fast(x: f64) -> Option<i64> {
     ((-9e15..=9e15).contains(&x) && x == x.trunc()).then(|| x as i64)
 }
 
-// Inputs: a finite double. Output: text strtod parses back bit-exact (dump -> load -> dump
-// fixpoints). Integer fast path (int_fast and not -0.0): plain "%lld" digits. Else the first
-// p in 1..=17 where fmt_g(p, x) round-trips through strtod == x. -0.0 prints "-0".
+// Inputs: an extended-real double. Output: canonical Ano text: either machine zero spells `0`,
+// every other value round-trips exactly through wnum, and dump -> load -> dump is a fixpoint.
+// Integers use the fast path; other values take the first p in 1..=17 where fmt_g round-trips.
 pub fn dnum(x: f64) -> String {
+    if x == 0.0 {
+        return "0".to_string();
+    }
     if let Some(i) = int_fast(x) {
-        if !(x == 0.0 && x.is_sign_negative()) {
-            return i.to_string();
-        }
+        return i.to_string();
     }
     let mut s = String::new();
     for p in 1..=17 {
@@ -303,4 +310,25 @@ pub fn dnum(x: f64) -> String {
         }
     }
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn number_boundary_is_extended_real_without_nan() {
+        assert_eq!(wnum("inf"), Some(f64::INFINITY));
+        assert_eq!(wnum("-infinity"), Some(f64::NEG_INFINITY));
+        assert_eq!(wnum("∞"), Some(f64::INFINITY));
+        assert_eq!(wnum("¯∞"), Some(f64::NEG_INFINITY));
+        assert!(wnum("nan").is_none());
+        assert!(wnum("nan(payload)").is_none());
+        let zero = wnum("-0").expect("zero");
+        assert_eq!(zero, 0.0);
+        assert!(!zero.is_sign_negative());
+        assert_eq!(dnum(-0.0), "0");
+        assert_eq!(dnum(f64::INFINITY), "inf");
+        assert_eq!(dnum(f64::NEG_INFINITY), "-inf");
+    }
 }

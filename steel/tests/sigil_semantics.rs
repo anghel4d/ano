@@ -273,6 +273,38 @@ fn static_alias_mask_fixture_stays_static() {
     assert_ne!(ok("^cursor , Silver = 0", &reg, &env), base);
 }
 
+// The cold ゼロが default is the exact `^cursor` resolver request. It follows overlay-first
+// lookup with bare fallback; once an antecedent exists, later elided effects reuse its saved mask
+// and do not consult a changed cursor merely because the source omitted the subject again.
+#[test]
+fn cold_elided_subject_uses_dynamic_cursor_then_bare() {
+    let reg = registry();
+    let empty = AliasEnvironment::for_registry(&reg);
+    assert_eq!(
+        ok("+Flag", &reg, &empty),
+        ok("^cursor , +Flag", &reg, &empty)
+    );
+
+    let mut env = AliasEnvironment::for_registry(&reg);
+    env.install_mask(&reg, "cursor", &[0.0, 1.0, 0.0]).unwrap();
+    assert_eq!(ok("+Flag", &reg, &env), ok("^cursor , +Flag", &reg, &env));
+    assert_ne!(ok("+Flag", &reg, &env), ok("cursor , +Flag", &reg, &env));
+
+    // Only the first statement is cold. The second inherits the first statement's mask.
+    assert_eq!(
+        ok("Gold > 1 , Silver = 0\n+Flag", &reg, &env),
+        ok("Gold > 1 , Silver = 0\n, +Flag", &reg, &env)
+    );
+}
+
+#[test]
+fn cold_continuations_still_require_an_antecedent() {
+    let reg = registry();
+    let env = AliasEnvironment::for_registry(&reg);
+    assert!(err(", +Flag", &reg, &env).contains("continuation with no antecedent"));
+    assert!(err("~", &reg, &env).contains("continuation with no antecedent"));
+}
+
 // The `^X` fallback routes through bare lookup, which applies the spelling-alias table.
 // Pins today's behavior; the overlay/spelling-table asymmetry is not decided here.
 #[test]
@@ -283,6 +315,40 @@ fn spelling_alias_control() {
         ok("X , Silver = 0", &reg, &env),
         ok("^X , Silver = 0", &reg, &env)
     );
+}
+
+
+#[test]
+fn entity_bind_mirror_reads_resolve_stable_keys() {
+    let mut reg = registry();
+    reg.ents.push(RegEntry {
+        name: "Id".to_string(),
+        defval: 0.0,
+        kind: RegEntryKind::Col {
+            ty: ColType::Num,
+            uniq: true,
+            nums: vec![10.0, 20.0, 30.0],
+            syms: Vec::new(),
+            pres: None,
+            rng: None,
+        },
+    });
+    reg.roles.push(("id".to_string(), "Id".to_string()));
+    let anchor = reg
+        .ents
+        .iter_mut()
+        .find(|entry| entry.name == "anchor")
+        .expect("anchor");
+    let RegEntryKind::Bind { vals, .. } = &mut anchor.kind else {
+        panic!("anchor binding");
+    };
+    vals[0] = 20.0;
+
+    let env = AliasEnvironment::for_registry(&reg);
+    let text = ok("anchor.Gold", &reg, &env);
+    assert!(text.contains("((⊑(id⊐20))⊑gold)"), "{}", text);
+    assert!(err("cursor.Gold", &reg, &env)
+        .contains("selection 'cursor' is not a unique entity mirror-read"));
 }
 
 // The synthetic materialization names are reserved for the emission that generates them.
@@ -546,8 +612,8 @@ fn trace_provenance_line() {
     );
 }
 
-// The ruled `^cursor` cold default (A4, todo/02): an elided or continuation statement with no
-// antecedent resolves its subject as `^cursor` — overlay first, bare fallback.  The overlay hit
+// The ruled `^cursor` cold default (A4, todo/02): an elided statement with no antecedent resolves
+// its subject as `^cursor` — overlay first, bare fallback.  The overlay hit
 // is byte-identical to spelling `^cursor` explicitly, and an unrelated overlay entry leaves the
 // bare-fallback plan byte-identical to the empty-overlay plan.
 #[test]
@@ -569,22 +635,11 @@ fn cold_default_is_alias_first_with_bare_fallback() {
         "the overlay entry moves the elided subject"
     );
 
-    // leading-comma continuation with no antecedent falls to the same default
-    assert_eq!(
-        ok(", Silver = 0", &reg, &env),
-        ok("^cursor , Silver = 0", &reg, &env),
-        "cold continuation is ^cursor"
-    );
-
     // bare fallback: no cursor stem in the overlay leaves the pre-overlay plan byte-identical,
     // even while an unrelated alias is installed
     let mut unrelated = AliasEnvironment::for_registry(&reg);
     unrelated.install_binding(&reg, "focus", "Gold").unwrap();
     assert_eq!(ok("+Flag", &reg, &empty), ok("+Flag", &reg, &unrelated));
-    assert_eq!(
-        ok(", Silver = 0", &reg, &empty),
-        ok(", Silver = 0", &reg, &unrelated)
-    );
 }
 
 // An antecedent wins over the cold default: only the first statement of a session lacks one, so
@@ -604,9 +659,8 @@ fn cold_default_defers_to_the_antecedent() {
     );
 }
 
-// With no antecedent, no overlay entry, and no bare cursor entry, the site still refuses with
-// the pinned diagnostic; and a world whose only cursor is the static AliasMask fixture keeps
-// reaching it through the unchanged bare fallback.
+// With no antecedent, no overlay entry, and no bare cursor entry, the site retains the sigiled
+// resolver request in its diagnostic; a static AliasMask fixture remains the bare fallback.
 #[test]
 fn cold_default_refusal_and_static_fixture_fallback() {
     let reg = registry();
@@ -619,9 +673,8 @@ fn cold_default_refusal_and_static_fixture_fallback() {
     bare.ents.retain(|e| e.name != "cursor");
     let none = AliasEnvironment::for_registry(&bare);
     assert!(
-        err("+Flag", &bare, &none)
-            .contains("elided subject with no antecedent and no ^cursor alias"),
-        "the refusal names both holes"
+        err("+Flag", &bare, &none).contains("unregistered mask name '^cursor'"),
+        "the refusal preserves the sigiled resolver request"
     );
 }
 
@@ -666,4 +719,56 @@ fn dynamic_masks_ride_the_static_alias_vehicle() {
             bare
         );
     }
+}
+
+// Stored selection values are extensional row data: a structural barrier filters them by the
+// despawn keep-mask, appends false for every newborn row, and saves that exact post-state.
+#[test]
+fn stored_masks_track_rows_and_save_exact_post_state() {
+    let mut reg = registry();
+    reg.ents.push(RegEntry {
+        name: "held".to_string(),
+        defval: 0.0,
+        kind: RegEntryKind::Bind {
+            kind: BindKind::Mask,
+            vals: vec![0.0, 1.0, 1.0],
+        },
+    });
+    reg.ents.push(RegEntry {
+        name: "Seed".to_string(),
+        defval: 0.0,
+        kind: RegEntryKind::Proto { fields: Vec::new() },
+    });
+    let env = AliasEnvironment::for_registry(&reg);
+    let emitted = plan_with(
+        "cursor , ~\nGold , spawn Seed\n",
+        &reg,
+        &env,
+        &Directives {
+            save: true,
+            ..Directives::default()
+        },
+    )
+    .unwrap();
+
+    for name in ["cursor", "held"] {
+        assert!(
+            emitted.lines().any(|line|
+                line.contains(&format!("{} ↩ (", name))
+                    && line.contains(&format!("/{}", name))),
+            "missing despawn filter for {}:\n{}",
+            name,
+            emitted
+        );
+        assert!(
+            emitted
+                .lines()
+                .any(|line| line.contains(&format!("{} ↩ ", name)) && line.contains("⥊0)")),
+            "missing false spawn append for {}:\n{}",
+            name,
+            emitted
+        );
+    }
+    assert!(emitted.contains("\"alias cursor\""), "{}", emitted);
+    assert!(emitted.contains("\"bindmask held\""), "{}", emitted);
 }

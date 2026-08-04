@@ -7,8 +7,8 @@ col v num 3 5 2 4 9 99 99 99 99
 col f bool 1 0 0 0 1 0 1 0 0
 col cCount int -1 -1 -1 -1 -1 -1 -1 -1 -1
 col cSum int -1 -1 -1 -1 -1 -1 -1 -1 -1
-col cAny int -1 -1 -1 -1 -1 -1 -1 -1 -1
-col cAll int -1 -1 -1 -1 -1 -1 -1 -1 -1
+col cAny bool 0 0 0 0 0 0 0 0 0
+col cAll bool 0 0 0 0 0 0 0 0 0
 col cAvg num -1 -1 -1 -1 -1 -1 -1 -1 -1
 col cPick int -1 -1 -1 -1 -1 -1 -1 -1 -1
 rel rto 5 5 7 7 7 -1 -1 -1 -1

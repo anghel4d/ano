@@ -1,6 +1,6 @@
 # 05 — registry border and runtime follow-ups
 
-Status: consolidated non-spatial registry/runtime backlog. The spatial placement seam and all spatial declaration design are owned by `99`, which remains the final implementation task.
+Status: the pre-spatial migration framework and Kore palette are implemented. The general registry taxonomy remains deliberately author-gated; the spatial placement seam and all spatial declaration design remain owned by `99`.
 
 ## The registry border
 
@@ -37,7 +37,7 @@ It is a host operation at a world barrier, never an Ano right-of-comma effect.
 
 ## Atomic `Σ → Σ′` migration protocol
 
-The concrete command spelling is open, but the protocol is not:
+The implemented host spelling is `kore migrate live.reg candidate.reg migration.map`; the protocol is:
 
 1. Parse the candidate registry independently.
 2. Validate it fully and mint a new schema identity/version.
@@ -52,7 +52,7 @@ The migration mechanism lives in Steel/Kore host commands, flags, or APIs. It do
 
 ### Migration acceptance
 
-Test compatible rename/ID preservation, carrier widening only when explicitly supported, declaration removal with live data, relationship endpoint changes, callable signature changes, dynamic aliases targeting migrated and removed entries, plan-cache invalidation, failed conversion rollback, save/reload after migration, and deterministic replay across the same migration event. Spatial endpoint and service migration cases are added by `99` through the same extension boundary.
+[X] DONE — Tests cover compatible rename/ID preservation, explicitly supported carrier widening, live-data removal, relationship endpoint changes, callable incompatibility and stale handles, migrated and removed alias targets, complete cache invalidation, failed conversion and partial-publication rollback, crash recovery, save/reload, and deterministic replay. Spatial endpoint and service cases remain assigned to `99` through the same extension boundary.
 
 ## Registry taxonomy, gated by author approval
 
@@ -75,7 +75,7 @@ The exact adjective/noun syntax proposed by older spatial notes is not approved 
 
 - `docs/ano-language.md` records the fixed-schema execution model and barrier-level schema replacement.
 - Registry documentation owns declaration syntax and the taxonomy above.
-- Open command spelling remains labeled open until implemented.
+- Any future command spelling remains labeled open until implemented.
 - No document claims a surface is supported merely because the loader can retain unknown text or unchecked metadata.
 - Every cache or serialized handle says which schema/version it belongs to.
 
@@ -83,18 +83,18 @@ The exact adjective/noun syntax proposed by older spatial notes is not approved 
 
 Derive Kore's palette from the shell theme without changing language semantics:
 
-1. Query terminal OSC 10 and OSC 11 at startup with a bounded, nonblocking response path.
-2. Parse and validate supported color response forms; ignore malformed or unsolicited replies.
-3. Derive readable accents and contrast from the reported foreground/background.
-4. Fall back deterministically to the existing forced dark canvas when the terminal does not answer, multiplexers filter the reply, or contrast is inadequate.
-5. Restore terminal state on every exit/refusal path and add pseudo-terminal tests for reply, timeout/no reply, malformed reply, and fallback.
+1. [X] DONE — Query terminal OSC 10 and OSC 11 at startup with a bounded, nonblocking response path.
+2. [X] DONE — Parse and validate supported color response forms; ignore malformed or unsolicited replies.
+3. [X] DONE — Derive readable accents and contrast from the reported foreground/background.
+4. [X] DONE — Fall back deterministically to the existing forced dark canvas when the terminal does not answer, multiplexers filter the reply, or contrast is inadequate.
+5. [X] DONE — Restore terminal state on every exit/refusal path and add pseudo-terminal tests for reply, timeout/no reply, malformed reply, and fallback.
 
 This item may land before `99`. Spatial view behavior itself remains in `99`.
 
 ## Completion gate
 
-- Registry and Ano syntax remain separate.
-- Every ordinary mutation is classified under one of the three ruled fixed-`Σ` arms, and no document claims placement writes are implemented before `99` lands and verifies them.
-- The `Σ → Σ′` framework is validated, cache-safe, atomic, replayable, and rollback-safe for the pre-spatial schema, with a typed extension boundary that `99` must use rather than bypass.
-- The registry taxonomy has explicit author-approved syntax and typed validation rather than inert metadata.
-- Kore theme probing is bounded and has a deterministic fallback.
+- [X] DONE — Registry and Ano syntax remain separate.
+- [X] DONE — Every ordinary mutation is classified under one of the three ruled fixed-`Σ` arms, and no document claims placement writes are implemented before `99` lands and verifies them.
+- [X] DONE — The `Σ → Σ′` framework is validated, cache-safe, atomic, replayable, and rollback-safe for the pre-spatial schema, with a typed extension boundary that `99` must use rather than bypass.
+- AUTHOR GATE — The registry taxonomy still needs explicit approval of exact syntax before typed validation can be implemented; no inert metadata has been added.
+- [X] DONE — Kore theme probing is bounded and has a deterministic fallback.

@@ -1,35 +1,20 @@
--- The scope of a fold can be a live alias: ^party is the sidecar's mask and ^empty selects nothing. Identity folds answer their registered identities on the empty scope; max/ and avg/ declare none and print no row at all (A12); #/ declares 0.
--- !^party negates the resolved mask, so the sigiled and negated golds partition the column's total of 210.
+-- Bare Whiterun is a registry mask; the sidecar shadows only ^Whiterun. The same fold descriptors consume both selections, and the empty identityless maximum contributes no row.
 --! registry ../registries/028-reductions.reg
 
---! out 150
-+/ Gold @ Nord
-
---! out 155
-+/ Gold @ ^party
-
 --! out 3
-#/ ^party
+#/ (Merchant & !Whiterun)
 
-def rest = !^party
+--! out 2
+#/ (Merchant & !^Whiterun)
 
---! out 55
-+/ Gold @ rest
+--! out 80
++/ Gold @ (Merchant & !Whiterun)
 
---! out 0.09375
-*/ (1 - Resist) @ Hits
-
---! out 0
-+/ Gold @ ^empty
-
---! out 1
-*/ (1 - Resist) @ ^empty
+--! out 150
++/ Gold @ (Merchant & !^Whiterun)
 
 --! out 0
-#/ ^empty
++/ Gold @ None
 
 --! out
-max/ Gold @ ^empty
-
---! out
-avg/ Gold @ ^empty
+max/ Gold @ None

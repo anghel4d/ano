@@ -21,6 +21,7 @@ fn alias_name(word: &str) -> &str {
 }
 
 fn load(path: &str) -> Result<(Registry, AliasEnvironment), String> {
+    crate::migrate::recover(path)?;
     let reg = registry::reg_load(path).map_err(|diag| diag.msg)?;
     let aliases = AliasEnvironment::load(sidecar_path(path), &reg).map_err(|diag| diag.msg)?;
     Ok((reg, aliases))
@@ -75,6 +76,10 @@ fn input_pairs(words: &[String]) -> Result<Vec<(String, String)>, String> {
 // no longer load, so a stale environment stays correctable from the host API.  Never automatic, and
 // the bare namespace is untouched.
 fn clear(path: &str) -> i32 {
+    if let Err(message) = crate::migrate::recover(path) {
+        eprintln!("kore alias: {}", message);
+        return 2;
+    }
     let reg = match registry::reg_load(path) {
         Ok(reg) => reg,
         Err(diag) => {

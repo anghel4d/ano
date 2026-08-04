@@ -47,11 +47,15 @@ The registry as the spec draws it binds downward, to the C host (Technical Expla
 
 The Sky Registry has two rows. A reducer registers an accumulator step and whatever laws it actually has. Identity licenses a value for the empty fold, associativity licenses unordered regrouping over a fixed traversal, and associativity plus commutativity license parallel/unordered execution that may discard traversal order; exact left accumulation on a declared order needs none of those proofs beyond a compatible step. These are capabilities pushed into the syntax, load-bearing, never guessed. And the merge certificates (§10, §11), disjoint footprints, the effect algebra, the guard-complement clause, are commutativity proofs injected into the compiler that license execution freedom. Naming the shelf tells you what else goes on it: commutativity certificates for registered verbs, associativity witnesses that license parallel scan trees without changing their declared order, rewrite laws like fold fusion, σ-pushdown, mask algebra.
 
-The failure modes are not symmetric, and that asymmetry is the open design question. A wrong axiom corrupts one gather. A wrong theorem miscompiles every statement it touches, silently. An axiom you can cheaply audit is still an axiom: debug builds can watchpoint undeclared columns the way the kernel fuzzes its trusted eBPF helpers. But a theorem wants a witness, and what witness a sky entry must carry is the question (Open Questions, The Sky Registry).
+The failure modes are not symmetric. A wrong axiom corrupts one gather; a wrong theorem silently miscompiles every statement it touches. The ruling is binary rewrite authority. Trusted host declarations and property tests may admit or diagnose Ground behavior, but no confidence grade grants a rewrite. A Sky law is usable only after a machine checker mints its sealed rewrite capability.
+
+## The certificate boundary
+
+A certificate is content-addressed by law identity and version, exact typed operation signature and endpoints, schema fingerprint, normalized proposition digest, proof-checker identity and version, and proof payload. Registration reruns the small checker and the optimizer receives only the resulting sealed `Rewrite<Law>`, never raw trust metadata. Cache keys contain the same tuple; schema replacement, signature drift, proposition drift, or checker-version drift invalidates the capability. Property tests remain valuable counterexample search and BQN may remain an explanatory witness, but neither can mint `Rewrite<Law>`.
 
 ## Communion is optional
 
-The Ground Registry is mandatory: a script can name nothing without it. The Sky above the prelude is not. The compiler carries its own small law table, the fold identities (§12) and the merge families (§10), and consulting that table is not communion: no prover in the loop, the compiler checks its own theorems the way it checks its own grammar. The Sibyl is visited only to extend the table. Registering a new law (a certified verb, a scan step, a fusion rewrite) owes a witness, once, at registration, off the hot path. The registrant pays the oracle's fee and every script thereafter uses the theorem for free, exactly how the reducer identities already work, since no script proves `+` is a monoid. The stance is gradual typing transposed to proofs. The mundane path stays mundane, and the ladder is priced per rung, per entry, only when climbed.
+The Ground Registry is mandatory: a script can name nothing without it. The Sky above the prelude is optional. The compiler's built-in fold identities and merge families are checked and sealed at build time; no prover runs on a script's hot path. Extending the table with a certified verb, scan law, or fusion rewrite pays the checker once at registration, and every schema-matching script thereafter reuses the sealed capability. Executing an uncertified operation remains mundane; only optimization freedom is withheld.
 
 ## The prototype path: ano embedded in Haskell
 
@@ -67,7 +71,7 @@ instance Merges 'Multiplicative 'Multiplicative    -- *= beside /=
 -- no Merges 'Additive 'Multiplicative: rejected by the type checker, not at emit
 ```
 
-The verification ladder is honest about what each rung buys. Vanilla GHC checks the schema, the footprints, and the family laws. The guard-complement clause is value-dependent (row-disjointness of two masks over a shared pre-state) and needs LiquidHaskell. The full contents of `proofs/foundations.md` need a dependent prover. Each rung of the ladder is a Sky Registry with a stronger witness format.
+The verification ladder is honest about what each rung buys. Vanilla GHC checks the embedding's schema indices and constructs candidate obligations. LiquidHaskell can discharge value-dependent refinements such as guard complement. The full contents of `proofs/foundations.md` need a dependent prover. These rungs are proof-construction and counterexample tools; production rewrite authority appears only when their result is translated to and accepted by the canonical certificate checker.
 
 The genre is Accelerate and Feldspar: embedded array languages in Haskell, typed deep embeddings with fast native backends. Ano's seat in the genre is exact: Accelerate is pure over a dead array, ano is pure over a live world with a commit barrier. The embedding admits agreement properties between the Haskell denotation and each backend.
 
@@ -81,9 +85,9 @@ The correspondence with the microarchitecture is tighter than the ISA suggests. 
 
 What proving buys, and what it does not. Barrier semantics makes intra-statement aliasing hazards statically absent, the thing autovectorizers burn their budget failing to prove in C, and SoA layout is native, so dependence and layout are provable and the compiler emits wide column operations without guessing. Latency is not provable: it is data-dependent (the cache miss), and Itanium died proving schedules statically. Claim the alias-freedom prize, and leave latency to the core.
 
-The code column. Von Neumann means code is data, but literal self-modifying code dies in the pipeline (instruction-cache invalidation, thousand-cycle penalties). The usable form is JIT synthesis into fresh columns. The fixed bytecode-VM/JIT target already anticipates it, and the staging question is its surface end (Open Questions, Staging). Church reduction as a columnar transform has an existence proof: the Reduceron, an FPGA graph-reduction machine that runs template instantiation as wide parallel memory operations, β-reduction lowered to gather/scatter.
+The code column. Von Neumann means code is data, but literal self-modifying code dies in the pipeline (instruction-cache invalidation, thousand-cycle penalties). The usable form is JIT synthesis into fresh columns through the accepted-plan boundary. The surface does not grow runtime quotation for it: `eval` stops at the compile-time literal splice. Church reduction as a columnar transform has an existence proof in the Reduceron, an FPGA graph-reduction machine that runs template instantiation as wide parallel memory operations, β-reduction lowered to gather/scatter.
 
-The endpoint, stated once. Register the machine itself as a world, code column, register column, memory column, and compilation becomes an ano query over it: gather λ-terms, scatter instructions. Specializing an ano evaluator written over the machine-world to a source program is the first Futamura projection, and machine code falls out as a scatter into the code column. Not a language with a compiler: a language whose compiler is a statement in the language. That this converges with so much prior work is the encouraging part. The pieces are each established, the composition is the bet. The spec entry is the record (Open Questions, The machine as a world). The first falsifiable step is the Haskell embedding above.
+The endpoint, stated once. Register the machine itself as a world, code column, register column, memory column, and compilation becomes an ano query over it: gather λ-terms, scatter instructions. Specializing an ano evaluator written over the machine-world to a source program is the first Futamura projection, and machine code falls out as a scatter into the code column. The pieces are each established; the composition remains the bet. The first falsifiable gate is the Haskell embedding above, followed by an agreement proof against the accepted-plan denotation. Failure ends this backend experiment and changes no Ano semantics.
 
 ## Lineage
 
@@ -100,7 +104,7 @@ The endpoint, stated once. Register the machine itself as a world, code column, 
 
 ## Status
 
-Doctrine, two registries, axioms below and theorems above, communion optional and priced at registration: adopted, recorded in the spec (Technical Explanation, Two faces; The maths). Prototype, the Haskell embedding: proposed, unstarted, the first falsifiable step. Hypothesis, the machine as a registered world: a hypothesis, not a roadmap. The spec's open questions (The Sky Registry; The machine as a world) are the record.
+Doctrine, two registries, axioms below and proof-carrying rewrites above: adopted. The canonical certificate tuple and binary authority rule are fixed; its checker and Steel bridge remain implementation work tracked by `proofs/foundations.md`. The Haskell embedding is the first falsifiable prototype. The machine as a registered world remains a research backend hypothesis, never a language roadmap.
 
 ## The speed claim, graded
 

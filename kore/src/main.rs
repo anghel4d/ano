@@ -3,6 +3,8 @@
 
 mod aliases;
 mod app;
+mod migrate;
+mod palette;
 mod registry_tx;
 mod sys;
 mod tables;
@@ -35,6 +37,9 @@ fn kore_main() -> i32 {
     if args.get(1).map(String::as_str) == Some("alias") {
         return aliases::run(&args[1..]);
     }
+    if args.get(1).map(String::as_str) == Some("migrate") {
+        return migrate::run(&args[1..]);
+    }
     let mut app = App::new();
     if args.len() >= 3 && args[1] == "--check" {
         let mut rc = 0;
@@ -53,7 +58,8 @@ fn kore_main() -> i32 {
                 "usage: kore [file.reg | file.ano]                    (bare: the demos rail)\n\
                  \x20      kore --check file.reg …                       (headless load+render report)\n\
                  \x20      kore --edit file.reg seg row col value        (headless cell splice)\n\
-                 \x20      kore alias file.reg list|set|mask|resolve|delete|clear (dynamic-alias admin)\n"
+                 \x20      kore alias file.reg list|set|mask|resolve|delete|clear (dynamic-alias admin)\n\
+                 \x20      kore migrate live.reg candidate.reg migration.map (schema barrier)\n"
             );
             return 2;
         }
@@ -382,6 +388,28 @@ mod demux_tests {
         assert_eq!(g.recs[0].value, b"42  \nmore"); // rstrip is tail-only; interior spaces stay
         assert_eq!(g.recs[1].label, b"weird");
         assert_eq!(g.recs[1].value, b"v");
+    }
+
+    // The machine trace reaches Kore byte-for-byte, sentinel stripped, in source/use order. It may
+    // be interleaved with a query record but never becomes part of that record or OUTPUTS.
+    #[test]
+    fn relationship_trace_is_exact_history_not_output() {
+        let mut app = App::new();
+        app.run_lines_set(b"+/ Gold\n");
+        cap_split(
+            &mut app,
+            b"\x1FRELATION mentor 13 -> 99 IS DEAD ! USE 0 PREDICATE SOURCE\n\x1Dq1@1\n42\n\x1FFIBER targets 11 IS EMPTY ! USE 1 EFFECT SELECTED\n\x1FTRACE-USE 0 s1:7 PREDICATE SOURCE mentor\n\x1FTRACE-USE 1 s2:8 EFFECT SELECTED targets\n",
+            0,
+            9,
+        );
+        assert_eq!(
+            app.out_log,
+            b"RELATION mentor 13 -> 99 IS DEAD ! USE 0 PREDICATE SOURCE\nFIBER targets 11 IS EMPTY ! USE 1 EFFECT SELECTED\nTRACE-USE 0 s1:7 PREDICATE SOURCE mentor\nTRACE-USE 1 s2:8 EFFECT SELECTED targets\n"
+        );
+        assert_eq!(app.qgroups.len(), 1);
+        assert_eq!(app.qgroups[0].recs.len(), 1);
+        assert_eq!(app.qgroups[0].recs[0].label, b"+/ Gold");
+        assert_eq!(app.qgroups[0].recs[0].value, b"42");
     }
 
     #[test]

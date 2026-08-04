@@ -206,6 +206,40 @@ impl OpDesc {
     }
 }
 
+/// Validate the invariants a descriptor claims before any execution strategy may consume it.
+/// Exact-left execution relaxes algebraic laws, never carrier compatibility.
+pub fn validate_descriptor(desc: &OpDesc) -> Result<(), String> {
+    match desc {
+        OpDesc::Reducer(reducer) => {
+            if reducer.input != reducer.output {
+                return Err(format!(
+                    "reducer '{}' is not homogeneous: input {:?}, output {:?}",
+                    reducer.spelling, reducer.input, reducer.output
+                ));
+            }
+            if let Some(identity) = reducer.identity {
+                if identity.carrier != reducer.output {
+                    return Err(format!(
+                        "reducer '{}' declares a {:?} identity for a {:?} result",
+                        reducer.spelling, identity.carrier, reducer.output
+                    ));
+                }
+            }
+        }
+        OpDesc::Machine(machine) => {
+            if let Some(identity) = machine.empty_fold.identity() {
+                if identity.carrier != machine.output {
+                    return Err(format!(
+                        "machine '{}' declares a {:?} empty result for a {:?} output",
+                        machine.spelling, identity.carrier, machine.output
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn is_builtin(spelling: &str) -> bool {
     matches!(
         spelling,
@@ -436,47 +470,11 @@ pub fn resolve_head(
     Ok(desc)
 }
 
-/// Validate a descriptor's own coherence before any strategy or rendering question.  A reducer
-/// is homogeneous, so its output carrier is its input carrier and a declared identity inhabits
-/// that carrier; a machine's registered empty result inhabits its output carrier.  The canonical
-/// table satisfies this by construction — the check is the boundary that refuses a drifted table
-/// entry or a future registration surface before a mistyped identity could seed a lowering.
-pub fn validate_descriptor(desc: &OpDesc) -> Result<(), String> {
-    match desc {
-        OpDesc::Reducer(desc) => {
-            if desc.output != desc.input {
-                return Err(format!(
-                    "reducer '{}' is not homogeneous: input {:?}, output {:?}",
-                    desc.spelling, desc.input, desc.output
-                ));
-            }
-            if let Some(identity) = desc.identity {
-                if identity.carrier != desc.output {
-                    return Err(format!(
-                        "reducer '{}' declares a {:?} identity for a {:?} result",
-                        desc.spelling, identity.carrier, desc.output
-                    ));
-                }
-            }
-        }
-        OpDesc::Machine(desc) => {
-            if let Some(identity) = desc.empty_fold.identity() {
-                if identity.carrier != desc.output {
-                    return Err(format!(
-                        "machine '{}' declares a {:?} empty result for a {:?} output",
-                        desc.spelling, identity.carrier, desc.output
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Validate a descriptor against the execution strategy a plan intends.  Exact left execution
 /// admits any type-compatible step; regrouping needs associativity; reordering needs both laws.
 /// A prefix machine admits nothing but exact left execution.
 pub fn validate_strategy(desc: &OpDesc, strategy: Strategy) -> Result<(), String> {
+    validate_descriptor(desc)?;
     if strategy == Strategy::ExactLeft {
         return Ok(());
     }
@@ -676,6 +674,36 @@ mod tests {
         );
         assert_eq!(head("#", Carrier::Presence).empty_identity(), Some("0"));
         assert_eq!(head("avg", Carrier::Number).empty_identity(), None);
+    }
+
+    // Malformed host metadata is refused even by the exact-left strategy: order cannot repair a
+    // carrier mismatch in the step or its empty result.
+    #[test]
+    fn descriptor_carriers_are_validated_before_strategy() {
+        let mut identity = head("+", Carrier::Number);
+        let OpDesc::Reducer(reducer) = &mut identity else { unreachable!() };
+        reducer.identity = Some(TypedIdentity { carrier: Carrier::Mask, bqn: "0" });
+        assert_eq!(
+            validate_strategy(&identity, Strategy::ExactLeft).unwrap_err(),
+            "reducer '+' declares a Mask identity for a Number result"
+        );
+
+        let mut result = head("+", Carrier::Number);
+        let OpDesc::Reducer(reducer) = &mut result else { unreachable!() };
+        reducer.output = Carrier::Mask;
+        assert_eq!(
+            validate_strategy(&result, Strategy::ExactLeft).unwrap_err(),
+            "reducer '+' is not homogeneous: input Number, output Mask"
+        );
+
+        let mut count = head("#", Carrier::Presence);
+        let OpDesc::Machine(machine) = &mut count else { unreachable!() };
+        machine.empty_fold =
+            EmptyFold::Identity(TypedIdentity { carrier: Carrier::Mask, bqn: "0" });
+        assert_eq!(
+            validate_strategy(&count, Strategy::ExactLeft).unwrap_err(),
+            "machine '#' declares a Mask empty result for a Number output"
+        );
     }
 
     // The bridge spellings are not lookalikes: they resolve to one and the same descriptor.

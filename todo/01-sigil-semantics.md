@@ -1,13 +1,13 @@
 # 01 — sigil semantics and the resolver boundary
 
-Status: the resolver boundary is implemented in Steel and `02` attaches to it as intended. Seventeen of the seventeen sigil tests hold — bare, sigiled and negated forms, case-fold and non-ASCII controls, spelling-alias and static-mask separation, provenance diagnostics, and byte-identical fallback plans under `03`'s landed fold renderer. Nothing here is owed to the sigil boundary itself.
+Status: complete. The resolved IR preserves bare, sigiled, and negated requests; overlay and bare fallback attach at one boundary; all seventeen original tests and the expanded lifecycle/deictic suite pass now that fold rendering is live.
 
 ## Verified current state
 
 - The lexer already distinguishes `^name` from a bare name and rejects a lone `^`.
 - The parser preserves that distinction as an alias node. `!` is parsed independently as prefix logical negation, so `!^name` is structurally `Not(Alias(name))` rather than a third lookup form.
 - Names are interpreted contextually in mask position: a Boolean column denotes its values (and presence where applicable), a sparse non-Boolean value column denotes its presence mask, and a total non-Boolean value column denotes the all-present mask. The emitter has an explicit `!` fast path for sparse value columns, but it computes the same `not(presence)` result. This is mask interpretation, not a lookup mode.
-- The emitter still has separate `Alias` branches and preserves the `^` spelling in its unresolved-name diagnostic, but alias lookup calls the same registry `find` path used by ordinary registry names; generic `node_name` also collapses both nodes to the same stem. The AST distinction therefore survives syntactically, while the required live-overlay resolver semantics do not yet exist.
+- The emitter carries an explicit lookup mode through normalization and resolution. Bare requests bypass the overlay; sigiled requests consult the captured overlay and invoke the exact bare path only on absence; diagnostics retain the source request and provenance.
 - The registry already uses the word “alias” for two other, static mechanisms:
   - a name-translation table used to accept alternate spellings; and
   - an `AliasMask` registry entry created by the registry `alias` directive.
@@ -63,8 +63,8 @@ The following remain invalid unless separately ruled:
 
 ## Completion gate
 
-- The resolved plan can distinguish `name` from `^name` without inspecting source text again.
-- `!^name` is demonstrably negation of the sigiled lookup result’s mask interpretation, while `!name` is negation of the bare lookup result’s mask interpretation.
-- No existing spelling alias or static `AliasMask` fixture silently becomes dynamic.
-- Existing bare-name behavior is unchanged.
-- The live-overlay task can attach at one resolver boundary rather than patching lexer, parser, emitter, and Kore independently.
+- [X] DONE — The resolved plan can distinguish `name` from `^name` without inspecting source text again.
+- [X] DONE — `!^name` is demonstrably negation of the sigiled lookup result’s mask interpretation, while `!name` is negation of the bare lookup result’s mask interpretation.
+- [X] DONE — No existing spelling alias or static `AliasMask` fixture silently becomes dynamic.
+- [X] DONE — Existing bare-name behavior is unchanged.
+- [X] DONE — The live-overlay task can attach at one resolver boundary rather than patching lexer, parser, emitter, and Kore independently.

@@ -34,10 +34,8 @@ fn main() -> ExitCode {
 // directive parsing (C-string fidelity); --tokens returns before parse; --dump happens
 // before lexing and exits 0 when no other mode was asked.
 fn run() -> i32 {
-    let args: Vec<String> = std::env::args_os()
-        .skip(1)
-        .map(|a| a.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> =
+        std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let (mut mode_tokens, mut mode_run, mut mode_emit) = (false, false, false);
     let (mut label_flag, mut trace_flag) = (false, false);
     let mut rt_flag: Option<String> = None;
@@ -142,11 +140,7 @@ fn run() -> i32 {
         reg_flag.or_else(|| (!dirs.registry.is_empty()).then(|| dirs.registry.clone()));
     if let Some(rspec) = &rspec {
         let is_path = rspec.contains('/') || (rspec.len() > 4 && rspec.ends_with(".reg"));
-        let spec = if is_path {
-            rspec.clone()
-        } else {
-            format!("{}.reg", rspec)
-        };
+        let spec = if is_path { rspec.clone() } else { format!("{}.reg", rspec) };
         let regp = fs::fs_dirname(&path)
             .filter(|_| !spec.is_empty() && spec.len() < fs::ANO_PATHSZ)
             .and_then(|d| fs::fs_join(&d.s, &spec)) // absolute rspec passes verbatim
@@ -254,12 +248,7 @@ fn run() -> i32 {
         match fs::fs_read(&rtp.s) {
             Ok(v) => std::borrow::Cow::Owned(v),
             Err(e) => {
-                eprintln!(
-                    "{}: cannot read runtime {}: {}",
-                    path,
-                    rtp.s,
-                    fs::strerror(&e)
-                );
+                eprintln!("{}: cannot read runtime {}: {}", path, rtp.s, fs::strerror(&e));
                 return 2;
             }
         }
@@ -436,16 +425,9 @@ fn dir_line(s: &[u8], dirs: &mut Directives) -> Result<(), Diag> {
             }
             w = c.word();
         }
-        dirs.expects.push(if is_out {
-            Expect::Out { vals }
-        } else {
-            Expect::Col { col, vals }
-        });
+        dirs.expects.push(if is_out { Expect::Out { vals } } else { Expect::Col { col, vals } });
     } else {
-        return Err(Diag::refuse(format!(
-            "directive: unknown key '{}'",
-            lossy(key)
-        )));
+        return Err(Diag::refuse(format!("directive: unknown key '{}'", lossy(key))));
     }
     Ok(())
 }
@@ -460,10 +442,7 @@ fn parse_directives(src: &mut [u8], dirs: &mut Directives) -> Result<(), Diag> {
     let total = src.len();
     let mut line = 0usize;
     while line < total {
-        let end = src[line..]
-            .iter()
-            .position(|&b| b == b'\n')
-            .map(|p| line + p);
+        let end = src[line..].iter().position(|&b| b == b'\n').map(|p| line + p);
         let len = end.unwrap_or(total) - line;
         let mut p = line;
         while p < line + len && (src[p] == b' ' || src[p] == b'\t') {
@@ -582,11 +561,7 @@ fn run_bqn(path: &str, rt: &[u8], prog: &str, cap: Option<&mut Vec<u8>>) -> i32 
         let mut last: Option<io::Error> = None;
         for salt in 0..100u64 {
             let name = format!("{}/steel-{}.bqn", tdir, rand6(salt));
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&name)
-            {
+            match std::fs::OpenOptions::new().write(true).create_new(true).open(&name) {
                 Ok(f) => {
                     made = Some((name, f));
                     break;
@@ -604,12 +579,7 @@ fn run_bqn(path: &str, rt: &[u8], prog: &str, cap: Option<&mut Vec<u8>>) -> i32 
             Some(t) => t,
             None => {
                 let e = last.unwrap_or_else(|| io::Error::from(io::ErrorKind::AlreadyExists));
-                eprintln!(
-                    "{}: cannot create temp file in {}: {}",
-                    path,
-                    tdir,
-                    fs::strerror(&e)
-                );
+                eprintln!("{}: cannot create temp file in {}: {}", path, tdir, fs::strerror(&e));
                 return 2;
             }
         }
@@ -695,9 +665,8 @@ fn run_bqn(path: &str, rt: &[u8], prog: &str, cap: Option<&mut Vec<u8>>) -> i32 
     code
 }
 
-// Inputs: one wire word. Output: Some(finite value) iff strtod consumes the whole word and
-// the result is finite — main.c save_num; the finite gate keeps a NaN tick refused, world
-// standing (CBQN spells overflow '∞', which refuses at parse).
+// Inputs: one wire word. Output: an extended-real f64 iff the whole word parses and is not
+// NaN. Carrier-specific save seals decide where infinity is meaningful.
 fn save_num(w: &[u8]) -> Option<f64> {
     std::str::from_utf8(w).ok().and_then(num::wnum)
 }
@@ -705,8 +674,8 @@ fn save_num(w: &[u8]) -> Option<f64> {
 // Inputs: mutable registry, one 0x1E-stripped capture line. Output: () or Diag ("save: ..."
 // texts, byte-exact).
 // Invariants: "n <k>" first resets the row count (later counts check the POST-state n);
-// line kinds col/field/pres/rel/srel only; numbers gate through num::wnum (the finite seal —
-// CBQN's "NaN" parses then refuses, "∞" refuses at parse; both quote the exact word); char
+// line kinds col/field/pres/rel/srel/alias/bindmask only; numeric words admit extended-real num but NaN never;
+// counts, masks, refinements, and relationship endpoints retain their narrower seals; char
 // payloads are the raw tail after name + exactly one separator, spaces kept, byte-length
 // checked, and the .reg-spelling guard (empty, boundary whitespace, word-boundary '#')
 // refuses; arrays allocate fresh (n may grow); an srel patch clears inv_of.
@@ -715,7 +684,12 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
     let Some(k) = c.word() else { return Ok(()) };
     if k == b"n" {
         return match c.word().and_then(save_num) {
-            Some(d) if d >= 0.0 => {
+            Some(d)
+                if d.is_finite()
+                    && d >= 0.0
+                    && d <= i32::MAX as f64
+                    && d.fract() == 0.0 =>
+            {
                 reg.n = d as i32;
                 Ok(())
             }
@@ -724,8 +698,17 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
     }
     let is_col = k == b"col";
     let is_field = k == b"field";
+    let is_alias = k == b"alias";
+    let is_bindmask = k == b"bindmask";
     let kw = lossy(k);
-    if !is_col && !is_field && k != b"pres" && k != b"rel" && k != b"srel" {
+    if !is_col
+        && !is_field
+        && !is_alias
+        && !is_bindmask
+        && k != b"pres"
+        && k != b"rel"
+        && k != b"srel"
+    {
         return Err(Diag::refuse(format!("save: unknown line kind '{}'", kw)));
     }
     let Some(name_b) = c.word() else {
@@ -735,27 +718,15 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
     // char payload is the raw tail — word() consumed exactly one separator, so rest() is
     // the glyph run verbatim, spaces included
     let tail = c.rest();
-    let Some(ei) = reg
-        .ents
-        .iter()
-        .position(|e| registry::names_eq(&e.name, &name))
-    else {
+    let Some(ei) = reg.ents.iter().position(|e| registry::names_eq(&e.name, &name)) else {
         return Err(Diag::refuse(format!("save: unknown entry '{}'", name)));
     };
     let n_now = reg.n;
-    let rows = if is_field {
-        reg.lat_w * reg.lat_h
-    } else {
-        n_now
-    };
+    let rows = if is_field { reg.lat_w * reg.lat_h } else { n_now };
     let rows_u = rows.max(0) as usize;
     let char_target = match &reg.ents[ei].kind {
-        RegEntryKind::Col {
-            ty: ColType::Char, ..
-        } => is_col,
-        RegEntryKind::Field {
-            ty: ColType::Char, ..
-        } => is_field,
+        RegEntryKind::Col { ty: ColType::Char, .. } => is_col,
+        RegEntryKind::Field { ty: ColType::Char, .. } => is_field,
         _ => false,
     };
     if (is_col || is_field) && char_target {
@@ -778,8 +749,7 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             || tail[rows_u - 1] == b' '
             || tail[rows_u - 1] == b'\t';
         if !bad {
-            bad = (1..rows_u)
-                .any(|j| tail[j] == b'#' && (tail[j - 1] == b' ' || tail[j - 1] == b'\t'));
+            bad = (1..rows_u).any(|j| tail[j] == b'#' && (tail[j - 1] == b' ' || tail[j - 1] == b'\t'));
         }
         if bad {
             return Err(Diag::refuse(format!(
@@ -801,6 +771,54 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
         words.push(w);
     }
     let nw = words.len() as i32;
+    if is_alias || is_bindmask {
+        let kind_ok = if is_alias {
+            matches!(&reg.ents[ei].kind, RegEntryKind::AliasMask { .. })
+        } else {
+            matches!(
+                &reg.ents[ei].kind,
+                RegEntryKind::Bind {
+                    kind: BindKind::Mask,
+                    ..
+                }
+            )
+        };
+        if !kind_ok {
+            return Err(Diag::refuse(format!("save: '{}' is not a {}", name, kw)));
+        }
+        if nw != n_now {
+            return Err(Diag::refuse(format!(
+                "save: {} {}: {} bits for {} rows",
+                kw, name, nw, n_now
+            )));
+        }
+        let mut bits = Vec::with_capacity(words.len());
+        for &word in &words {
+            let Some(value) = save_num(word) else {
+                return Err(Diag::refuse(format!(
+                    "save: {} {}: bad bit '{}'",
+                    kw,
+                    name,
+                    lossy(word)
+                )));
+            };
+            if value != 0.0 && value != 1.0 {
+                return Err(Diag::refuse(format!(
+                    "save: {} {}: value {} is not a bit",
+                    kw,
+                    name,
+                    num::dnum(value)
+                )));
+            }
+            bits.push(value);
+        }
+        match &mut reg.ents[ei].kind {
+            RegEntryKind::AliasMask { mask } => *mask = bits,
+            RegEntryKind::Bind { kind: BindKind::Mask, vals } => *vals = bits,
+            _ => unreachable!(),
+        }
+        return Ok(());
+    }
     if is_col || is_field {
         let kind_ok = match &reg.ents[ei].kind {
             RegEntryKind::Col { .. } => is_col,
@@ -810,17 +828,13 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
         if !kind_ok {
             return Err(Diag::refuse(format!("save: '{}' is not a {}", name, kw)));
         }
-        let is_sym = matches!(
-            &reg.ents[ei].kind,
-            RegEntryKind::Col {
-                ty: ColType::Sym,
-                ..
-            } | RegEntryKind::Field {
-                ty: ColType::Sym,
-                ..
+        let (target_ty, target_range) = match &reg.ents[ei].kind {
+            RegEntryKind::Col { ty, rng, .. } | RegEntryKind::Field { ty, rng, .. } => {
+                (*ty, *rng)
             }
-        );
-        if is_sym {
+            _ => unreachable!(),
+        };
+        if target_ty == ColType::Sym {
             if nw != rows {
                 return Err(Diag::refuse(format!(
                     "save: {} {}: {} values for {} rows (an empty sym value has no .reg spelling)",
@@ -830,10 +844,7 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             let mut vs = Vec::with_capacity(words.len());
             for &w in &words {
                 if w.len() >= ANO_NAMESZ {
-                    return Err(Diag::refuse(format!(
-                        "save: {} {}: sym value too long",
-                        kw, name
-                    )));
+                    return Err(Diag::refuse(format!("save: {} {}: sym value too long", kw, name)));
                 }
                 vs.push(lossy(w));
             }
@@ -854,7 +865,21 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
         let mut v = Vec::with_capacity(words.len());
         for &w in &words {
             match save_num(w) {
-                Some(x) => v.push(x),
+                Some(x)
+                    if registry::type_admits(target_ty, x)
+                        && target_range
+                            .is_none_or(|(lo, hi)| x >= lo && x <= hi) =>
+                {
+                    v.push(x)
+                }
+                Some(x) => {
+                    return Err(Diag::refuse(format!(
+                        "save: {} {}: value {} outside declared carrier",
+                        kw,
+                        name,
+                        num::dnum(x)
+                    )));
+                }
                 None => {
                     return Err(Diag::refuse(format!(
                         "save: {} {}: bad number '{}'",
@@ -885,13 +910,16 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
         let mut v = Vec::with_capacity(words.len());
         for &w in &words {
             match save_num(w) {
-                Some(x) => v.push(x),
-                None => {
+                Some(x) if x == 0.0 || x == 1.0 => v.push(x),
+                Some(x) => {
                     return Err(Diag::refuse(format!(
-                        "save: pres {}: bad bit '{}'",
+                        "save: pres {}: value {} is not a bit",
                         name,
-                        lossy(w)
+                        num::dnum(x)
                     )));
+                }
+                None => {
+                    return Err(Diag::refuse(format!("save: pres {}: bad bit '{}'", name, lossy(w))));
                 }
             }
         }
@@ -915,11 +943,7 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
             match save_num(w) {
                 Some(x) => v.push(x),
                 None => {
-                    return Err(Diag::refuse(format!(
-                        "save: rel {}: bad index '{}'",
-                        name,
-                        lossy(w)
-                    )));
+                    return Err(Diag::refuse(format!("save: rel {}: bad index '{}'", name, lossy(w))));
                 }
             }
         }
@@ -944,11 +968,7 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
                     }
                 }
                 None => {
-                    return Err(Diag::refuse(format!(
-                        "save: srel {}: bad id '{}'",
-                        name,
-                        lossy(w)
-                    )));
+                    return Err(Diag::refuse(format!("save: srel {}: bad id '{}'", name, lossy(w))));
                 }
             }
         }
@@ -961,25 +981,77 @@ fn save_line(reg: &mut Registry, line: &[u8]) -> Result<(), Diag> {
 }
 
 // Inputs: mutable registry, the whole 0x1E capture. Output: () or the first save_line Diag.
-// Invariants: split on '\n', first failure aborts; then the mask reconciliation — every
-// AliasMask and Bind{Mask} whose length != n resizes (zero-padded on growth, truncated on
-// shrink) so the dumped world always reloads.
+// Invariants: split on '\n', first failure aborts. Stored masks arrive as ordinary captured
+// post-state lines; no positional resize is allowed to manufacture a reloadable lie.
 fn save_patch(reg: &mut Registry, cap: &[u8]) -> Result<(), Diag> {
     // C-string view: processing stops at the first NUL byte in the capture
     let end = cap.iter().position(|&b| b == 0).unwrap_or(cap.len());
     for line in cap[..end].split(|&b| b == b'\n') {
         save_line(reg, line)?;
     }
-    let n = reg.n.max(0) as usize;
-    for e in &mut reg.ents {
-        match &mut e.kind {
-            RegEntryKind::AliasMask { mask } if mask.len() != n => mask.resize(n, 0.0),
-            RegEntryKind::Bind {
-                kind: BindKind::Mask,
-                vals,
-            } if vals.len() != n => vals.resize(n, 0.0),
-            _ => {}
+    Ok(())
+}
+
+#[cfg(test)]
+mod save_tests {
+    use super::*;
+
+    fn registry_with_masks() -> Registry {
+        Registry {
+            n: 3,
+            ents: vec![
+                steel::RegEntry {
+                    name: "picked".to_string(),
+                    defval: 0.0,
+                    kind: RegEntryKind::AliasMask {
+                        mask: vec![1.0, 0.0, 1.0],
+                    },
+                },
+                steel::RegEntry {
+                    name: "held".to_string(),
+                    defval: 0.0,
+                    kind: RegEntryKind::Bind {
+                        kind: BindKind::Mask,
+                        vals: vec![0.0, 1.0, 1.0],
+                    },
+                },
+            ],
+            ..Registry::default()
         }
     }
-    Ok(())
+
+    #[test]
+    fn captured_stored_masks_replace_the_exact_post_state() {
+        let mut reg = registry_with_masks();
+        save_patch(
+            &mut reg,
+            b"n 2\nalias picked 0 1\nbindmask held 1 0\n",
+        )
+        .unwrap();
+        assert!(matches!(
+            &reg.ents[0].kind,
+            RegEntryKind::AliasMask { mask } if mask == &[0.0, 1.0]
+        ));
+        assert!(matches!(
+            &reg.ents[1].kind,
+            RegEntryKind::Bind { kind: BindKind::Mask, vals } if vals == &[1.0, 0.0]
+        ));
+    }
+
+    #[test]
+    fn captured_stored_masks_reject_non_bits_and_wrong_widths() {
+        let mut reg = registry_with_masks();
+        assert_eq!(
+            save_line(&mut reg, b"alias picked 1 2 0")
+                .unwrap_err()
+                .msg,
+            "save: alias picked: value 2 is not a bit"
+        );
+        assert_eq!(
+            save_line(&mut reg, b"bindmask held 1 0")
+                .unwrap_err()
+                .msg,
+            "save: bindmask held: 2 bits for 3 rows"
+        );
+    }
 }

@@ -1,7 +1,5 @@
-# 生きた別名を非ASCIIの語幹で: サイドカーの照準は動的マスク、素の照準列はその裏で生き続ける。
-# The overlay key 照準 is exact bytes — the ASCII case fold never touches a non-ASCII stem.
 n 6
 col 派閥 sym 山賊 勇者 山賊 勇者 山賊 勇者
 col 印 char .#..#.
 col 打撃 num 0 0 0 0 0 0
-col 照準 bool 0 1 0 0 0 0
+bind 照準 mask 0 1 0 0 1 0

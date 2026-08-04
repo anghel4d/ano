@@ -157,6 +157,7 @@ fn nstart_span(src: &[u8], i: usize) -> usize {
 fn kwkind(nm: &str) -> Option<TokKind> {
     Some(match nm {
         "def" => TokKind::Def,
+        "undef" => TokKind::Undef,
         "spawn" => TokKind::Spawn,
         "at" => TokKind::AtKw,
         "to" => TokKind::To,
@@ -724,7 +725,6 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("に", BK::Tgt, false, ""),
     /* comparisons (postfix on the comparand) */
     ("より", t(TokKind::Gt), true, ""),
-    ("超", t(TokKind::Gt), true, ""),
     ("未満", t(TokKind::Lt), true, ""),
     ("同", t(TokKind::EqEq), true, ""),
     ("以上", t(TokKind::Ge), true, ""),
@@ -771,6 +771,7 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("字", t(TokKind::Name), false, "char"),
     /* keywords */
     ("定義", t(TokKind::Def), false, ""),
+    ("解除", t(TokKind::Undef), false, ""),
     ("生成", t(TokKind::Spawn), false, ""),
     ("於", t(TokKind::AtKw), false, ""),
     ("至", t(TokKind::To), false, ""),
@@ -1387,5 +1388,15 @@ mod semantic_tests {
         assert_eq!(&kinds[..3], &[TokKind::Name, TokKind::Bang, TokKind::Name]);
         let (kinds, _) = lexed(b"a != b", false);
         assert_eq!(&kinds[..3], &[TokKind::Name, TokKind::Ne, TokKind::Name]);
+    }
+
+    #[test]
+    fn japanese_greater_has_one_executable_spelling() {
+        let (kinds, _) = lexed("値 六十 より".as_bytes(), true);
+        assert_eq!(&kinds[..3], &[TokKind::Name, TokKind::Gt, TokKind::Num]);
+
+        let (kinds, names) = lexed("超".as_bytes(), true);
+        assert_eq!(kinds[0], TokKind::Name);
+        assert_eq!(names[0], "超");
     }
 }

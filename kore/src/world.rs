@@ -247,10 +247,15 @@ pub fn run_ok(run: &[u8], rows: i32) -> bool {
     true
 }
 
-// Parse one finite, fully consumed libc strtod word; accepts hex floats and leading +.
+// Parse one fully consumed extended-real word: finite or signed infinity, never NaN.
 pub fn wnum(w: &[u8]) -> Option<f64> {
+    match w {
+        b"\xe2\x88\x9e" | b"+\xe2\x88\x9e" => return Some(f64::INFINITY),
+        b"-\xe2\x88\x9e" | b"\xc2\xaf\xe2\x88\x9e" => return Some(f64::NEG_INFINITY),
+        _ => {}
+    }
     let (v, used) = sys::strtod_prefix(w);
-    if used > 0 && used == w.len() && v.is_finite() {
+    if used > 0 && used == w.len() && !v.is_nan() {
         Some(v)
     } else {
         None
@@ -358,11 +363,27 @@ pub fn world_load(path: &str) -> Result<World, String> {
         let can = w.ents.len() < KMAXENT;
         if k == b"n" && nw == 2 {
             if let Some(d) = wnum(&words[1]) {
-                w.n = if d >= 0.0 && d <= 1e6 { d as i32 } else { 0 };
+                w.n = if d.is_finite()
+                    && d >= 0.0
+                    && d <= 1e6
+                    && d.fract() == 0.0
+                {
+                    d as i32
+                } else {
+                    0
+                };
             }
         } else if k == b"lattice" && nw == 3 {
             if let (Some(d), Some(h)) = (wnum(&words[1]), wnum(&words[2])) {
-                if d >= 0.0 && d <= 4096.0 && h >= 0.0 && h <= 4096.0 {
+                if d.is_finite()
+                    && h.is_finite()
+                    && d >= 0.0
+                    && d <= 4096.0
+                    && h >= 0.0
+                    && h <= 4096.0
+                    && d.fract() == 0.0
+                    && h.fract() == 0.0
+                {
                     w.lat_w = d as i32;
                     w.lat_h = h as i32;
                 }
@@ -1204,9 +1225,28 @@ pub fn tag_of(path: &str) -> String {
     )
 }
 
-// tag_of over the live world's path (kore.c world_tag).
+fn schema_generation(path: &str) -> Option<(u64, u64)> {
+    let text =
+        std::fs::read_to_string(steel::migration::manifest_path(path)).ok()?;
+    let fields: Vec<&str> = text.lines().next()?.split('\t').collect();
+    if fields.len() != 3 || fields[0] != "ano-schema-v1" {
+        return None;
+    }
+    let version = fields[1].parse().ok()?;
+    let fingerprint = u64::from_str_radix(fields[2], 16).ok()?;
+    Some((version, fingerprint))
+}
+
+// Path identity plus schema generation. Ordinary world values and population do not move the
+// suffix; a successful schema barrier does, so an old registry-only undo can never cross it.
 fn world_tag(app: &App) -> String {
-    tag_of(&app.world.path)
+    let tag = tag_of(&app.world.path);
+    match schema_generation(&app.world.path) {
+        Some((version, fingerprint)) => {
+            format!("{}-s{}-{:016x}", tag, version, fingerprint)
+        }
+        None => tag,
+    }
 }
 
 fn basename(p: &str) -> &str {
@@ -2452,6 +2492,32 @@ mod tests {
         );
         let dotted = path.replace("/demos/", "/./demos/");
         assert_eq!(tag_of(&path), tag_of(&dotted));
+    }
+
+    #[test]
+    fn undo_tag_is_namespaced_by_schema_generation() {
+        let root = std::env::temp_dir().join(format!(
+            "ano-world-tag-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("world.reg");
+        std::fs::write(&path, b"n 0\n").unwrap();
+
+        let mut app = App::new();
+        app.world.path = path.to_string_lossy().into_owned();
+        assert_eq!(world_tag(&app), tag_of(&app.world.path));
+        std::fs::write(
+            steel::migration::manifest_path(&app.world.path),
+            b"ano-schema-v1\t7\t0123456789abcdef\n",
+        )
+        .unwrap();
+        assert_eq!(
+            world_tag(&app),
+            format!("{}-s7-0123456789abcdef", tag_of(&app.world.path))
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

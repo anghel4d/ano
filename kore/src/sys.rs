@@ -15,8 +15,10 @@ use nix::unistd::{
     AccessFlags, ForkResult, access, dup2_stderr, dup2_stdout, execvp, fork, pipe, read, write,
 };
 use std::cell::UnsafeCell;
+use std::collections::VecDeque;
 use std::ffi::CString;
 use std::os::unix::io::{AsFd, BorrowedFd};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[repr(C)]
@@ -44,6 +46,7 @@ pub const TERM_BYE: &[u8] = b"\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[0 q\x1b[?1049l
 
 static RESIZED: AtomicBool = AtomicBool::new(false);
 static RAW_ON: AtomicBool = AtomicBool::new(false);
+static INPUT: Mutex<VecDeque<u8>> = Mutex::new(VecDeque::new());
 
 struct SavedTermios(UnsafeCell<Option<Termios>>);
 // Written once in term_enter before RAW_ON is set; read by term_leave and the fatal handler.
@@ -166,20 +169,41 @@ pub fn win_size() -> Option<(i32, i32)> {
 
 // ---------- input / output ----------
 
-// One byte from fd 0 within ms milliseconds, else -1 (timeout, EINTR, or short read).
-// The 100ms outer tick and 25ms inter-byte window live at the call sites (ev_read).
-pub fn rbyte(ms: i32) -> i32 {
-    let input = std::io::stdin();
-    let mut fds = [PollFd::new(input.as_fd(), PollFlags::POLLIN)];
+// One byte from an fd within ms milliseconds, else -1 (timeout, EINTR, or short read).
+pub(crate) fn rbyte_from(input: BorrowedFd<'_>, ms: i32) -> i32 {
+    let mut fds = [PollFd::new(input, PollFlags::POLLIN)];
     let timeout = PollTimeout::try_from(ms).unwrap_or(PollTimeout::NONE);
     if poll(&mut fds, timeout).unwrap_or(0) <= 0 {
         return -1;
     }
     let mut b = [0u8; 1];
-    if read(input.as_fd(), &mut b) != Ok(1) {
+    if read(input, &mut b) != Ok(1) {
         return -1;
     }
     b[0] as i32
+}
+
+// One byte directly from fd 0. Palette negotiation uses this path so bytes it preserves cannot
+// be consumed again before the negotiation ends.
+pub(crate) fn rbyte_raw(ms: i32) -> i32 {
+    rbyte_from(std::io::stdin().as_fd(), ms)
+}
+
+// Retain ordinary input that arrived while Kore was waiting for terminal protocol replies.
+pub(crate) fn unread_input(bytes: &[u8]) {
+    if let Ok(mut input) = INPUT.lock() {
+        input.extend(bytes.iter().copied());
+    }
+}
+
+// The 100ms outer tick and 25ms inter-byte window live at the call sites (ev_read).
+pub fn rbyte(ms: i32) -> i32 {
+    if let Ok(mut input) = INPUT.lock()
+        && let Some(byte) = input.pop_front()
+    {
+        return byte as i32;
+    }
+    rbyte_raw(ms)
 }
 
 // write_all to fd 1: same bytes as the C's single fire-and-forget write, but short

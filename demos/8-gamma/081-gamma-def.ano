@@ -1,10 +1,10 @@
 -- Gamma from first principles: five sources point at four targets, the relation's fibers group the sources, and each fold writes one cell per target. Identity folds keep the empty fibers at the identity; avg drops them.
--- Each fold writes its own -1-sentinel column: identity folds (count 0, sum 0, any false, all true) keep empty-fiber rows at the identity; avg has no identity, rows 6 and 8 drop out of the selection and keep -1 (the §5 left-join-null rule extended to the empty fiber).
+-- Numeric folds write -1-sentinel columns while mask folds write mask columns: identities (count 0, sum 0, any false, all true) keep empty-fiber rows at the identity; avg has no identity, rows 6 and 8 drop out and keep -1 (the §5 left-join-null rule extended to the empty fiber).
 --! registry ../registries/081-gamma-def.reg
 --! expect cCount = -1 -1 -1 -1 -1 2 0 3 0
 --! expect cSum = -1 -1 -1 -1 -1 8 0 15 0
---! expect cAny = -1 -1 -1 -1 -1 1 0 1 0
---! expect cAll = -1 -1 -1 -1 -1 0 1 0 1
+--! expect cAny = 0 0 0 0 0 1 0 1 0
+--! expect cAll = 0 0 0 0 0 0 1 0 1
 --! expect cAvg = -1 -1 -1 -1 -1 4 -1 5 -1
 --! expect cPick = -1 -1 -1 -1 -1 2 -1 3 -1
 

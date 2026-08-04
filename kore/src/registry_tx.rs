@@ -22,6 +22,9 @@ fn staged_path(path: &Path) -> PathBuf {
 /// Stage bytes, parse and seal the complete relationship-bearing registry, then publish.
 /// The live path is untouched on every validation or I/O failure before rename.
 pub fn publish(path: &str, data: &[u8]) -> Result<(), String> {
+    crate::migrate::recover(path)?;
+    let old = steel::registry::reg_load(path).map_err(|diag| diag.msg)?;
+    let old_schema = steel::alias::registry_fingerprint(&old);
     let live = Path::new(path);
     let staged = staged_path(live);
     let result = (|| -> Result<(), String> {
@@ -35,13 +38,21 @@ pub fn publish(path: &str, data: &[u8]) -> Result<(), String> {
         file.sync_all()
             .map_err(|error| format!("cannot sync staged {}: {}", path, error))?;
         drop(file);
-        steel::registry::reg_load(&staged.to_string_lossy()).map_err(|diag| diag.msg)?;
+        let registry =
+            steel::registry::reg_load(&staged.to_string_lossy()).map_err(|diag| diag.msg)?;
+        if steel::alias::registry_fingerprint(&registry) != old_schema {
+            return Err(
+                "schema-changing registry publication requires `kore migrate`".into(),
+            );
+        }
+        steel::migration::SchemaManifest::load(
+            steel::migration::manifest_path(path),
+            &registry,
+        )
+        .map_err(|diag| diag.msg)?;
         std::fs::rename(&staged, live)
             .map_err(|error| format!("cannot publish {}: {}", path, error))?;
-        if let Some(parent) = live
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
+        if let Some(parent) = live.parent().filter(|parent| !parent.as_os_str().is_empty()) {
             if let Ok(directory) = std::fs::File::open(parent) {
                 let _ = directory.sync_all();
             }
@@ -55,9 +66,14 @@ pub fn publish(path: &str, data: &[u8]) -> Result<(), String> {
 }
 
 pub fn validate(path: &str) -> Result<(), String> {
-    steel::registry::reg_load(path)
-        .map(|_| ())
-        .map_err(|diag| diag.msg)
+    crate::migrate::recover(path)?;
+    let registry = steel::registry::reg_load(path).map_err(|diag| diag.msg)?;
+    steel::migration::SchemaManifest::load(
+        steel::migration::manifest_path(path),
+        &registry,
+    )
+    .map(|_| ())
+    .map_err(|diag| diag.msg)
 }
 
 #[cfg(test)]
@@ -78,6 +94,28 @@ mod tests {
         std::fs::write(&path, original).unwrap();
         let invalid = b"n 1\nrel Parent 1.5\n";
         assert!(publish(&path.to_string_lossy(), invalid).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn ordinary_publication_cannot_cross_a_schema_barrier() {
+        let root = std::env::temp_dir().join(format!(
+            "ano-registry-schema-tx-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("world.reg");
+        let original = b"n 1\ncol Value num 0\n";
+        std::fs::write(&path, original).unwrap();
+
+        let changed = b"n 1\ncol Renamed num 0\n";
+        assert!(
+            publish(&path.to_string_lossy(), changed)
+                .unwrap_err()
+                .contains("requires `kore migrate`")
+        );
         assert_eq!(std::fs::read(&path).unwrap(), original);
         let _ = std::fs::remove_dir_all(&root);
     }

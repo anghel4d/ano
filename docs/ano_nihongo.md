@@ -27,7 +27,7 @@ The 日本語ーmode is also a litmus test for ano's semantics. If adding the Ja
 | `@` region or scope | で | locative "at / in" | で marks where the action happens |
 | `,` selection-effect separator | 、 / が | subject-predicate hinge | 、 is the surface mark; が is the grammar |
 | omitted subject | ゼロが | zero pronoun | block-local anaphora or default subject |
-| `>` | より, or 超 | "than", "over" | より alone needs a direction word, 超 disambiguates |
+| `>` | より | "than" | postfix order fixes the direction; bare 超 remains a noun |
 | `<` | 未満 | "under" | the sign-board word, 18歳未満 |
 | `==` | 同 | "same" | |
 | `+=` | に … たす | "to X, add" | に marks the target, たす is add |
@@ -35,7 +35,7 @@ The 日本語ーmode is also a litmus test for ano's semantics. If adding the Ja
 | `*=` | に … かける | multiply | |
 | `/=` | に … わる | divide | |
 | `=` set | を … にする | "make X be" | |
-| `!` not | ず, ない | the negator | postfix, and it bites, see below |
+| `!` not | ない | the negator | postfix; spaced input keeps the boundary visible |
 
 The standout is の. ano's relationship hop, `mentor.TwoHanded`, reads `師匠 の 両手`, mentor's two-handed. The genitive particle is the foreign-key join with no adaptation at all. で for `@` is as clean: a scope is a place, and で is the particle for the place an action occurs.
 
@@ -86,21 +86,21 @@ The spaced skin is registry-blind: every noun lexes to its surface spelling and 
 
 ## Negation, the one that fights back
 
-Japanese negation is a postfix auxiliary, which suits a postfix language, but `死 ない` for not-dead sits next to 死ぬ, which is the verb to die, and the kana run together in unspaced mode. Options are the classical ず, the modern ない, or the kanji prefix 非 which is unambiguous but breaks the postfix rhythm. Steel ships ない and makes 非 a legal identifier-start, so 非死 lexes as one noun; adopting the 非 prefix would need its own table entry and would shadow any 非-initial noun — the collision the open noun space now carries. Unresolved.
+Japanese negation is the postfix auxiliary ない. The executable authoring form is spaced, so `死 ない` is unambiguous; the unspaced reader may use its dictionary and grammar position but grants no new spelling. Classical ず is not a token, and 非 remains a legal identifier-start, so 非死 is one noun rather than a prefix form. This preserves postfix rhythm and the open noun space with one canonical negator.
 
-## Open questions
+## Surface rulings
 
-- Direction of comparison. より needs a paired adjective in natural Japanese; 超 and 未満 disambiguate but read as jargon. Pick one scheme and commit.
-- Negation glyph, per above.
-- Reduction and scan. Settled: the JA folds are the prefix words 総和 総積 総数 最大 最小 平均 皆 或 and the scans 累和 累積 累数 累小 累平均 累大 累皆 累或, each carrying the ASCII `/`/`\` op as payload; a fused reducer word (`脅威/`, `脅威\`) carries a named reducer the same way; the whole corpus uses them.
-- Numeral policy per surface. Kanji numerals read as numbers only under `--! ja`; on the ASCII surface 六十 is an ordinary identifier, so the same glyphs mean 60 in one skin and a noun in the other. Deliberate — the ASCII surface owns no kanji-numeral grammar, and a native column may be spelled 六十 — but whether the skins should ever converge is open. Unresolved.
-- Verb-aware case frames. The spaced particle surface is a lexer table because each operator fixes one case frame (に on the column in に…たす). The full-sentence する voice lets the verb pick the frame — 与える puts に on the recipient selection and を on the column — so the same `ASSIGN_ADD` needs a per-verb case-frame table, a grammar rather than a lexer. The なる register ships as the table tier; whether the する register gets verb frames or stays out of the unspaced surface is open.
+- Direction of comparison. より is the sole executable `>` spelling. Postfix operand order supplies direction; bare 超 returns to the noun space, while natural full-sentence prose may still say 超える outside the reader skin.
+- Negation. ない is the sole executable spelling, per above.
+- Reduction and scan. The JA folds are the prefix words 総和 総積 総数 最大 最小 平均 皆 或 and the scans 累和 累積 累数 累小 累平均 累大 累皆 累或, each carrying the ASCII `/`/`\` op as payload; a fused reducer word (`脅威/`, `脅威\`) carries a named reducer the same way.
+- Numeral policy is deliberately skin-specific. Kanji numerals read as numbers only under `--! ja`; on the ASCII surface 六十 remains an ordinary identifier, so a native column may own that spelling. The skins converge on AST meaning, not on which concrete words each lexer reserves.
+- Verb-aware case frames stop at the shipped table tier. The spaced particle surface and the なる rule voice are executable; the free full-sentence する voice remains explanatory prose because per-verb case frames would be another grammar. `解除 name` is the exact Japanese twin of top-level `undef name`, not a conjugated effect.
 - IME ergonomics. Writing kana code needs an input method, and the unspaced form is hard to type as well as to lex. The spaced form is the authoring surface; the unspaced form is accepted but not authored.
-- Whether the printer normalizes mixed kana, or preserves the author's katakana-vs-kanji choices on round-trip.
+- Printing has two contracts. The semantic AST printer chooses the canonical atlas spelling for closed tokens in the requested skin and preserves every identifier byte exactly; a lossless formatter retains the original token stream separately. Semantic printing therefore normalizes operator spellings without rewriting an author's katakana, kanji, or native registry nouns.
 
 ## Status
 
-A side-project, orthogonal to the implementation language. Even on a q or k prototype the Japanese reader is a preprocessor that emits ano AST, so it can be built at any time and costs nothing later. Keep it a mode. The ASCII surface stays the product; this is the teaching and marketing skin, and it is good at that because あの is already Japanese and the canonical task is, after all, paying Norsemen in their own grammar.
+The reader skin is shipped: Steel maps both surfaces to one AST and the active paired demos require byte-identical plans. Keep it a mode. The ASCII surface stays canonical; Japanese is the native teaching skin, and it is good at that because あの is already Japanese and the canonical task is, after all, paying Norsemen in their own grammar.
 
 ## Grammar beyond the operators
 

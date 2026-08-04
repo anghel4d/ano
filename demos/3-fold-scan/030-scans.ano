@@ -1,33 +1,20 @@
--- Every admitted fold has a running form, and every scan is the same left recurrence held prefix by prefix: the numeric Greater/Lesser scans and their max/min bridges are one descriptor, the mean emits a prefix of its own state, and #\ counts admitted rows rather than physical slots.
--- An empty scope's scan is an empty column; #\ over an all-false mask is a column of zeros, because the scope is nonempty while the count never advances.
+-- Homogeneous reducers and stateful prefix machines share the same ordered stream. Every scan is length-preserving on that stream, and every nonempty fold is its final prefix.
 --! registry ../registries/030-scans.reg
 
---! out 3 4 12 16 25
+--! out 3 4 8 10 15
 +\ Weight @ Route
 
---! out 3 2 -6 -10 -19
--\ Weight @ Route
-
---! out 3 3 8 8 9
-|\ Weight @ Route
-
---! out 3 3 8 8 9
-max\ Weight @ Route
+--! out 2 6 9 18
+*\ Multiplier @ comboChain
 
 --! out 3 1 1 1 1
-&\ Weight @ Route
+min\ Height @ Ray
 
---! out 3 1 1 1 1
-min\ Weight @ Route
-
---! out 3 2 4 4 5
+--! out 3 2 2.6666666666666665 2.5 3
 avg\ Weight @ Route
 
---! out 1 1 2 3 3 3 4 4
-#\ Mixed
+--! out 1 1 2 3 3 4 4 5
+#\ Route
 
---! out
-+\ Weight @ Gone
-
---! out 0 0 0 0 0 0 0 0
-#\ Gone
+--! out 0 0 0 0 1
+(+\ Weight @ Route) == (+/ Weight @ Route)

@@ -1,8 +1,8 @@
 --! registry ../registries/081-gamma-def.reg
 --! expect cCount = -1 -1 -1 -1 -1 2 0 3 0
 --! expect cSum = -1 -1 -1 -1 -1 8 0 15 0
---! expect cAny = -1 -1 -1 -1 -1 1 0 1 0
---! expect cAll = -1 -1 -1 -1 -1 0 1 0 1
+--! expect cAny = 0 0 0 0 0 1 0 1 0
+--! expect cAll = 0 0 0 0 0 0 1 0 1
 --! expect cAvg = -1 -1 -1 -1 -1 4 -1 5 -1
 --! expect cPick = -1 -1 -1 -1 -1 2 -1 3 -1
 --! ja

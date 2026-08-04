@@ -809,6 +809,18 @@ impl P<'_, '_> {
     fn parse_stmt(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         let k = self.pk();
+        if k == TokKind::Undef {
+            self.adv();
+            if self.pk() != TokKind::Name {
+                return Err(perr(self.tline(), "expected rule name after 'undef'"));
+            }
+            let name = self.tname();
+            self.adv();
+            if !matches!(self.pk(), TokKind::Nl | TokKind::Eof) {
+                return Err(perr(self.tline(), "unexpected token after rule name"));
+            }
+            return Ok(Node::new(NodeKind::UndefStmt { name }, line));
+        }
         if k == TokKind::Def {
             self.adv();
             if self.pk() != TokKind::Name {
@@ -1405,6 +1417,9 @@ mod tests {
                 let _ = write!(b, "(DEFSTMT {} ", it.resolve(*name));
                 sx(b, body, it);
                 b.push(')');
+            }
+            UndefStmt { name } => {
+                let _ = write!(b, "(UNDEFSTMT {})", it.resolve(*name));
             }
             Query(x) => {
                 b.push_str("(QUERY ");
@@ -2137,6 +2152,11 @@ mod tests {
                 tk!(Eof),
             ],
             "(PROGRAM (DEFSTMT spread (STMT:RULE (AND (NAME Plot) (NAME p)) (EADD Planted))))",
+        );
+        run_case(
+            "undef-rule",
+            &[tk!(Undef), tn!("spread"), tk!(Eof)],
+            "(PROGRAM (UNDEFSTMT spread))",
         );
     }
 }
