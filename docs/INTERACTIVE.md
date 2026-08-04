@@ -24,7 +24,7 @@ Demo files are immutable. The first mutation creates a play copy under `.kore/pl
 host declarations → Steel world and typed plan → .reg fixture/save boundary → Kore views and edits
 ```
 
-The current registry defines names, carriers, relationships, bindings, callables, prototypes, and the archival singleton-lattice fields that task `99` must replace with nominal spatial capabilities. Steel owns language validation and execution. `.reg` is the repository's text fixture and save boundary. Kore presents that world without becoming a second semantic authority.
+The current registry defines names, carriers, relationships, bindings, typed resident-array slots, callables, services, enums, constructors, prototypes, and the archival singleton-lattice fields that task `99` must replace with nominal spatial capabilities. Steel owns language validation and execution. `.reg` is the canonical text schema and legacy-world boundary. Kore presents that world without becoming a second semantic authority.
 
 ## The staged file, zoomed
 
@@ -36,23 +36,25 @@ bindings, aliases, defaults, prototypes, and callables
 fields and current spatial data
 ```
 
-Save and reload preserve every declaration the loader understands. Host-owned state lives beside, not inside, this grammar: `.reg.aliases` is the live dynamic overlay, `.reg.schema` is the stable declaration-ID manifest, and `.reg.migrations` is the deterministic schema-event log. Spatial habitat, layout, frame, boundary, and bridge identity remain pending in task `99` and are not inferred from the existing lattice buffers.
+Save and reload preserve every declaration the loader understands. Host-owned state lives beside, not inside, this grammar: `.reg.aliases` is the live dynamic overlay, `.reg.schema` is the stable declaration-ID manifest, and `.reg.migrations` is the deterministic schema-event log. Resident arrays and constructed nominal values use their own canonical schema/ID/version-stamped sidecars; their host owner must load or migrate them through the validating APIs before publication. Spatial habitat, layout, frame, boundary, and bridge identity remain pending in task `99` and are not inferred from an array extent or existing lattice buffer.
 
 ## The entry taxonomy
 
 - `col`, `pres`, and `unique`: stored columns and carrier refinements.
 - `rel`, `srel`, and `inv`: functional and set-valued relationships.
 - `bind`, `default`, and registry `def`: constants, spawn defaults, and prototypes.
-- `fn`: registered callable behavior.
+- `array`: a typed host-resident slot whose payload is attached and sealed separately.
+- `service`, `enum`, and `ctor`: versioned host boundaries and nominal value constructors.
+- Legacy and typed `fn`: compatibility behavior or an exact signature/effect/determinism/trust descriptor.
 - `as`, `ja`, and `role`: derived names, surface names, and system roles.
 - Fixture `alias`: stored fixture masks, distinct from the live `^name` overlay in `.reg.aliases`.
 - Spatial declarations: named habitats and capabilities. Equal length never establishes alignment.
 
 ## Schema barriers
 
-`kore alias world.reg list|set|mask|resolve|delete|clear` administers the overlay between statements. Each successful change publishes one new environment version; a failed target resolution leaves the old file and version untouched. The concrete resolver IDs are `deictic.cursor`, `deictic.observer`, `deictic.selected`, and `deictic.world`, with their host inputs frozen for one statement.
+`kore alias world.reg list|set|mask|resolve|delete|clear` administers the overlay between statements. Each successful change publishes one new environment version; a failed target resolution leaves the old file and version untouched. `.reg.aliases` has one canonical LF-terminated UTF-8 byte form and publishes through create-new staged atomic replacement. The concrete resolver IDs are `deictic.cursor`, `deictic.observer`, `deictic.selected`, and `deictic.world`, with their host inputs frozen for one statement. A resolver record stamps the declaration ID and version when declared; a legacy built-in stamps only its distinct v1 contract.
 
-`kore migrate live.reg candidate.reg migration.map` is the pre-spatial `Σ → Σ′` barrier. The separate map must account for every declaration with `preserve`, `rename`, supported `widen`, `drop`, explicit `discard`, `add`, or `unalias`. Kore stages and reload-validates the registry, alias overlay, schema manifest, and event log, then journal-publishes them together. A failure restores the exact old bundle; startup validation restarts an interrupted prepared rollback and cleans durable committed or rolled-back states before opening the world. Old plans and handles cannot cross the new schema without receipt revalidation; Kore's registry-only undo ring is generation-qualified for the same reason. Lattice changes refuse at the typed extension seam until task `99` implements them.
+`kore migrate live.reg candidate.reg migration.map` is the pre-spatial `Σ → Σ′` barrier. The separate map must account for every declaration with `preserve`, `rename`, supported `widen`, `drop`, explicit `discard`, `add`, or `unalias`. Kore stages and reload-validates the registry, alias overlay, schema manifest, and event log, then journal-publishes them together. A failure restores the exact old bundle; startup validation restarts an interrupted prepared rollback and cleans durable committed or rolled-back states before opening the world. Old plans and handles cannot cross the new schema without receipt revalidation; external resident arrays and constructed values additionally reseal through that receipt before their owner publishes them. Kore's registry-only undo ring is generation-qualified for the same reason. Lattice changes refuse at the typed extension seam until task `99` implements them.
 
 ## The data model — the ladder
 

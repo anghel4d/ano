@@ -404,14 +404,13 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
     }
 }
 
-/// A registered `fn` defaults to a dyadic numeric reducer with undeclared laws and no identity.
-/// It advertises fold, scan, and scan-along; declaring instances, arity, or an identity is
-/// registry surface this pass does not own.
-fn registered(spelling: &str) -> OpDesc {
+/// A checked registered `fn` is one homogeneous dyad with undeclared laws and no identity.
+/// Its closed registry signature chooses the carrier; legacy rows pass Number explicitly.
+fn registered(spelling: &str, carrier: Carrier) -> OpDesc {
     OpDesc::Reducer(ReducerDesc {
         spelling: spelling.to_string(),
-        input: Carrier::Number,
-        output: Carrier::Number,
+        input: carrier,
+        output: carrier,
         step: "",
         step_body: "",
         identity: None,
@@ -420,14 +419,13 @@ fn registered(spelling: &str) -> OpDesc {
     })
 }
 
-/// THE fold/scan head resolver.  Inputs: the surface spelling, the requested form, the inferred
-/// operand carrier, and whether the registry answers the name with a `fn`.  Output: the checked
-/// descriptor, whose `spelling()` is the canonical head every emitter then retrieves.
-pub fn resolve_head(
+/// THE typed fold/scan head resolver. The optional carrier is the registry's admitted homogeneous
+/// instance; a different operand carrier refuses before lowering.
+pub fn resolve_registered_head(
     spelling: &str,
     form: Form,
     carrier: Carrier,
-    registered_fn: bool,
+    registered_carrier: Option<Carrier>,
 ) -> Result<OpDesc, String> {
     let head = match (spelling, carrier) {
         ("+", Carrier::Number)
@@ -445,8 +443,8 @@ pub fn resolve_head(
         // and over the char carrier, by the same A9 derivation and the same bridge names
         ("|", Carrier::Char) | ("max", Carrier::Char) => "charmax",
         ("&", Carrier::Char) | ("min", Carrier::Char) => "charmin",
-        (name, Carrier::Number) if registered_fn => name,
-        (name, _) if registered_fn || is_builtin(name) => {
+        (name, actual) if registered_carrier == Some(actual) => name,
+        (name, _) if registered_carrier.is_some() || is_builtin(name) => {
             return Err(format!(
                 "reducer '{}' is not defined on {:?}",
                 name, carrier
@@ -456,7 +454,9 @@ pub fn resolve_head(
     };
     let desc = match canonical(head, form) {
         Some(desc) => desc,
-        None if registered_fn && !is_builtin(head) => registered(head),
+        None if registered_carrier.is_some() && !is_builtin(head) => {
+            registered(head, registered_carrier.unwrap())
+        }
         None => {
             return Err(format!(
                 "reducer '{}' has no {} form",
@@ -468,6 +468,18 @@ pub fn resolve_head(
     validate_descriptor(&desc)?;
     validate_strategy(&desc, Strategy::ExactLeft)?;
     Ok(desc)
+}
+
+/// Legacy-compatible resolver: an untyped registry `fn` keeps its numeric default.
+pub fn resolve_head(
+    spelling: &str,
+    form: Form,
+    carrier: Carrier,
+    registered_fn: bool,
+) -> Result<OpDesc, String> {
+    resolve_registered_head(
+        spelling, form, carrier, registered_fn.then_some(Carrier::Number),
+    )
 }
 
 /// Validate a descriptor against the execution strategy a plan intends.  Exact left execution

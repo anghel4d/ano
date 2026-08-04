@@ -79,7 +79,7 @@ Every scan in the table is live. `#\`, `min\`, and `avg\` landed with the rest, 
 
 ## Atlas: registry keywords
 
-`.reg` files are line-based; the first word of each line is a directive. Directive and kind words are exact-byte lowercase ASCII — they never fold and have no Japanese spelling, though the entry names they introduce may be kanji. Source: the current Rust reference, `steel/src/registry.rs`.
+`.reg` is the canonical registry extension. Files are line-based; the first word of each line is a directive. Directive and kind words are exact-byte lowercase ASCII — they never fold and have no Japanese spelling, though the entry names they introduce may be kanji. Source: the current Rust reference, `steel/src/registry.rs`; the high-integrity identity, validation, persistence, and migration laws are collected in `ano-registry.md`.
 
 | Directive | Shape | Role |
 |---|---|---|
@@ -96,7 +96,11 @@ Every scan in the table is live. `#\`, `min\`, and `avg\` landed with the rest, 
 | `inv` | `inv <name> <rel>` | the inverse read of a functional `rel`; fibers computed at load |
 | `alias` | `alias <name> <mask>` | a stored boolean mask — a value with a name |
 | `bind` | `bind <name> <kind> <values…>` | a named constant (see bind kinds) |
-| `fn` | `fn <name> [verbatim BQN]` | a registered callable body |
+| `array` | `array <name> id:<16-hex> v:<n> <carrier> <scalar\|entity\|fixed:N>` | a typed host-resident array slot; payload attaches through the sealing API |
+| `service` | `service <name> id:<16-hex> v:<n> <input\|output> sig:<...> trust:<...>` | a versioned host input or output boundary |
+| `enum` | `enum <name> id:<16-hex> v:<n> <Case=u32>... reserve:<u32,...|->` | a nominal sum with permanent serialized discriminants |
+| `ctor` | `ctor <name> id:<16-hex> v:<n> <range:lo..hi\|enum:name>` | the checked nominal fabrication boundary |
+| `fn` | `fn <name> [verbatim BQN]` or the typed `id:/v:/sig:/fx:/det:/trust:/read:/write:/use:` form | a legacy callable or a closed high-integrity callable descriptor |
 | `as` | `as <word> <name>` or `as <word> <col> <value>` | pure name alias (3-word) or derived tag, an equality mask (4-word) |
 | `ja` | `ja <word> <name>` | name alias, flagged as documenting the Japanese surface |
 | `role` | `role <keys\|id\|parent\|proto\|pos> <col>` | point a system role at a native column |
@@ -111,6 +115,10 @@ Sub-word vocabularies, filling the second slot of a directive and equally closed
 | bind kinds | `entity` `num` `point` `mask` `vec` | `bind` kind slot |
 | roles | `keys` `id` `parent` `proto` `pos` | `role` role slot |
 | reap policies | `seal` `host` | `reap` policy slot |
+| registry carriers | `mask` `nat` `int` `num` `sym` `char` `entity`, or an earlier enum/constructor | `array`, callable signatures, and service signatures; `unit` is signature-only |
+| array domains | `scalar` `entity` `fixed:N` | exact resident-array extent |
+| callable boundaries | `pure` `read` `write` `service`; `deterministic` `snapshot` `nondeterministic`; `checked` `trusted` | typed `fn` and `service` descriptors |
+| declaration metadata | `id:<16-hex>` `v:<positive>` | stable nominal identity and local semantic version |
 
 The refined numeric carriers: `nat` is ℕ ∩ [0, 2⁵³], `int` is ℤ ∩ [−2⁵³, 2⁵³], and `bool` is {0,1}. `num` is finite IEEE float64 plus `±∞`, never NaN or absence, with one canonical zero: either machine signed zero enters and persists as `0`. Out-of-carrier rest data refuses at load; computed NaN refuses before numeric publication; refinements retract only under their declared commit law. Infinity remains a value, never an implicit extrema identity.
 
@@ -125,17 +133,19 @@ The text registry remains the schema and world boundary; host session and migrat
 | `<world>.reg.migrations` | append-only deterministic migration event records |
 | `<world>.reg.migration-journal` | transient Kore recovery journal; absent after commit or rollback |
 
-`kore migrate live.reg candidate.reg migration.map` is the implemented schema barrier. The map is a separate host language with `preserve OLD [NEW]`, `rename OLD NEW`, `widen OLD NEW`, `drop OLD`, `discard OLD`, `add NEW`, and `unalias NAME`. It must account for every old and candidate declaration exactly once. `drop` refuses live data, `discard` names intentional loss, and a removed declaration targeted by the live overlay requires `unalias`. Supported pre-spatial widening is exactly `bool → nat|int|num`, `nat → int|num`, and `int → num`; all other carrier changes refuse. Relationship endpoints must map to the same stable endpoint declaration, callable bodies must remain byte-identical, and every migrated relationship value is sealed again before publication.
+Resident array and constructed nominal payloads are host world state, not schema lines. Their canonical one-line sidecars carry the full schema fingerprint, stable declaration ID, declaration version, canonical name, typed bit-exact payload, and final newline; every decode re-enters the same carrier/refinement validator. `ano-registry.md` gives the exact formats.
+
+`kore migrate live.reg candidate.reg migration.map` is the implemented schema barrier. The map is a separate host language with `preserve OLD [NEW]`, `rename OLD NEW`, `widen OLD NEW`, `drop OLD`, `discard OLD`, `add NEW`, and `unalias NAME`. It must account for every old and candidate declaration exactly once. `drop` refuses live data, `discard` names intentional loss, and a removed declaration targeted by the live overlay requires `unalias`. Supported pre-spatial widening is exactly `bool → nat|int|num`, `nat → int|num`, and `int → num`; all other legacy carrier changes refuse. Legacy callable bodies remain byte-identical. High-integrity declarations retain their explicit ID; semantic descriptor or body changes require a version increase, and runtime capabilities cross only through receipt revalidation. Every migrated relationship value is sealed again before publication.
 
 Kore stages and validates the migrated `.reg`, overlay, schema manifest, and event log, then publishes all four under one durable journal. A failure or recovered `prepared` journal restores every old byte without consuming its backups; a durable `rolled-back` marker makes that restoration restartable after a second crash. Recovered `committed` and `rolled-back` journals only remove transaction debris. Plans, callable handles, view descriptors, and service tokens are invalidated or revalidated against the new schema identity. The typed extension boundary deliberately refuses lattice changes until task `99` supplies the spatial descriptors and conversions.
 
-This mechanism does not approve the general registry taxonomy. Callable signatures, effects, determinism, service trust, enum identities, checked constructors, resident array domains, and the canonical extension remain author-gated; the loader does not accept inert metadata as a capability.
+The non-spatial taxonomy is implemented rather than retained as inert metadata: the loader, programmatic registry gate, planner, alias-service adapter, canonical dumper, migration validator, runtime sealers, and sidecar decoders consume its descriptors. Spatial declaration nouns remain solely in task `99`.
 
 ## How the two vocabularies intersect
 
 The registry and the language are the schema and the query over one column store. Five seams join them.
 
-The registry vocabulary is the language's noun vocabulary. Every `col`, `rel`, `srel`, `bind`, `fn`, `as`, and `def` name declared in a `.reg` becomes a resolvable word in the program's selection predicates: `col gold num …` makes `Gold` a mask and column you write `Gold += 100` against. Resolution folds case for registry names (so `Gold` reaches column `gold`), then walks the alias table one hop — but program-level `def` heads, comprehension binders, and values (`:Sym`, sym and char data) stay exact-byte. Complexity lives registry-side; the language stays flat.
+The registry vocabulary supplies the language's closed noun and callable vocabulary. Value-bearing `col`, `rel`, `srel`, `bind`, `fn`, `as`, and `def` names resolve in programs; enum and constructor names denote nominal types and checked host boundaries; services are callable footprints; unattached resident arrays refuse as source values. `col gold num …` makes `Gold` a mask and column you write `Gold += 100` against. Resolution folds case for registry names (so `Gold` reaches column `gold`), then walks the alias table one hop — but program-level `def` heads, comprehension binders, and values (`:Sym`, sym and char data) stay exact-byte. Complexity lives registry-side; the language stays flat.
 
 `def` lives on both sides and they never meet. Registry `def` is a proto, a row-oriented archetype of `col=value` fields consumed by `spawn`. Program `def` is a predicate or rule, inlined at use or installed on `=>`. Registry `def` resolves at load, program `def` at parse, so the reuse is deliberate, not a collision. `spawn Marine` reaches the registry proto; `def master = Human & Nord …` names a program predicate.
 

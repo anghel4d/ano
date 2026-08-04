@@ -513,6 +513,15 @@ fn verb_target(raw: &str) -> String {
     String::from_utf8_lossy(&b[start..i]).into_owned()
 }
 
+fn claims_call_namespace(kind: &RegEntryKind) -> bool {
+    matches!(
+        kind,
+        RegEntryKind::Fn { .. }
+            | RegEntryKind::TypedFn { .. }
+            | RegEntryKind::Ctor { .. }
+    )
+}
+
 /* ---------- Em infrastructure ---------- */
 
 impl<'a> Em<'a> {
@@ -987,7 +996,15 @@ impl<'a> Em<'a> {
                 line,
                 format!("proto '{}' in value position: a proto is spawned, never read", n),
             )),
-            RegEntryKind::Fn { .. } => Err(fail(line, format!("name '{}' (fn) in value position", n))),
+            RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. } => {
+                Err(fail(line, format!("name '{}' (fn) in value position", n)))
+            }
+            RegEntryKind::Array { .. } => Err(fail(line, format!("array '{}' needs a host attachment", n))),
+            RegEntryKind::Service { .. } => Err(fail(line, format!("service '{}' is not a value", n))),
+            RegEntryKind::Enum { .. } => Err(fail(line, format!("enum '{}' is a type, not a value", n))),
+            RegEntryKind::Ctor { .. } => {
+                Err(fail(line, format!("constructor '{}' must be called", n)))
+            }
         }
     }
 
@@ -1114,6 +1131,24 @@ impl<'a> Em<'a> {
                     let Some(fe) = self.find(cn) else {
                         return Err(fail(st.line, format!("unregistered callable '{}'", cn)));
                     };
+                    match self.ent(fe).kind {
+                        RegEntryKind::Fn { .. } => {}
+                        RegEntryKind::TypedFn { .. } => {
+                            return Err(fail(
+                                st.line,
+                                format!(
+                                    "typed pipeline callable '{}' needs a declared domain signature",
+                                    cn
+                                ),
+                            ));
+                        }
+                        _ => {
+                            return Err(fail(
+                                st.line,
+                                format!("declaration '{}' is not callable", cn),
+                            ));
+                        }
+                    }
                     let mut a = format!("⟨{}", vw.idx);
                     for k in args {
                         let av = self.emit_val(k, Mode::World)?;
@@ -1288,7 +1323,7 @@ impl<'a> Em<'a> {
                     }
                 } else {
                     if let Some(ei) = self.find(op) {
-                        if matches!(self.ent(ei).kind, RegEntryKind::Fn { .. }) {
+                        if matches!(self.ent(ei).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }) {
                             return Err(fail(
                                 operand.line,
                                 format!("named reducer '{}' over fibers is not yet supported", op),
@@ -1436,7 +1471,7 @@ impl<'a> Em<'a> {
         let operand = if identity { gathered.as_str() } else { "𝕩" };
         let Some(call) = self.render_fold(op, operand) else {
             // named reducer: the registry fn steps the same left recurrence
-            let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+            let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }));
             let Some(fe) = fe else {
                 return Err(fail(line, format!("unknown reducer '{}'", op)));
             };
@@ -1484,7 +1519,7 @@ impl<'a> Em<'a> {
             None => {
                 // named reducer scan: registry fn accumulates pairwise; the empty scope
                 // yields the empty column — a scan is length-preserving, no identity consulted
-                let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                let fe = self.find(op).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }));
                 let Some(fe) = fe else {
                     return Err(fail(line, format!("internal: no scan descriptor for '{}'", op)));
                 };
@@ -1556,7 +1591,7 @@ impl<'a> Em<'a> {
     fn emit_call(&mut self, callee: Symbol, args: &[Node], line: i32, m: Mode) -> R<Ev> {
         let name = self.rs(callee);
         let mut ev = Ev::default();
-        if name == "rank" {
+        if name == "rank" && self.find(name).is_none_or(|index| !claims_call_namespace(&self.ent(index).kind)) {
             if let Some(a0) = args.first() {
                 let a = self.emit_val(a0, m)?;
                 ev.v = format!("(AnoRank {})", a.v);
@@ -1565,7 +1600,15 @@ impl<'a> Em<'a> {
         }
         let e = self.find(name);
         let fnn: String = match e {
-            Some(i) => self.fnv(i),
+            Some(i)
+                if matches!(
+                    self.ent(i).kind,
+                    RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }
+                ) =>
+            {
+                self.fnv(i)
+            }
+            Some(_) => return Err(fail(line, format!("declaration '{}' is not callable", name))),
             None if name == "abs" => "|".to_string(),
             None if name == "sin" => "•math.Sin".to_string(),
             None => return Err(fail(line, format!("unregistered callable '{}'", name))),
@@ -1931,7 +1974,7 @@ impl<'a> Em<'a> {
                     None => {
                         let fe = self
                             .find(opn)
-                            .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                            .filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }));
                         let Some(fe) = fe else {
                             return Err(fail(
                                 nd.line,
@@ -2029,7 +2072,7 @@ impl<'a> Em<'a> {
             NodeKind::CrossV { f, a, b } => {
                 let am = self.emit_mask(a)?;
                 let bm = self.emit_mask(b)?;
-                let fe = self.find(self.rs(*f)).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. }));
+                let fe = self.find(self.rs(*f)).filter(|&i| matches!(self.ent(i).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }));
                 let Some(fe) = fe else {
                     return Err(fail(nd.line, "cross needs a registered fn"));
                 };
@@ -2627,34 +2670,79 @@ impl<'a> Em<'a> {
         }
     }
 
-    // N_EVERB/N_EVIA: raw text "<targetcol> <dfn>"; called as sel FnName ⟨target, args…⟩.
+    // Legacy verbs take their target from the raw prefix. Typed effects take zero or one target
+    // from the checked write footprint; zero-target output-service calls still execute at the barrier.
     fn emit_verb(&mut self, line: i32, name: Symbol, args: &[Node], fx: &mut Fx) -> R<()> {
-        let n = self.rs(name);
-        let e = self.find(n);
-        let raw: Option<&'a str> = e.and_then(|i| {
-            if let RegEntryKind::Fn { body: Some(b) } = &self.ent(i).kind { Some(b.as_str()) } else { None }
-        });
-        let (Some(ei), Some(raw)) = (e, raw) else {
-            return Err(fail(line, format!("verb '{}' needs a registered fn with a target column", n)));
+        let n = self.rs(name).to_string();
+        let Some(ei) = self.find(&n) else {
+            return Err(fail(line, format!("verb '{}' needs a registered fn", n)));
         };
-        let target = verb_target(raw);
-        let Some(ti) = self.find(&target) else {
-            return Err(fail(line, format!("verb '{}' target column '{}' unregistered", n, target)));
+        let target = match &self.ent(ei).kind {
+            RegEntryKind::Fn { body: Some(body) } => Some(verb_target(body)),
+            RegEntryKind::TypedFn { descriptor, .. } if descriptor.writes.len() <= 1 => {
+                descriptor.writes.first().cloned()
+            }
+            RegEntryKind::TypedFn { descriptor, .. } => {
+                return Err(fail(
+                    line,
+                    format!(
+                        "typed effect '{}' has {} write targets; this backend admits at most one",
+                        n,
+                        descriptor.writes.len()
+                    ),
+                ));
+            }
+            _ => return Err(fail(line, format!("verb '{}' needs a registered fn", n))),
         };
-        if is_uniq(self.ent(ti)) {
-            return Err(fail(line, format!("unique column '{}' is minted, never written", target)));
+        let target_index = match target {
+            Some(target) => {
+                let Some(index) = self.find(&target) else {
+                    return Err(fail(
+                        line,
+                        format!("verb '{}' target column '{}' unregistered", n, target),
+                    ));
+                };
+                if is_uniq(self.ent(index)) {
+                    return Err(fail(
+                        line,
+                        format!("unique column '{}' is minted, never written", target),
+                    ));
+                }
+                if !matches!(
+                    self.ent(index).kind,
+                    RegEntryKind::Col { .. } | RegEntryKind::Field { .. }
+                ) {
+                    return Err(fail(
+                        line,
+                        format!("verb '{}' target '{}' is not a mutable column", n, target),
+                    ));
+                }
+                Some(index)
+            }
+            None => None,
+        };
+        let mut rendered = Vec::new();
+        if let Some(index) = target_index {
+            rendered.push(self.bqnv(index));
         }
-        let mut args_s = format!("⟨{}", self.bqnv(ti));
-        for a in args {
-            let av = self.emit_val(a, Mode::World)?;
-            args_s = format!("{}, {}", args_s, av.v);
+        for arg in args {
+            rendered.push(self.emit_val(arg, Mode::World)?.v);
         }
-        args_s = format!("{}⟩", args_s);
-        self.merge_base(fx, ti, self.bqnv(ti), b'v', None, line, n)?;
-        let t = self.tv();
-        let fv = self.fnv(ei);
-        self.stage(format!("{} ← {} {} {}", t, self.sel_var, fv, args_s));
-        self.add_commit(fx, ti, t, b'v', None);
+        if let Some(index) = target_index {
+            self.merge_base(fx, index, self.bqnv(index), b'v', None, line, &n)?;
+        }
+        let temporary = self.tv();
+        let function = self.fnv(ei);
+        self.stage(format!(
+            "{} ← {} {} ⟨{}⟩",
+            temporary,
+            self.sel_var,
+            function,
+            rendered.join(", ")
+        ));
+        if let Some(index) = target_index {
+            self.add_commit(fx, index, temporary, b'v', None);
+        }
         Ok(())
     }
 }
@@ -3513,6 +3601,11 @@ impl<'a> Em<'a> {
                         }
                     }
                 }
+                RegEntryKind::TypedFn { body, .. } => {
+                    let function = self.fnv(i);
+                    self.out
+                        .push_str(&format!("{} ← {}{}\n", function, body, cm));
+                }
                 _ => {}
             }
         }
@@ -4300,8 +4393,9 @@ mod normalize {
     use crate::registry::{names_eq, reg_find, reg_role};
     use crate::trace::{TracePhase, TracePlan};
     use crate::{
-        ArithOp, AssignOp, BindKind, ColType, Diag, Directives, Interner, Node, NodeKind, RegEntry,
-        RegEntryKind, Registry, Symbol,
+        ArithOp, AssignOp, BindKind, CallableDescriptor, ColType, Determinism, Diag, Directives,
+        EffectSet, Interner, Node, NodeKind, RegEntry, RegEntryKind, RegType, Registry,
+        ServiceDirection, Symbol,
     };
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -4715,7 +4809,9 @@ mod normalize {
                 }
                 NodeKind::Fold { op, operand } | NodeKind::ScanExpr { op, operand } => {
                     let spelling = self.spelling(*op);
-                    if spelling == "#" {
+                    if let Some(descriptor) = self.typed_callable(spelling) {
+                        Self::semantic_from_type(&descriptor.signature.output)
+                    } else if spelling == "#" {
                         SemanticCarrier::Number
                     } else if matches!(spelling, "charmax" | "charmin") {
                         SemanticCarrier::Char
@@ -4729,7 +4825,9 @@ mod normalize {
                 }
                 NodeKind::ScanAlong { op, col, .. } => {
                     let spelling = self.spelling(*op);
-                    if matches!(spelling, "charmax" | "charmin") {
+                    if let Some(descriptor) = self.typed_callable(spelling) {
+                        Self::semantic_from_type(&descriptor.signature.output)
+                    } else if matches!(spelling, "charmax" | "charmin") {
                         SemanticCarrier::Char
                     } else if matches!(spelling, "&" | "|")
                         && self.infer(col) == SemanticCarrier::Mask
@@ -4750,6 +4848,8 @@ mod normalize {
                         SemanticCarrier::Char
                     } else if Some(*callee) == self.char_code || Some(*callee) == self.mask_number {
                         SemanticCarrier::Number
+                    } else if let Some(descriptor) = self.typed_callable(self.spelling(*callee)) {
+                        Self::semantic_from_type(&descriptor.signature.output)
                     } else {
                         SemanticCarrier::Number
                     }
@@ -4956,11 +5056,466 @@ mod normalize {
             }
         }
 
-        // Inputs: a head spelling. Output: true when the registry answers it with a fn — the ONLY
-        // admission route for a name (an arity that happens to be two admits nothing).
-        fn registered_fn(&self, spelling: &str) -> bool {
-            reg_find(&self.reg, spelling)
-                .is_some_and(|index| matches!(self.reg.ents[index].kind, RegEntryKind::Fn { .. }))
+        fn type_of_entry(&self, index: usize) -> Option<RegType> {
+            let entry = &self.reg.ents[index];
+            match &entry.kind {
+                RegEntryKind::Col { ty, nums, .. } => {
+                    if *ty == ColType::Num
+                        && self.reg.n > 0
+                        && nums.len() as i64 == 2 * self.reg.n as i64
+                    {
+                        return None;
+                    }
+                    Some(match ty {
+                        ColType::Bool => RegType::Mask,
+                        ColType::Nat => RegType::Nat,
+                        ColType::Int => RegType::Int,
+                        ColType::Num => RegType::Num,
+                        ColType::Sym => RegType::Sym,
+                        ColType::Char => RegType::Char,
+                    })
+                }
+                RegEntryKind::Field { ty, nums, .. } => {
+                    let cells = self.reg.lat_w.wrapping_mul(self.reg.lat_h);
+                    if *ty == ColType::Num
+                        && cells > 0
+                        && nums.len() as i64 == 2 * cells as i64
+                    {
+                        return None;
+                    }
+                    Some(match ty {
+                        ColType::Bool => RegType::Mask,
+                        ColType::Nat => RegType::Nat,
+                        ColType::Int => RegType::Int,
+                        ColType::Num => RegType::Num,
+                        ColType::Sym => RegType::Sym,
+                        ColType::Char => RegType::Char,
+                    })
+                }
+                RegEntryKind::Rel { .. } => Some(RegType::Entity),
+                RegEntryKind::AliasMask { .. } | RegEntryKind::Tag { .. } => {
+                    Some(RegType::Mask)
+                }
+                RegEntryKind::Bind { kind, .. } => match kind {
+                    BindKind::Entity => Some(RegType::Entity),
+                    BindKind::Mask => Some(RegType::Mask),
+                    BindKind::Num => Some(RegType::Num),
+                    BindKind::Point | BindKind::Vec => None,
+                },
+                _ => None,
+            }
+        }
+
+        fn type_from_semantic(carrier: SemanticCarrier) -> Option<RegType> {
+            match carrier {
+                SemanticCarrier::Mask => Some(RegType::Mask),
+                SemanticCarrier::Number => Some(RegType::Num),
+                SemanticCarrier::Char => Some(RegType::Char),
+                SemanticCarrier::Sym => Some(RegType::Sym),
+                SemanticCarrier::Other => None,
+            }
+        }
+        fn semantic_from_type(carrier: &RegType) -> SemanticCarrier {
+            match carrier {
+                RegType::Mask => SemanticCarrier::Mask,
+                RegType::Char => SemanticCarrier::Char,
+                RegType::Sym => SemanticCarrier::Sym,
+                RegType::Unit => SemanticCarrier::Other,
+                RegType::Nat
+                | RegType::Int
+                | RegType::Num
+                | RegType::Entity
+                | RegType::Named(_) => SemanticCarrier::Number,
+            }
+        }
+
+        // This exact carrier view is used only at typed registry boundaries. Runtime operator
+        // promotion remains the broader SemanticCarrier lattice.
+        fn node_type(&self, node: &Node) -> Option<RegType> {
+            match &node.kind {
+                NodeKind::Num(value) => {
+                    if crate::registry::type_admits(ColType::Nat, *value) {
+                        Some(RegType::Nat)
+                    } else if crate::registry::type_admits(ColType::Int, *value) {
+                        Some(RegType::Int)
+                    } else {
+                        Some(RegType::Num)
+                    }
+                }
+                NodeKind::Counter { .. } | NodeKind::Arith { .. } => Some(RegType::Num),
+                NodeKind::Sym(..) => Some(RegType::Sym),
+                NodeKind::Str(..) => Some(RegType::Char),
+                NodeKind::Name(symbol) | NodeKind::Alias { look: symbol, .. } => self
+                    .derived
+                    .get(self.spelling(*symbol))
+                    .copied()
+                    .and_then(Self::type_from_semantic)
+                    .or_else(|| {
+                        reg_find(&self.reg, self.spelling(*symbol))
+                            .and_then(|index| self.type_of_entry(index))
+                    }),
+                NodeKind::Cmp { .. }
+                | NodeKind::CmpAny { .. }
+                | NodeKind::Not(..) => Some(RegType::Mask),
+                NodeKind::And(..) | NodeKind::Or(..) => {
+                    Self::type_from_semantic(self.infer(node))
+                }
+                NodeKind::Scope { l, .. } => self.node_type(l),
+                NodeKind::Hop { r, .. } => self.node_type(r),
+                NodeKind::Call { callee, .. } => reg_find(&self.reg, self.spelling(*callee))
+                    .and_then(|index| match &self.reg.ents[index].kind {
+                        RegEntryKind::TypedFn { descriptor, .. } => {
+                            Some(descriptor.signature.output.clone())
+                        }
+                        RegEntryKind::Ctor { .. } => {
+                            Some(RegType::Named(self.reg.ents[index].name.clone()))
+                        }
+                        _ => None,
+                    })
+                    .or(Some(RegType::Num)),
+                NodeKind::Fold { op, operand } | NodeKind::ScanExpr { op, operand } => {
+                    if let Some(output) = reg_find(&self.reg, self.spelling(*op)).and_then(
+                        |index| match &self.reg.ents[index].kind {
+                            RegEntryKind::TypedFn { descriptor, .. } => {
+                                Some(descriptor.signature.output.clone())
+                            }
+                            _ => None,
+                        },
+                    ) {
+                        Some(output)
+                    } else if self.spelling(*op) == "#" {
+                        Some(RegType::Nat)
+                    } else {
+                        Self::type_from_semantic(self.infer(operand))
+                    }
+                }
+                NodeKind::ScanAlong { op, col, .. } => {
+                    if let Some(output) = reg_find(&self.reg, self.spelling(*op)).and_then(
+                        |index| match &self.reg.ents[index].kind {
+                            RegEntryKind::TypedFn { descriptor, .. } => {
+                                Some(descriptor.signature.output.clone())
+                            }
+                            _ => None,
+                        },
+                    ) {
+                        Some(output)
+                    } else if self.spelling(*op) == "#" {
+                        Some(RegType::Nat)
+                    } else {
+                        Self::type_from_semantic(self.infer(col))
+                    }
+                }
+                NodeKind::IotaX(..) => Some(RegType::Nat),
+                NodeKind::CrossV { f, .. } => reg_find(&self.reg, self.spelling(*f)).and_then(
+                    |index| match &self.reg.ents[index].kind {
+                        RegEntryKind::TypedFn { descriptor, .. } => {
+                            Some(descriptor.signature.output.clone())
+                        }
+                        _ => Some(RegType::Num),
+                    },
+                ),
+                _ => None,
+            }
+        }
+
+        fn typed_callable(&self, spelling: &str) -> Option<CallableDescriptor> {
+            reg_find(&self.reg, spelling).and_then(|index| {
+                if let RegEntryKind::TypedFn { descriptor, .. } = &self.reg.ents[index].kind {
+                    Some(descriptor.clone())
+                } else {
+                    None
+                }
+            })
+        }
+
+        fn validate_typed_arguments(
+            &self,
+            spelling: &str,
+            descriptor: &CallableDescriptor,
+            args: &[Node],
+            line: i32,
+        ) -> Result<(), Diag> {
+            if args.len() != descriptor.signature.inputs.len() {
+                return Err(super::fail(
+                    line,
+                    format!(
+                        "typed callable '{}' expects {} arguments, got {}",
+                        spelling,
+                        descriptor.signature.inputs.len(),
+                        args.len()
+                    ),
+                ));
+            }
+            for (position, (arg, expected)) in args
+                .iter()
+                .zip(&descriptor.signature.inputs)
+                .enumerate()
+            {
+                let actual = self.node_type(arg);
+                if actual.as_ref() != Some(expected) {
+                    return Err(super::fail(
+                        line,
+                        format!(
+                            "typed callable '{}' argument {} is {}, expected {}",
+                            spelling,
+                            position + 1,
+                            actual
+                                .as_ref()
+                                .map(crate::registry::reg_type_word)
+                                .unwrap_or("untyped"),
+                            crate::registry::reg_type_word(expected)
+                        ),
+                    ));
+                }
+            }
+            Ok(())
+        }
+
+        fn has_output_service(&self, descriptor: &CallableDescriptor) -> bool {
+            descriptor.services.iter().any(|service| {
+                reg_find(&self.reg, service).is_some_and(|index| {
+                    matches!(
+                        &self.reg.ents[index].kind,
+                        RegEntryKind::Service { descriptor }
+                            if descriptor.direction == ServiceDirection::Output
+                    )
+                })
+            })
+        }
+
+        fn validate_value_call(
+            &self,
+            spelling: &str,
+            args: &[Node],
+            line: i32,
+        ) -> Result<(), Diag> {
+            if spelling == "rank"
+                && reg_find(&self.reg, spelling)
+                    .is_none_or(|index| !super::claims_call_namespace(&self.reg.ents[index].kind))
+            {
+                if args.len() != 1 {
+                    return Err(super::fail(
+                        line,
+                        format!("rank expects 1 argument, got {}", args.len()),
+                    ));
+                }
+                return Ok(());
+            }
+            let Some(index) = reg_find(&self.reg, spelling) else {
+                return Ok(());
+            };
+            match &self.reg.ents[index].kind {
+                RegEntryKind::Fn { .. } => Ok(()),
+                RegEntryKind::TypedFn { descriptor, .. } => {
+                    self.validate_typed_arguments(spelling, descriptor, args, line)?;
+                    if !(1..=2).contains(&args.len()) {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed callable '{}' has no {}-argument value ABI; use a unary or binary signature",
+                                spelling,
+                                args.len()
+                            ),
+                        ));
+                    }
+                    if descriptor.signature.output == RegType::Unit {
+                        return Err(super::fail(
+                            line,
+                            format!("typed callable '{}' returns unit and is effect-only", spelling),
+                        ));
+                    }
+                    if descriptor.effects.write
+                        || descriptor.determinism == Determinism::Nondeterministic
+                        || self.has_output_service(descriptor)
+                    {
+                        return Err(super::fail(
+                            line,
+                            format!("typed callable '{}' has effects unavailable in value position", spelling),
+                        ));
+                    }
+                    Ok(())
+                }
+                RegEntryKind::Ctor { .. } => Err(super::fail(
+                    line,
+                    format!(
+                        "constructor '{}' is a checked host boundary, not raw BQN",
+                        spelling
+                    ),
+                )),
+                _ => Err(super::fail(
+                    line,
+                    format!("declaration '{}' is not callable", spelling),
+                )),
+            }
+        }
+        fn validate_cross_call(&self, spelling: &str, line: i32) -> Result<(), Diag> {
+            let Some(index) = reg_find(&self.reg, spelling) else {
+                return Err(super::fail(line, "cross needs a registered fn"));
+            };
+            match &self.reg.ents[index].kind {
+                RegEntryKind::Fn { .. } => Ok(()),
+                RegEntryKind::TypedFn { descriptor, .. } => {
+                    if descriptor.signature.inputs.as_slice()
+                        != [RegType::Mask, RegType::Mask]
+                    {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed cross '{}' requires signature mask,mask->...",
+                                spelling
+                            ),
+                        ));
+                    }
+                    if descriptor.signature.output == RegType::Unit
+                        || descriptor.effects.write
+                        || descriptor.determinism == Determinism::Nondeterministic
+                        || self.has_output_service(descriptor)
+                    {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed cross '{}' requires a value-returning input-only callable",
+                                spelling
+                            ),
+                        ));
+                    }
+                    Ok(())
+                }
+                _ => Err(super::fail(line, "cross needs a registered fn")),
+            }
+        }
+
+        fn validate_effect_call(
+            &self,
+            spelling: &str,
+            args: &[Node],
+            line: i32,
+        ) -> Result<(), Diag> {
+            let Some(index) = reg_find(&self.reg, spelling) else {
+                return Err(super::fail(
+                    line,
+                    format!("verb '{}' needs a registered fn", spelling),
+                ));
+            };
+            match &self.reg.ents[index].kind {
+                RegEntryKind::Fn { .. } => Ok(()),
+                RegEntryKind::TypedFn { descriptor, .. } => {
+                    self.validate_typed_arguments(spelling, descriptor, args, line)?;
+                    if descriptor.signature.output != RegType::Unit {
+                        return Err(super::fail(
+                            line,
+                            format!("typed effect '{}' must return unit", spelling),
+                        ));
+                    }
+                    if descriptor.writes.len() > 1 {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed effect '{}' has {} write targets; this backend admits at most one",
+                                spelling,
+                                descriptor.writes.len()
+                            ),
+                        ));
+                    }
+                    if let Some(target) = descriptor.writes.first() {
+                        let Some(target_index) = reg_find(&self.reg, target) else {
+                            return Err(super::fail(
+                                line,
+                                format!("typed effect '{}' write target '{}' is missing", spelling, target),
+                            ));
+                        };
+                        if !matches!(
+                            self.reg.ents[target_index].kind,
+                            RegEntryKind::Col { uniq: false, .. } | RegEntryKind::Field { .. }
+                        ) {
+                            return Err(super::fail(
+                                line,
+                                format!(
+                                    "typed effect '{}' write target '{}' is not a mutable column",
+                                    spelling, target
+                                ),
+                            ));
+                        }
+                    } else if !self.has_output_service(descriptor) {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed effect '{}' has neither a write target nor an output service",
+                                spelling
+                            ),
+                        ));
+                    }
+                    Ok(())
+                }
+                _ => Err(super::fail(
+                    line,
+                    format!("verb '{}' needs a registered fn", spelling),
+                )),
+            }
+        }
+
+        // The registry signature, not source arity, decides whether a function is a reducer.
+        fn registered_reducer(
+            &self,
+            spelling: &str,
+            line: i32,
+            operand: &Node,
+        ) -> Result<Option<Carrier>, Diag> {
+            let Some(index) = reg_find(&self.reg, spelling) else {
+                return Ok(None);
+            };
+            match &self.reg.ents[index].kind {
+                RegEntryKind::Fn { .. } => Ok(Some(Carrier::Number)),
+                RegEntryKind::TypedFn { descriptor, .. } => {
+                    let signature = &descriptor.signature;
+                    if descriptor.effects != EffectSet::default()
+                        || descriptor.determinism != Determinism::Deterministic
+                        || signature.inputs.len() != 2
+                        || signature.inputs[0] != signature.inputs[1]
+                        || signature.output != signature.inputs[0]
+                    {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed reducer '{}' must be pure, deterministic, and A,A->A",
+                                spelling
+                            ),
+                        ));
+                    }
+                    let actual = self.node_type(operand);
+                    if actual.as_ref() != Some(&signature.inputs[0]) {
+                        return Err(super::fail(
+                            line,
+                            format!(
+                                "typed reducer '{}' operand is {}, expected {}",
+                                spelling,
+                                actual
+                                    .as_ref()
+                                    .map(crate::registry::reg_type_word)
+                                    .unwrap_or("untyped"),
+                                crate::registry::reg_type_word(&signature.inputs[0])
+                            ),
+                        ));
+                    }
+                    let carrier = match signature.inputs[0] {
+                        RegType::Mask => Carrier::Mask,
+                        RegType::Nat | RegType::Int | RegType::Num => Carrier::Number,
+                        RegType::Char => Carrier::Char,
+                        _ => {
+                            return Err(super::fail(
+                                line,
+                                format!(
+                                    "typed reducer '{}' has unsupported carrier {}",
+                                    spelling,
+                                    crate::registry::reg_type_word(&signature.inputs[0])
+                                ),
+                            ));
+                        }
+                    };
+                    Ok(Some(carrier))
+                }
+                _ => Ok(None),
+            }
         }
 
         // Inputs: the head spelling and its already-normalized operand. Output: the carrier the
@@ -4993,11 +5548,12 @@ mod normalize {
             operand: &Node,
             line: i32,
         ) -> Result<OpDesc, Diag> {
-            reducer::resolve_head(
+            let registered = self.registered_reducer(spelling, line, operand)?;
+            reducer::resolve_registered_head(
                 spelling,
                 form,
                 self.head_carrier(spelling, operand),
-                self.registered_fn(spelling),
+                registered,
             )
             .map_err(|message| super::fail(line, message))
         }
@@ -5161,13 +5717,15 @@ mod normalize {
                     r: Box::new(self.normalize(r, Context::Neutral, phase)?),
                 },
                 NodeKind::SetHop { rel } => NodeKind::SetHop { rel: *rel },
-                NodeKind::Call { callee, args } => NodeKind::Call {
-                    callee: *callee,
-                    args: args
+                NodeKind::Call { callee, args } => {
+                    let spelling = self.spelling(*callee).to_string();
+                    let args = args
                         .iter()
                         .map(|arg| self.normalize(arg, Context::Value, phase))
-                        .collect::<Result<Vec<_>, _>>()?,
-                },
+                        .collect::<Result<Vec<_>, _>>()?;
+                    self.validate_value_call(&spelling, &args, line)?;
+                    NodeKind::Call { callee: *callee, args }
+                }
                 // The three head arms below share ONE resolver and ONE descriptor table. The
                 // descriptor's canonical spelling is bound back into the node, so every emitter
                 // retrieves the object that was checked here and can hold no second table.
@@ -5330,11 +5888,17 @@ mod normalize {
                 NodeKind::Expand(inner) => {
                     NodeKind::Expand(Box::new(self.normalize(inner, Context::Value, phase)?))
                 }
-                NodeKind::CrossV { f, a, b } => NodeKind::CrossV {
-                    f: *f,
-                    a: Box::new(self.normalize(a, Context::Value, phase)?),
-                    b: Box::new(self.normalize(b, Context::Value, phase)?),
-                },
+                NodeKind::CrossV { f, a, b } => {
+                    let spelling = self.spelling(*f).to_string();
+                    let a = self.normalize(a, Context::Mask, phase)?;
+                    let b = self.normalize(b, Context::Mask, phase)?;
+                    self.validate_cross_call(&spelling, line)?;
+                    NodeKind::CrossV {
+                        f: *f,
+                        a: Box::new(a),
+                        b: Box::new(b),
+                    }
+                }
                 NodeKind::Binder { name, source } => NodeKind::Binder {
                     name: *name,
                     source: Box::new(self.normalize(source, Context::Value, phase)?),
@@ -5424,17 +5988,21 @@ mod normalize {
                         None => None,
                     },
                 },
-                NodeKind::EVerb { name, args } => NodeKind::EVerb {
-                    name: *name,
-                    args: args
+                NodeKind::EVerb { name, args } => {
+                    let spelling = self.spelling(*name).to_string();
+                    let args = args
                         .iter()
                         .map(|arg| self.normalize(arg, Context::Value, TracePhase::Effect))
-                        .collect::<Result<Vec<_>, _>>()?,
-                },
-                NodeKind::EVia { f, col } => NodeKind::EVia {
-                    f: *f,
-                    col: Box::new(self.normalize(col, Context::Value, TracePhase::Effect)?),
-                },
+                        .collect::<Result<Vec<_>, _>>()?;
+                    self.validate_effect_call(&spelling, &args, line)?;
+                    NodeKind::EVerb { name: *name, args }
+                }
+                NodeKind::EVia { f, col } => {
+                    let spelling = self.spelling(*f).to_string();
+                    let col = self.normalize(col, Context::Value, TracePhase::Effect)?;
+                    self.validate_effect_call(&spelling, std::slice::from_ref(&col), line)?;
+                    NodeKind::EVia { f: *f, col: Box::new(col) }
+                }
                 NodeKind::Stmt { sel, effects, rule, cont, elided } => {
                     let dynamic_selection = sel.is_none() && (*cont || *elided);
                     for effect in effects {

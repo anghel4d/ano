@@ -3,6 +3,7 @@
 // purely lexical, writes commit via staged file + rename(2). No CWD mutation anywhere.
 
 use std::io::{Error, Read, Write};
+use std::path::{Path, PathBuf};
 
 pub const ANO_PATHSZ: usize = 1024;
 
@@ -166,15 +167,36 @@ pub fn fs_read(path: &str) -> std::io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-// Writes and syncs "<path>.staged", then atomically renames it over the target. The parent
-// directory is not synced. Paths at or above ANO_PATHSZ refuse ENAMETOOLONG. Failures after
-// staging remove the staged file and preserve the original error.
-pub fn fs_write_commit(path: &str, data: &[u8]) -> std::io::Result<()> {
-    let staged = format!("{}.staged", path);
-    if staged.len() >= ANO_PATHSZ {
-        return Err(condition(FsCondition::NameTooLong));
-    }
-    let mut f = std::fs::File::create(&staged)?;
+// Writes and syncs a create-new sibling stage, then atomically renames it over the target.
+// Concurrent writers can race only at the complete-file rename. Paths at or above ANO_PATHSZ
+// refuse ENAMETOOLONG; failures remove the exact stage; the parent sync is best effort.
+pub fn fs_write_commit(path: impl AsRef<Path>, data: &[u8]) -> std::io::Result<()> {
+    let path = path.as_ref();
+    let mut serial = 0u64;
+    let (staged, mut f) = loop {
+        let mut staged = path.as_os_str().to_os_string();
+        staged.push(format!(
+            ".staged.{}.{}",
+            std::process::id(), serial
+        ));
+        let staged = PathBuf::from(staged);
+        if staged.as_os_str().as_encoded_bytes().len() >= ANO_PATHSZ {
+            return Err(condition(FsCondition::NameTooLong));
+        }
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staged)
+        {
+            Ok(file) => break (staged, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                serial = serial
+                    .checked_add(1)
+                    .ok_or_else(|| condition(FsCondition::Unattributed))?;
+            }
+            Err(error) => return Err(error),
+        }
+    };
     if let Err(e) = f.write_all(data) {
         let e = os_or_eio(e);
         drop(f);
@@ -190,6 +212,14 @@ pub fn fs_write_commit(path: &str, data: &[u8]) -> std::io::Result<()> {
     if let Err(e) = std::fs::rename(&staged, path) {
         let _ = std::fs::remove_file(&staged);
         return Err(e);
+    }
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        if let Ok(directory) = std::fs::File::open(parent) {
+            let _ = directory.sync_all();
+        }
     }
     Ok(())
 }
@@ -208,22 +238,45 @@ pub enum FsCondition {
 
 // Inputs: one FsCondition. Output: an io::Error carrying the platform's own code for that
 // condition, so a diagnostic reads the same as any other tool on the platform reports it.
-fn condition(_which: FsCondition) -> Error {
-    todo!()
+fn condition(which: FsCondition) -> Error {
+    #[cfg(unix)]
+    let code = match which {
+        FsCondition::IsADirectory => libc::EISDIR,
+        FsCondition::NotAFile => libc::EINVAL,
+        FsCondition::NameTooLong => libc::ENAMETOOLONG,
+        FsCondition::Unattributed => libc::EIO,
+    };
+    #[cfg(not(unix))]
+    let code = match which {
+        FsCondition::IsADirectory => 5,
+        FsCondition::NotAFile => 87,
+        FsCondition::NameTooLong => 206,
+        FsCondition::Unattributed => 1117,
+    };
+    Error::from_raw_os_error(code)
 }
 
 // Inputs: an io::Error. Output: the same error when it already carries an OS code, and the
 // unattributed-failure code otherwise.
-fn os_or_eio(_e: Error) -> Error {
-    todo!()
+fn os_or_eio(e: Error) -> Error {
+    if e.raw_os_error().is_some() {
+        e
+    } else {
+        condition(FsCondition::Unattributed)
+    }
 }
 
 // Inputs: an io::Error. Output: the platform's native message text for it. The text is the
 // operating system's own wording and carries no Rust-added decoration such as a trailing
 // parenthesized code, so one diagnostic line matches what the platform reports everywhere
 // else. A code the platform does not name renders as "Unknown error <code>".
-pub fn strerror(_e: &std::io::Error) -> String {
-    todo!()
+pub fn strerror(e: &std::io::Error) -> String {
+    let rendered = e.to_string();
+    let Some(code) = e.raw_os_error() else {
+        return rendered;
+    };
+    let suffix = format!(" (os error {code})");
+    rendered.strip_suffix(&suffix).unwrap_or(&rendered).to_string()
 }
 
 #[cfg(test)]
@@ -269,5 +322,64 @@ mod tests {
         assert_eq!(fs_join("d", "/abs").unwrap().s, "/abs");
         assert_eq!(fs_join("d", "").unwrap().s, "d/");
         assert!(fs_join(&"a".repeat(1000), &"b".repeat(100)).is_none());
+    }
+
+    #[test]
+    fn filesystem_conditions_are_native_errors_not_panics() {
+        let directory = condition(FsCondition::IsADirectory);
+        let nonfile = condition(FsCondition::NotAFile);
+        let long = condition(FsCondition::NameTooLong);
+        let unattributed = os_or_eio(Error::other("no platform cause"));
+        assert!(directory.raw_os_error().is_some());
+        assert!(nonfile.raw_os_error().is_some());
+        assert!(long.raw_os_error().is_some());
+        assert!(unattributed.raw_os_error().is_some());
+        for error in [directory, nonfile, long, unattributed] {
+            assert!(!strerror(&error).contains("(os error"));
+            assert!(!strerror(&error).is_empty());
+        }
+    }
+
+    #[test]
+    fn attributed_io_errors_survive_unchanged() {
+        let original = Error::from_raw_os_error(2);
+        let preserved = os_or_eio(original);
+        assert_eq!(preserved.raw_os_error(), Some(2));
+        assert!(!strerror(&preserved).contains("(os error"));
+    }
+
+    #[test]
+    fn concurrent_commits_publish_one_complete_value_and_leave_no_stage() {
+        let root = std::env::temp_dir().join(format!("ano-fs-commit-{}-{}", std::process::id(), line!()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let path = std::sync::Arc::new(root.join("value"));
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let writers = [b'a', b'b']
+            .into_iter()
+            .map(|byte| {
+                let path = std::sync::Arc::clone(&path);
+                let barrier = std::sync::Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let payload = vec![byte; 16 * 1024];
+                    barrier.wait();
+                    fs_write_commit(path.to_str().unwrap(), &payload).unwrap();
+                    payload
+                })
+            })
+            .collect::<Vec<_>>();
+        barrier.wait();
+        let payloads = writers
+            .into_iter()
+            .map(|writer| writer.join().unwrap())
+            .collect::<Vec<_>>();
+        let published = std::fs::read(&*path).unwrap();
+        assert!(payloads.iter().any(|payload| *payload == published));
+        let files = std::fs::read_dir(&root)
+            .unwrap()
+            .filter_map(Result::ok)
+            .collect::<Vec<_>>();
+        assert_eq!(files.len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

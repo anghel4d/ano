@@ -14,10 +14,12 @@
 
 use crate::num;
 use crate::registry::reg_find;
-use crate::{BindKind, ColType, Diag, RegEntryKind, Registry};
+use crate::{
+    ArrayDomain, BindKind, CallableSignature, ColType, ConstructorRefinement, DeclId, DeclMeta,
+    Diag, RegEntryKind, RegType, Registry, ServiceDirection,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
-use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
 
 const MAGIC: &str = "ano-aliases-v1";
@@ -242,6 +244,64 @@ const RESOLVERS: &[ResolverSpec] = &[
 pub fn resolver_spec(id: &str) -> Option<&'static ResolverSpec> {
     RESOLVERS.iter().find(|spec| spec.id == id)
 }
+#[derive(Debug, Clone, Copy)]
+struct ResolverContract {
+    declaration: Option<DeclId>,
+    service: u64,
+    carrier: AliasCarrier,
+}
+
+// A matching service declaration upgrades the legacy compile-time resolver contract. Its
+// signature is closed: frozen host input is out-of-band, so the service is unit -> entity|mask.
+fn resolver_contract(
+    reg: &Registry,
+    spec: &ResolverSpec,
+) -> Result<ResolverContract, Diag> {
+    let Some(index) = reg_find(reg, spec.id) else {
+        return Ok(ResolverContract {
+            declaration: None,
+            service: spec.service,
+            carrier: spec.carrier,
+        });
+    };
+    let RegEntryKind::Service { descriptor } = &reg.ents[index].kind else {
+        return Err(fail(format!(
+            "resolver '{}' is shadowed by a non-service declaration",
+            spec.id
+        )));
+    };
+    if descriptor.direction != ServiceDirection::Input || !descriptor.signature.inputs.is_empty() {
+        return Err(fail(format!(
+            "resolver '{}' needs an input service with signature unit->{}",
+            spec.id,
+            spec.carrier.word()
+        )));
+    }
+    let carrier = match descriptor.signature.output {
+        RegType::Entity => AliasCarrier::Entity,
+        RegType::Mask => AliasCarrier::Mask,
+        _ => {
+            return Err(fail(format!(
+                "resolver '{}' service output is not entity or mask",
+                spec.id
+            )));
+        }
+    };
+    if carrier != spec.carrier {
+        return Err(fail(format!(
+            "resolver '{}' service declares {}, implementation returns {}",
+            spec.id,
+            carrier.word(),
+            spec.carrier.word()
+        )));
+    }
+    Ok(ResolverContract {
+        declaration: Some(descriptor.meta.id),
+        service: descriptor.meta.version,
+        carrier,
+    })
+}
+
 
 // Inputs: a resolver result, the carrier its target declared, the frozen registry. Output: true
 // when the result inhabits that carrier and row domain — Entity < n, Mask exactly n rows of 0/1.
@@ -272,9 +332,17 @@ pub enum AliasTarget {
         resolver: String,
         carrier: AliasCarrier,
         service: u64,
+        service_declaration: Option<DeclId>,
         schema: u64,
         input: HostInput,
     },
+}
+
+fn service_description(version: u64, declaration: Option<DeclId>) -> String {
+    match declaration {
+        Some(id) => format!("{} declaration {:016x}", version, id.0),
+        None => version.to_string(),
+    }
 }
 
 impl AliasTarget {
@@ -299,11 +367,11 @@ impl AliasTarget {
                     .join(" ");
                 format!("mask [{}]", bits)
             }
-            AliasTarget::Resolver { resolver, carrier, service, input, .. } => format!(
+            AliasTarget::Resolver { resolver, carrier, service, service_declaration, input, .. } => format!(
                 "resolver {} ({}, service {}, input v{})",
                 resolver,
                 carrier.word(),
-                service,
+                service_description(*service, *service_declaration),
                 input.version
             ),
         }
@@ -317,9 +385,9 @@ impl AliasTarget {
             AliasTarget::Mask { .. } => {
                 format!("mask '{}'", materialized.unwrap_or(""))
             }
-            AliasTarget::Resolver { resolver, service, input, .. } => format!(
+            AliasTarget::Resolver { resolver, service, service_declaration, input, .. } => format!(
                 "resolver '{}' service {} input v{}",
-                resolver, service, input.version
+                resolver, service_description(*service, *service_declaration), input.version
             ),
         }
     }
@@ -344,18 +412,6 @@ pub enum ResolvedAlias {
     Entry(usize),
     Mask(Vec<f64>),
     EntityRow(usize),
-}
-
-impl Default for AliasEnvironment {
-    fn default() -> Self {
-        Self { version: 0, schema: 0, entries: BTreeMap::new() }
-    }
-}
-
-impl Default for AliasSnapshot {
-    fn default() -> Self {
-        Self { version: 0, schema: 0, entries: BTreeMap::new() }
-    }
 }
 
 fn hash_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
@@ -383,11 +439,56 @@ fn hash_optional_text(mut hash: u64, text: &Option<String>) -> u64 {
     hash
 }
 
+fn hash_number(hash: u64, value: f64) -> u64 {
+    let bits = if value == 0.0 { 0 } else { value.to_bits() };
+    hash_bytes(hash, &bits.to_le_bytes())
+}
+
 fn hash_range(mut hash: u64, range: Option<(f64, f64)>) -> u64 {
     hash = hash_bytes(hash, &[range.is_some() as u8]);
     if let Some((lo, hi)) = range {
-        hash = hash_bytes(hash, &lo.to_bits().to_le_bytes());
-        hash = hash_bytes(hash, &hi.to_bits().to_le_bytes());
+        hash = hash_number(hash, lo);
+        hash = hash_number(hash, hi);
+    }
+    hash
+}
+
+fn hash_meta(mut hash: u64, meta: DeclMeta) -> u64 {
+    hash = hash_bytes(hash, &meta.id.0.to_le_bytes());
+    hash_bytes(hash, &meta.version.to_le_bytes())
+}
+
+fn hash_reg_type(mut hash: u64, carrier: &RegType) -> u64 {
+    let tag = match carrier {
+        RegType::Unit => 0,
+        RegType::Mask => 1,
+        RegType::Nat => 2,
+        RegType::Int => 3,
+        RegType::Num => 4,
+        RegType::Sym => 5,
+        RegType::Char => 6,
+        RegType::Entity => 7,
+        RegType::Named(_) => 8,
+    };
+    hash = hash_bytes(hash, &[tag]);
+    if let RegType::Named(name) = carrier {
+        hash = hash_text(hash, name);
+    }
+    hash
+}
+
+fn hash_signature(mut hash: u64, signature: &CallableSignature) -> u64 {
+    hash = hash_bytes(hash, &(signature.inputs.len() as u64).to_le_bytes());
+    for input in &signature.inputs {
+        hash = hash_reg_type(hash, input);
+    }
+    hash_reg_type(hash, &signature.output)
+}
+
+fn hash_names(mut hash: u64, names: &[String]) -> u64 {
+    hash = hash_bytes(hash, &(names.len() as u64).to_le_bytes());
+    for name in names {
+        hash = hash_text(hash, name);
     }
     hash
 }
@@ -396,6 +497,7 @@ fn hash_range(mut hash: u64, range: Option<(f64, f64)>) -> u64 {
 /// entity updates do not stale binding aliases.  Materialized mask aliases independently pin
 /// their row count.  Every declaration descriptor does participate: this hash is also the
 /// persistent schema identity used by migration manifests and stamped handles.
+/// The retired inferred-pair byte remains in the wire hash as canonical zero.
 pub fn registry_fingerprint(reg: &Registry) -> u64 {
     let mut hash = 0xcbf29ce484222325u64;
     hash = hash_bytes(hash, b"ano-schema-fingerprint-v2");
@@ -403,19 +505,16 @@ pub fn registry_fingerprint(reg: &Registry) -> u64 {
     hash = hash_bytes(hash, &reg.lat_h.to_le_bytes());
     for entry in &reg.ents {
         hash = hash_text(hash, &entry.name);
-        hash = hash_bytes(hash, &entry.defval.to_bits().to_le_bytes());
+        hash = hash_number(hash, entry.defval);
         match &entry.kind {
-            RegEntryKind::Col { ty, uniq, nums, pres, rng, .. } => {
+            RegEntryKind::Col { ty, uniq, pres, rng, .. } => {
                 hash = hash_bytes(hash, &[0x10, *ty as u8, *uniq as u8, pres.is_some() as u8]);
-                let vector = reg.n > 0 && nums.len() as i64 == 2 * reg.n as i64;
-                hash = hash_bytes(hash, &[vector as u8]);
+                hash = hash_bytes(hash, &[0]);
                 hash = hash_range(hash, *rng);
             }
-            RegEntryKind::Field { ty, nums, rng, .. } => {
+            RegEntryKind::Field { ty, rng, .. } => {
                 hash = hash_bytes(hash, &[0x20, *ty as u8]);
-                let cells = reg.lat_w as i64 * reg.lat_h as i64;
-                let vector = cells > 0 && nums.len() as i64 == 2 * cells;
-                hash = hash_bytes(hash, &[vector as u8]);
+                hash = hash_bytes(hash, &[0]);
                 hash = hash_range(hash, *rng);
             }
             RegEntryKind::Rel { key_of, .. } => {
@@ -437,10 +536,76 @@ pub fn registry_fingerprint(reg: &Registry) -> u64 {
                 hash = hash_bytes(hash, &[0x70]);
                 hash = hash_optional_text(hash, body);
             }
+            RegEntryKind::TypedFn { body, descriptor } => {
+                hash = hash_bytes(hash, &[0x71]);
+                hash = hash_meta(hash, descriptor.meta);
+                hash = hash_signature(hash, &descriptor.signature);
+                hash = hash_bytes(
+                    hash,
+                    &[
+                        descriptor.effects.read as u8,
+                        descriptor.effects.write as u8,
+                        descriptor.effects.service as u8,
+                        descriptor.determinism as u8,
+                        descriptor.trust as u8,
+                    ],
+                );
+                hash = hash_names(hash, &descriptor.reads);
+                hash = hash_names(hash, &descriptor.writes);
+                hash = hash_names(hash, &descriptor.services);
+                hash = hash_text(hash, body);
+            }
+            RegEntryKind::Array { descriptor } => {
+                hash = hash_bytes(hash, &[0xa0]);
+                hash = hash_meta(hash, descriptor.meta);
+                hash = hash_reg_type(hash, &descriptor.carrier);
+                match descriptor.domain {
+                    ArrayDomain::Scalar => hash = hash_bytes(hash, &[0]),
+                    ArrayDomain::Entity => hash = hash_bytes(hash, &[1]),
+                    ArrayDomain::Fixed(extent) => {
+                        hash = hash_bytes(hash, &[2]);
+                        hash = hash_bytes(hash, &extent.to_le_bytes());
+                    }
+                }
+            }
+            RegEntryKind::Service { descriptor } => {
+                hash = hash_bytes(hash, &[0xa1]);
+                hash = hash_meta(hash, descriptor.meta);
+                hash = hash_bytes(hash, &[descriptor.direction as u8, descriptor.trust as u8]);
+                hash = hash_signature(hash, &descriptor.signature);
+            }
+            RegEntryKind::Enum { descriptor } => {
+                hash = hash_bytes(hash, &[0xa2]);
+                hash = hash_meta(hash, descriptor.meta);
+                hash = hash_bytes(hash, &(descriptor.cases.len() as u64).to_le_bytes());
+                for case in &descriptor.cases {
+                    hash = hash_text(hash, &case.name);
+                    hash = hash_bytes(hash, &case.discriminant.to_le_bytes());
+                }
+                hash = hash_bytes(hash, &(descriptor.reserved.len() as u64).to_le_bytes());
+                for discriminant in &descriptor.reserved {
+                    hash = hash_bytes(hash, &discriminant.to_le_bytes());
+                }
+            }
+            RegEntryKind::Ctor { descriptor } => {
+                hash = hash_bytes(hash, &[0xa3]);
+                hash = hash_meta(hash, descriptor.meta);
+                match &descriptor.refinement {
+                    ConstructorRefinement::Range { lo, hi } => {
+                        hash = hash_bytes(hash, &[0]);
+                        hash = hash_number(hash, *lo);
+                        hash = hash_number(hash, *hi);
+                    }
+                    ConstructorRefinement::Enum { enumeration } => {
+                        hash = hash_bytes(hash, &[1]);
+                        hash = hash_text(hash, enumeration);
+                    }
+                }
+            }
             RegEntryKind::Tag { col, carrier_ty, num, sym } => {
                 hash = hash_bytes(hash, &[0x80, *carrier_ty as u8]);
                 hash = hash_text(hash, col);
-                hash = hash_bytes(hash, &num.to_bits().to_le_bytes());
+                hash = hash_number(hash, *num);
                 hash = hash_optional_text(hash, sym);
             }
             RegEntryKind::Proto { fields } => {
@@ -449,7 +614,7 @@ pub fn registry_fingerprint(reg: &Registry) -> u64 {
                 for field in fields {
                     hash = hash_text(hash, &field.col);
                     hash = hash_text(hash, &field.spelling);
-                    hash = hash_bytes(hash, &field.num.to_bits().to_le_bytes());
+                    hash = hash_number(hash, field.num);
                 }
             }
         }
@@ -498,7 +663,13 @@ fn entry_carrier(reg: &Registry, index: usize) -> Result<AliasCarrier, Diag> {
             BindKind::Num => AliasCarrier::Number,
             BindKind::Vec => AliasCarrier::Vector,
         },
-        RegEntryKind::Fn { .. } | RegEntryKind::Proto { .. } => {
+        RegEntryKind::Fn { .. }
+        | RegEntryKind::TypedFn { .. }
+        | RegEntryKind::Array { .. }
+        | RegEntryKind::Service { .. }
+        | RegEntryKind::Enum { .. }
+        | RegEntryKind::Ctor { .. }
+        | RegEntryKind::Proto { .. } => {
             return Err(fail(format!("'{}' is not a value binding", entry.name)));
         }
     })
@@ -517,12 +688,44 @@ fn input_pairs(pairs: &[(String, String)]) -> Result<BTreeMap<String, String>, D
     let mut map = BTreeMap::new();
     for (key, value) in pairs {
         validate_name(key, "resolver input key")?;
+        if key.contains('=') {
+            return Err(fail("resolver input key cannot contain '='"));
+        }
         validate_name(value, "resolver input value")?;
         if map.insert(key.clone(), value.clone()).is_some() {
             return Err(fail(format!("duplicate resolver input '{}'", key)));
         }
     }
     Ok(map)
+}
+
+fn service_stamp_word(declaration: Option<DeclId>, version: u64) -> String {
+    match declaration {
+        Some(id) => format!("{:016x}@{}", id.0, version),
+        None => version.to_string(),
+    }
+}
+
+fn parse_service_stamp(word: &str) -> Option<(Option<DeclId>, u64)> {
+    let (declaration, version_word) = if let Some((id_word, version_word)) = word.split_once('@') {
+        if id_word.len() != 16
+            || !id_word.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+        {
+            return None;
+        }
+        let id = u64::from_str_radix(id_word, 16).ok()?;
+        if id == 0 {
+            return None;
+        }
+        (Some(DeclId(id)), version_word)
+    } else {
+        (None, word)
+    };
+    let version = version_word.parse::<u64>().ok()?;
+    if version == 0 || version_word != version.to_string() {
+        return None;
+    }
+    Some((declaration, version))
 }
 
 fn binding_target(reg: &Registry, binding: &str, schema: u64) -> Result<AliasTarget, Diag> {
@@ -651,13 +854,14 @@ impl AliasEnvironment {
         let Some(spec) = resolver_spec(id) else {
             return Err(fail(format!("unknown resolver '{}'", id)));
         };
+        let contract = resolver_contract(reg, spec)?;
         let input = HostInput { version: self.version.wrapping_add(1), pairs: members };
         let value = (spec.run)(reg, &input)?;
-        if !value_fits(&value, spec.carrier, reg) {
+        if !value_fits(&value, contract.carrier, reg) {
             return Err(fail(format!(
                 "resolver '{}' result does not inhabit {} over {} rows",
                 id,
-                spec.carrier.word(),
+                contract.carrier.word(),
                 reg.n.max(0)
             )));
         }
@@ -667,8 +871,9 @@ impl AliasEnvironment {
             canonical_name(name),
             AliasTarget::Resolver {
                 resolver: spec.id.to_string(),
-                carrier: spec.carrier,
-                service: spec.service,
+                carrier: contract.carrier,
+                service: contract.service,
+                service_declaration: contract.declaration,
                 schema,
                 input,
             },
@@ -727,11 +932,13 @@ impl AliasEnvironment {
                     }
                     AliasTarget::Mask { values: values.clone(), rows: *rows, schema }
                 }
-                AliasTarget::Resolver { resolver, carrier, service, input, .. } => {
+                AliasTarget::Resolver { resolver, carrier, service, service_declaration, input, .. } => {
                     let Some(spec) = resolver_spec(resolver) else {
                         return Err(fail(format!("'^{}' resolver '{}' is not registered", name, resolver)));
                     };
-                    if spec.carrier != *carrier || spec.service != *service {
+                    let contract = resolver_contract(new, spec)?;
+                    if contract.carrier != *carrier || contract.service != *service
+                        || contract.declaration != *service_declaration {
                         return Err(fail(format!("'^{}' resolver service or carrier changed", name)));
                     }
                     let value = (spec.run)(new, input)
@@ -743,6 +950,7 @@ impl AliasEnvironment {
                         resolver: resolver.clone(),
                         carrier: *carrier,
                         service: *service,
+                        service_declaration: *service_declaration,
                         schema,
                         input: input.clone(),
                     }
@@ -759,8 +967,7 @@ impl AliasEnvironment {
         Ok(environment)
     }
 
-    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Diag> {
-        let path = path.as_ref();
+    fn encode(&self) -> Vec<u8> {
         let mut text = String::new();
         let _ = writeln!(text, "{}\t{}\t{:016x}", MAGIC, self.version, self.schema);
         for (name, target) in &self.entries {
@@ -784,14 +991,15 @@ impl AliasEnvironment {
                 }
                 // MAGIC stays ano-aliases-v1: no sidecar written before resolvers existed can
                 // contain a `rslv` record, so a v1 reader that refuses the word stays sound.
-                AliasTarget::Resolver { resolver, carrier, service, schema, input } => {
+                AliasTarget::Resolver { resolver, carrier, service, service_declaration, schema, input } => {
+                    let service_stamp = service_stamp_word(*service_declaration, *service);
                     let _ = write!(
                         text,
                         "rslv\t{}\t{}\t{}\t{}\t{:016x}\t{}",
                         name,
                         resolver,
                         carrier.word(),
-                        service,
+                        service_stamp,
                         schema,
                         input.version
                     );
@@ -802,46 +1010,32 @@ impl AliasEnvironment {
                 }
             }
         }
+        text.into_bytes()
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Diag> {
+        let path = path.as_ref();
+        let encoded = self.encode();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent).map_err(|error| {
                 fail(format!("cannot create '{}': {}", parent.display(), error))
             })?;
         }
-        let tmp = path.with_extension(format!(
-            "{}.tmp.{}",
-            path.extension().and_then(|s| s.to_str()).unwrap_or("aliases"),
-            std::process::id()
-        ));
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&tmp)
-            .map_err(|error| fail(format!("cannot write '{}': {}", tmp.display(), error)))?;
-        IoWrite::write_all(&mut file, text.as_bytes())
-            .map_err(|error| fail(format!("cannot write '{}': {}", tmp.display(), error)))?;
-        file.sync_all()
-            .map_err(|error| fail(format!("cannot sync '{}': {}", tmp.display(), error)))?;
-        drop(file);
-        std::fs::rename(&tmp, path).map_err(|error| {
-            let _ = std::fs::remove_file(&tmp);
+        crate::fs::fs_write_commit(path, &encoded).map_err(|error| {
             fail(format!("cannot publish '{}': {}", path.display(), error))
         })?;
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
-            && let Ok(directory) = std::fs::File::open(parent)
-        {
-            let _ = directory.sync_all();
-        }
         Ok(())
     }
 
     pub fn load(path: impl AsRef<Path>, reg: &Registry) -> Result<Self, Diag> {
         let path = path.as_ref();
-        if !path.exists() {
-            return Ok(Self::for_registry(reg));
-        }
-        let text = std::fs::read_to_string(path)
-            .map_err(|error| fail(format!("cannot read '{}': {}", path.display(), error)))?;
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Self::for_registry(reg)),
+            Err(error) => return Err(fail(format!("cannot read '{}': {}", path.display(), error))),
+        };
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| fail(format!("'{}' is not a UTF-8 alias sidecar", path.display())))?;
         let mut lines = text.lines();
         let header = lines
             .next()
@@ -920,11 +1114,13 @@ impl AliasEnvironment {
                             path.display(), line_no, fields[2]
                         )));
                     };
+                    let contract = resolver_contract(reg, spec)?;
                     let carrier = AliasCarrier::parse(fields[3]).ok_or_else(malformed)?;
-                    if carrier != spec.carrier {
+                    if carrier != contract.carrier {
                         return Err(malformed());
                     }
-                    let service = fields[4].parse::<u64>().map_err(|_| malformed())?;
+                    let (service_declaration, service) =
+                        parse_service_stamp(fields[4]).ok_or_else(malformed)?;
                     let record_schema =
                         u64::from_str_radix(fields[5], 16).map_err(|_| malformed())?;
                     if record_schema != schema {
@@ -943,6 +1139,7 @@ impl AliasEnvironment {
                             resolver: spec.id.to_string(),
                             carrier,
                             service,
+                            service_declaration,
                             schema,
                             input: HostInput { version, pairs: input_pairs(&pairs)? },
                         },
@@ -952,6 +1149,12 @@ impl AliasEnvironment {
             }
         }
         environment.snapshot(reg)?;
+        if environment.encode() != bytes {
+            return Err(fail(format!(
+                "'{}' is not in canonical alias form",
+                path.display()
+            )));
+        }
         Ok(environment)
     }
 
@@ -1020,7 +1223,7 @@ impl AliasSnapshot {
                         return Err(fail(format!("'^{}' is a stale or malformed mask", name)));
                     }
                 }
-                AliasTarget::Resolver { resolver, carrier, service, schema, input } => {
+                AliasTarget::Resolver { resolver, carrier, service, service_declaration, schema, input } => {
                     if *schema != current {
                         return Err(fail(format!("'^{}' has a stale schema", name)));
                     }
@@ -1030,12 +1233,14 @@ impl AliasSnapshot {
                             name, resolver
                         )));
                     };
-                    if spec.service != *service {
+                    let contract = resolver_contract(reg, spec)?;
+                    if contract.service != *service
+                        || contract.declaration != *service_declaration {
                         return Err(fail(format!("'^{}' resolver service changed", name)));
                     }
                     let stale = || fail(format!("'^{}' resolver is stale for the current world", name));
                     let value = (spec.run)(reg, input).map_err(|_| stale())?;
-                    if spec.carrier != *carrier || !value_fits(&value, *carrier, reg) {
+                    if contract.carrier != *carrier || !value_fits(&value, *carrier, reg) {
                         return Err(stale());
                     }
                 }
@@ -1088,7 +1293,7 @@ impl AliasSnapshot {
                 }
                 Ok(Some(ResolvedAlias::Mask(values.clone())))
             }
-            AliasTarget::Resolver { resolver, carrier, service, schema, input } => {
+            AliasTarget::Resolver { resolver, carrier, service, service_declaration, schema, input } => {
                 let current = registry_fingerprint(reg);
                 if *schema != current || self.schema != current {
                     return Err(fail(format!("'^{}' has a stale schema", name)));
@@ -1099,12 +1304,14 @@ impl AliasSnapshot {
                         name, resolver
                     )));
                 };
-                if spec.service != *service {
+                let contract = resolver_contract(reg, spec)?;
+                if contract.service != *service
+                    || contract.declaration != *service_declaration {
                     return Err(fail(format!("'^{}' resolver service changed", name)));
                 }
                 let stale = || fail(format!("'^{}' resolver is stale for the current world", name));
                 let value = (spec.run)(reg, input).map_err(|_| stale())?;
-                if spec.carrier != *carrier || !value_fits(&value, *carrier, reg) {
+                if contract.carrier != *carrier || !value_fits(&value, *carrier, reg) {
                     return Err(stale());
                 }
                 Ok(Some(match value {
@@ -1384,12 +1591,24 @@ mod tests {
         let schema = registry_fingerprint(&reg);
 
         let mut world_update = reg.clone();
+        let mut signed_zero = reg.clone();
+        signed_zero.ents[0].defval = -0.0;
+        assert_eq!(registry_fingerprint(&signed_zero), schema);
+
         world_update.n = 4;
         let RegEntryKind::Col { nums, .. } = &mut world_update.ents[0].kind else {
             unreachable!()
         };
         *nums = vec![9.0, 8.0, 7.0, 6.0];
         assert_eq!(registry_fingerprint(&world_update), schema);
+
+        let mut legacy_pair = reg.clone();
+        let RegEntryKind::Col { nums, .. } = &mut legacy_pair.ents[0].kind else {
+            unreachable!()
+        };
+        *nums = vec![9.0, 8.0, 7.0, 6.0, 5.0, 4.0];
+        assert_eq!(registry_fingerprint(&legacy_pair), schema);
+
 
         let mut changed = reg.clone();
         changed.ents[0].defval = 1.0;
@@ -1440,6 +1659,27 @@ mod tests {
             "good",
             format!("{}bind\tfocus\tGold\tnumber\t{:016x}\n", header, schema),
         );
+
+        let canonical = std::fs::read(&good).unwrap();
+        let variants = vec![
+            ("missing-final-newline", canonical[..canonical.len() - 1].to_vec()),
+            ("blank-record", [canonical.as_slice(), b"\n"].concat()),
+            ("padded-version", format!("{}\t04\t{:016x}\nbind\tfocus\tGold\tnumber\t{:016x}\n", MAGIC, schema, schema).into_bytes()),
+            ("wide-schema", format!("{}\t4\t{:017x}\nbind\tfocus\tGold\tnumber\t{:016x}\n", MAGIC, schema, schema).into_bytes()),
+            ("noncanonical-name", format!("{}bind\tFocus\tGold\tnumber\t{:016x}\n", header, schema).into_bytes()),
+            ("duplicate-name", format!("{}bind\tfocus\tGold\tnumber\t{:016x}\nbind\tfocus\tGold\tnumber\t{:016x}\n", header, schema, schema).into_bytes()),
+            ("non-utf8", { let mut bytes = canonical.clone(); bytes.push(0xff); bytes }),
+        ];
+        for (name, bytes) in variants {
+            let path = dir.join(name);
+            std::fs::write(&path, bytes).unwrap();
+            assert!(AliasEnvironment::load(path, &reg).is_err(), "accepted {name}");
+        }
+
+        let mut environment = AliasEnvironment::for_registry(&reg);
+        let bad_input = pairs(&[("bad=key", "1")]);
+        assert!(environment.install_resolver(&reg, "focus", "input.entity", &bad_input).is_err());
+
         let mut drifted = reg.clone();
         drifted.ents.push(RegEntry {
             name: "Silver".to_string(),

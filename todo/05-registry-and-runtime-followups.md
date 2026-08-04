@@ -1,6 +1,6 @@
 # 05 — registry border and runtime follow-ups
 
-Status: the pre-spatial migration framework and Kore palette are implemented. The general registry taxonomy remains deliberately author-gated; the spatial placement seam and all spatial declaration design remain owned by `99`.
+Status: complete for the non-spatial schema. The migration framework, high-integrity registry taxonomy, typed planning boundary, runtime sealing and persistence, resolver-service integration, exact refusal suite, and Kore palette are implemented. The spatial placement seam and spatial declarations remain owned solely by `99`.
 
 ## The registry border
 
@@ -52,24 +52,24 @@ The migration mechanism lives in Steel/Kore host commands, flags, or APIs. It do
 
 ### Migration acceptance
 
-[X] DONE — Tests cover compatible rename/ID preservation, explicitly supported carrier widening, live-data removal, relationship endpoint changes, callable incompatibility and stale handles, migrated and removed alias targets, complete cache invalidation, failed conversion and partial-publication rollback, crash recovery, save/reload, and deterministic replay. Spatial endpoint and service cases remain assigned to `99` through the same extension boundary.
+[X] DONE — Tests cover compatible rename/ID preservation, explicitly supported carrier widening, live-data removal, relationship endpoint changes, legacy and typed callable evolution, high declaration versions, enum retirement reservations, constructor refinement evolution, resident-array and constructed-value receipt resealing, stale handles, migrated and removed alias targets, resolver service identity/version, complete cache invalidation, failed conversion and partial-publication rollback, crash recovery, save/reload, deterministic replay, and final validation after migration extensions. Spatial endpoint and service cases remain assigned to `99` through the same extension boundary.
 
-## Registry taxonomy, gated by author approval
+## Registry taxonomy
 
-Finish the general registry taxonomy only after its surface is explicitly approved. The loader needs semantic descriptors for:
+The chosen non-spatial surface remains in canonical `.reg` and adds these semantic descriptors:
 
-- the canonical registry extension (`.reg` versus `.anoreg`) and any migration period;
-- registry-resident arrays and their carrier/domain metadata;
-- callable signatures, input/output carriers, effects, determinism, and resource/footprint declarations;
-- registered input/output services and their trust/version boundaries;
-- declared enum value sets and stable serialized identities;
-- checked constructors that validate refinements rather than exposing raw carrier fabrication;
-- spelling aliases as immutable name translations;
-- static `AliasMask` entries as stored registry values.
+- `.reg` is canonical; there is no `.anoreg` fork or migration period.
+- `array NAME id:... v:... CARRIER scalar|entity|fixed:N` declares a payload-free host-resident slot.
+- Typed `fn` declares exact signature, effect row, determinism, trust, read/write/service footprints, and one trusted raw BQN dfn.
+- `service` declares input/output direction, exact signature, trust boundary, stable ID, and version.
+- `enum` declares live `u32` cases and permanent reserved discriminants.
+- `ctor` declares a finite closed range or an earlier enum and is the only nominal fabrication boundary.
+- Spelling aliases remain immutable name translations whose exact rows participate in schema identity.
+- Static `AliasMask` entries remain stored legacy registry values with persisted manifest identities, never dynamic overlays.
 
-Every item must specify validation, stable identity/versioning, persistence, diagnostic spelling, and plan-cache invalidation. “Callable” is not an unchecked host function pointer; admission requires a closed signature and the trust/effect metadata consumed by the planner.
+Every high declaration has a nonzero explicit 64-bit ID and positive local version. Text loads and programmatically assembled registries cross the same validator; references are backward and canonical; the schema fingerprint covers every descriptor and callable body while excluding live legacy pair width; the planner consumes signatures, effects, determinism, trust, footprints, and exact reducer carriers; the alias resolver consumes declared input-service identity/version; the canonical dumper round-trips the descriptors; migration requires stable IDs and version bumps for semantic change; resident arrays and constructed nominal values use canonical schema/ID/version-stamped sidecars with Ano `+0` and receipt resealing. `docs/ano-registry.md` is the exact reference.
 
-The exact adjective/noun syntax proposed by older spatial notes is not approved here. Spatial nouns, frames, habitats, placements, locators, interpolators, and service certificates remain behind the author gate in `99`. Do not parse them as inert metadata: a declaration that grants no checking must not be advertised as a semantic capability.
+Spatial nouns, frames, habitats, placements, locators, interpolators, and service certificates remain in `99`. This task adds none of their proposed spellings and infers no spatial capability from a resident-array extent.
 
 ## Documentation law
 
@@ -96,5 +96,5 @@ This item may land before `99`. Spatial view behavior itself remains in `99`.
 - [X] DONE — Registry and Ano syntax remain separate.
 - [X] DONE — Every ordinary mutation is classified under one of the three ruled fixed-`Σ` arms, and no document claims placement writes are implemented before `99` lands and verifies them.
 - [X] DONE — The `Σ → Σ′` framework is validated, cache-safe, atomic, replayable, and rollback-safe for the pre-spatial schema, with a typed extension boundary that `99` must use rather than bypass.
-- AUTHOR GATE — The registry taxonomy still needs explicit approval of exact syntax before typed validation can be implemented; no inert metadata has been added.
+- [X] DONE — The non-spatial registry taxonomy has exact syntax, stable identity/versioning, canonical dump and sidecars, typed validation consumed by planning and host adapters, migration evolution and receipt resealing, cache invalidation, and exact acceptance/refusal coverage; no spatial metadata was predeclared inertly.
 - [X] DONE — Kore theme probing is bounded and has a deterministic fallback.

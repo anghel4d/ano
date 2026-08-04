@@ -11,3 +11,6 @@ name = "steel"
 path = "src/main.rs"
 
 [dependencies]
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

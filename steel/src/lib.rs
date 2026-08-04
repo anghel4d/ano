@@ -480,7 +480,173 @@ pub struct ProtoField {
     pub num: f64,
 }
 
-// The nine RegEntry meanings as a real ADT. Value-level conventions preserved from C:
+// A stable registry declaration identity. Zero is reserved for "not assigned" while parsing
+// migrations and therefore never admits a high-integrity declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DeclId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeclMeta {
+    pub id: DeclId,
+    pub version: u64,
+}
+
+// Closed registry types. Named carriers resolve to an earlier enum or constructor declaration;
+// their canonical registry spelling is retained, so equal physical representation never implies
+// type equality.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RegType {
+    Unit,
+    Mask,
+    Nat,
+    Int,
+    Num,
+    Sym,
+    Char,
+    Entity,
+    Named(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArrayDomain {
+    Scalar,
+    Entity,
+    Fixed(u64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrayDescriptor {
+    pub meta: DeclMeta,
+    pub carrier: RegType,
+    pub domain: ArrayDomain,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallableSignature {
+    pub inputs: Vec<RegType>,
+    pub output: RegType,
+}
+
+// The empty set is pure. Other rows say which named footprint lists must be nonempty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct EffectSet {
+    pub read: bool,
+    pub write: bool,
+    pub service: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Determinism {
+    Deterministic,
+    Snapshot,
+    Nondeterministic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrustBoundary {
+    Checked,
+    Trusted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallableDescriptor {
+    pub meta: DeclMeta,
+    pub signature: CallableSignature,
+    pub effects: EffectSet,
+    pub determinism: Determinism,
+    pub trust: TrustBoundary,
+    pub reads: Vec<String>,
+    pub writes: Vec<String>,
+    pub services: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceDirection {
+    Input,
+    Output,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceDescriptor {
+    pub meta: DeclMeta,
+    pub direction: ServiceDirection,
+    pub signature: CallableSignature,
+    pub trust: TrustBoundary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumCase {
+    pub name: String,
+    pub discriminant: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumDescriptor {
+    pub meta: DeclMeta,
+    pub cases: Vec<EnumCase>,
+    pub reserved: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstructorRefinement {
+    Range { lo: f64, hi: f64 },
+    Enum { enumeration: String },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstructorDescriptor {
+    pub meta: DeclMeta,
+    pub refinement: ConstructorRefinement,
+}
+
+// A high-integrity value is bound to both the structural schema and the declaration version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeclarationStamp {
+    pub schema: u64,
+    pub declaration: DeclId,
+    pub version: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResidentArrayValue {
+    Numbers(Vec<f64>),
+    Symbols(Vec<String>),
+    Characters(Vec<char>),
+    Entities(Vec<f64>),
+    Discriminants(Vec<u32>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResidentArrayHandle {
+    pub(crate) stamp: DeclarationStamp,
+    pub(crate) name: String,
+    pub(crate) value: ResidentArrayValue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstructorInput {
+    Number(f64),
+    Case(String),
+    Discriminant(u32),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstructedPayload {
+    Number(f64),
+    Enum {
+        enumeration: DeclId,
+        discriminant: u32,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstructedValue {
+    pub(crate) stamp: DeclarationStamp,
+    pub(crate) name: String,
+    pub(crate) payload: ConstructedPayload,
+}
+
+// The fourteen RegEntry meanings as a real ADT. Value-level conventions preserved from C:
 // -1.0 is the dangling-rel sentinel (data, never an Option); CT_CHAR stores the glyph run
 // as syms[0] (exactly one element); CT_SYM values are exact bytes; keyOf/invOf "" sentinels
 // are Options holding CANONICAL key spellings (keyOf) or the rel word AS WRITTEN (invOf, tag col).
@@ -506,6 +672,18 @@ pub enum RegEntryKind {
     Bind { kind: BindKind, vals: Vec<f64> },
     // Registered fn; body = the raw .reg line tail verbatim (spaces preserved), None when bodyless.
     Fn { body: Option<String> },
+    // Typed raw BQN callable. Admission requires the closed descriptor, explicit footprints and
+    // the trusted boundary; the legacy Fn arm remains only for byte-stable old registries.
+    TypedFn { body: String, descriptor: CallableDescriptor },
+    // Host-resident array slot. The descriptor is schema; attached values cross a separate
+    // carrier/domain sealing API and are never smuggled into the declaration line.
+    Array { descriptor: ArrayDescriptor },
+    // Versioned host boundary, named by callable service footprints and resolver adapters.
+    Service { descriptor: ServiceDescriptor },
+    // Nominal serialized sum type. Discriminants are identities and reservations are permanent.
+    Enum { descriptor: EnumDescriptor },
+    // Checked nominal refinement constructor; no raw fabrication callback is stored.
+    Ctor { descriptor: ConstructorDescriptor },
     // Derived tag: the equality mask over the live carrier column, recomputed at each use.
     // col = the carrier word AS WRITTEN; carrier_ty = the carrier's type; sym value exact bytes.
     Tag { col: String, carrier_ty: ColType, num: f64, sym: Option<String> },
@@ -520,6 +698,19 @@ pub struct RegEntry {
     pub name: String,
     pub defval: f64,
     pub kind: RegEntryKind,
+}
+
+impl RegEntryKind {
+    pub fn declaration_meta(&self) -> Option<DeclMeta> {
+        Some(match self {
+            RegEntryKind::TypedFn { descriptor, .. } => descriptor.meta,
+            RegEntryKind::Array { descriptor } => descriptor.meta,
+            RegEntryKind::Service { descriptor } => descriptor.meta,
+            RegEntryKind::Enum { descriptor } => descriptor.meta,
+            RegEntryKind::Ctor { descriptor } => descriptor.meta,
+            _ => return None,
+        })
+    }
 }
 
 // One row of the spelling-alias table (`as`/`ja` two-word lines): surface word -> entry name,

@@ -277,10 +277,10 @@ pub fn recover(live: &str) -> Result<(), String> {
 
 fn stage_bundle(transaction: &Transaction, outcome: &MigrationOutcome) -> Result<(), String> {
     let staged = transaction.staged();
-    steel::registry::reg_dump(&outcome.registry, &staged[0].to_string_lossy())
+    steel::registry::reg_dump(outcome.registry(), &staged[0].to_string_lossy())
         .map_err(|diag| diag.msg)?;
-    outcome.aliases.save(&staged[1]).map_err(|diag| diag.msg)?;
-    write_new(&staged[2], &outcome.manifest.encode())?;
+    outcome.aliases().save(&staged[1]).map_err(|diag| diag.msg)?;
+    write_new(&staged[2], &outcome.manifest().encode())?;
     let log_path = transaction.targets()[3].clone();
     let mut log = match std::fs::read(&log_path) {
         Ok(log) => log,
@@ -293,7 +293,7 @@ fn stage_bundle(transaction: &Transaction, outcome: &MigrationOutcome) -> Result
             ));
         }
     };
-    log.extend_from_slice(outcome.receipt.log_line().as_bytes());
+    log.extend_from_slice(outcome.receipt().log_line().as_bytes());
     write_new(&staged[3], &log)?;
     for path in &staged {
         std::fs::File::open(path)
@@ -404,17 +404,19 @@ pub fn run(args: &[String]) -> i32 {
         let outcome =
             migrate(&old, &candidate, &aliases, &manifest, &plan).map_err(|diag| diag.msg)?;
         publish_outcome(live, &outcome)?;
-        Ok(outcome.receipt)
+        Ok(outcome.into_receipt())
     })();
     match result {
         Ok(receipt) => {
+            let old = receipt.old_schema();
+            let new = receipt.new_schema();
             println!(
                 "migrated schema v{} {:016x} -> v{} {:016x} event {:016x}",
-                receipt.old_schema.version,
-                receipt.old_schema.fingerprint,
-                receipt.new_schema.version,
-                receipt.new_schema.fingerprint,
-                receipt.event
+                old.version,
+                old.fingerprint,
+                new.version,
+                new.fingerprint,
+                receipt.event()
             );
             0
         }
@@ -484,7 +486,7 @@ mod tests {
         assert_eq!(registry.ents[1].name, "Power");
         let manifest =
             SchemaManifest::load(manifest_path(&live.to_string_lossy()), &registry).unwrap();
-        assert_eq!(manifest.version, 1);
+        assert_eq!(manifest.identity().version, 1);
         AliasEnvironment::load(sidecar_path(&live.to_string_lossy()), &registry).unwrap();
         let log =
             std::fs::read_to_string(format!("{}.migrations", live.to_string_lossy())).unwrap();

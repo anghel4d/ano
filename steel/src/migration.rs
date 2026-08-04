@@ -1,11 +1,11 @@
 //! Barrier-level registry migration for the pre-spatial schema.
 //!
-//! `.reg` remains the world/schema language. Stable declaration identities and schema versions
-//! live in a host sidecar, so migration does not pre-empt the gated registry-taxonomy surface.
+//! `.reg` remains the world/schema language. High-integrity declarations carry explicit stable
+//! identities and local versions; the manifest persists identities for legacy declarations.
 
 use crate::alias::{AliasEnvironment, canonical_name, registry_fingerprint};
 use crate::registry::names_eq;
-use crate::{ANO_NATMAX, BindKind, ColType, Diag, ProtoField, RegEntry, RegEntryKind, Registry};
+use crate::{ANO_NATMAX, BindKind, ColType, ConstructedValue, DeclarationStamp, Diag, ProtoField, RegEntry, RegEntryKind, Registry, ResidentArrayHandle};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -23,6 +23,13 @@ fn hash_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
     }
     hash
 }
+fn manifest_hex(word: &str, label: &str) -> Result<u64, Diag> {
+    if word.len() != 16 || !word.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')) {
+        return Err(fail(format!("bad canonical {}", label)));
+    }
+    u64::from_str_radix(word, 16).map_err(|_| fail(format!("bad canonical {}", label)))
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DeclarationId(pub u64);
@@ -35,8 +42,8 @@ pub struct SchemaIdentity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaManifest {
-    pub fingerprint: u64,
-    pub version: u64,
+    fingerprint: u64,
+    version: u64,
     declarations: Vec<(DeclarationId, String)>,
 }
 
@@ -49,13 +56,23 @@ impl SchemaManifest {
     // its structural fingerprint; subsequent migrations persist and carry these IDs forward.
     pub fn for_registry(registry: &Registry) -> Self {
         let fingerprint = registry_fingerprint(registry);
-        let mut used = BTreeSet::new();
+        // Explicit identities reserve the whole namespace before any legacy ID is derived, so
+        // declaration order cannot make an earlier legacy entry collide with a later explicit one.
+        let mut used: BTreeSet<DeclarationId> = registry
+            .ents
+            .iter()
+            .filter_map(|entry| entry.kind.declaration_meta())
+            .map(|meta| DeclarationId(meta.id.0))
+            .collect();
         let declarations = registry
             .ents
             .iter()
             .enumerate()
             .map(|(index, entry)| {
-                let id = mint_id(fingerprint, 0, index, &entry.name, &mut used);
+                let id = match entry.kind.declaration_meta() {
+                    Some(meta) => DeclarationId(meta.id.0),
+                    None => mint_id(fingerprint, 0, index, &entry.name, &mut used),
+                };
                 (id, entry.name.clone())
             })
             .collect();
@@ -102,7 +119,11 @@ impl SchemaManifest {
         }
         let mut ids = BTreeSet::new();
         for ((id, name), entry) in self.declarations.iter().zip(&registry.ents) {
-            if !ids.insert(*id) || !names_eq(name, &entry.name) {
+            let explicit = entry
+                .kind
+                .declaration_meta()
+                .map(|meta| DeclarationId(meta.id.0));
+            if id.0 == 0 || !ids.insert(*id) || !names_eq(name, &entry.name) || explicit.is_some_and(|declared| declared != *id) {
                 return Err(fail(
                     "manifest declaration order, name, or identity is invalid",
                 ));
@@ -124,12 +145,20 @@ impl SchemaManifest {
 
     pub fn load(path: impl AsRef<Path>, registry: &Registry) -> Result<Self, Diag> {
         let path = path.as_ref();
-        if !path.exists() {
-            return Ok(Self::for_registry(registry));
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Self::for_registry(registry)),
+            Err(error) => return Err(fail(format!("cannot read '{}': {}", path.display(), error))),
+        };
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| fail(format!("'{}' is not a UTF-8 schema manifest", path.display())))?;
+        let Some(text) = text.strip_suffix('\n') else {
+            return Err(fail(format!("'{}' has no canonical final newline", path.display())));
+        };
+        if text.as_bytes().contains(&b'\r') {
+            return Err(fail(format!("'{}' contains a noncanonical carriage return", path.display())));
         }
-        let text = std::fs::read_to_string(path)
-            .map_err(|error| fail(format!("cannot read '{}': {}", path.display(), error)))?;
-        let mut lines = text.lines();
+        let mut lines = text.split('\n');
         let fields: Vec<&str> = lines.next().unwrap_or("").split('\t').collect();
         if fields.len() != 3 || fields[0] != MANIFEST_MAGIC {
             return Err(fail(format!(
@@ -140,25 +169,24 @@ impl SchemaManifest {
         let version = fields[1]
             .parse::<u64>()
             .map_err(|_| fail("bad schema version"))?;
-        let fingerprint =
-            u64::from_str_radix(fields[2], 16).map_err(|_| fail("bad schema fingerprint"))?;
+        if fields[1] != version.to_string() {
+            return Err(fail("bad canonical schema version"));
+        }
+        let fingerprint = manifest_hex(fields[2], "schema fingerprint")?;
         let mut declarations = Vec::new();
         for (offset, line) in lines.enumerate() {
             let fields: Vec<&str> = line.split('\t').collect();
-            if fields.len() != 3 || fields[0] != "decl" {
+            if fields.len() != 3 || fields[0] != "decl" || fields[2].is_empty() {
                 return Err(fail(format!(
                     "{}:{}: malformed declaration identity",
                     path.display(),
                     offset + 2
                 )));
             }
-            let id = u64::from_str_radix(fields[1], 16).map_err(|_| {
-                fail(format!(
-                    "{}:{}: malformed declaration identity",
-                    path.display(),
-                    offset + 2
-                ))
-            })?;
+            let id = manifest_hex(fields[1], "declaration identity")?;
+            if id == 0 {
+                return Err(fail("declaration identity zero is reserved"));
+            }
             declarations.push((DeclarationId(id), fields[2].to_string()));
         }
         let manifest = Self {
@@ -321,18 +349,50 @@ pub struct CacheInvalidation {
     pub services: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ReceiptSeal;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationReceipt {
-    pub old_schema: SchemaIdentity,
-    pub new_schema: SchemaIdentity,
-    pub event: u64,
-    pub declarations: Vec<DeclarationMigration>,
-    pub removed: Vec<DeclarationId>,
-    pub added: Vec<DeclarationId>,
-    pub invalidation: CacheInvalidation,
+    old_schema: SchemaIdentity,
+    new_schema: SchemaIdentity,
+    event: u64,
+    declarations: Vec<DeclarationMigration>,
+    removed: Vec<DeclarationId>,
+    added: Vec<DeclarationId>,
+    invalidation: CacheInvalidation,
+    seal: ReceiptSeal,
 }
 
 impl MigrationReceipt {
+    pub fn old_schema(&self) -> SchemaIdentity {
+        self.old_schema
+    }
+
+    pub fn new_schema(&self) -> SchemaIdentity {
+        self.new_schema
+    }
+
+    pub fn event(&self) -> u64 {
+        self.event
+    }
+
+    pub fn declarations(&self) -> &[DeclarationMigration] {
+        &self.declarations
+    }
+
+    pub fn removed(&self) -> &[DeclarationId] {
+        &self.removed
+    }
+
+    pub fn added(&self) -> &[DeclarationId] {
+        &self.added
+    }
+
+    pub fn invalidation(&self) -> CacheInvalidation {
+        self.invalidation
+    }
+
     pub fn revalidate(&self, handle: DeclarationHandle) -> Result<DeclarationHandle, Diag> {
         if handle.schema != self.old_schema {
             return Err(fail(
@@ -354,6 +414,107 @@ impl MigrationReceipt {
         }
         Err(fail("declaration handle is stale or incompatible"))
     }
+    // Inputs: one old declaration identity and the registries on both sides of this receipt.
+    // Output: its complete mapping after proving the receipt names these exact structural schemas.
+    fn revalidation_mapping<'a>(
+        &'a self,
+        declaration: DeclarationId,
+        old_registry: &Registry,
+        new_registry: &Registry,
+    ) -> Result<&'a DeclarationMigration, Diag> {
+        let old_fingerprint = registry_fingerprint(old_registry);
+        if old_fingerprint != self.old_schema.fingerprint {
+            return Err(fail(format!(
+                "receipt old schema {:016x} does not match registry {:016x}",
+                self.old_schema.fingerprint, old_fingerprint
+            )));
+        }
+        let new_fingerprint = registry_fingerprint(new_registry);
+        if new_fingerprint != self.new_schema.fingerprint {
+            return Err(fail(format!(
+                "receipt new schema {:016x} does not match registry {:016x}",
+                self.new_schema.fingerprint, new_fingerprint
+            )));
+        }
+        self.revalidate(DeclarationHandle {
+            schema: self.old_schema,
+            declaration,
+        })?;
+        self.declarations
+            .iter()
+            .find(|mapping| mapping.id == declaration)
+            .ok_or_else(|| fail("declaration handle is stale or incompatible"))
+    }
+
+    // A resident attachment is world state, not schema text. Migration carries it only after the
+    // old handle validates, the stable declaration maps, and the complete value reseals in Σ′.
+    pub fn revalidate_resident_array(
+        &self,
+        handle: &ResidentArrayHandle,
+        old_registry: &Registry,
+        new_registry: &Registry,
+    ) -> Result<ResidentArrayHandle, Diag> {
+        handle
+            .validate(old_registry)
+            .map_err(|diag| fail(diag.msg))?;
+        let declaration = DeclarationId(handle.stamp.declaration.0);
+        let mapping =
+            self.revalidation_mapping(declaration, old_registry, new_registry)?;
+        let migrated = crate::registry::seal_resident_array(
+            new_registry,
+            &mapping.new_name,
+            handle.value.clone(),
+        )
+        .map_err(|diag| fail(diag.msg))?;
+        if migrated.stamp.declaration.0 != declaration.0 {
+            return Err(fail("resident array changed stable declaration identity"));
+        }
+        Ok(migrated)
+    }
+
+    // A nominal value crosses Σ → Σ′ only through the same checked constructor identity. The new
+    // constructor then rechecks range or live enum membership; a retired case is a loud refusal.
+    pub fn revalidate_constructed(
+        &self,
+        value: &ConstructedValue,
+        old_registry: &Registry,
+        new_registry: &Registry,
+    ) -> Result<ConstructedValue, Diag> {
+        value
+            .validate(old_registry)
+            .map_err(|diag| fail(diag.msg))?;
+        let declaration = DeclarationId(value.stamp.declaration.0);
+        let mapping =
+            self.revalidation_mapping(declaration, old_registry, new_registry)?;
+        let Some(index) = crate::registry::reg_find(new_registry, &mapping.new_name) else {
+            return Err(fail(format!(
+                "mapped constructor '{}' is missing",
+                mapping.new_name
+            )));
+        };
+        let RegEntryKind::Ctor { descriptor } = &new_registry.ents[index].kind else {
+            return Err(fail(format!(
+                "mapped declaration '{}' is not a constructor",
+                mapping.new_name
+            )));
+        };
+        if descriptor.meta.id.0 != declaration.0 {
+            return Err(fail("constructor changed stable declaration identity"));
+        }
+        let migrated = ConstructedValue {
+            stamp: DeclarationStamp {
+                schema: self.new_schema.fingerprint,
+                declaration: descriptor.meta.id,
+                version: descriptor.meta.version,
+            },
+            name: new_registry.ents[index].name.clone(),
+            payload: value.payload.clone(),
+        };
+        migrated
+            .validate(new_registry)
+            .map_err(|diag| fail(diag.msg))?;
+        Ok(migrated)
+    }
 
     pub fn log_line(&self) -> String {
         format!(
@@ -369,16 +530,38 @@ impl MigrationReceipt {
 
 #[derive(Debug, Clone)]
 pub struct MigrationOutcome {
-    pub registry: Registry,
-    pub aliases: AliasEnvironment,
-    pub manifest: SchemaManifest,
-    pub receipt: MigrationReceipt,
+    registry: Registry,
+    aliases: AliasEnvironment,
+    manifest: SchemaManifest,
+    receipt: MigrationReceipt,
+}
+
+impl MigrationOutcome {
+    pub fn registry(&self) -> &Registry {
+        &self.registry
+    }
+
+    pub fn aliases(&self) -> &AliasEnvironment {
+        &self.aliases
+    }
+
+    pub fn manifest(&self) -> &SchemaManifest {
+        &self.manifest
+    }
+
+    pub fn receipt(&self) -> &MigrationReceipt {
+        &self.receipt
+    }
+
+    pub fn into_receipt(self) -> MigrationReceipt {
+        self.receipt
+    }
 }
 
 pub trait MigrationExtension {
     // `99` implements this seam for a changed lattice/header and its spatial descriptors. Returning
     // false leaves the pre-spatial refusal in force; extensions may not bypass final validation.
-    fn migrate_header(&self, _old: &Registry, _candidate: &mut Registry) -> Result<bool, Diag> {
+    fn migrate_header(&self, _old: &Registry, _candidate: &Registry) -> Result<bool, Diag> {
         Ok(false)
     }
 }
@@ -404,6 +587,8 @@ pub fn migrate_with_extension(
     plan: &MigrationPlan,
     extension: &dyn MigrationExtension,
 ) -> Result<MigrationOutcome, Diag> {
+    crate::registry::validate_registry_contracts(old).map_err(|diag| fail(diag.msg))?;
+    crate::registry::validate_registry_contracts(candidate).map_err(|diag| fail(diag.msg))?;
     manifest.validate(old)?;
     aliases.snapshot(old)?;
     if old.n != candidate.n {
@@ -411,7 +596,7 @@ pub fn migrate_with_extension(
     }
     let mut next = candidate.clone();
     if (old.lat_w, old.lat_h) != (candidate.lat_w, candidate.lat_h)
-        && !extension.migrate_header(old, &mut next)?
+        && !extension.migrate_header(old, candidate)?
     {
         return Err(fail(
             "lattice migration belongs to the spatial extension boundary",
@@ -475,6 +660,17 @@ pub fn migrate_with_extension(
     let old_to_new: BTreeMap<usize, usize> =
         mappings.iter().map(|(old, new, _)| (*old, *new)).collect();
     for &(oi, ni, conversion) in &mappings {
+        if let Some(meta) = candidate.ents[ni].kind.declaration_meta() {
+            let carried = manifest.declarations[oi].0;
+            if DeclarationId(meta.id.0) != carried {
+                return Err(fail(format!(
+                    "declaration '{}' changes stable id {:016x} to {:016x}",
+                    old.ents[oi].name,
+                    carried.0,
+                    meta.id.0
+                )));
+            }
+        }
         validate_structure(old, candidate, oi, ni, conversion, &old_to_new)?;
         copy_world_data(&old.ents[oi], &mut next.ents[ni]);
     }
@@ -482,6 +678,7 @@ pub fn migrate_with_extension(
     for index in 0..next.ents.len() {
         validate_values(&next, index)?;
     }
+    crate::registry::validate_registry_contracts(&next).map_err(|diag| fail(diag.msg))?;
     crate::relationship::validate_registry(&next)?;
 
     let binding_map = mappings
@@ -515,13 +712,26 @@ pub fn migrate_with_extension(
         .ok_or_else(|| fail("schema version is exhausted"))?;
     let mut added_ids = Vec::new();
     for ni in additions {
-        let id = mint_id(
-            next_fingerprint,
-            next_version,
-            ni,
-            &next.ents[ni].name,
-            &mut used,
-        );
+        let id = match next.ents[ni].kind.declaration_meta() {
+            Some(meta) => {
+                let id = DeclarationId(meta.id.0);
+                if !used.insert(id) {
+                    return Err(fail(format!(
+                        "added declaration '{}' reuses stable id {:016x}",
+                        next.ents[ni].name,
+                        id.0
+                    )));
+                }
+                id
+            }
+            None => mint_id(
+                next_fingerprint,
+                next_version,
+                ni,
+                &next.ents[ni].name,
+                &mut used,
+            ),
+        };
         declarations[ni] = (id, next.ents[ni].name.clone());
         added_ids.push(id);
     }
@@ -556,6 +766,7 @@ pub fn migrate_with_extension(
             views: true,
             services: true,
         },
+        seal: ReceiptSeal,
     };
     Ok(MigrationOutcome {
         registry: next,
@@ -654,6 +865,173 @@ fn widening(old: ColType, new: ColType) -> bool {
     )
 }
 
+fn type_maps(
+    old: &Registry,
+    new: &Registry,
+    old_type: &crate::RegType,
+    new_type: &crate::RegType,
+    map: &BTreeMap<usize, usize>,
+) -> bool {
+    match (old_type, new_type) {
+        (crate::RegType::Named(old_name), crate::RegType::Named(new_name)) => {
+            reference_maps(old, new, old_name, new_name, map)
+        }
+        _ => old_type == new_type,
+    }
+}
+
+fn signature_maps(
+    old: &Registry,
+    new: &Registry,
+    old_signature: &crate::CallableSignature,
+    new_signature: &crate::CallableSignature,
+    map: &BTreeMap<usize, usize>,
+) -> bool {
+    old_signature.inputs.len() == new_signature.inputs.len()
+        && old_signature
+            .inputs
+            .iter()
+            .zip(&new_signature.inputs)
+            .all(|(old_type, new_type)| type_maps(old, new, old_type, new_type, map))
+        && type_maps(
+            old,
+            new,
+            &old_signature.output,
+            &new_signature.output,
+            map,
+        )
+}
+
+fn references_map(
+    old: &Registry,
+    new: &Registry,
+    old_names: &[String],
+    new_names: &[String],
+    map: &BTreeMap<usize, usize>,
+) -> bool {
+    old_names.len() == new_names.len()
+        && old_names
+            .iter()
+            .zip(new_names)
+            .all(|(old_name, new_name)| reference_maps(old, new, old_name, new_name, map))
+}
+
+fn callable_contract_maps(
+    old: &Registry,
+    new: &Registry,
+    old_descriptor: &crate::CallableDescriptor,
+    new_descriptor: &crate::CallableDescriptor,
+    map: &BTreeMap<usize, usize>,
+) -> bool {
+    signature_maps(
+        old,
+        new,
+        &old_descriptor.signature,
+        &new_descriptor.signature,
+        map,
+    ) && old_descriptor.effects == new_descriptor.effects
+        && old_descriptor.determinism == new_descriptor.determinism
+        && old_descriptor.trust == new_descriptor.trust
+        && references_map(old, new, &old_descriptor.reads, &new_descriptor.reads, map)
+        && references_map(old, new, &old_descriptor.writes, &new_descriptor.writes, map)
+        && references_map(old, new, &old_descriptor.services, &new_descriptor.services, map)
+}
+
+fn validate_declaration_version(
+    name: &str,
+    old: crate::DeclMeta,
+    new: crate::DeclMeta,
+    semantic_change: bool,
+) -> Result<(), Diag> {
+    if new.version < old.version {
+        return Err(fail(format!(
+            "declaration '{}' version regresses from {} to {}",
+            name, old.version, new.version
+        )));
+    }
+    if semantic_change && new.version == old.version {
+        return Err(fail(format!(
+            "declaration '{}' changes semantics without increasing v:{}",
+            name, old.version
+        )));
+    }
+    Ok(())
+}
+
+fn enum_evolution(
+    old: &crate::EnumDescriptor,
+    new: &crate::EnumDescriptor,
+) -> Result<bool, Diag> {
+    for discriminant in &old.reserved {
+        if !new.reserved.contains(discriminant) {
+            return Err(fail(format!(
+                "enum discriminant {} was unreserved",
+                discriminant
+            )));
+        }
+        if new
+            .cases
+            .iter()
+            .any(|case| case.discriminant == *discriminant)
+        {
+            return Err(fail(format!(
+                "enum discriminant {} was reused after reservation",
+                discriminant
+            )));
+        }
+    }
+    for case in &old.cases {
+        let remains_live = new
+            .cases
+            .iter()
+            .any(|next| next.discriminant == case.discriminant);
+        if !remains_live && !new.reserved.contains(&case.discriminant) {
+            return Err(fail(format!(
+                "removed enum case '{}' must reserve discriminant {}",
+                case.name, case.discriminant
+            )));
+        }
+    }
+    Ok(old.cases != new.cases || old.reserved != new.reserved)
+}
+
+fn constructor_maps(
+    old: &Registry,
+    new: &Registry,
+    old_refinement: &crate::ConstructorRefinement,
+    new_refinement: &crate::ConstructorRefinement,
+    map: &BTreeMap<usize, usize>,
+) -> bool {
+    match (old_refinement, new_refinement) {
+        (
+            crate::ConstructorRefinement::Range { lo: old_lo, hi: old_hi },
+            crate::ConstructorRefinement::Range { lo: new_lo, hi: new_hi },
+        ) => old_lo.is_finite() && old_hi.is_finite() && new_lo.is_finite() && new_hi.is_finite(),
+        (
+            crate::ConstructorRefinement::Enum {
+                enumeration: old_enum,
+            },
+            crate::ConstructorRefinement::Enum {
+                enumeration: new_enum,
+            },
+        ) => reference_maps(old, new, old_enum, new_enum, map),
+        _ => false,
+    }
+}
+
+fn constructor_changed(
+    old: &crate::ConstructorRefinement,
+    new: &crate::ConstructorRefinement,
+) -> bool {
+    match (old, new) {
+        (
+            crate::ConstructorRefinement::Range { lo: old_lo, hi: old_hi },
+            crate::ConstructorRefinement::Range { lo: new_lo, hi: new_hi },
+        ) => old_lo != new_lo || old_hi != new_hi,
+        _ => false,
+    }
+
+}
 fn validate_structure(
     old: &Registry,
     new: &Registry,
@@ -759,6 +1137,138 @@ fn validate_structure(
             if old_kind == new_kind => {}
         (RegEntryKind::Fn { body: old_body }, RegEntryKind::Fn { body: new_body })
             if old_body == new_body => {}
+        (
+            RegEntryKind::TypedFn {
+                body: old_body,
+                descriptor: old_descriptor,
+            },
+            RegEntryKind::TypedFn {
+                body: new_body,
+                descriptor: new_descriptor,
+            },
+        ) => {
+            if conversion != Conversion::Preserve
+                || old_descriptor.meta.id != new_descriptor.meta.id
+            {
+                return Err(incompatible());
+            }
+            let changed = old_body != new_body
+                || !callable_contract_maps(old, new, old_descriptor, new_descriptor, map);
+            validate_declaration_version(
+                &old_entry.name,
+                old_descriptor.meta,
+                new_descriptor.meta,
+                changed,
+            )?;
+        }
+        (
+            RegEntryKind::Array {
+                descriptor: old_descriptor,
+            },
+            RegEntryKind::Array {
+                descriptor: new_descriptor,
+            },
+        ) => {
+            if conversion != Conversion::Preserve
+                || old_descriptor.meta.id != new_descriptor.meta.id
+            {
+                return Err(incompatible());
+            }
+            let changed = old_descriptor.domain != new_descriptor.domain
+                || !type_maps(
+                    old,
+                    new,
+                    &old_descriptor.carrier,
+                    &new_descriptor.carrier,
+                    map,
+                );
+            validate_declaration_version(
+                &old_entry.name,
+                old_descriptor.meta,
+                new_descriptor.meta,
+                changed,
+            )?;
+        }
+        (
+            RegEntryKind::Service {
+                descriptor: old_descriptor,
+            },
+            RegEntryKind::Service {
+                descriptor: new_descriptor,
+            },
+        ) => {
+            if conversion != Conversion::Preserve
+                || old_descriptor.meta.id != new_descriptor.meta.id
+            {
+                return Err(incompatible());
+            }
+            let changed = old_descriptor.direction != new_descriptor.direction
+                || old_descriptor.trust != new_descriptor.trust
+                || !signature_maps(
+                    old,
+                    new,
+                    &old_descriptor.signature,
+                    &new_descriptor.signature,
+                    map,
+                );
+            validate_declaration_version(
+                &old_entry.name,
+                old_descriptor.meta,
+                new_descriptor.meta,
+                changed,
+            )?;
+        }
+        (
+            RegEntryKind::Enum {
+                descriptor: old_descriptor,
+            },
+            RegEntryKind::Enum {
+                descriptor: new_descriptor,
+            },
+        ) => {
+            if conversion != Conversion::Preserve
+                || old_descriptor.meta.id != new_descriptor.meta.id
+            {
+                return Err(incompatible());
+            }
+            let changed = enum_evolution(old_descriptor, new_descriptor)?;
+            validate_declaration_version(
+                &old_entry.name,
+                old_descriptor.meta,
+                new_descriptor.meta,
+                changed,
+            )?;
+        }
+        (
+            RegEntryKind::Ctor {
+                descriptor: old_descriptor,
+            },
+            RegEntryKind::Ctor {
+                descriptor: new_descriptor,
+            },
+        ) => {
+            if conversion != Conversion::Preserve
+                || old_descriptor.meta.id != new_descriptor.meta.id
+                || !constructor_maps(
+                    old,
+                    new,
+                    &old_descriptor.refinement,
+                    &new_descriptor.refinement,
+                    map,
+                )
+            {
+                return Err(incompatible());
+            }
+            validate_declaration_version(
+                &old_entry.name,
+                old_descriptor.meta,
+                new_descriptor.meta,
+                constructor_changed(
+                    &old_descriptor.refinement,
+                    &new_descriptor.refinement,
+                ),
+            )?;
+        }
         (
             RegEntryKind::Tag {
                 col: old_col,
@@ -971,6 +1481,11 @@ fn has_live_data(registry: &Registry, entry: &RegEntry) -> bool {
             inv_of: Some(_), ..
         }
         | RegEntryKind::Fn { .. }
+        | RegEntryKind::TypedFn { .. }
+        | RegEntryKind::Array { .. }
+        | RegEntryKind::Service { .. }
+        | RegEntryKind::Enum { .. }
+        | RegEntryKind::Ctor { .. }
         | RegEntryKind::Tag { .. }
         | RegEntryKind::Proto { .. } => false,
     }

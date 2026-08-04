@@ -16,7 +16,7 @@ lookup_t(^name) = Γ(name),   otherwise
 
 Installing, rebinding, or deleting an entry of `A_t` never changes `Γ`. A live alias may deliberately have the same stem as a bare entry. Deleting it reveals the bare entry again. Bare fallback occurs only when the canonical key is absent from `A_t`; a present but stale, invalid, or context-incompatible target refuses instead of silently exposing the bare binding.
 
-An alias target is one of: an already resolved column/binding handle; a host-supplied mask value with an explicit carrier and row domain; or a validated host resolver handle for deictics such as `^cursor`. A resolver declares its result carrier/domain contract, determinism boundary, input snapshot, and service version. It may be invoked at each lookup/gather, but every invocation in one statement receives the same frozen world and host-input snapshots.
+An alias target is one of: an already resolved column/binding handle; a host-supplied mask value with an explicit carrier and row domain; or a validated host resolver handle for deictics such as `^cursor`. A resolver declares its result carrier/domain contract, determinism boundary, input snapshot, and service identity/version. It may be invoked at each lookup/gather, but every invocation in one statement receives the same frozen world and host-input snapshots.
 
 An alias target is not registry schema, source-level assignment syntax, or a recursive string macro. If the host accepts a binding target by name, it resolves that target before installation and records the stable resolved handle; dynamic alias chains and cycle-breaking are therefore not part of evaluation.
 
@@ -50,7 +50,7 @@ enum AliasTarget {
 The concrete ownership and arena design may differ. The required properties are:
 
 - [X] DONE — canonical keys use the registry's existing ASCII name-folding rule;
-- [X] DONE — targets retain carrier, row-domain, schema/service version, and host-snapshot information needed to reject stale or incompatible handles;
+- [X] DONE — targets retain carrier, row-domain, schema, service declaration identity/version, and host-snapshot information needed to reject stale or incompatible handles;
 - [X] DONE — a statement captures an immutable environment version or snapshot;
 - [X] DONE — installation validates the target before publishing a new environment;
 - [X] DONE — rebinding is atomic replacement of one key;
@@ -61,12 +61,12 @@ The concrete ownership and arena design may differ. The required properties are:
 
 1. [X] DONE — Expose host operations to install, rebind, inspect, and delete a dynamic alias between statement steps. The exact Steel CLI, API, and Kore command spelling is a host-interface decision, not Ano grammar.
 2. [X] DONE — Apply an alias transition only after its target has resolved and validated. A failed transition leaves the old environment unchanged.
-3. [X] DONE — Add each successful transition to the deterministic session/input log with the statement barrier and environment version at which it became visible. Resolver-backed aliases also require the resolver version and the frozen host-input events needed to reproduce each statement.
+3. [X] DONE — Add each successful transition to the deterministic session/input log with the statement barrier and environment version at which it became visible. Resolver-backed aliases also require the resolver service identity/version and the frozen host-input events needed to reproduce each statement.
 4. [X] DONE — Save/reload must choose one explicit policy and test it end to end:
    - persist the alias environment as session state; or
    - persist/replay the alias transition log.
 
-   Either policy is valid only if replay reproduces the same environment versions and statement observations. The overlay must not be serialized as immutable registry schema. The chosen policy is persist-environment with barrier-stamped transition records; replay reproduces versions and plans.
+   Either policy is valid only if replay reproduces the same environment versions and statement observations. The overlay must not be serialized as immutable registry schema. The chosen policy is persist-environment with barrier-stamped transition records; the sidecar has one canonical LF-terminated UTF-8 byte form, uses create-new staged atomic replacement, and replay reproduces versions and plans.
 5. [X] DONE — Kore must display enough alias state to diagnose shadowing without presenting the overlay as a column declaration.
 
 ## Resolver work

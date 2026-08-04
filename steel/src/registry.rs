@@ -5,8 +5,12 @@
 // lex::lex_reserved_fold; files move through fs::fs_read and fs::fs_write_commit.
 
 use crate::{
-    AliasRow, BindKind, ColType, Diag, ProtoField, Reap, RegEntry, RegEntryKind, Registry,
-    ANO_NAMESZ, ANO_NATMAX,
+    AliasRow, ArrayDescriptor, ArrayDomain, BindKind, CallableDescriptor, CallableSignature,
+    ColType, ConstructedPayload, ConstructedValue, ConstructorDescriptor, ConstructorInput,
+    ConstructorRefinement, DeclId, DeclMeta, DeclarationStamp, Determinism, Diag, EffectSet,
+    EnumCase, EnumDescriptor, ProtoField, Reap, RegEntry, RegEntryKind, RegType,
+    ResidentArrayHandle, ResidentArrayValue,
+    Registry, ServiceDescriptor, ServiceDirection, TrustBoundary, ANO_NAMESZ, ANO_NATMAX,
 };
 use crate::{fs, lex, num};
 use std::fmt::Write;
@@ -24,6 +28,8 @@ const RESV: [&str; 12] = [
 // The emitter's relationship-write staging variables are a generated family, anoRelStage<n>,
 // so the whole family is reserved by its stem rather than by any one name.
 const RESVPFX: [&str; 1] = ["anoRelStage"];
+const PRIMITIVE_REG_TYPES: [&str; 8] =
+    ["unit", "mask", "nat", "int", "num", "sym", "char", "entity"];
 
 // Inputs: full message. Output: the message clipped to ANO_ERRSZ-1 bytes (the C snprintf
 // bound), backed off to a char boundary.
@@ -43,6 +49,16 @@ fn clip(mut s: String) -> String {
 fn rerr(ln: i32, msg: String) -> Diag {
     let full = if ln != 0 { format!("registry line {}: {}", ln, msg) } else { msg };
     Diag::refuse(clip(full))
+}
+
+fn validate_nominal_name(name: &str, ln: i32) -> Result<(), Diag> {
+    if PRIMITIVE_REG_TYPES.contains(&name) {
+        return Err(rerr(
+            ln,
+            format!("nominal declaration '{}' collides with a primitive carrier word", name),
+        ));
+    }
+    Ok(())
 }
 
 // Inputs: physical line (already NUL-truncated). Output: the line with a word-boundary '#'
@@ -235,6 +251,296 @@ fn seal_ty(kw: &str, name: &str, ty: ColType, nums: &[f64], ln: i32) -> Result<(
     Ok(())
 }
 
+// High-integrity declarations use explicit nonzero 64-bit hexadecimal identities and positive
+// decimal versions. Legacy rows retain manifest-derived version-zero identities.
+fn declaration_meta(reg: &Registry, id_word: &str, version_word: &str, ln: i32) -> Result<DeclMeta, Diag> {
+    let Some(id_text) = id_word.strip_prefix("id:") else {
+        return Err(rerr(ln, format!("expected id:<16-hex>, got '{}'", id_word)));
+    };
+    if id_text.len() != 16 || !id_text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(rerr(ln, format!("bad declaration id '{}': expected 16 hex digits", id_text)));
+    }
+    let id = u64::from_str_radix(id_text, 16).unwrap();
+    if id == 0 {
+        return Err(rerr(ln, "declaration id 0000000000000000 is reserved".into()));
+    }
+    let Some(version_text) = version_word.strip_prefix("v:") else {
+        return Err(rerr(ln, format!("expected v:<positive-decimal>, got '{}'", version_word)));
+    };
+    let version = version_text
+        .parse::<u64>()
+        .ok()
+        .filter(|version| *version > 0)
+        .ok_or_else(|| rerr(ln, format!("bad declaration version '{}'", version_text)))?;
+    for entry in &reg.ents {
+        if entry.kind.declaration_meta().is_some_and(|meta| meta.id == DeclId(id)) {
+            return Err(rerr(
+                ln,
+                format!("declaration id {:016x} is already owned by '{}'", id, entry.name),
+            ));
+        }
+    }
+    Ok(DeclMeta { id: DeclId(id), version })
+}
+
+pub fn reg_type_word(carrier: &RegType) -> &str {
+    match carrier {
+        RegType::Unit => "unit",
+        RegType::Mask => "mask",
+        RegType::Nat => "nat",
+        RegType::Int => "int",
+        RegType::Num => "num",
+        RegType::Sym => "sym",
+        RegType::Char => "char",
+        RegType::Entity => "entity",
+        RegType::Named(name) => name,
+    }
+}
+
+fn parse_reg_type(reg: &Registry, word: &str, unit: bool, ln: i32) -> Result<RegType, Diag> {
+    let builtin = match word {
+        "unit" if unit => Some(RegType::Unit),
+        "mask" => Some(RegType::Mask),
+        "nat" => Some(RegType::Nat),
+        "int" => Some(RegType::Int),
+        "num" => Some(RegType::Num),
+        "sym" => Some(RegType::Sym),
+        "char" => Some(RegType::Char),
+        "entity" => Some(RegType::Entity),
+        _ => None,
+    };
+    if let Some(carrier) = builtin {
+        return Ok(carrier);
+    }
+    let Some(index) = find_ent(reg, word) else {
+        return Err(rerr(ln, format!("unknown registry carrier '{}'", word)));
+    };
+    if !matches!(
+        reg.ents[index].kind,
+        RegEntryKind::Enum { .. } | RegEntryKind::Ctor { .. }
+    ) {
+        return Err(rerr(
+            ln,
+            format!("'{}' is not an enum or constructor carrier", word),
+        ));
+    }
+    Ok(RegType::Named(reg.ents[index].name.clone()))
+}
+
+fn parse_signature(reg: &Registry, word: &str, ln: i32) -> Result<CallableSignature, Diag> {
+    let Some(text) = word.strip_prefix("sig:") else {
+        return Err(rerr(ln, format!("expected sig:<inputs>-><output>, got '{}'", word)));
+    };
+    let Some((input_text, output_text)) = text.split_once("->") else {
+        return Err(rerr(ln, format!("bad callable signature '{}'", text)));
+    };
+    if input_text.is_empty() || output_text.is_empty() || output_text.contains("->") {
+        return Err(rerr(ln, format!("bad callable signature '{}'", text)));
+    }
+    let inputs = if input_text == "unit" {
+        Vec::new()
+    } else {
+        input_text
+            .split(',')
+            .map(|carrier| {
+                if carrier.is_empty() || carrier == "unit" {
+                    Err(rerr(ln, format!("bad callable signature '{}'", text)))
+                } else {
+                    parse_reg_type(reg, carrier, false, ln)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let output = parse_reg_type(reg, output_text, true, ln)?;
+    Ok(CallableSignature { inputs, output })
+}
+
+fn parse_effects(word: &str, ln: i32) -> Result<EffectSet, Diag> {
+    let Some(text) = word.strip_prefix("fx:") else {
+        return Err(rerr(ln, format!("expected fx:<effect-row>, got '{}'", word)));
+    };
+    if text == "pure" {
+        return Ok(EffectSet::default());
+    }
+    let mut effects = EffectSet::default();
+    for effect in text.split(',') {
+        let slot = match effect {
+            "read" => &mut effects.read,
+            "write" => &mut effects.write,
+            "service" => &mut effects.service,
+            _ => return Err(rerr(ln, format!("unknown callable effect '{}'", effect))),
+        };
+        if std::mem::replace(slot, true) {
+            return Err(rerr(ln, format!("duplicate callable effect '{}'", effect)));
+        }
+    }
+    Ok(effects)
+}
+
+fn parse_determinism(word: &str, ln: i32) -> Result<Determinism, Diag> {
+    let Some(text) = word.strip_prefix("det:") else {
+        return Err(rerr(ln, format!("expected det:<boundary>, got '{}'", word)));
+    };
+    match text {
+        "deterministic" => Ok(Determinism::Deterministic),
+        "snapshot" => Ok(Determinism::Snapshot),
+        "nondeterministic" => Ok(Determinism::Nondeterministic),
+        _ => Err(rerr(ln, format!("unknown determinism boundary '{}'", text))),
+    }
+}
+
+fn parse_trust(word: &str, ln: i32) -> Result<TrustBoundary, Diag> {
+    let Some(text) = word.strip_prefix("trust:") else {
+        return Err(rerr(ln, format!("expected trust:<boundary>, got '{}'", word)));
+    };
+    match text {
+        "checked" => Ok(TrustBoundary::Checked),
+        "trusted" => Ok(TrustBoundary::Trusted),
+        _ => Err(rerr(ln, format!("unknown trust boundary '{}'", text))),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum FootprintKind {
+    Read,
+    Write,
+    Service,
+}
+
+fn footprint_admits(entry: &RegEntry, kind: FootprintKind) -> bool {
+    match kind {
+        FootprintKind::Read => matches!(
+            entry.kind,
+            RegEntryKind::Col { .. }
+                | RegEntryKind::Field { .. }
+                | RegEntryKind::Rel { .. }
+                | RegEntryKind::SRel { .. }
+                | RegEntryKind::AliasMask { .. }
+                | RegEntryKind::Bind {
+                    kind: BindKind::Mask | BindKind::Vec | BindKind::Num,
+                    ..
+                }
+        ),
+        FootprintKind::Write => matches!(
+            entry.kind,
+            RegEntryKind::Col { uniq: false, .. }
+                | RegEntryKind::Field { .. }
+        ),
+        FootprintKind::Service => matches!(entry.kind, RegEntryKind::Service { .. }),
+    }
+}
+
+fn parse_footprint(
+    reg: &Registry,
+    word: &str,
+    prefix: &str,
+    kind: FootprintKind,
+    ln: i32,
+) -> Result<Vec<String>, Diag> {
+    let Some(text) = word.strip_prefix(prefix) else {
+        return Err(rerr(ln, format!("expected {}<names|->, got '{}'", prefix, word)));
+    };
+    if text == "-" {
+        return Ok(Vec::new());
+    }
+    if text.is_empty() {
+        return Err(rerr(ln, format!("{} footprint is empty; spell '-'", &prefix[..prefix.len() - 1])));
+    }
+    let mut out: Vec<(usize, String)> = Vec::new();
+    for spelling in text.split(',') {
+        let Some(index) = find_ent(reg, spelling) else {
+            return Err(rerr(ln, format!("{} footprint names no declaration '{}'", &prefix[..prefix.len() - 1], spelling)));
+        };
+        if !footprint_admits(&reg.ents[index], kind) {
+            return Err(rerr(
+                ln,
+                format!(
+                    "{} footprint cannot name {} '{}'",
+                    &prefix[..prefix.len() - 1],
+                    match kind {
+                        FootprintKind::Read => "unreadable declaration",
+                        FootprintKind::Write => "unwritable declaration",
+                        FootprintKind::Service => "non-service declaration",
+                    },
+                    spelling
+                ),
+            ));
+        }
+        let canonical = reg.ents[index].name.clone();
+        if out.iter().any(|(_, existing)| names_eq(existing, &canonical)) {
+            return Err(rerr(ln, format!("duplicate {} footprint '{}'", &prefix[..prefix.len() - 1], spelling)));
+        }
+        out.push((index, canonical));
+    }
+    out.sort_by_key(|(index, _)| *index);
+    Ok(out.into_iter().map(|(_, name)| name).collect())
+}
+
+fn validate_callable_descriptor(reg: &Registry, name: &str, descriptor: &CallableDescriptor, ln: i32) -> Result<(), Diag> {
+    if descriptor.trust != TrustBoundary::Trusted {
+        return Err(rerr(ln, format!("fn {}: raw BQN requires trust:trusted", name)));
+    }
+    for (declared, populated, label) in [
+        (descriptor.effects.read, !descriptor.reads.is_empty(), "read"),
+        (descriptor.effects.write, !descriptor.writes.is_empty(), "write"),
+        (descriptor.effects.service, !descriptor.services.is_empty(), "service"),
+    ] {
+        if declared != populated {
+            return Err(rerr(
+                ln,
+                format!("fn {}: fx:{} and {} footprint disagree", name, label, label),
+            ));
+        }
+    }
+    let service_directions = descriptor
+        .services
+        .iter()
+        .filter_map(|service| {
+            find_ent(reg, service).and_then(|index| match &reg.ents[index].kind {
+                RegEntryKind::Service { descriptor } => Some(descriptor.direction),
+                _ => None,
+            })
+        })
+        .collect::<Vec<_>>();
+    match descriptor.determinism {
+        Determinism::Deterministic if !descriptor.services.is_empty() => {
+            return Err(rerr(ln, format!("fn {}: service use requires det:snapshot or det:nondeterministic", name)));
+        }
+        Determinism::Snapshot
+            if service_directions
+                .iter()
+                .any(|direction| *direction == ServiceDirection::Output) =>
+        {
+            return Err(rerr(ln, format!("fn {}: an output service is nondeterministic", name)));
+        }
+        Determinism::Nondeterministic
+            if !service_directions
+                .iter()
+                .any(|direction| *direction == ServiceDirection::Output) =>
+        {
+            return Err(rerr(ln, format!("fn {}: det:nondeterministic requires an output service", name)));
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn parse_domain(word: &str, ln: i32) -> Result<ArrayDomain, Diag> {
+    match word {
+        "scalar" => Ok(ArrayDomain::Scalar),
+        "entity" => Ok(ArrayDomain::Entity),
+        _ => {
+            let Some(text) = word.strip_prefix("fixed:") else {
+                return Err(rerr(ln, format!("unknown array domain '{}'", word)));
+            };
+            let extent = text
+                .parse::<u64>()
+                .map_err(|_| rerr(ln, format!("bad fixed array extent '{}'", text)))?;
+            Ok(ArrayDomain::Fixed(extent))
+        }
+    }
+}
+
 // Inputs: registry, spelling-alias-table words, line, ja flag. Output: one AliasRow pushed —
 // the pure spelling alias, one hop, target unvalidated free text.
 fn push_alias(reg: &mut Registry, words: &[(usize, &str)], ln: i32, ja: bool) -> Result<(), Diag> {
@@ -358,6 +664,26 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 saw_lat = true;
                 reg.lat_w = w as i32;
                 reg.lat_h = h as i32;
+            }
+
+            "array" => {
+                if nw != 6 {
+                    return Err(rerr(
+                        ln,
+                        "usage: array <name> id:<16-hex> v:<n> <carrier> <scalar|entity|fixed:N>".into(),
+                    ));
+                }
+                let name = gate_name(&reg, words[1].1, ln)?;
+                let meta = declaration_meta(&reg, words[2].1, words[3].1, ln)?;
+                let carrier = parse_reg_type(&reg, words[4].1, false, ln)?;
+                let domain = parse_domain(words[5].1, ln)?;
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Array {
+                        descriptor: ArrayDescriptor { meta, carrier, domain },
+                    },
+                });
             }
 
             "col" | "field" => {
@@ -526,6 +852,12 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 let Some(idx) = find_ent(&reg, words[1].1) else {
                     return Err(rerr(ln, format!("default: no entry '{}'", words[1].1)));
                 };
+                if reg.ents[idx].kind.declaration_meta().is_some() {
+                    return Err(rerr(
+                        ln,
+                        format!("default on high-integrity declaration '{}'", reg.ents[idx].name),
+                    ));
+                }
                 // a unique column's values are minted, never defaulted: a shared default is
                 // a standing violation of the declared injectivity
                 if is_uniq_col(&reg.ents[idx]) {
@@ -754,13 +1086,184 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                 reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Bind { kind, vals } });
             }
 
+            "service" => {
+                if nw != 7 {
+                    return Err(rerr(
+                        ln,
+                        "usage: service <name> id:<16-hex> v:<n> <input|output> sig:<...> trust:<checked|trusted>".into(),
+                    ));
+                }
+                let name = gate_name(&reg, words[1].1, ln)?;
+                let meta = declaration_meta(&reg, words[2].1, words[3].1, ln)?;
+                let direction = match words[4].1 {
+                    "input" => ServiceDirection::Input,
+                    "output" => ServiceDirection::Output,
+                    word => return Err(rerr(ln, format!("unknown service direction '{}'", word))),
+                };
+                let signature = parse_signature(&reg, words[5].1, ln)?;
+                let trust = parse_trust(words[6].1, ln)?;
+                if direction == ServiceDirection::Input && signature.output == RegType::Unit {
+                    return Err(rerr(ln, format!("service {}: an input service must return a value", name)));
+                }
+                if direction == ServiceDirection::Output && signature.output != RegType::Unit {
+                    return Err(rerr(ln, format!("service {}: an output service must return unit", name)));
+                }
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Service {
+                        descriptor: ServiceDescriptor { meta, direction, signature, trust },
+                    },
+                });
+            }
+
+            "enum" => {
+                if nw < 6 || !words[nw - 1].1.starts_with("reserve:") {
+                    return Err(rerr(
+                        ln,
+                        "usage: enum <name> id:<16-hex> v:<n> <Case=u32>... reserve:<u32,...|->".into(),
+                    ));
+                }
+                let name = gate_name(&reg, words[1].1, ln)?;
+                validate_nominal_name(&name, ln)?;
+                let meta = declaration_meta(&reg, words[2].1, words[3].1, ln)?;
+                let mut cases: Vec<EnumCase> = Vec::new();
+                for &(_, case_word) in &words[4..nw - 1] {
+                    let Some((case_name, discriminant)) = case_word.split_once('=') else {
+                        return Err(rerr(ln, format!("enum {}: case '{}' is not <name>=<u32>", name, case_word)));
+                    };
+                    let case_name = wname(case_name, ANO_NAMESZ, ln)?;
+                    let discriminant = discriminant
+                        .parse::<u32>()
+                        .map_err(|_| rerr(ln, format!("enum {}: bad discriminant '{}'", name, discriminant)))?;
+                    if cases.iter().any(|case| names_eq(&case.name, &case_name)) {
+                        return Err(rerr(ln, format!("enum {}: duplicate case '{}'", name, case_name)));
+                    }
+                    if cases.iter().any(|case| case.discriminant == discriminant) {
+                        return Err(rerr(ln, format!("enum {}: discriminant {} is reused", name, discriminant)));
+                    }
+                    cases.push(EnumCase { name: case_name, discriminant });
+                }
+                let reserve_word = words[nw - 1].1;
+                let reserve_text = reserve_word.strip_prefix("reserve:").unwrap();
+                let mut reserved: Vec<u32> = Vec::new();
+                if reserve_text != "-" {
+                    if reserve_text.is_empty() {
+                        return Err(rerr(ln, format!("enum {}: empty reserve list must be '-'", name)));
+                    }
+                    for spelling in reserve_text.split(',') {
+                        let discriminant = spelling
+                            .parse::<u32>()
+                            .map_err(|_| rerr(ln, format!("enum {}: bad reserved discriminant '{}'", name, spelling)))?;
+                        if reserved.contains(&discriminant) {
+                            return Err(rerr(ln, format!("enum {}: discriminant {} is reserved twice", name, discriminant)));
+                        }
+                        if cases.iter().any(|case| case.discriminant == discriminant) {
+                            return Err(rerr(ln, format!("enum {}: live discriminant {} is also reserved", name, discriminant)));
+                        }
+                        reserved.push(discriminant);
+                    }
+                    reserved.sort_unstable();
+                }
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Enum {
+                        descriptor: EnumDescriptor { meta, cases, reserved },
+                    },
+                });
+            }
+
+            "ctor" => {
+                if nw != 5 {
+                    return Err(rerr(
+                        ln,
+                        "usage: ctor <name> id:<16-hex> v:<n> <range:lo..hi|enum:name>".into(),
+                    ));
+                }
+                let name = gate_name(&reg, words[1].1, ln)?;
+                validate_nominal_name(&name, ln)?;
+                let meta = declaration_meta(&reg, words[2].1, words[3].1, ln)?;
+                let refinement = if let Some(range) = words[4].1.strip_prefix("range:") {
+                    let Some((lo_word, hi_word)) = range.split_once("..") else {
+                        return Err(rerr(ln, format!("ctor {}: bad range '{}'", name, range)));
+                    };
+                    let lo = num::wnum(lo_word)
+                        .filter(|value| value.is_finite())
+                        .ok_or_else(|| rerr(ln, format!("ctor {}: bad finite lower bound '{}'", name, lo_word)))?;
+                    let hi = num::wnum(hi_word)
+                        .filter(|value| value.is_finite())
+                        .ok_or_else(|| rerr(ln, format!("ctor {}: bad finite upper bound '{}'", name, hi_word)))?;
+                    if lo > hi {
+                        return Err(rerr(ln, format!("ctor {}: lower bound is above upper bound", name)));
+                    }
+                    ConstructorRefinement::Range { lo, hi }
+                } else if let Some(enum_name) = words[4].1.strip_prefix("enum:") {
+                    let Some(index) = find_ent(&reg, enum_name) else {
+                        return Err(rerr(ln, format!("ctor {}: no enum '{}'", name, enum_name)));
+                    };
+                    if !matches!(reg.ents[index].kind, RegEntryKind::Enum { .. }) {
+                        return Err(rerr(ln, format!("ctor {}: '{}' is not an enum", name, enum_name)));
+                    }
+                    ConstructorRefinement::Enum {
+                        enumeration: reg.ents[index].name.clone(),
+                    }
+                } else {
+                    return Err(rerr(ln, format!("ctor {}: expected range:lo..hi or enum:name", name)));
+                };
+                reg.ents.push(RegEntry {
+                    name,
+                    defval: 0.0,
+                    kind: RegEntryKind::Ctor {
+                        descriptor: ConstructorDescriptor { meta, refinement },
+                    },
+                });
+            }
+
             "fn" => {
                 if nw < 2 {
                     return Err(rerr(ln, "usage: fn <name> [bqn]".into()));
                 }
                 let name = gate_name(&reg, words[1].1, ln)?;
-                let body = raw2.map(str::to_string); // verbatim BQN body convention
-                reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Fn { body } });
+                if nw >= 3 && words[2].1.starts_with("id:") {
+                    if nw < 13 || words[11].1 != "=" {
+                        return Err(rerr(
+                            ln,
+                            "usage: fn <name> id:<16-hex> v:<n> sig:<...> fx:<...> det:<...> trust:<...> read:<...> write:<...> use:<...> = <bqn-dfn>".into(),
+                        ));
+                    }
+                    let meta = declaration_meta(&reg, words[2].1, words[3].1, ln)?;
+                    let signature = parse_signature(&reg, words[4].1, ln)?;
+                    let effects = parse_effects(words[5].1, ln)?;
+                    let determinism = parse_determinism(words[6].1, ln)?;
+                    let trust = parse_trust(words[7].1, ln)?;
+                    let reads = parse_footprint(&reg, words[8].1, "read:", FootprintKind::Read, ln)?;
+                    let writes = parse_footprint(&reg, words[9].1, "write:", FootprintKind::Write, ln)?;
+                    let services = parse_footprint(&reg, words[10].1, "use:", FootprintKind::Service, ln)?;
+                    let body = line[words[12].0..].to_string();
+                    if !body.starts_with('{') || !body.ends_with('}') {
+                        return Err(rerr(ln, format!("fn {}: typed raw BQN must be one brace-delimited dfn", name)));
+                    }
+                    let descriptor = CallableDescriptor {
+                        meta,
+                        signature,
+                        effects,
+                        determinism,
+                        trust,
+                        reads,
+                        writes,
+                        services,
+                    };
+                    validate_callable_descriptor(&reg, &name, &descriptor, ln)?;
+                    reg.ents.push(RegEntry {
+                        name,
+                        defval: 0.0,
+                        kind: RegEntryKind::TypedFn { body, descriptor },
+                    });
+                } else {
+                    let body = raw2.map(str::to_string);
+                    reg.ents.push(RegEntry { name, defval: 0.0, kind: RegEntryKind::Fn { body } });
+                }
             }
 
             // the spelling alias: one hop, no transitivity, outranked by real entries; `ja` and
@@ -934,6 +1437,7 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
             ));
         }
     }
+    validate_registry_contracts(&reg)?;
     validate_entity_binds(&reg)?;
     crate::relationship::validate_registry(&reg)?;
     Ok(reg)
@@ -983,6 +1487,1216 @@ pub fn reg_role(reg: &Registry, role: &str) -> Option<usize> {
     }
     reg_find(reg, role)
 }
+// High-integrity declarations must survive construction outside the text loader with the same
+// guarantees as parsed declarations. References are canonical and backward so a dump reloads.
+fn declaration_before<'a>(
+    reg: &'a Registry,
+    owner: usize,
+    name: &str,
+    label: &str,
+) -> Result<(usize, &'a RegEntry), Diag> {
+    let Some(index) = find_ent(reg, name) else {
+        return Err(rerr(0, format!("{} names no declaration '{}'", label, name)));
+    };
+    if index >= owner {
+        return Err(rerr(0, format!("{} must name an earlier declaration '{}'", label, name)));
+    }
+    if reg.ents[index].name != name {
+        return Err(rerr(
+            0,
+            format!(
+                "{} must use canonical spelling '{}', got '{}'",
+                label, reg.ents[index].name, name
+            ),
+        ));
+    }
+    Ok((index, &reg.ents[index]))
+}
+
+fn validate_reg_type(
+    reg: &Registry,
+    owner: usize,
+    carrier: &RegType,
+    unit: bool,
+    label: &str,
+) -> Result<(), Diag> {
+    match carrier {
+        RegType::Unit if !unit => {
+            Err(rerr(0, format!("{} cannot use unit as an input carrier", label)))
+        }
+        RegType::Named(name) => {
+            let (_, entry) = declaration_before(reg, owner, name, label)?;
+            if !matches!(entry.kind, RegEntryKind::Enum { .. } | RegEntryKind::Ctor { .. }) {
+                return Err(rerr(
+                    0,
+                    format!("{} '{}' is not an enum or constructor carrier", label, name),
+                ));
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn validate_signature_contract(
+    reg: &Registry,
+    owner: usize,
+    signature: &CallableSignature,
+    label: &str,
+) -> Result<(), Diag> {
+    for carrier in &signature.inputs {
+        validate_reg_type(reg, owner, carrier, false, label)?;
+    }
+    validate_reg_type(reg, owner, &signature.output, true, label)
+}
+
+fn validate_footprint_contract(
+    reg: &Registry,
+    owner: usize,
+    names: &[String],
+    kind: FootprintKind,
+    label: &str,
+) -> Result<(), Diag> {
+    let mut previous = None;
+    for (position, name) in names.iter().enumerate() {
+        if names[..position].iter().any(|prior| names_eq(prior, name)) {
+            return Err(rerr(0, format!("duplicate {} footprint '{}'", label, name)));
+        }
+        let (reference, entry) = declaration_before(reg, owner, name, label)?;
+        if previous.is_some_and(|prior| reference <= prior) {
+            return Err(rerr(
+                0,
+                format!("{} footprint must follow declaration order", label),
+            ));
+        }
+        previous = Some(reference);
+        if !footprint_admits(entry, kind) {
+            return Err(rerr(
+                0,
+                format!("{} footprint cannot name declaration '{}'", label, name),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_high_name(reg: &Registry, index: usize) -> Result<(), Diag> {
+    let name = &reg.ents[index].name;
+    wfree(name, 0)?;
+    wname(name, ANO_NAMESZ, 0)?;
+    if name.starts_with('#')
+        || name.bytes().any(|byte| byte == 0 || byte.is_ascii_whitespace())
+    {
+        return Err(rerr(0, format!("declaration name '{}' is not one word", name)));
+    }
+    for reserved in RESV {
+        if names_eq(name, reserved) {
+            return Err(rerr(
+                0,
+                format!("'{}' collides with the emitter's reserved '{}'", name, reserved),
+            ));
+        }
+    }
+    for prefix in RESVPFX {
+        if name.get(..prefix.len()).is_some_and(|head| names_eq(head, prefix)) {
+            return Err(rerr(
+                0,
+                format!("'{}' collides with the emitter's reserved '{}<n>' names", name, prefix),
+            ));
+        }
+    }
+    for (other, entry) in reg.ents.iter().enumerate() {
+        if other != index && names_eq(name, &entry.name) {
+            return Err(rerr(
+                0,
+                format!("'{}' collides with entry '{}'", name, entry.name),
+            ));
+        }
+    }
+    if let Some(alias) = reg.aliases.iter().find(|alias| names_eq(name, &alias.from)) {
+        return Err(rerr(
+            0,
+            format!("'{}' collides with alias source '{}'", name, alias.from),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_enum_contract(name: &str, descriptor: &EnumDescriptor) -> Result<(), Diag> {
+    if descriptor.cases.is_empty() {
+        return Err(rerr(0, format!("enum {}: at least one live case is required", name)));
+    }
+    for (index, case) in descriptor.cases.iter().enumerate() {
+        wname(&case.name, ANO_NAMESZ, 0)?;
+        if case.name.starts_with('#')
+            || case.name.contains('=')
+            || case.name.bytes().any(|byte| byte == 0 || byte.is_ascii_whitespace())
+        {
+            return Err(rerr(
+                0,
+                format!("enum {}: case '{}' is not one case word", name, case.name),
+            ));
+        }
+        if descriptor.cases[..index]
+            .iter()
+            .any(|prior| names_eq(&prior.name, &case.name))
+        {
+            return Err(rerr(0, format!("enum {}: duplicate case '{}'", name, case.name)));
+        }
+        if descriptor.cases[..index]
+            .iter()
+            .any(|prior| prior.discriminant == case.discriminant)
+        {
+            return Err(rerr(
+                0,
+                format!("enum {}: discriminant {} is reused", name, case.discriminant),
+            ));
+        }
+        if descriptor.reserved.contains(&case.discriminant) {
+            return Err(rerr(
+                0,
+                format!(
+                    "enum {}: live discriminant {} is also reserved",
+                    name, case.discriminant
+                ),
+            ));
+        }
+    }
+    if descriptor
+        .reserved
+        .windows(2)
+        .any(|pair| pair[0] >= pair[1])
+    {
+        return Err(rerr(
+            0,
+            format!("enum {}: reserved discriminants must be strictly ascending", name),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_meta_contract(
+    reg: &Registry,
+    index: usize,
+    name: &str,
+    meta: DeclMeta,
+) -> Result<(), Diag> {
+    if meta.id.0 == 0 {
+        return Err(rerr(0, format!("declaration '{}' uses reserved id zero", name)));
+    }
+    if meta.version == 0 {
+        return Err(rerr(0, format!("declaration '{}' uses version zero", name)));
+    }
+    if let Some(owner) = reg.ents[..index].iter().find(|entry| {
+        entry
+            .kind
+            .declaration_meta()
+            .is_some_and(|other| other.id == meta.id)
+    }) {
+        return Err(rerr(
+            0,
+            format!(
+                "declaration id {:016x} is already owned by '{}'",
+                meta.id.0, owner.name
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate every explicit registry capability, including registries assembled by host code.
+pub fn validate_registry_contracts(reg: &Registry) -> Result<(), Diag> {
+    for (index, entry) in reg.ents.iter().enumerate() {
+        validate_high_name(reg, index)?;
+        let Some(meta) = entry.kind.declaration_meta() else {
+            continue;
+        };
+        if matches!(entry.kind, RegEntryKind::Enum { .. } | RegEntryKind::Ctor { .. }) {
+            validate_nominal_name(&entry.name, 0)?;
+        }
+
+        validate_meta_contract(reg, index, &entry.name, meta)?;
+        if entry.defval != 0.0 {
+            return Err(rerr(
+                0,
+                format!("default on high-integrity declaration '{}'", entry.name),
+            ));
+        }
+        match &entry.kind {
+            RegEntryKind::Array { descriptor } => {
+                validate_reg_type(reg, index, &descriptor.carrier, false, "array carrier")?;
+                if let ArrayDomain::Fixed(extent) = descriptor.domain {
+                    usize::try_from(extent).map_err(|_| {
+                        rerr(
+                            0,
+                            format!("array {}: fixed extent {} is not addressable", entry.name, extent),
+                        )
+                    })?;
+                }
+            }
+            RegEntryKind::Service { descriptor } => {
+                validate_signature_contract(reg, index, &descriptor.signature, "service signature")?;
+                match (descriptor.direction, &descriptor.signature.output) {
+                    (ServiceDirection::Input, RegType::Unit) => {
+                        return Err(rerr(
+                            0,
+                            format!("service {}: an input service must return a value", entry.name),
+                        ));
+                    }
+                    (ServiceDirection::Output, output) if *output != RegType::Unit => {
+                        return Err(rerr(
+                            0,
+                            format!("service {}: an output service must return unit", entry.name),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            RegEntryKind::Enum { descriptor } => {
+                validate_enum_contract(&entry.name, descriptor)?;
+            }
+            RegEntryKind::Ctor { descriptor } => match &descriptor.refinement {
+                ConstructorRefinement::Range { lo, hi } => {
+                    if !lo.is_finite() || !hi.is_finite() || lo > hi {
+                        return Err(rerr(
+                            0,
+                            format!("ctor {}: range must be finite and ordered", entry.name),
+                        ));
+                    }
+                }
+                ConstructorRefinement::Enum { enumeration } => {
+                    let (_, target) =
+                        declaration_before(reg, index, enumeration, "constructor enum")?;
+                    if !matches!(target.kind, RegEntryKind::Enum { .. }) {
+                        return Err(rerr(
+                            0,
+                            format!("ctor {}: '{}' is not an enum", entry.name, enumeration),
+                        ));
+                    }
+                }
+            },
+            RegEntryKind::TypedFn { body, descriptor } => {
+                validate_signature_contract(reg, index, &descriptor.signature, "fn signature")?;
+                if matches!(descriptor.signature.output, RegType::Named(_)) {
+                    return Err(rerr(
+                        0,
+                        format!("fn {}: nominal outputs require a checked constructor", entry.name),
+                    ));
+                }
+                validate_footprint_contract(
+                    reg,
+                    index,
+                    &descriptor.reads,
+                    FootprintKind::Read,
+                    "read",
+                )?;
+                validate_footprint_contract(
+                    reg,
+                    index,
+                    &descriptor.writes,
+                    FootprintKind::Write,
+                    "write",
+                )?;
+                validate_footprint_contract(
+                    reg,
+                    index,
+                    &descriptor.services,
+                    FootprintKind::Service,
+                    "service",
+                )?;
+                if !body.starts_with('{')
+                    || !body.ends_with('}')
+                    || body.bytes().any(|byte| matches!(byte, 0 | b'\n' | b'\r' | b'#'))
+                {
+                    return Err(rerr(
+                        0,
+                        format!("fn {}: body must be one comment-free BQN dfn", entry.name),
+                    ));
+                }
+                validate_callable_descriptor(reg, &entry.name, descriptor, 0)?;
+            }
+            _ => unreachable!(),
+        }
+    }
+    Ok(())
+}
+
+fn entity_key_exists(reg: &Registry, value: f64) -> bool {
+    let key_values = reg_role(reg, "id")
+        .or_else(|| reg_role(reg, "keys"))
+        .and_then(|index| match &reg.ents[index].kind {
+            RegEntryKind::Col { nums, .. } => Some(nums.as_slice()),
+            _ => None,
+        });
+    match key_values {
+        Some(keys) => keys.iter().filter(|key| **key == value).count() == 1,
+        None => {
+            value.is_finite()
+                && value >= 0.0
+                && value.fract() == 0.0
+                && value < reg.n.max(0) as f64
+        }
+    }
+}
+
+fn resident_len(value: &ResidentArrayValue) -> usize {
+    match value {
+        ResidentArrayValue::Numbers(values) => values.len(),
+        ResidentArrayValue::Symbols(values) => values.len(),
+        ResidentArrayValue::Characters(values) => values.len(),
+        ResidentArrayValue::Entities(values) => values.len(),
+        ResidentArrayValue::Discriminants(values) => values.len(),
+    }
+}
+
+fn resident_kind(value: &ResidentArrayValue) -> &'static str {
+    match value {
+        ResidentArrayValue::Numbers(_) => "numbers",
+        ResidentArrayValue::Symbols(_) => "symbols",
+        ResidentArrayValue::Characters(_) => "characters",
+        ResidentArrayValue::Entities(_) => "entities",
+        ResidentArrayValue::Discriminants(_) => "discriminants",
+    }
+}
+
+fn live_enum_discriminant(
+    enum_name: &str,
+    descriptor: &EnumDescriptor,
+    discriminant: u32,
+) -> Result<u32, Diag> {
+    if descriptor
+        .cases
+        .iter()
+        .any(|case| case.discriminant == discriminant)
+    {
+        Ok(discriminant)
+    } else {
+        Err(rerr(
+            0,
+            format!(
+                "enum {}: discriminant {} is not a live case",
+                enum_name, discriminant
+            ),
+        ))
+    }
+}
+
+fn seal_enum_array(
+    enum_name: &str,
+    descriptor: &EnumDescriptor,
+    value: ResidentArrayValue,
+) -> Result<ResidentArrayValue, Diag> {
+    let discriminants = match value {
+        ResidentArrayValue::Symbols(values) => values
+            .into_iter()
+            .map(|value| {
+                descriptor
+                    .cases
+                    .iter()
+                    .find(|case| names_eq(&case.name, &value))
+                    .map(|case| case.discriminant)
+                    .ok_or_else(|| {
+                        rerr(0, format!("enum {}: no live case '{}'", enum_name, value))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        ResidentArrayValue::Discriminants(values) => values
+            .into_iter()
+            .map(|value| live_enum_discriminant(enum_name, descriptor, value))
+            .collect::<Result<Vec<_>, _>>()?,
+        other => {
+            return Err(rerr(
+                0,
+                format!(
+                    "enum {}: expected symbols or discriminants, got {}",
+                    enum_name,
+                    resident_kind(&other)
+                ),
+            ));
+        }
+    };
+    Ok(ResidentArrayValue::Discriminants(discriminants))
+}
+
+fn seal_numeric_array(
+    name: &str,
+    carrier: &RegType,
+    value: ResidentArrayValue,
+    range: Option<(f64, f64)>,
+) -> Result<ResidentArrayValue, Diag> {
+    let ResidentArrayValue::Numbers(mut values) = value else {
+        return Err(rerr(
+            0,
+            format!("array {}: carrier {} requires numbers", name, reg_type_word(carrier)),
+        ));
+    };
+    let primitive = match carrier {
+        RegType::Mask => ColType::Bool,
+        RegType::Nat => ColType::Nat,
+        RegType::Int => ColType::Int,
+        RegType::Num | RegType::Named(_) => ColType::Num,
+        _ => unreachable!(),
+    };
+    for value in &mut values {
+        if !type_admits(primitive, *value)
+            || range.is_some_and(|(lo, hi)| *value < lo || *value > hi)
+        {
+            return Err(rerr(
+                0,
+                format!(
+                    "array {}: value {} is outside {}",
+                    name,
+                    num::fmt_g(17, *value),
+                    reg_type_word(carrier)
+                ),
+            ));
+        }
+        if *value == 0.0 {
+            *value = 0.0;
+        }
+    }
+    Ok(ResidentArrayValue::Numbers(values))
+}
+
+fn seal_array_value(
+    reg: &Registry,
+    name: &str,
+    descriptor: &ArrayDescriptor,
+    value: ResidentArrayValue,
+) -> Result<ResidentArrayValue, Diag> {
+    let expected = match descriptor.domain {
+        ArrayDomain::Scalar => 1,
+        ArrayDomain::Entity => reg.n.max(0) as usize,
+        ArrayDomain::Fixed(extent) => usize::try_from(extent)
+            .map_err(|_| rerr(0, format!("array {}: extent is not addressable", name)))?,
+    };
+    if resident_len(&value) != expected {
+        return Err(rerr(
+            0,
+            format!(
+                "array {}: expected {} values for its domain, got {}",
+                name,
+                expected,
+                resident_len(&value)
+            ),
+        ));
+    }
+    match &descriptor.carrier {
+        RegType::Mask | RegType::Nat | RegType::Int | RegType::Num => {
+            seal_numeric_array(name, &descriptor.carrier, value, None)
+        }
+        RegType::Sym => match value {
+            ResidentArrayValue::Symbols(values) => Ok(ResidentArrayValue::Symbols(values)),
+            other => Err(rerr(
+                0,
+                format!("array {}: carrier sym cannot seal {}", name, resident_kind(&other)),
+            )),
+        },
+        RegType::Char => match value {
+            ResidentArrayValue::Characters(values) => {
+                Ok(ResidentArrayValue::Characters(values))
+            }
+            other => Err(rerr(
+                0,
+                format!("array {}: carrier char cannot seal {}", name, resident_kind(&other)),
+            )),
+        },
+        RegType::Entity => match value {
+            ResidentArrayValue::Entities(mut values) => {
+                for value in &mut values {
+                    if !entity_key_exists(reg, *value) {
+                        return Err(rerr(
+                            0,
+                            format!(
+                                "array {}: entity key {} is not live and unique",
+                                name,
+                                num::fmt_g(17, *value)
+                            ),
+                        ));
+                    }
+                    if *value == 0.0 {
+                        *value = 0.0;
+                    }
+                }
+                Ok(ResidentArrayValue::Entities(values))
+            }
+            other => Err(rerr(
+                0,
+                format!(
+                    "array {}: carrier entity cannot seal {}",
+                    name,
+                    resident_kind(&other)
+                ),
+            )),
+        },
+        RegType::Named(type_name) => {
+            let Some(index) = find_ent(reg, type_name) else {
+                return Err(rerr(0, format!("array {}: missing carrier '{}'", name, type_name)));
+            };
+            match &reg.ents[index].kind {
+                RegEntryKind::Enum { descriptor } => {
+                    seal_enum_array(type_name, descriptor, value)
+                }
+                RegEntryKind::Ctor { descriptor: constructor } => match &constructor.refinement {
+                    ConstructorRefinement::Range { lo, hi } => seal_numeric_array(
+                        name,
+                        &descriptor.carrier,
+                        value,
+                        Some((*lo, *hi)),
+                    ),
+                    ConstructorRefinement::Enum { enumeration } => {
+                        let Some(enum_index) = find_ent(reg, enumeration) else {
+                            return Err(rerr(
+                                0,
+                                format!("array {}: missing enum '{}'", name, enumeration),
+                            ));
+                        };
+                        let RegEntryKind::Enum { descriptor } = &reg.ents[enum_index].kind else {
+                            return Err(rerr(
+                                0,
+                                format!("array {}: '{}' is not an enum", name, enumeration),
+                            ));
+                        };
+                        seal_enum_array(enumeration, descriptor, value)
+                    }
+                },
+                _ => Err(rerr(
+                    0,
+                    format!("array {}: '{}' is not a nominal carrier", name, type_name),
+                )),
+            }
+        }
+        RegType::Unit => Err(rerr(0, format!("array {}: unit has no resident values", name))),
+    }
+}
+
+const RESIDENT_ARRAY_MAGIC: &str = "ano-resident-array-v1";
+const CONSTRUCTED_VALUE_MAGIC: &str = "ano-constructed-value-v1";
+
+fn sidecar_error(label: &str, message: impl Into<String>) -> Diag {
+    rerr(0, format!("{} sidecar: {}", label, message.into()))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(DIGITS[(byte >> 4) as usize] as char);
+        encoded.push(DIGITS[(byte & 15) as usize] as char);
+    }
+    encoded
+}
+
+fn canonical_hex(word: &str) -> bool {
+    word.bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn hex_decode(word: &str, label: &str) -> Result<Vec<u8>, Diag> {
+    if word.len() % 2 != 0 || !canonical_hex(word) {
+        return Err(sidecar_error(label, format!("bad hexadecimal payload '{}'", word)));
+    }
+    let mut decoded = Vec::with_capacity(word.len() / 2);
+    for pair in word.as_bytes().chunks_exact(2) {
+        let pair = std::str::from_utf8(pair).unwrap();
+        decoded.push(u8::from_str_radix(pair, 16).unwrap());
+    }
+    Ok(decoded)
+}
+
+fn fixed_hex(word: &str, width: usize, label: &str) -> Result<u64, Diag> {
+    if word.len() != width || !canonical_hex(word) {
+        return Err(sidecar_error(label, format!("bad {}-digit hexadecimal value '{}'", width, word)));
+    }
+    u64::from_str_radix(word, 16)
+        .map_err(|_| sidecar_error(label, format!("bad hexadecimal value '{}'", word)))
+}
+
+fn sidecar_fields<'a>(
+    bytes: &'a [u8],
+    magic: &str,
+    label: &str,
+) -> Result<Vec<&'a str>, Diag> {
+    let text = std::str::from_utf8(bytes)
+        .map_err(|_| sidecar_error(label, "payload is not UTF-8"))?;
+    let Some(text) = text.strip_suffix('\n') else {
+        return Err(sidecar_error(label, "missing canonical final newline"));
+    };
+    if text.bytes().any(|byte| matches!(byte, b'\n' | b'\r')) {
+        return Err(sidecar_error(label, "payload must be exactly one line"));
+    }
+    let fields = text.split('\t').collect::<Vec<_>>();
+    if fields.len() < 6 || fields[0] != magic {
+        return Err(sidecar_error(label, "unsupported or malformed header"));
+    }
+    Ok(fields)
+}
+
+fn sidecar_stamp(fields: &[&str], label: &str) -> Result<(DeclarationStamp, String), Diag> {
+    let schema = fixed_hex(fields[1], 16, label)?;
+    let declaration = fixed_hex(fields[2], 16, label)?;
+    let version = fields[3]
+        .parse::<u64>()
+        .ok()
+        .filter(|version| *version > 0)
+        .ok_or_else(|| sidecar_error(label, format!("bad declaration version '{}'", fields[3])))?;
+    if fields[3] != version.to_string() {
+        return Err(sidecar_error(label, format!("noncanonical declaration version '{}'", fields[3])));
+    }
+
+    if fields[4].is_empty() {
+        return Err(sidecar_error(label, "empty declaration name"));
+    }
+    Ok((
+        DeclarationStamp {
+            schema,
+            declaration: DeclId(declaration),
+            version,
+        },
+        fields[4].to_string(),
+    ))
+}
+
+fn write_sidecar(label: &str, path: &str, bytes: &[u8]) -> Result<(), Diag> {
+    fs::fs_write_commit(path, bytes).map_err(|error| {
+        rerr(
+            0,
+            format!(
+                "cannot write {} sidecar '{}': {}",
+                label,
+                path,
+                fs::strerror(&error)
+            ),
+        )
+    })
+}
+
+fn read_sidecar(label: &str, path: &str) -> Result<Vec<u8>, Diag> {
+    fs::fs_read(path).map_err(|error| {
+        rerr(
+            0,
+            format!("cannot read {} sidecar '{}': {}", label, path, fs::strerror(&error)),
+        )
+    })
+}
+
+/// Seal a host attachment against the array's carrier, domain, identity, and schema.
+pub fn seal_resident_array(
+    reg: &Registry,
+    name: &str,
+    value: ResidentArrayValue,
+) -> Result<ResidentArrayHandle, Diag> {
+    validate_registry_contracts(reg)?;
+    let Some(index) = reg_find(reg, name) else {
+        return Err(rerr(0, format!("no resident array '{}'", name)));
+    };
+    let RegEntryKind::Array { descriptor } = &reg.ents[index].kind else {
+        return Err(rerr(0, format!("'{}' is not a resident array", name)));
+    };
+    let value = seal_array_value(reg, &reg.ents[index].name, descriptor, value)?;
+    Ok(ResidentArrayHandle {
+        stamp: DeclarationStamp {
+            schema: crate::alias::registry_fingerprint(reg),
+            declaration: descriptor.meta.id,
+            version: descriptor.meta.version,
+        },
+        name: reg.ents[index].name.clone(),
+        value,
+    })
+}
+
+impl ResidentArrayHandle {
+    /// Return the schema, declaration, and version proof carried by this handle.
+    pub fn stamp(&self) -> DeclarationStamp {
+        self.stamp
+    }
+
+    /// Return the canonical declaration name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Borrow the normalized, sealed payload.
+    pub fn value(&self) -> &ResidentArrayValue {
+        &self.value
+    }
+
+    pub fn validate(&self, reg: &Registry) -> Result<(), Diag> {
+        validate_registry_contracts(reg)?;
+        let schema = crate::alias::registry_fingerprint(reg);
+        if self.stamp.schema != schema {
+            return Err(rerr(
+                0,
+                format!("resident array '{}' belongs to a stale schema", self.name),
+            ));
+        }
+        let Some((entry, descriptor)) = reg.ents.iter().find_map(|entry| match &entry.kind {
+            RegEntryKind::Array { descriptor }
+                if descriptor.meta.id == self.stamp.declaration =>
+            {
+                Some((entry, descriptor))
+            }
+            _ => None,
+        }) else {
+            return Err(rerr(
+                0,
+                format!("resident array '{}' declaration is missing", self.name),
+            ));
+        };
+        if entry.name != self.name {
+            return Err(rerr(
+                0,
+                format!("resident array '{}' has the wrong declaration name", self.name),
+            ));
+        }
+        if descriptor.meta.version != self.stamp.version {
+            return Err(rerr(
+                0,
+                format!("resident array '{}' declaration version changed", self.name),
+            ));
+        }
+        seal_array_value(reg, &entry.name, descriptor, self.value.clone())?;
+        Ok(())
+    }
+    /// Encode one canonical, schema-stamped resident-array sidecar.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut encoded = format!(
+            "{}\t{:016x}\t{:016x}\t{}\t{}",
+            RESIDENT_ARRAY_MAGIC,
+            self.stamp.schema,
+            self.stamp.declaration.0,
+            self.stamp.version,
+            self.name
+        );
+        match &self.value {
+            ResidentArrayValue::Numbers(values) => {
+                encoded.push_str("\tnumbers");
+                for value in values {
+                    write!(&mut encoded, "\t{:016x}", value.to_bits()).unwrap();
+                }
+            }
+            ResidentArrayValue::Symbols(values) => {
+                encoded.push_str("\tsymbols");
+                for value in values {
+                    write!(&mut encoded, "\t{}", hex_encode(value.as_bytes())).unwrap();
+                }
+            }
+            ResidentArrayValue::Characters(values) => {
+                encoded.push_str("\tcharacters");
+                for value in values {
+                    write!(&mut encoded, "\t{:08x}", u32::from(*value)).unwrap();
+                }
+            }
+            ResidentArrayValue::Entities(values) => {
+                encoded.push_str("\tentities");
+                for value in values {
+                    write!(&mut encoded, "\t{:016x}", value.to_bits()).unwrap();
+                }
+            }
+            ResidentArrayValue::Discriminants(values) => {
+                encoded.push_str("\tdiscriminants");
+                for value in values {
+                    write!(&mut encoded, "\t{:08x}", value).unwrap();
+                }
+            }
+        }
+        encoded.push('\n');
+        encoded.into_bytes()
+    }
+
+    /// Decode and revalidate one canonical resident-array sidecar.
+    pub fn decode(bytes: &[u8], reg: &Registry) -> Result<Self, Diag> {
+        let label = "resident array";
+        let fields = sidecar_fields(bytes, RESIDENT_ARRAY_MAGIC, label)?;
+        let (stamp, name) = sidecar_stamp(&fields, label)?;
+        let value = match fields[5] {
+            "numbers" => ResidentArrayValue::Numbers(
+                fields[6..]
+                    .iter()
+                    .map(|field| fixed_hex(field, 16, label).map(f64::from_bits))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            "symbols" => ResidentArrayValue::Symbols(
+                fields[6..]
+                    .iter()
+                    .map(|field| {
+                        String::from_utf8(hex_decode(field, label)?)
+                            .map_err(|_| sidecar_error(label, "symbol payload is not UTF-8"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            "characters" => ResidentArrayValue::Characters(
+                fields[6..]
+                    .iter()
+                    .map(|field| {
+                        let scalar = fixed_hex(field, 8, label)? as u32;
+                        char::from_u32(scalar).ok_or_else(|| {
+                            sidecar_error(label, format!("invalid character scalar '{field}'"))
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            "entities" => ResidentArrayValue::Entities(
+                fields[6..]
+                    .iter()
+                    .map(|field| fixed_hex(field, 16, label).map(f64::from_bits))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            "discriminants" => ResidentArrayValue::Discriminants(
+                fields[6..]
+                    .iter()
+                    .map(|field| fixed_hex(field, 8, label).map(|value| value as u32))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            kind => {
+                return Err(sidecar_error(
+                    label,
+                    format!("unknown resident payload kind '{kind}'"),
+                ));
+            }
+        };
+        let handle = Self { stamp, name, value };
+        handle.validate(reg)?;
+        let sealed = seal_resident_array(reg, &handle.name, handle.value.clone())?;
+        if sealed.encode().as_slice() != bytes {
+            return Err(sidecar_error(label, "payload is not in canonical form"));
+        }
+        Ok(sealed)
+    }
+
+    /// Validate and atomically save one resident-array sidecar.
+    pub fn save(&self, path: &str, reg: &Registry) -> Result<(), Diag> {
+        self.validate(reg)?;
+        write_sidecar("resident array", path, &self.encode())
+    }
+
+    /// Load and revalidate one resident-array sidecar.
+    pub fn load(path: &str, reg: &Registry) -> Result<Self, Diag> {
+        Self::decode(&read_sidecar("resident array", path)?, reg)
+    }
+}
+
+fn enum_payload(
+    reg: &Registry,
+    enumeration: &str,
+    input: ConstructorInput,
+) -> Result<ConstructedPayload, Diag> {
+    let Some(index) = find_ent(reg, enumeration) else {
+        return Err(rerr(0, format!("constructor enum '{}' is missing", enumeration)));
+    };
+    let RegEntryKind::Enum { descriptor } = &reg.ents[index].kind else {
+        return Err(rerr(0, format!("'{}' is not an enum", enumeration)));
+    };
+    let discriminant = match input {
+        ConstructorInput::Case(case_name) => descriptor
+            .cases
+            .iter()
+            .find(|case| names_eq(&case.name, &case_name))
+            .map(|case| case.discriminant)
+            .ok_or_else(|| {
+                rerr(0, format!("enum {}: no live case '{}'", enumeration, case_name))
+            })?,
+        ConstructorInput::Discriminant(discriminant) => {
+            live_enum_discriminant(enumeration, descriptor, discriminant)?
+        }
+        ConstructorInput::Number(value) => {
+            return Err(rerr(
+                0,
+                format!(
+                    "enum constructor {} cannot consume number {}",
+                    enumeration,
+                    num::fmt_g(17, value)
+                ),
+            ));
+        }
+    };
+    Ok(ConstructedPayload::Enum {
+        enumeration: descriptor.meta.id,
+        discriminant,
+    })
+}
+
+/// Apply one checked nominal constructor; no raw carrier value crosses this boundary unchecked.
+pub fn construct(
+    reg: &Registry,
+    name: &str,
+    input: ConstructorInput,
+) -> Result<ConstructedValue, Diag> {
+    validate_registry_contracts(reg)?;
+    let Some(index) = reg_find(reg, name) else {
+        return Err(rerr(0, format!("no constructor '{}'", name)));
+    };
+    let RegEntryKind::Ctor { descriptor } = &reg.ents[index].kind else {
+        return Err(rerr(0, format!("'{}' is not a constructor", name)));
+    };
+    let payload = match (&descriptor.refinement, input) {
+        (ConstructorRefinement::Range { lo, hi }, ConstructorInput::Number(value))
+            if !value.is_nan() && value >= *lo && value <= *hi =>
+        {
+            ConstructedPayload::Number(if value == 0.0 { 0.0 } else { value })
+        }
+        (ConstructorRefinement::Range { lo, hi }, ConstructorInput::Number(value)) => {
+            return Err(rerr(
+                0,
+                format!(
+                    "constructor {}: value {} is outside {}..{}",
+                    reg.ents[index].name,
+                    num::fmt_g(17, value),
+                    num::fmt_g(17, *lo),
+                    num::fmt_g(17, *hi)
+                ),
+            ));
+        }
+        (ConstructorRefinement::Range { .. }, _) => {
+            return Err(rerr(
+                0,
+                format!("constructor {} requires a number", reg.ents[index].name),
+            ));
+        }
+        (ConstructorRefinement::Enum { enumeration }, input) => {
+            enum_payload(reg, enumeration, input)?
+        }
+    };
+    Ok(ConstructedValue {
+        stamp: DeclarationStamp {
+            schema: crate::alias::registry_fingerprint(reg),
+            declaration: descriptor.meta.id,
+            version: descriptor.meta.version,
+        },
+        name: reg.ents[index].name.clone(),
+        payload,
+    })
+}
+
+impl ConstructedValue {
+    /// Return the schema, declaration, and version proof carried by this value.
+    pub fn stamp(&self) -> DeclarationStamp {
+        self.stamp
+    }
+
+    /// Return the canonical constructor name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Borrow the checked nominal payload.
+    pub fn payload(&self) -> &ConstructedPayload {
+        &self.payload
+    }
+
+    pub fn validate(&self, reg: &Registry) -> Result<(), Diag> {
+        validate_registry_contracts(reg)?;
+        if self.stamp.schema != crate::alias::registry_fingerprint(reg) {
+            return Err(rerr(
+                0,
+                format!("constructed value '{}' belongs to a stale schema", self.name),
+            ));
+        }
+        let Some((entry, descriptor)) = reg.ents.iter().find_map(|entry| match &entry.kind {
+            RegEntryKind::Ctor { descriptor }
+                if descriptor.meta.id == self.stamp.declaration =>
+            {
+                Some((entry, descriptor))
+            }
+            _ => None,
+        }) else {
+            return Err(rerr(
+                0,
+                format!("constructed value '{}' has no constructor", self.name),
+            ));
+        };
+        if entry.name != self.name {
+            return Err(rerr(
+                0,
+                format!("constructed value '{}' has the wrong declaration name", self.name),
+            ));
+        }
+        if descriptor.meta.version != self.stamp.version {
+            return Err(rerr(
+                0,
+                format!("constructor '{}' version changed", self.name),
+            ));
+        }
+        match (&descriptor.refinement, &self.payload) {
+            (
+                ConstructorRefinement::Range { lo, hi },
+                ConstructedPayload::Number(value),
+            ) if !value.is_nan() && value >= lo && value <= hi => Ok(()),
+            (
+                ConstructorRefinement::Range { lo, hi },
+                ConstructedPayload::Number(value),
+            ) => Err(rerr(
+                0,
+                format!(
+                    "constructor {}: value {} is outside {}..{}",
+                    self.name,
+                    num::fmt_g(17, *value),
+                    num::fmt_g(17, *lo),
+                    num::fmt_g(17, *hi)
+                ),
+            )),
+            (
+                ConstructorRefinement::Enum { enumeration },
+                ConstructedPayload::Enum {
+                    enumeration: enum_id,
+                    discriminant,
+                },
+            ) => {
+                let Some(index) = find_ent(reg, enumeration) else {
+                    return Err(rerr(0, format!("constructor enum '{}' is missing", enumeration)));
+                };
+                let RegEntryKind::Enum { descriptor } = &reg.ents[index].kind else {
+                    return Err(rerr(0, format!("'{}' is not an enum", enumeration)));
+                };
+                if descriptor.meta.id != *enum_id {
+                    return Err(rerr(
+                        0,
+                        format!("constructed value '{}' has the wrong enum identity", self.name),
+                    ));
+                }
+                live_enum_discriminant(enumeration, descriptor, *discriminant)?;
+                Ok(())
+            }
+            _ => Err(rerr(
+                0,
+                format!("constructed value '{}' has the wrong representation", self.name),
+            )),
+        }
+    }
+    /// Encode one canonical, schema-stamped constructed-value sidecar.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut encoded = format!(
+            "{}\t{:016x}\t{:016x}\t{}\t{}",
+            CONSTRUCTED_VALUE_MAGIC,
+            self.stamp.schema,
+            self.stamp.declaration.0,
+            self.stamp.version,
+            self.name
+        );
+        match self.payload {
+            ConstructedPayload::Number(value) => {
+                write!(&mut encoded, "\tnumber\t{:016x}", value.to_bits()).unwrap();
+            }
+            ConstructedPayload::Enum {
+                enumeration,
+                discriminant,
+            } => {
+                write!(
+                    &mut encoded,
+                    "\tenum\t{:016x}\t{:08x}",
+                    enumeration.0, discriminant
+                )
+                .unwrap();
+            }
+        }
+        encoded.push('\n');
+        encoded.into_bytes()
+    }
+
+    /// Decode and revalidate one canonical constructed-value sidecar.
+    pub fn decode(bytes: &[u8], reg: &Registry) -> Result<Self, Diag> {
+        let label = "constructed value";
+        let fields = sidecar_fields(bytes, CONSTRUCTED_VALUE_MAGIC, label)?;
+        let (stamp, name) = sidecar_stamp(&fields, label)?;
+        let payload = match fields[5] {
+            "number" if fields.len() == 7 => {
+                ConstructedPayload::Number(f64::from_bits(fixed_hex(fields[6], 16, label)?))
+            }
+            "enum" if fields.len() == 8 => ConstructedPayload::Enum {
+                enumeration: DeclId(fixed_hex(fields[6], 16, label)?),
+                discriminant: fixed_hex(fields[7], 8, label)? as u32,
+            },
+            "number" | "enum" => {
+                return Err(sidecar_error(label, "wrong payload field count"));
+            }
+            kind => {
+                return Err(sidecar_error(
+                    label,
+                    format!("unknown constructed payload kind '{kind}'"),
+                ));
+            }
+        };
+        let value = Self {
+            stamp,
+            name,
+            payload,
+        };
+        value.validate(reg)?;
+        let sealed = match &value.payload {
+            ConstructedPayload::Number(payload) => construct(reg, &value.name, ConstructorInput::Number(*payload))?,
+            ConstructedPayload::Enum { discriminant, .. } => construct(reg, &value.name, ConstructorInput::Discriminant(*discriminant))?,
+        };
+        if sealed.encode().as_slice() != bytes {
+            return Err(sidecar_error(label, "payload is not in canonical form"));
+        }
+        Ok(sealed)
+    }
+
+    /// Validate and atomically save one constructed-value sidecar.
+    pub fn save(&self, path: &str, reg: &Registry) -> Result<(), Diag> {
+        self.validate(reg)?;
+        write_sidecar("constructed value", path, &self.encode())
+    }
+
+    /// Load and revalidate one constructed-value sidecar.
+    pub fn load(path: &str, reg: &Registry) -> Result<Self, Diag> {
+        Self::decode(&read_sidecar("constructed value", path)?, reg)
+    }
+}
+
+fn signature_word(signature: &CallableSignature) -> String {
+    let inputs = if signature.inputs.is_empty() {
+        "unit".to_string()
+    } else {
+        signature
+            .inputs
+            .iter()
+            .map(reg_type_word)
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    format!("{}->{}", inputs, reg_type_word(&signature.output))
+}
+
+fn effects_word(effects: EffectSet) -> String {
+    let mut words = Vec::new();
+    if effects.read {
+        words.push("read");
+    }
+    if effects.write {
+        words.push("write");
+    }
+    if effects.service {
+        words.push("service");
+    }
+    if words.is_empty() { "pure".into() } else { words.join(",") }
+}
+
+fn determinism_word(determinism: Determinism) -> &'static str {
+    match determinism {
+        Determinism::Deterministic => "deterministic",
+        Determinism::Snapshot => "snapshot",
+        Determinism::Nondeterministic => "nondeterministic",
+    }
+}
+
+fn trust_word(trust: TrustBoundary) -> &'static str {
+    match trust {
+        TrustBoundary::Checked => "checked",
+        TrustBoundary::Trusted => "trusted",
+    }
+}
+
+fn footprint_word(names: &[String]) -> String {
+    if names.is_empty() { "-".into() } else { names.join(",") }
+}
+
+fn domain_word(domain: &ArrayDomain) -> String {
+    match domain {
+        ArrayDomain::Scalar => "scalar".into(),
+        ArrayDomain::Entity => "entity".into(),
+        ArrayDomain::Fixed(extent) => format!("fixed:{}", extent),
+    }
+}
 
 // Inputs: sink, keyword (col/field), entry name, type, values, rows. Output: one column
 // line — sym words, the char glyph run, the structurally re-detected pair column as vec,
@@ -1028,6 +2742,7 @@ fn dump_column(b: &mut String, kw: &str, name: &str, ty: ColType, nums: &[f64], 
 // Emits n, lattice, reap, entries, roles, then aliases in declaration order. Inverse fibers
 // recompute on load. fs_write_commit performs the staged replacement.
 pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
+    validate_registry_contracts(reg)?;
     crate::relationship::validate_registry(reg)?;
     let mut b = String::new();
     let _ = writeln!(b, "n {}", reg.n);
@@ -1148,6 +2863,90 @@ pub fn reg_dump(reg: &Registry, path: &str) -> Result<(), Diag> {
                     let _ = writeln!(b, "fn {}", e.name);
                 }
             },
+            RegEntryKind::TypedFn { body, descriptor } => {
+                let _ = writeln!(
+                    b,
+                    "fn {} id:{:016x} v:{} sig:{} fx:{} det:{} trust:{} read:{} write:{} use:{} = {}",
+                    e.name,
+                    descriptor.meta.id.0,
+                    descriptor.meta.version,
+                    signature_word(&descriptor.signature),
+                    effects_word(descriptor.effects),
+                    determinism_word(descriptor.determinism),
+                    trust_word(descriptor.trust),
+                    footprint_word(&descriptor.reads),
+                    footprint_word(&descriptor.writes),
+                    footprint_word(&descriptor.services),
+                    body,
+                );
+            }
+            RegEntryKind::Array { descriptor } => {
+                let _ = writeln!(
+                    b,
+                    "array {} id:{:016x} v:{} {} {}",
+                    e.name,
+                    descriptor.meta.id.0,
+                    descriptor.meta.version,
+                    reg_type_word(&descriptor.carrier),
+                    domain_word(&descriptor.domain),
+                );
+            }
+            RegEntryKind::Service { descriptor } => {
+                let _ = writeln!(
+                    b,
+                    "service {} id:{:016x} v:{} {} sig:{} trust:{}",
+                    e.name,
+                    descriptor.meta.id.0,
+                    descriptor.meta.version,
+                    match descriptor.direction {
+                        ServiceDirection::Input => "input",
+                        ServiceDirection::Output => "output",
+                    },
+                    signature_word(&descriptor.signature),
+                    trust_word(descriptor.trust),
+                );
+            }
+            RegEntryKind::Enum { descriptor } => {
+                let _ = write!(
+                    b,
+                    "enum {} id:{:016x} v:{}",
+                    e.name,
+                    descriptor.meta.id.0,
+                    descriptor.meta.version,
+                );
+                for case in &descriptor.cases {
+                    let _ = write!(b, " {}={}", case.name, case.discriminant);
+                }
+                b.push_str(" reserve:");
+                if descriptor.reserved.is_empty() {
+                    b.push('-');
+                } else {
+                    for (index, discriminant) in descriptor.reserved.iter().enumerate() {
+                        if index > 0 {
+                            b.push(',');
+                        }
+                        let _ = write!(b, "{}", discriminant);
+                    }
+                }
+                b.push('\n');
+            }
+            RegEntryKind::Ctor { descriptor } => {
+                let _ = write!(
+                    b,
+                    "ctor {} id:{:016x} v:{} ",
+                    e.name,
+                    descriptor.meta.id.0,
+                    descriptor.meta.version,
+                );
+                match &descriptor.refinement {
+                    ConstructorRefinement::Range { lo, hi } => {
+                        let _ = writeln!(b, "range:{}..{}", num::dnum(*lo), num::dnum(*hi));
+                    }
+                    ConstructorRefinement::Enum { enumeration } => {
+                        let _ = writeln!(b, "enum:{}", enumeration);
+                    }
+                }
+            }
             RegEntryKind::Tag { col, carrier_ty, num: nv, sym } => {
                 let _ = write!(b, "as {} {} ", e.name, col);
                 if *carrier_ty == ColType::Sym {
