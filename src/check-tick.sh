@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Re-derives every demo's tick-dynamics class against src/tick-classes.txt and runs the
 # absorption/saturation witness worlds. The tick is Kore's n staged headlessly: registry
-# retargeted to a scratch copy (sidecar beside it), out/expect/expect-n pins stripped,
-# `steel --run --save --label`. A class mismatch is a real finding: the test was never good,
+# retargeted to a scratch copy (sidecar beside it), `steel --run --save --label`. Tick one
+# keeps the out/expect/expect-n pins — the pristine pin-checked demo run IS tick one of the
+# orbit, so this battery subsumes the old one-run demo sweep; later ticks strip the pins
+# (they witness only the pristine world). Pins assert without mutating: pinned and stripped
+# tick one save byte-identical worlds. A class mismatch is a real finding: the test was never good,
 # a grammar intentionally changed, or the implementation broke. ANO_TICK_SATURATE=1 also
 # runs the measured `saturate=K` fixed points (~1000 ticks each). Proofs: proofs/tick-induction.md.
 set -u
@@ -22,23 +25,31 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/ano-tick-XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 fail=0
 
-# stage_tick <demo> <world> <out>: the demo with its registry retargeted and pins dropped.
+# stage_tick <demo> <world> <play>: registry retargeted to <world>; first.ano keeps the pins
+# (tick one is the pristine run, values verified there), next.ano strips them.
 stage_tick() {
   awk -v w="$2" '
     { line=$0; sub(/^[ \t]+/, "", line) }
     !done && line ~ /^--! registry / { print "--! registry " w; done=1; next }
+    { print }
+  ' "$1" > "$3/first.ano"
+  awk '
+    { line=$0; sub(/^[ \t]+/, "", line) }
     line ~ /^--![ \t]*(out|expect|expect-n)([ \t]|$)/ { next }
     { print }
-  ' "$1" > "$3"
-  grep -q "^--! registry $2\$" "$3"
+  ' "$3/first.ano" > "$3/next.ano"
+  grep -q "^--! registry $2\$" "$3/next.ano"
 }
 
 # run_ticks <play> <K>: tick K times, hashes into HASH[1..K]; nonzero + TICK_ERR on a failed tick.
+# Tick one runs first.ano (pins intact), later ticks next.ano.
 run_ticks() {
-  local play="$1" limit="$2" k
+  local play="$1" limit="$2" k prog
   HASH=()
   for ((k = 1; k <= limit; k++)); do
-    if ! "$STEEL" --run --save "$play/world.reg" --label --label "$play/next.ano" >"$play/tick.out" 2>&1; then
+    prog="$play/next.ano"
+    [ "$k" -eq 1 ] && prog="$play/first.ano"
+    if ! "$STEEL" --run --save "$play/world.reg" --label --label "$prog" >"$play/tick.out" 2>&1; then
       TICK_ERR="tick $k failed: $(tail -1 "$play/tick.out" | cut -c1-100)"
       return 1
     fi
@@ -64,7 +75,7 @@ while read -r stem class a1 _; do
   mkdir -p "$play"
   cp "$src" "$play/world.reg" || { echo "FAIL-registry $stem"; fail=1; continue; }
   [ -f "$src.aliases" ] && cp "$src.aliases" "$play/world.reg.aliases"
-  stage_tick "$file" "$play/world.reg" "$play/next.ano" || { echo "FAIL-stage  $stem"; fail=1; continue; }
+  stage_tick "$file" "$play/world.reg" "$play" || { echo "FAIL-stage  $stem"; fail=1; continue; }
   # per-class re-derivation; args re-read from the manifest line
   line="$(grep -m1 "^$stem " "$manifest")"
   set -- $line

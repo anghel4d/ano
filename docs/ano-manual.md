@@ -40,7 +40,7 @@ The demo tree comes in twins. Every `.bqn` file is a witness: the semantics work
 
 ```text
 ./demos/check.sh       # every .bqn witness (93 files)
-./src/check-ano.sh     # every .ano twin through steel --run (257 files)
+./src/check-ano.sh     # twin emission parity, refusal boundaries, and every demo's tick orbit (pins checked at tick one)
 nix flake check        # both suites, hermetically
 ```
 

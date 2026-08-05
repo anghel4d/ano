@@ -4,7 +4,7 @@ Whether "the demo ticks at step n and n+1" extends to every step is a per-demo t
 
 ## The tick map
 
-Kore's `n` is `T(W) = save(run(P, W))` with `P` the staged program: the demo verbatim, `--! registry` retargeted to the play scratch, `--! out`/`expect`/`expect-n` pins stripped. `P` is fixed across presses, none of the active demos consults a host service, the alias sidecar is frozen, and emission is deterministic (twin emission is byte-identical; the trace battery pins run determinism), so `T` is a deterministic function on saved worlds. Every claim below is about iterating `T`.
+Kore's `n` is `T(W) = save(run(P, W))` with `P` the staged program: the demo verbatim, `--! registry` retargeted to the play scratch, `--! out`/`expect`/`expect-n` pins stripped. `P` is fixed across presses, none of the active demos consults a host service, the alias sidecar is frozen, and emission is deterministic (twin emission is byte-identical; the trace battery pins run determinism), so `T` is a deterministic function on saved worlds. The pins are assertions, not mutations: running `P` with them intact computes the same `T` and additionally verifies the pinned values, or fails the tick — verified corpus-wide that pinned and stripped tick one save byte-identical worlds. Every claim below is about iterating `T`.
 
 ## Theorems
 
@@ -26,7 +26,7 @@ Kore's `n` is `T(W) = save(run(P, W))` with `P` the staged program: the demo ver
 
 ## The executable form
 
-The classification is a standing pin, not a report: `src/tick-classes.txt` records every active demo's class and `src/check-tick.sh` re-derives each class on every run — fixed points must still fix at their exact tick, cycles must still close with their exact period, evolving demos must still evolve, and the absorption, infinity, and zero witness worlds re-prove theorems 3–4's absorbing semantics each time. `check-ano.sh` chains it, so the standard battery fails on any drift. `ANO_TICK_SATURATE=1` additionally runs the three measured saturation fixed points (`002`@1022, `007`@1079, `021`@1018) to their exact ticks. A class mismatch always means one of three things — the test was never good, a grammar intentionally changed, or the implementation broke — and the mismatch is the signal to decide which.
+The classification is a standing pin, not a report: `src/tick-classes.txt` records every active demo's class and `src/check-tick.sh` re-derives each class on every run — fixed points must still fix at their exact tick, cycles must still close with their exact period, evolving demos must still evolve, and the absorption, infinity, and zero witness worlds re-prove theorems 3–4's absorbing semantics each time. Tick one runs with the pins intact, so the battery subsumes the old one-run demo sweep: the pristine run's values and the orbit's shape are checked on the same trajectory, and a `-nihongo` twin's values ride its ASCII stem because the twin comparison proves emission byte-identical. `check-ano.sh` chains it, so the standard battery fails on any drift. `ANO_TICK_SATURATE=1` additionally runs the three measured saturation fixed points (`002`@1022, `007`@1079, `021`@1018) to their exact ticks. A class mismatch always means one of three things — the test was never good, a grammar intentionally changed, or the implementation broke — and the mismatch is the signal to decide which.
 
 ## What the step case assumes
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Runs every active demo through Steel, compares each active Japanese twin's emitted BQN with
-# its ASCII twin, then runs the numeric and refusal boundary battery. Quarantined skips are always visible.
+# Compares each active Japanese twin's emitted BQN with its ASCII twin, then chains the refusal
+# battery and the tick battery. The pristine pin-checked demo run lives in check-tick.sh as tick one
+# of each demo's classified orbit; twins ride their ASCII stem because emission is byte-identical.
+# Quarantined skips are always visible.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
@@ -29,14 +31,6 @@ while IFS= read -r -d '' file; do
   if ano_demo_quarantined "$number"; then
     echo "skip-quarantine $file"
     continue
-  fi
-  out="$work/run-$seen.out"
-  if "$STEEL" --run "$file" >"$out" 2>&1; then
-    echo "ok-run      $file"
-  else
-    echo "FAIL-run    $file"
-    sed 's/^/  /' "$out"
-    fail=1
   fi
   case "$file" in
     *-nihongo.ano)

@@ -3,6 +3,7 @@
 # `cycle A B` (tick B reproduces tick A, ticks A..B-1 all distinct), `evolving` (ticks 1-4 succeed, all distinct).
 # `saturate=K` on an evolving demo pins its measured saturation fixed point, checked under ANO_TICK_SATURATE=1.
 # A `-nihongo` twin shares its ASCII twin dynamics and is not listed. Quarantined numbers are not listed.
+# Tick one runs each demo with its out/expect pins intact: pinned values and orbit shape share one trajectory.
 # This file is a pin, not documentation: src/check-tick.sh re-derives every class each run, and a mismatch
 # means the test was never good, a grammar intentionally changed, or the implementation broke — decide which.
 # The proofs behind the classes are proofs/tick-induction.md. A new demo joins by exhibiting its invariant.
