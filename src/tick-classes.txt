@@ -1,0 +1,95 @@
+# Tick-dynamics manifest: one line per active ASCII demo, `<stem> <class> [args]`.
+# Classes: `fixed K` (tick K reproduces tick K-1 byte-for-byte, and for K>2 tick K-1 differs from K-2),
+# `cycle A B` (tick B reproduces tick A, ticks A..B-1 all distinct), `evolving` (ticks 1-4 succeed, all distinct).
+# `saturate=K` on an evolving demo pins its measured saturation fixed point, checked under ANO_TICK_SATURATE=1.
+# A `-nihongo` twin shares its ASCII twin dynamics and is not listed. Quarantined numbers are not listed.
+# This file is a pin, not documentation: src/check-tick.sh re-derives every class each run, and a mismatch
+# means the test was never good, a grammar intentionally changed, or the implementation broke — decide which.
+# The proofs behind the classes are proofs/tick-induction.md. A new demo joins by exhibiting its invariant.
+001-canonical-masked-update evolving
+002-core-sentence-form evolving saturate=1022
+003-component-masks evolving
+004-scoped-selection evolving
+005-alias-overlay evolving
+006-presence-patterns evolving
+007-value-predicates evolving saturate=1079
+008-relationship-hops evolving
+009-named-selections evolving
+010-frenzy-image evolving
+011-neighbor-quantifiers fixed 3
+012-empty-pen fixed 2
+013-set-hop evolving
+014-masked-scatter fixed 2
+015-keyed-hop evolving
+016-value-effects evolving
+017-assignment fixed 2
+018-structural-effects fixed 2
+019-sequenced-effects evolving
+020-derived-columns fixed 2
+021-masked-multiply evolving saturate=1018
+022-barrier-granularity-a evolving
+023-barrier-granularity-b evolving
+024-pre-state cycle 2 4
+025-soul-gate fixed 2
+026-hop-after-despawn fixed 2
+027-hop-out-of-range fixed 2
+028-reductions fixed 2
+029-ordered-steps fixed 2
+030-scans fixed 2
+031-scan-along fixed 2
+032-avg-fold-finish fixed 2
+038-ever-any fixed 2
+039-still-all fixed 2
+040-reducer-spellings fixed 2
+041-grade-and-rank fixed 2
+042-pipeline-topk fixed 2
+043-fold-ordered-topk fixed 2
+045-rank-ties fixed 2
+048-replicate-spawn evolving
+049-expand-alias evolving
+054-proto-spawn evolving
+079-global-vs-gamma-a fixed 2
+080-global-vs-gamma-b fixed 2
+081-gamma-def fixed 2
+082-tokenizer-skin evolving
+083-dotted-hop evolving
+084-scoped-selection evolving
+085-relative-clause-a evolving
+086-relative-clause-b evolving
+087-fallen-master fixed 2
+088-fold-noun-phrase fixed 2
+092-counters-becoming evolving
+094-block-anaphora fixed 2
+095-native-registry evolving
+096-mixed-surface evolving
+097-bilingual-bridge evolving
+098-native-kinds-a evolving
+100-native-kinds-c evolving
+103-native-sigils evolving
+111-modifiers-a evolving
+112-modifiers-b evolving
+113-modifiers-c evolving
+120-cast-block fixed 2
+121-cast-block-b fixed 2
+122-wrap evolving
+123-modifier-chain evolving
+124-modifier-chain-b evolving
+125-modifier-chain-c evolving
+126-greek evolving
+127-ledger evolving
+128-eval evolving
+129-beside evolving
+130-central evolving
+131-derived-tag-a evolving
+132-derived-tag-b evolving
+133-bool-domain fixed 2
+134-natural-floor fixed 3
+135-natural-grain fixed 53
+136-integer-domain fixed 3
+137-range-clamp cycle 3 7
+138-typed-keys evolving
+139-accumulation-order fixed 2
+140-magnitude-extremes fixed 2
+141-mixed-scales fixed 2
+142-glyph-extrema fixed 2
+143-row-fold-empty fixed 2

@@ -70,4 +70,7 @@ fi
 if ! STEEL="$STEEL" bash "$here/check-refusals.sh"; then
   fail=1
 fi
+if ! STEEL="$STEEL" bash "$here/check-tick.sh"; then
+  fail=1
+fi
 exit "$fail"
