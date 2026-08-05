@@ -1,7 +1,7 @@
 # ano: 死んだ北が、幽霊を生み、消える。
-# ano: あの Nord & Dead が spawn Ghost
+# ano: あの Nord & Dead が spawn Wraith
 # ano: ~
-# ano: Nord & Dead , spawn Ghost
+# ano: Nord & Dead , spawn Wraith
 # ano: ~
 # Invariant: after both barriers the dead Nords are gone, every other original row remains, and one ghost per dead Nord survives.
 

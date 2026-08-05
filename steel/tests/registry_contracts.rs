@@ -89,6 +89,27 @@ fn migration(
     migrate(&old, &candidate, &aliases, &manifest, &plan)
 }
 
+// A proto sym field is spawn fill for a sym column: its value is a spelling, never a number,
+// and it survives the dump round trip so a spawned world stays savable.
+#[test]
+fn proto_sym_fields_load_and_round_trip() {
+    let registry = load(
+        "proto-sym",
+        "n 2\ncol type sym nord nord\ncol ghost bool 0 0\ndef wraith ghost=1 type=ghost\n",
+    );
+    let proto = registry.ents.iter().find(|e| e.name == "wraith").expect("proto");
+    let RegEntryKind::Proto { fields } = &proto.kind else { panic!("not a proto") };
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[1].col, "type");
+    assert_eq!(fields[1].spelling, "ghost");
+    let out = scratch("proto-sym-dump").join("dump.reg");
+    reg_dump(&registry, out.to_str().unwrap()).expect("dump");
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.contains("def wraith ghost=1 type=ghost"), "{}", text);
+    let reloaded = reg_load(out.to_str().unwrap()).expect("reload");
+    assert_eq!(reloaded.ents.len(), registry.ents.len());
+}
+
 #[test]
 fn canonical_round_trip_and_explicit_manifest_identities() {
     let registry = full_registry("round-trip");

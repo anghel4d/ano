@@ -125,6 +125,9 @@ struct Fx {
 // shared by statements, queries, comprehensions, and rule ticks.
 struct Em<'a> {
     reg: &'a Registry,
+    // reg.ents[..declared] are the world's declarations; entries past it are the normalizer's
+    // synthetic vehicles (AnoDynMask/AnoDynEnt), session state that must never pipe to save.
+    declared: usize,
     dirs: &'a Directives,
     it: &'a Interner,
     out: String,
@@ -3678,14 +3681,15 @@ impl<'a> Em<'a> {
     }
 
     // The --save pipe-back serializer: 0x1E-prefixed post-state lines, data-carrying entries
-    // in declaration order; schema never pipes; inverse srels skipped.
+    // in declaration order; schema never pipes; inverse srels skipped; synthetic overlay
+    // vehicles past `declared` never pipe — the dynamic overlay is session state, not world.
     fn emit_save(&mut self) {
         self.out.push_str("\n# save pipe-back (--save): 0x1E-prefixed post-state lines\n");
         self.out.push_str("anoSaveSep ← @+30\n");
         self.out.push_str("AnoSaveNum ← {∾{𝕩='¯' ? \"-\" ; ⋈𝕩}¨•Repr 𝕩}\n");
         self.out.push_str("AnoSaveRow ← {∾{\" \"∾𝕩}¨𝕩}\n");
         self.out.push_str("•Out anoSaveSep∾\"n \"∾AnoSaveNum anoN\n");
-        for i in 0..self.reg.ents.len() {
+        for i in 0..self.declared.min(self.reg.ents.len()) {
             let e = self.ent(i);
             let v = self.bqnv(i);
             match &e.kind {
@@ -3870,12 +3874,14 @@ impl<'a> Em<'a> {
 fn emit_lowered(
     prog: &Node,
     reg: &Registry,
+    declared: usize,
     dirs: &Directives,
     it: &Interner,
     plan: crate::trace::TracePlan,
 ) -> Result<(String, crate::trace::TracePlan), Diag> {
     let mut em = Em {
         reg,
+        declared,
         dirs,
         it,
         out: String::new(),
@@ -6199,7 +6205,14 @@ mod normalize {
         normalizer.refuse_reserved(prog)?;
         // the alias plan crosses into the lowerer, which mints one record per staged crossing
         let plan = std::mem::take(&mut normalizer.trace);
-        let (bqn, plan) = emit_lowered(&program, &normalizer.reg, dirs, &normalizer.it, plan)?;
+        let (bqn, plan) = emit_lowered(
+            &program,
+            &normalizer.reg,
+            normalizer.base_reg.ents.len(),
+            dirs,
+            &normalizer.it,
+            plan,
+        )?;
         let bqn = emit_trace_uses(bqn, &plan, dirs.trace);
         Ok(bqn)
     }
@@ -6539,6 +6552,24 @@ mod normalize {
                 .find(|e| e.name == "AnoDynMask0")
                 .expect("materialized entry");
             assert!(matches!(&entry.kind, RegEntryKind::AliasMask { mask } if mask == &[1.0, 0.0, 1.0]));
+        }
+
+        // The vehicle is session state: --save pipes every declared entry and never the synthetic.
+        #[test]
+        fn dynamic_alias_mask_never_pipes_to_save() {
+            let reg = registry();
+            let mut environment = AliasEnvironment::for_registry(&reg);
+            environment.install_mask(&reg, "hot", &[1.0, 0.0, 1.0]).expect("install");
+            let (prog, it) = program("^hot , Silver = 0\n");
+            let dirs = Directives { save: true, ..Directives::default() };
+            let bqn = emit(&prog, &reg, &dirs, &it, environment.snapshot(&reg).expect("snapshot"))
+                .expect("emit");
+            assert!(bqn.contains("anoSaveSep∾\"col Gold\""), "{}", bqn);
+            assert!(bqn.contains("anoSaveSep∾\"col Silver\""), "{}", bqn);
+            let leaked = bqn
+                .lines()
+                .any(|line| line.contains("anoSaveSep") && line.contains("AnoDynMask"));
+            assert!(!leaked, "{}", bqn);
         }
 
         // An overlay entry spelled like a column is invisible to the bare spelling (work 3).

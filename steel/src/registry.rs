@@ -1391,8 +1391,9 @@ pub fn reg_load(path: &str) -> Result<Registry, Diag> {
                             None => return Err(rerr(ln, format!("def {}: bad number '{}' for '{}'", name, vw, cname))),
                         }
                     }
-                    // a proto value is spawn fill layer one: it must sit in the carrier set
-                    if !is_rel {
+                    // a proto value is spawn fill layer one: it must sit in the carrier set;
+                    // a sym field's value is its spelling, not a number, so it has no numeric gate
+                    if !is_rel && cty != ColType::Sym {
                         if !type_admits(cty, num_v) {
                             return Err(rerr(
                                 ln,
