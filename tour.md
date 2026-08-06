@@ -32,6 +32,44 @@ Here is a tiny world. Ten fighters. Laid flat, it looks like this. The leftmost 
 `Race` is a symbol column: which people live in the row. `IsHostile` is a boolean column — ones and zeros, named the C# way, a yes/no flag on each fighter. `TwoHanded` and `Archery` are numeric skill columns over the same row index; the `…` in between stands for the rest of the skill tree — Block, OneHanded, Sneak, whatever the game registers — same shape, more columns. `Gold` is another numeric column beside them. That is the whole move. An ECS archetype is a table in the SQL sense, or a keyed table in the kdb+ sense — one name for the row set, one vector per attribute, aligned by position. Once the world is a table, "the Nords" is just the rows where `Race` is Nord, and "the hostiles" is just the rows where `IsHostile` is 1 — column operations, not a loop over objects.
 
 
+### Saying who
+
+In Ano you do not have to memorize FormIDs, object names, or which handle is which. You describe the things by how they are — hostile, Nord, rich, standing in Whiterun — and the host figures out which rows that is. The description *is* the reference.
+
+So let's ask a question. Who is hostile? The boolean column is sitting right there. Type its name:
+
+```haskell
+IsHostile
+```
+
+And… oh. That can't be right.
+
+```text
+1 1 0 0 0 1 0 1 0 1
+```
+
+No names. No gold purses. No angry Redguard staring back at you. Just a strip of ones and zeros.
+
+But of course — that *is* the answer. In Ano, a bare selection is a mask: one bit per row, on or off. A mask is like a filter of booleans that activates or deactivates rows of the table. `IsHostile` means "these rows," and these rows are exactly where the column is 1. You asked who, and the language handed you the bitmask.
+
+If you want to see their contents — the actual people under those ones — you use a registered function, `show()`. The comma is the hinge: left side who, right side what to do. For now the "what" is just display; nothing in the world changes yet.
+
+```haskell
+IsHostile , show()
+```
+
+```text
+row  Race       IsHostile  TwoHanded  …  Archery  Gold
+0    Nord       1          80            40       100
+1    Breton     1          55            70       200
+5    Redguard   1          60            75       600
+7    Nord       1          72            55       350
+9    Khajiit    1          88            90       520
+```
+
+There they are. Five hostiles, every column, in table order. `show()` with empty parentheses means the whole width of the row; later you can pass column names to pick and reorder what appears. The selection stayed the same. Only the hinge and the verb turned "which rows?" into "let me see them."
+
+
 ### `&` vs `@`
 
 For `Merchant @ Whiterun` versus `Merchant & Whiterun`: they aren't different.
