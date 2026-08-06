@@ -123,9 +123,7 @@ row  Race       IsHostile  TwoHanded  …  Archery  Gold
 
 One row. The leader.
 
-That `:Nord` is new. It is an enum value — a symbol atom, a named constant in a closed set of kinds. The `Race` column does not hold free text in the loose sense; it holds members of a small vocabulary the registry knows: Nord, Breton, Khajiit, Imperial, Redguard, Argonian. Writing `:Nord` means the Nord member of that set, not a variable named Nord and not a boolean column named Nord. The colon is the sigil that says "this is the value, the kind."
-
-So `Race = :Nord` is a mask like the others: true on every row whose race cell is that enum member. Same idea as `IsHostile`, except the column's answers are names from a list instead of one and zero. You can ask for the whole people in one breath:
+That `:Nord` is an enum value — one named kind from a small fixed set (Nord, Breton, Khajiit, …). The colon marks the value; bare `Nord` would be something else. `Race = :Nord` is just another mask: rows whose race cell is that kind.
 
 ```haskell
 Race = :Nord , show(Race, TwoHanded, Gold)
@@ -138,7 +136,7 @@ row  Race   TwoHanded  Gold
 7    Nord   72         350
 ```
 
-Three Nords in the camp. The bandit leader was the one who also cleared every other gate we stacked — hostile, skilled, solvent. The enum did not replace those gates; it named a kind inside the same mask algebra.
+Three Nords in the camp. The leader was the one who also cleared the other gates — hostile, skilled, solvent.
 
 
 ### `&` vs `@`
