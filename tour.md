@@ -69,6 +69,77 @@ row  Race       IsHostile  TwoHanded  …  Archery  Gold
 
 There they are. Five hostiles, every column, in table order. `show()` with empty parentheses means the whole width of the row; later you can pass column names to pick and reorder what appears. The selection stayed the same. Only the hinge and the verb turned "which rows?" into "let me see them."
 
+Wow — that's quite a few hostiles. As we can see, they are all a little different. Two Nords and a Breton, a Redguard, a Khajiit; gold from a thin 100 to a fat 600; Archery all over the map from 40 up to 90; some look like bruisers, one looks like they brought a bow to a sword fight. Same flag, very different people.
+
+But what if we only care about the ones skilled enough with the two-handed weapon skill to actually be a threat?
+
+```haskell
+IsHostile & TwoHanded > 60
+```
+
+```text
+1 0 0 0 0 0 0 1 0 1
+```
+
+Ah, our ones and zeros yet again. The selection got quite a bit tighter this time. Now we only have three people that match the query. Let's take a closer look:
+
+```haskell
+IsHostile & TwoHanded > 60 , show()
+```
+
+```text
+row  Race       IsHostile  TwoHanded  …  Archery  Gold
+0    Nord       1          80            40       100
+7    Nord       1          72            55       350
+9    Khajiit    1          88            90       520
+```
+
+The hostiles who can actually swing. Everyone else is still in the world; they just are not in this description.
+
+But one of these three is not like the others, it seems. That's right… they're poor! Not much use having such a high two-handed skill if they can't even afford to buy a sword. Let's focus on just the two who are a real danger to our dragonborn.
+
+```haskell
+IsHostile & TwoHanded > 60 & Gold >= 300 , show()
+```
+
+```text
+row  Race       IsHostile  TwoHanded  …  Archery  Gold
+7    Nord       1          72            55       350
+9    Khajiit    1          88            90       520
+```
+
+Gold under 300 drops the Nord at row 0 out of the description. Two rows remain: a Nord and a Khajiit, still hostile, still sharp with a two-hander, and solvent enough to matter. Everyone else is still in the world; this sentence simply is not about them.
+
+And finally, we can narrow it down to the character we are actually interested in. The Khajiit is just a caravaneer we pissed off when we stole his goods thirty minutes ago. Now he is halfway across the map. Who we are really looking for is the bandit leader — a Nord warrior in charge of this camp. Stack the description until only he remains:
+
+```haskell
+IsHostile & TwoHanded > 60 & Gold >= 300 & Race = :Nord , show()
+```
+
+```text
+row  Race       IsHostile  TwoHanded  …  Archery  Gold
+7    Nord       1          72            55       350
+```
+
+One row. The leader.
+
+That `:Nord` is new. It is an enum value — a symbol atom, a named constant in a closed set of kinds. The `Race` column does not hold free text in the loose sense; it holds members of a small vocabulary the registry knows: Nord, Breton, Khajiit, Imperial, Redguard, Argonian. Writing `:Nord` means the Nord member of that set, not a variable named Nord and not a boolean column named Nord. The colon is the sigil that says "this is the value, the kind."
+
+So `Race = :Nord` is a mask like the others: true on every row whose race cell is that enum member. Same idea as `IsHostile`, except the column's answers are names from a list instead of one and zero. You can ask for the whole people in one breath:
+
+```haskell
+Race = :Nord , show(Race, TwoHanded, Gold)
+```
+
+```text
+row  Race   TwoHanded  Gold
+0    Nord   80         100
+3    Nord   61         400
+7    Nord   72         350
+```
+
+Three Nords in the camp. The bandit leader was the one who also cleared every other gate we stacked — hostile, skilled, solvent. The enum did not replace those gates; it named a kind inside the same mask algebra.
+
 
 ### `&` vs `@`
 
