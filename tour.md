@@ -138,6 +138,34 @@ row  Race   TwoHanded  Gold
 
 Three Nords in the camp. The leader was the one who also cleared the other gates — hostile, skilled, solvent.
 
+The left side is a ladder. You stack masks until the description fits. The sentence everyone meets first is only one rung of that ladder — Nords with a high TwoHanded skill — and then, for the first time in this tour, the right side of the comma *writes*.
+
+```haskell
+Race = :Nord & TwoHanded > 60 , show(Race, TwoHanded, Gold)
+```
+
+```text
+row  Race   TwoHanded  Gold
+0    Nord   80         100
+3    Nord   61         400
+7    Nord   72         350
+```
+
+Same three. Now pay them:
+
+```haskell
+Race = :Nord & TwoHanded > 60 , Gold += 1000
+```
+
+```text
+row  Race   TwoHanded  Gold
+0    Nord   80         1100
+3    Nord   61         1400
+7    Nord   72         1350
+```
+
+Who on the left. What happens on the right. The world moved.
+
 
 ### `&` vs `@`
 
