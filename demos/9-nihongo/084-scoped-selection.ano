@@ -1,4 +1,4 @@
--- 商人 ホワイトラン で is Merchant @ Whiterun: the place-particle scopes the selection to where it stands.
+-- 商人 ホワイトラン で is Merchant @ Whiterun: the place-particle scopes the selection to where it stands. Same mask as Merchant & Whiterun (both ∧); @ only diverges as fold scope, lattice shape, or anchored frame.
 --! registry ../registries/084-scoped-selection.reg
 --! ja
 --! expect gold = 5010 20 30 5040 50 5060
