@@ -1,6 +1,23 @@
 # Tour
 
-A walk through Ano as it actually is. One section at a time.
+Welcome to AnoLang. This is a walk through the language as it actually is — not the mythology around it — one piece at a time, starting from the world it talks about before any syntax shows up.
+
+People usually think of a video game as a pile of objects. A Nord is an instance of some class or actor type; he has fields for health and gold, methods to take damage or trade, and a place in a scene graph or entity list. To change every Nord who meets some condition, you walk that list, ask each object what it is, and mutate the ones that pass. The mental model is object orientation: identity first, data hanging off it, behavior as methods on the thing.
+
+There is another view, and it falls out almost naturally from what game engines started calling ECS. Instead of a Nord-the-object, the world is a columnar store: rows are entities, columns are components, and an archetype is just the set of columns that travel together. A Nord is not a class instance. He is a row that happens to be present in the Nord column — and in Gold, and in TwoHanded — the same way a row in a SQL table is present under every column of that table, or a row in a kdb+ table sits under each of its vectors.
+
+Here is a tiny world. Six fighters. Three columns. The Nord archetype, laid flat, looks like this:
+
+| row | Nord | TwoHanded | Gold |
+|---:|:---:|---:|---:|
+| 0 | 1 | 80 | 100 |
+| 1 | 1 | 55 | 200 |
+| 2 | 0 | 70 | 300 |
+| 3 | 1 | 61 | 400 |
+| 4 | 0 | 90 | 500 |
+| 5 | 1 | 60 | 600 |
+
+`Nord` is a boolean column: who is one. `TwoHanded` and `Gold` are numeric columns over the same row index. That is the whole move. An ECS archetype is a table in the SQL sense, or a keyed table in the kdb+ sense — one name for the row set, one vector per attribute, aligned by position. Once the world is a table, selecting Nords is a column operation, not a loop over objects. The language comes after that fact.
 
 
 ### `&` vs `@`
