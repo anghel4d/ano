@@ -21,7 +21,7 @@ Here is a tiny world. Ten fighters. Laid flat, it looks like this. The leftmost 
 | 0 | Nord | 1 | 80 |  | 40 | 100 |
 | 1 | Breton | 1 | 55 |  | 70 | 200 |
 | 2 | Khajiit | 0 | 70 |  | 85 | 300 |
-| 3 | Nord | 0 | 61 |  | 30 | 400 |
+| 3 | Nord | 0 | 55 |  | 30 | 400 |
 | 4 | Imperial | 0 | 90 |  | 50 | 500 |
 | 5 | Redguard | 1 | 60 |  | 75 | 600 |
 | 6 | Argonian | 0 | 45 |  | 60 | 150 |
@@ -132,7 +132,7 @@ Race = :Nord , show(Race, TwoHanded, Gold)
 ```text
 row  Race   TwoHanded  Gold
 0    Nord   80         100
-3    Nord   61         400
+3    Nord   55         400
 7    Nord   72         350
 ```
 
@@ -147,11 +147,10 @@ Race = :Nord & TwoHanded > 60 , show(Race, TwoHanded, Gold)
 ```text
 row  Race   TwoHanded  Gold
 0    Nord   80         100
-3    Nord   61         400
 7    Nord   72         350
 ```
 
-Same three. Now pay them:
+TwoHanded 55 drops the Nord at row 3 out of the description. Two remain. Now pay them:
 
 ```haskell
 Race = :Nord & TwoHanded > 60 , Gold += 1000
@@ -160,7 +159,6 @@ Race = :Nord & TwoHanded > 60 , Gold += 1000
 ```text
 row  Race   TwoHanded  Gold
 0    Nord   80         1100
-3    Nord   61         1400
 7    Nord   72         1350
 ```
 
