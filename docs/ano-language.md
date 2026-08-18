@@ -328,9 +328,36 @@ Collapse a column to a scalar. On a declared traversal order, a fold is exact le
 
 Not every collapsing form is a raw reduction. The pairwise mean is not associative, and `#` is not a binary operator, so `avg/` and `#/` are derived fold-and-finish forms. `avg/` folds sum and count in one pass and divides at the end. `#/` is `+/` over the constant 1. The surface keeps the spellings, and the registry records them as fold-and-finish. That is what makes the empty case honest. A fold identity depends on the carrier. `|/` over masks yields false on empty input and `&/` yields true. Numeric `|/` and `&/` are registered without an empty identity, so an empty scope fails the row. `max/` and `min/` are bridge spellings for those numeric folds and obey the same law. `avg/` also fails an empty scope. The `num` carrier is the extended real represented by finite IEEE float64 values and signed infinities, excludes NaN and absence, and has one zero: either IEEE signed-zero input canonicalizes to `0` because the sign is outside the denotation. It still grants no extrema identity: an admitted value is not thereby an empty-fold seed.
 
+The empty cases are the semigroup/monoid split. A semigroup is a set with an associative binary operation. A monoid is a semigroup with an identity. Integer `+` is a monoid, identity `0`. Integer `max` is only a semigroup. No integer `m` satisfies `max(m, x) == x` for every `x`. Demo 028 pins both readings.
+
+```haskell
++/ Gold @ None     -- 0
+max/ Gold @ None   -- no result row
+```
+
+Haskell splits this by function name. `foldr` takes a seed. `foldr1` does not, and is partial on `[]`. OCaml Base splits the same fact by return type, which is the closer match. `List.fold` takes `init`. `List.reduce` returns `'a option`. Ano's empty output is that option, spelled as no row rather than a none marker.
+
+```haskell
+foldr  :: (a -> b -> b) -> b -> [a] -> b
+foldr1 :: (a -> a -> a) -> [a] -> a
+```
+
+```ocaml
+List.fold   : 'a list -> init:'acc -> f:('acc -> 'a -> 'acc) -> 'acc
+List.reduce : 'a list -> f:('a -> 'a -> 'a) -> 'a option
+```
+
+Map is element-wise, length-preserving, no carried state. Column expressions are already this. `Gold * 2` over a mask is a map.
+
+Fold collapses to one value, threading an accumulator. Haskell `foldl` / `foldr` and OCaml `fold_left` / `fold_right` take a seed. The argument order flips between left and right in both languages, accumulator-first for left, element-first for right. That flip is a persistent source of confusion, and it is why Ano does not bake direction into the operator name.
+
+Reduce is fold without a seed, the first element starting the accumulator. Haskell `foldl1` / `foldr1`, OCaml Base `List.reduce`, Ano's `+/` and `max/`.
+
+Haskell `foldMap` is map then fold with an explicit monoid. Numbers have obvious monoids (`Sum`, `Product`, `Min`, `Max`, `Any`, `All`). Objects do not, so the mapping function is the choice of monoid. `+/ Gold @ Nord` is already `foldMap Sum` whose projection is the Gold column. Extending the same fold to objects means naming the monoid: concatenation for strings, union for sets, last-write for snapshots. A registered reducer is that choice, recorded.
+
 The slash attaches to a registered reducer name exactly as it attaches to an operator, one grammar row, and `fold(f)` is the long form of `f/`. `scan(f)` is the long form of `f\`. The short and long spellings never select different semantics.
 
-Operationally, Ano follows LINQ's unseeded `Aggregate` model. `f` denotes the accumulator step and is resolved through the registry: an operator selects its built-in entry and a name selects a registered reducer. On a nonempty ordered input, the first value starts the accumulator and each remaining value is applied from left to right. A fold returns the final accumulator. A scan returns the first value followed by every successive accumulator state, so it preserves input length. The registry entry supplies the step and, where applicable, its identity, finishing function, and algebraic witnesses. Haskell supplies the useful fold/scan and direction vocabulary; LINQ is the closer operational precedent because Ano dispatches the named accumulator through its registry.
+Operationally, Ano follows LINQ's unseeded `Aggregate` model. `f` denotes the accumulator step and is resolved through the registry: an operator selects its built-in entry and a name selects a registered reducer. On a nonempty ordered input, the first value starts the accumulator and each remaining value is applied from left to right. A fold returns the final accumulator. A scan returns the first value followed by every successive accumulator state, so it preserves input length. The registry entry supplies the step and, where applicable, its identity, finishing function, and algebraic witnesses. Haskell supplies the names (`foldl1`, `scanl1`, `foldMap`, `mapAccumL`). LINQ remains the closer operational precedent because Ano dispatches the named accumulator through its registry.
 
 Ano improves on LINQ because the registry can prove which execution strategies are legal:
 
@@ -391,6 +418,44 @@ or, with an explicit ordering:
 ```haskell
 scan(+) Weight along pathCells
 ```
+
+A homogeneous scan is Haskell `scanl1`. It is length-preserving and emits no seed. Demo 030 pins the law `last (scanl1 f xs) == foldl1 f xs` as the column comparison `(+\ Weight @ Route) == (+/ Weight @ Route)`.
+
+```haskell
+scanl  :: (b -> a -> b) -> b -> [a] -> [b]   -- length n+1, starts with the seed
+scanl1 :: (a -> a -> a) -> [a] -> [a]        -- length n, no seed
+scanl (+) 0 [3,1,4,2,5]  -- [0,3,4,8,10,15]
+scanl1 (+) [3,1,4,2,5]   -- [3,4,8,10,15]
+```
+
+`avg\` is not that scan. A monoidal scan carries one value of the output type. A running average cannot. It needs `(sum, count)` internally and emits `sum/count`. The carried state has a different type from the output. Haskell names this `mapAccumL`. OCaml 4.11 names it `List.fold_left_map`. Both are separate from `scanl` because they are a different shape. A Mealy machine takes state and an input and emits a new state plus an output. `#\` is the same shape. Its state is the count and its output is the count. The registry already records both as prefix machines rather than homogeneous reducers.
+
+```haskell
+mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
+```
+
+```ocaml
+List.fold_left_map : ('acc -> 'a -> 'acc * 'b) -> 'acc -> 'a list -> 'acc * 'b list
+```
+
+`along` makes traversal order an explicit argument. Haskell bakes direction into the function name (`foldl` versus `foldr`), so the operator and the order cannot be chosen separately. APL's `-/` folds right, which surprises everyone forever. Order is a property of the traversal, not of the operator. For an associative step it does not matter. For `-` it is the whole answer. One `scan` then handles associative, non-associative, extremum, and Mealy heads uniformly, which is what demo 031 claims.
+
+```haskell
+scan(-) Weight along pathCells   -- 2 -1 -5 -6
+```
+
+| concept | Haskell | OCaml | Ano |
+|---|---|---|---|
+| element-wise | `map` | `List.map` | column expression |
+| fold with seed | `foldl` / `foldr` | `fold_left` / `fold_right` | no surface yet |
+| fold, no seed | `foldl1` | `List.reduce` → `option` | `+/`, `max/` |
+| running fold | `scanl1` | `Seq.scan` | `+\` |
+| stateful prefix | `mapAccumL` | `fold_left_map` | `avg\`, `#\` |
+| map then fold | `foldMap` | none | `+/ Gold @ mask` |
+| fallible fold | `traverse` | `Result.fold` | no surface yet |
+| explicit order | baked into `foldl`/`foldr` | baked into `fold_left`/`fold_right` | `along` |
+
+A seeded fold and a fallible `traverse` remain open.
 
 A two-axis prefix scan is a composition of ordinary scans along two registry-declared axes, not a separate language form.
 
@@ -567,7 +632,7 @@ The leading comma remains a new statement and barrier. The first statement mater
 
 ### 22. Reduction and scan
 
-A reduction maps a column on `X` to a scalar. A declared order licenses exact left accumulation with any compatible registered step. An unordered fold that may regroup that traversal requires associativity. A parallel/unordered fold that may discard traversal order requires associativity and commutativity. A registered identity supplies the empty result but is not required for nonempty input. `avg/` reduces the sufficient statistic `(sum, count)` and then finishes by division. A scan requires a declared order or axis, applies the same left-accumulator law, and returns a column on the same domain.
+A reduction maps a column on `X` to a scalar. A declared order licenses exact left accumulation with any compatible registered step. An unordered fold that may regroup that traversal requires associativity. A parallel/unordered fold that may discard traversal order requires associativity and commutativity. A registered identity supplies the empty result but is not required for nonempty input. `avg/` reduces the sufficient statistic `(sum, count)` and then finishes by division. `avg\` and `#\` are prefix machines, Haskell `mapAccumL`: the carried state need not inhabit the output carrier. A scan requires a declared order or axis, applies the same left-accumulator law, and returns a column on the same domain. `along` names the traversal independently of the operator, so subtraction and a Mealy head share one scan.
 
 ```haskell
 +/ Elevation @ Ground
@@ -970,6 +1035,10 @@ The overlay runtime, concrete deictic resolver table, cold `^cursor` default, ho
 
 - Registry identity and host capabilities — ruled and implemented for the non-spatial schema. `.reg` remains canonical. Explicit stable IDs and local versions govern resident arrays, typed callables, services, enums, and checked constructors; the loader and the public programmatic gate enforce the same contracts; planner position, signature, effect, determinism, trust, and exact reducer-carrier checks consume the metadata; canonical dump, schema fingerprints, alias-service versions, migration evolution, receipt resealing, and bit-exact runtime sidecars close persistence and cache invalidation. Spatial declarations extend this machinery only through task `99`.
 
+
+- Seeded fold. A13 already provides for a possible explicit seeded form. The unseeded surface does not grow one by implication, and an unseeded scan never emits an extra seed row. The gap is real: `max/` over empty yields nothing, and a supplied floor would need a seed. Haskell `foldl` / `foldr` take that seed. OCaml `List.fold` does too. Ano's `+/` and `max/` are the unseeded pair. Options. Keep only the unseeded form and let a registered identity remain the empty answer, which is today's law and keeps A12's no-row reading for identityless heads. Or add an explicit seed slot so `max/` over empty can yield a supplied floor rather than nothing, at the cost of a second empty-case reading beside A12. Unresolved.
+
+- Fallible fold. Haskell `traverse` is a fold where each step can fail, collecting effects. `Maybe` or `Either` short-circuits. `Validation` accumulates. Monadic bind sequences, so failure stops at the first step. Accumulation of errors is deliberately not a monad, which is why the two readings want two names. Ano has no surface for this yet. Options. Keep failure as the existing row-drop and refusal path, which already aborts a statement. Or admit a form that returns a column of successes or a collected refusal, which needs an effect carrier the language does not currently have. Unresolved.
 
 - Habitat and spatial spelling. The denotation: a registered field has one nominal habitat; equal shape never aligns foreign habitats; a bare shape creates an anonymous derived habitat; selection retains lineage; exact reshape is an equivalence; cycling or truncation is a gather map; `Point<F>` and `Vector<F>` carry nominal frames; placement is a covariant point map and never lineage or localization; locators, interpolators, frame maps, situated capabilities, and support projectors are separately registered partial bridges with exact endpoints and laws; an exact spatial spawn validates every proposal before allocation and refuses atomically. The remaining surface questions are how habitats, layouts, frames, placements, locators, interpolators, projectors, boundaries, and exact spawn policy are declared, whether first-class value reshape uses `to` or `⥊`, and whether the allative placement `to` deserves a distinct spelling. Unresolved.
 
