@@ -216,7 +216,7 @@ Hostile , shortestPath via Adj      -- the host runs Dijkstra over the Adj relat
 
 ### `along` — 沿
 
-Names the order a `scan` accumulates along when the selection has no intrinsic order. Steel sorts by the order key, scans, and scatters back through the inverse grade and query lineage. Tied order keys retain stable-index behavior, so effects depending on ties must declare that policy.
+Names the order a `scan` accumulates along when the selection has no intrinsic order. Order is a property of the traversal, not of the operator. Haskell bakes direction into `foldl` / `foldr`. `along` names it once, so one `scan` covers associative, non-associative, extremum, and prefix-machine heads. Steel sorts by the order key, scans, and scatters back through the inverse grade and query lineage. Tied order keys retain stable-index behavior, so effects depending on ties must declare that policy.
 
 ```haskell
 scan(+) Weight along pathCells       -- order named explicitly
@@ -486,7 +486,7 @@ threat/ Damage @ Enemies     -- the slash attaches to the reducer name
 +\ Weight @ Route            -- the scan marker, one running value per cell
 ```
 
-A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. The derived forms keep their spellings while the registry records the step, identity, finish, and available laws. `avg/` folds sum and count, then divides. `#/` is `+/` over ones. A fold without an identity fails the empty row. This is an empty result, so a bare query prints nothing rather than a placeholder scalar. A scan needs no identity, so empty input yields an empty column.
+A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. The derived forms keep their spellings while the registry records the step, identity, finish, and available laws. `avg/` folds sum and count, then divides. `#/` is `+/` over ones. A fold without an identity fails the empty row. This is an empty result, so a bare query prints nothing rather than a placeholder scalar. That is the semigroup/monoid split. `+/` has identity `0`. `max/` has none. Haskell `foldr1` is partial on `[]`. OCaml Base `List.reduce` returns `option`. Ano prints nothing. A scan needs no identity, so empty input yields an empty column.
 
 | operator | `f/` fold | `f\` scan | empty-scope identity | Steel emits the scan? |
 |---|---|---|---|---|
@@ -502,7 +502,7 @@ A fold on a declared order is exact left accumulation and accepts any compatible
 | `-/` `-\` | ordered left subtraction | running subtraction | none — row drops | yes, numbers only |
 | `fold(/)` `/\` | ordered left division | running division | none — row drops | yes, numbers only; `//` stays unlexable |
 
-Both scan spellings resolve through one table. Numeric `|\` is running maximum and numeric `&\` is running minimum; the mask instances are the ever-any and still-all latches. `max\` and `min\` are their numeric bridges and emit the same program as the glyphs they bridge, and `scan(min) X along order` is that same operation under a named order. `#\` is running cardinality over selection presence and `avg\` is the running mean; both are prefix machines. A head with no instance on the operand carrier refuses: `+\ mask` and `avg\ mask` are errors for the same reason `+/ mask` and `avg/ mask` are. `>` remains a comparison, so `>/` stays rejected.
+Both scan spellings resolve through one table. Numeric `|\` is running maximum and numeric `&\` is running minimum; the mask instances are the ever-any and still-all latches. `max\` and `min\` are their numeric bridges and emit the same program as the glyphs they bridge, and `scan(min) X along order` is that same operation under a named order. `#\` is running cardinality over selection presence and `avg\` is the running mean; both are prefix machines, Haskell `mapAccumL`, not `scanl1` over the output carrier. A head with no instance on the operand carrier refuses: `+\ mask` and `avg\ mask` are errors for the same reason `+/ mask` and `avg/ mask` are. `>` remains a comparison, so `>/` stays rejected.
 
 ### `+/`  `+\` — sum, running sum
 
@@ -544,7 +544,7 @@ Multiplication. `*/` multiplies the scope; `*\` returns the running product. Ide
 
 ### `#/`  `#\` — count, running count
 
-Cardinality over selection presence. `#/` counts, taking a parenthesized mask; identity 0, the count machine's registered empty result. `#\` is the running count: it advances by one on each admitted row and by zero on each false mask element, so `1,0,1,1` scans to `1,1,2,3` and an all-true stream scans to `1…n`. `#` forms nothing else — a bare `#` is a lex error, `line N: '#' begins only '#/' or '#\'`.
+Cardinality over selection presence. `#/` counts, taking a parenthesized mask; identity 0, the count machine's registered empty result. `#\` is the running count: it advances by one on each admitted row and by zero on each false mask element, so `1,0,1,1` scans to `1,1,2,3` and an all-true stream scans to `1…n`. That is `mapAccumL` with state equal to the emitted count. `#` forms nothing else. A bare `#` is a lex error, `line N: '#' begins only '#/' or '#\'`.
 
 ```haskell
 #/ (Nord & TwoHanded > 60)             -- how many trained Nords
@@ -572,7 +572,7 @@ min\ Depth @ Descent         -- the running floor down the descent
 
 ### `avg/`  `avg\` — mean, running mean
 
-Arithmetic mean. The machine carries state `(sum,count)` and projects `sum/count`, so `avg/` finishes on the last prefix and `avg\` emits the mean of every prefix. An empty fold fails the row; an empty scan is an empty column.
+Arithmetic mean. The machine carries state `(sum,count)` and projects `sum/count`, so `avg/` finishes on the last prefix and `avg\` emits the mean of every prefix. That is Haskell `mapAccumL`, not `scanl1`. The carried state is a different type from the output. An empty fold fails the row. An empty scan is an empty column.
 
 ```haskell
 Cow & Weight < avg/ Weight @ Cow , +Marked   -- @: one scalar, the herd mean

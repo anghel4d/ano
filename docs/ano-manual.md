@@ -194,12 +194,17 @@ fold(threat) Damage @ Enemies    -- the long form, same fold
 
 Two honesty rules. A fold on a declared order is exact left accumulation and accepts any compatible registry step. Unordered regrouping requires associativity; parallel/unordered execution that may discard traversal order requires associativity and commutativity. An identity is needed only to produce a value on empty input. `+/` and `#/` give 0 on empty input. Mask `|/` gives false and mask `&/` gives true. Numeric `|/` and `&/` are currently registered without an empty identity, so they fail an empty scope. Their `max/` and `min/` bridge spellings obey the same law. `avg/` also fails because the pairwise mean is not its reduction. Failure means no result row, the same nothing as a predicate with no matches. An assignment writes nothing and a bare query prints nothing. Steel consumes the validity guard before binding, labeling, comparison, and display, so the backend placeholder behind a false guard is unobservable.
 
+The empty cases are the semigroup/monoid split. `+/ Gold @ None` is `0` because addition has identity `0`. `max/ Gold @ None` prints nothing because maximum has no integer identity (demo 028). Haskell splits this by `foldr` versus `foldr1`. OCaml Base splits it by `fold` versus `reduce` returning `option`. Ano's empty output is that option, spelled as no row.
+
 A scan accumulates and returns one value per row of its ordered source domain; an abstract selection has no order, so either the source view carries one or you name one. This exact-left read-side form is the admitted within-statement recurrence. Every scan result retains its ordered world-row witness: assignment grades values and witness together, refuses an obvious nominal mismatch while planning, and seals exact witness equality with the statement selection at the barrier. Equal length never proves alignment, and duplicate, omitted, or foreign rows cannot scatter. If an effect writes the column the scan reads, Steel first refuses the intersecting footprints instead of smuggling a carry through the barrier.
 
 ```haskell
 +\ Weight @ (↕steps |> route A B)    -- the view is ordered, scan along it
 scan(+) Weight along pathCells       -- the order named explicitly
+scan(-) Weight along pathCells       -- 2 -1 -5 -6: order is the traversal's, not the operator's
 ```
+
+`+\` is Haskell `scanl1`. Demo 030 pins `last (scan f) == fold f` as `(+\ Weight @ Route) == (+/ Weight @ Route)`. `avg\` is not a scan of that kind. It is `mapAccumL`: state `(sum,count)`, output `sum/count`. `#\` is the same shape. `along` factors order out of the operator, which is the right answer once `-` is admitted. Haskell cannot say "this operator, that direction" without picking `foldl` or `foldr`.
 
 The whole family fits one operator-specific promotion table. `|` is OR on masks, pointwise maximum on numbers, and the greater code point on glyphs; `&` is AND, minimum, and lesser rune. Their mixed value operands join `mask < number < char`, while arithmetic promotes masks and glyphs to number and comparison reads glyphs by code point. This is not universal storage subtyping: a result must still inhabit its declared destination. `|/` and `&/` are q's folds, and their scans follow from the same dyads. The mask scans are the ever-any and still-all latches; glyph scans are running extrema through the one declared code-point step because the BQN primitives do not accept characters. A named reducer's scan comes free (`threat\`, `040-reducer-spellings.ano`).
 

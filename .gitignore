@@ -52,6 +52,9 @@ scratch/
 !.claude/hooks/**
 .claude/skills/coding-campaign/
 
+# Language tour (tracked)
+!tour.md
+
 # GNU APL repl history
 .apl.history
 
