@@ -17,7 +17,7 @@ fold f = aₙ
 scan f = [a₀, …, aₙ]
 ```
 
-This is A13's operational law: Haskell supplies the `foldl1`/`scanl1` vocabulary, LINQ's unseeded `Aggregate` is the closer operational precedent for registered dispatch, and q/kdb+ folds and scans are natively this left recurrence. It is not a permission to reassociate. The vocabulary map lives in `docs/ano-language.md` §12 and §14. `+/` is an unseeded monoid fold, `max/` a semigroup reduce, `+\` is `scanl1`, `avg\` and `#\` are `mapAccumL`, and `along` factors traversal order out of the operator. A seeded fold and a fallible `traverse` remain open.
+This is A13's operational law: Haskell supplies the `foldl1`/`scanl1` vocabulary, LINQ's unseeded `Aggregate` is the closer operational precedent for registered dispatch, and q/kdb+ folds and scans are natively this left recurrence. It is not a permission to reassociate. The vocabulary map lives in `docs/ano-language.md` §12 and §14. `+/` is an unseeded monoid fold, `max/` a semigroup reduce, `+\` is `scanl1`, `avg\` and `#\` are `mapAccumL`, and `along` factors traversal order out of the operator. A seeded fold and a fallible `traverse` live in `06`.
 
 - Exact left-to-right execution admits any type-compatible step when the source has a declared order.
 - Regrouping while preserving order requires associativity.
