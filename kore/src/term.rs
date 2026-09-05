@@ -5,12 +5,12 @@ use crate::palette::{Color, Palette};
 use crate::sys;
 use crate::text;
 
-// Attribute bits (kore.c).
+// Attribute bits.
 pub const A_DIM: u8 = 1;
 pub const A_BOLD: u8 = 2;
 pub const A_REV: u8 = 4;
 
-// The palette, xterm-256 (kore.c). Cell fg/bg 0 mean the canvas defaults.
+// The palette, xterm-256. Cell fg/bg 0 mean the canvas defaults.
 pub const C_BG: u8 = 234;
 pub const C_TEXT: u8 = 252;
 pub const C_FRAME: u8 = 245;
@@ -78,7 +78,7 @@ fn cell_zeroed() -> Cell {
     Cell { g: [0; 8], attr: 0, fg: 0, bg: 0, cont: false }
 }
 
-// The terminal state (kore.c `T`): grid row-major grid[y*cols+x]; out is the frame
+// The terminal state: grid row-major grid[y*cols+x]; out is the frame
 // buffer; cur_shape is the frame's DECSCUSR request, 0 = cursor hidden. The saved termios,
 // raw flag, and resize flag live in sys.rs statics.
 pub struct Term {
@@ -92,7 +92,7 @@ pub struct Term {
     palette: Palette,
 }
 
-// Event model (kore.c). C-style discriminants: the decode tree ports 1:1.
+// Event model. C-style discriminants: the decode tree ports 1:1.
 pub const EV_NONE: i32 = 0;
 pub const EV_CHAR: i32 = 1;
 pub const EV_KEY: i32 = 2;
@@ -174,7 +174,7 @@ impl Term {
     }
 
     // ioctl winsize (fallback 24x80), floors rows>=12 cols>=20, grid reallocated zeroed
-    // (contents discarded; the next frame_clear repaints). kore.c term_size.
+    // (contents discarded; the next frame_clear repaints).
     pub fn size(&mut self) {
         let (mut r, mut c) = sys::win_size().unwrap_or((24, 80));
         if r < 12 {
@@ -199,7 +199,7 @@ impl Term {
     // Write UTF-8 text into the grid at (x,y), clipped to maxw (-1 unbounded) and the grid
     // edge; returns width consumed. Wide glyphs take two cells (second cont); overwriting a
     // continuation blanks its owner, burying a wide head blanks its orphan; codepoints < 0x20
-    // are skipped but still consume width; glyph bytes clamp at 7. kore.c putp.
+    // are skipped but still consume width; glyph bytes clamp at 7.
     pub fn putp(&mut self, x: i32, y: i32, attr: u8, fg: u8, bg: u8, s: &[u8], maxw: i32) -> i32 {
         if y < 0 || y >= self.rows {
             return 0;
@@ -255,7 +255,7 @@ impl Term {
     }
 
     // Stamp one glyph into every cell of the rect (bg 0, cont cleared), fixing straddled
-    // wide glyphs at both edges. kore.c fill.
+    // wide glyphs at both edges.
     pub fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, g: &[u8], attr: u8, fg: u8) {
         // snprintf "%s": stops at NUL, clamps to 7 bytes.
         let gl = g.iter().position(|&b| b == 0).unwrap_or(g.len()).min(7);
@@ -287,7 +287,7 @@ impl Term {
     }
 
     // OR A_REV into the cell, stepping a continuation back to its wide head; bounds-checked.
-    // The one door for cursor overlays. kore.c rev_cell.
+    // The one door for cursor overlays.
     pub fn rev_cell(&mut self, x: i32, y: i32) {
         if x < 0 || y < 0 || y >= self.rows || x >= self.cols {
             return;
@@ -300,7 +300,7 @@ impl Term {
     }
 
     // Border ┌ ┐ └ ┘ ─ │; focused A_BOLD accent, unfocused A_DIM C_FRAME; title embedded in
-    // the top rule as ╴title╶ from x+2, maxw w-6. No-op when w<2 or h<2. kore.c box.
+    // the top rule as ╴title╶ from x+2, maxw w-6. No-op when w<2 or h<2.
     pub fn draw_box(&mut self, r: Rect, title: &str, accent: u8, focused: bool) {
         let (x, y, w, h) = (r.x, r.y, r.w, r.h);
         if w < 2 || h < 2 {
@@ -329,7 +329,7 @@ impl Term {
 
     // Right-border thumb, only when total > vis && r.h > 3 && vis > 0: track h-2, thumb
     // vis*track/total min 1, at top*(track-thumb)/maxTop clamped; ┃ accent on-thumb, │ dim
-    // C_FRAME off. Integer math exact. kore.c scrollbar.
+    // C_FRAME off. Integer math exact.
     pub fn scrollbar(&mut self, r: Rect, top: i32, vis: i32, total: i32, accent: u8) {
         if total <= vis || r.h <= 3 || vis <= 0 {
             return;
@@ -362,7 +362,7 @@ impl Term {
     // invalid — on change emit "\x1b[0;48;5;<bg>" + ";2"? + ";1"? + ";7"? + ";38;5;<fg>" + "m"
     // with bg?:C_BG, fg?:C_TEXT under the deterministic fallback, or 49/39 for the validated
     // terminal defaults and readable projected accents; tail "\x1b[0m"; then when cur_shape != 0:
-    // "\x1b[<y+1>;<x+1>H\x1b[<shape> q\x1b[?25h". No diffing. kore.c flush_frame.
+    // "\x1b[<y+1>;<x+1>H\x1b[<shape> q\x1b[?25h". No diffing.
     pub fn flush_frame(&mut self) {
         self.out.clear();
         self.out.extend_from_slice(b"\x1b[?25l\x1b[H");
@@ -463,7 +463,7 @@ fn atoi_prefix(s: &[u8]) -> i32 {
     v[0]
 }
 
-// The full decode tree (kore.c ev_read): outer sys::rbyte(100), continuation bytes
+// The full decode tree: outer sys::rbyte(100), continuation bytes
 // sys::rbyte(25). ESC alone -> K_ESC; ESC+\r|\n -> K_NEWLINE; ESC+other-non-[O swallowed.
 // CSI accumulates into a 47-byte seq draining to a final in @..~ except '['. SGR mouse
 // '<': base = mb & !28, 64/65 wheel, >=66 drop, motion (base&3)==3 drop else drag; 'm'

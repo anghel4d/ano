@@ -6,7 +6,7 @@
 # Tick one runs each demo with its out/expect pins intact: pinned values and orbit shape share one trajectory.
 # This file is a pin, not documentation: src/check-tick.sh re-derives every class each run, and a mismatch
 # means the test was never good, a grammar intentionally changed, or the implementation broke — decide which.
-# The proofs behind the classes are proofs/tick-induction.md. A new demo joins by exhibiting its invariant.
+# Scope and induction assumptions: proofs/tick-induction.md. Classes are finite saved-registry checks.
 001-canonical-masked-update evolving
 002-core-sentence-form evolving saturate=1022
 003-component-masks evolving

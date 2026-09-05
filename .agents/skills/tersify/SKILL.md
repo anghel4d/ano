@@ -1,8 +1,6 @@
 ---
 name: tersify
 description: Tighten requested prose and names without changing meaning. Use only when explicitly invoked.
-argument-hint: "[files or section]"
-disable-model-invocation: true
 ---
 
 Simplify the FUCK out of the requested prose. Preserve meaning.

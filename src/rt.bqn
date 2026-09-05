@@ -1,4 +1,4 @@
-# rt.bqn — the anoc runtime prelude, prepended to every emitted program.
+# rt.bqn — Steel's runtime prelude, prepended to every emitted program.
 # Thin by design: per-demo callables (fib, polar, dist, verbs) are registry rows
 # carrying their own BQN, mirroring host registration. Only surface-independent
 # helpers live here. Names carry the Ano prefix because BQN identifiers are

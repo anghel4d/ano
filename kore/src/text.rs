@@ -9,7 +9,7 @@ use crate::tables::*;
 pub const RUNE_REPLACEMENT: u32 = 0xFFFD;
 pub const NPOS: usize = usize::MAX; // find_base miss (ANOSTR_NPOS)
 
-// kore.c u8next, the lenient forward decoder, over a byte slice: at i >= s.len()
+// the lenient forward decoder, over a byte slice: at i >= s.len()
 // return 0 without advancing (the C-string NUL sentinel); ASCII returns itself; a
 // 0x80..0xBF lead yields U+FFFD advancing 1; a bad continuation yields U+FFFD advancing 1;
 // value assembly masks the head with c & (0x7F >> n); NO overlong/surrogate/range checks
@@ -49,7 +49,7 @@ pub fn u8next(s: &[u8], i: &mut usize) -> u32 {
     v
 }
 
-// Codepoint cell width (kore.c cw): fast path c < 0x1100 -> 1; the verbatim range
+// Codepoint cell width: fast path c < 0x1100 -> 1; the verbatim range
 // list (1100-115F 231A-231B 2B1B-2B1C 2E80-303E 3041-33FF 3400-4DBF 4E00-9FFF A000-A4CF
 // AC00-D7A3 F900-FAFF FE30-FE4F FF00-FF60 FFE0-FFE6 1F300-1FAFF 20000-3FFFD) -> 2; else 1.
 // Not wcwidth, not a crate — the list is contract (0x3040 is 1, 0x303F is 1).
@@ -78,7 +78,7 @@ pub fn cw(c: u32) -> i32 {
     1
 }
 
-// Sum of cw over u8next across the whole slice (kore.c swidth).
+// Sum of cw over u8next across the whole slice.
 pub fn swidth(s: &[u8]) -> i32 {
     let mut w = 0;
     let mut i = 0;
@@ -363,7 +363,7 @@ pub fn collate(a: &[u8], b: &[u8]) -> i32 {
     }
 }
 
-// kore.c collate_natural: maximal ASCII digit runs ('0'..'9' only) compare as
+// maximal ASCII digit runs ('0'..'9' only) compare as
 // numbers — leading zeros stripped keeping at least one digit, then by digit count, then
 // bytes; equal numeric value continues the walk. A digit run against a non-digit at the
 // same position falls back to straight collate on both whole remainders. Non-digit
@@ -459,7 +459,7 @@ pub fn find_base(s: &[u8], needle: &[u8], from: usize) -> usize {
     }
 }
 
-// The rail order (kore.c cmp_demo): collate_natural over both paths with a trailing
+// The rail order: collate_natural over both paths with a trailing
 // ".ano" stripped (last 4 bytes when len > 4), byte-order tiebreak on the full paths.
 pub fn cmp_demo(a: &str, b: &str) -> std::cmp::Ordering {
     let (x, y) = (a.as_bytes(), b.as_bytes());
@@ -475,7 +475,7 @@ pub fn cmp_demo(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
-// kore.c u8_tail_fix: a byte-capped copy must not end mid-codepoint — back over
+// a byte-capped copy must not end mid-codepoint — back over
 // trailing continuation bytes to the last lead; if the lead's declared length overruns the
 // end, truncate at the lead. In-place on the owned buffer.
 pub fn u8_tail_fix(s: &mut Vec<u8>) {

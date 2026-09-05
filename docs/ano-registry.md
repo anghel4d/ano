@@ -1,114 +1,108 @@
-# Ano registry
+# Registry
 
-The registry is Ano's typed host boundary. `.reg` remains the canonical extension; there is no parallel `.anoreg` dialect or migration period. Legacy world rows and high-integrity declarations coexist in one ordered text grammar, while Ano source remains a separate language elaborated against the validated registry.
+`.reg` is the text registry format. [registry.rs](../steel/src/registry.rs) loads, validates, and dumps it; [lib.rs](../steel/src/lib.rs) defines its types. Ano source cannot replace its own schema.
 
-## Boundary and order
+## Legacy rows
 
-A registry constructs one schema `Σ`. Ano statements may update values and population under that fixed schema, but they cannot declare, replace, or migrate schema. `kore migrate` is the separate barrier-level host operation for `Σ → Σ′`.
-
-Declaration order is semantic. A named carrier, footprint, constructor enum, alias target, relationship endpoint, prototype field, or other declaration reference must name an earlier entry and use its canonical spelling. Registry lookup remains ASCII case-insensitive for source use; high-integrity stored references are canonical so dump and reload cannot silently retarget.
-
-The new declarations are deliberately narrow:
-
-| declaration | canonical form |
+| Row | Meaning |
 |---|---|
-| resident array slot | `array NAME id:HHHHHHHHHHHHHHHH v:N CARRIER scalar` |
-| entity-width array slot | `array NAME id:HHHHHHHHHHHHHHHH v:N CARRIER entity` |
-| fixed-width array slot | `array NAME id:HHHHHHHHHHHHHHHH v:N CARRIER fixed:N` |
-| input service | `service NAME id:HHHHHHHHHHHHHHHH v:N input sig:ARGS->RESULT trust:BOUNDARY` |
-| output service | `service NAME id:HHHHHHHHHHHHHHHH v:N output sig:ARGS->unit trust:BOUNDARY` |
-| enum | `enum NAME id:HHHHHHHHHHHHHHHH v:N CASE=U32 ... reserve:U32,...` |
-| finite range constructor | `ctor NAME id:HHHHHHHHHHHHHHHH v:N range:LO..HI` |
-| enum constructor | `ctor NAME id:HHHHHHHHHHHHHHHH v:N enum:ENUM` |
-| typed raw callable | `fn NAME id:HHHHHHHHHHHHHHHH v:N sig:ARGS->RESULT fx:EFFECTS det:BOUNDARY trust:trusted read:NAMES write:NAMES use:SERVICES = {BQN}` |
+| `n N` | Entity count |
+| `lattice W H` | One legacy lattice |
+| `col NAME TYPE VALUES` | Entity column |
+| `field NAME TYPE VALUES` | Lattice field |
+| `unique NAME [TYPE] VALUES` | Total injective numeric key column |
+| `pres NAME MASK` | Component presence |
+| `default NAME VALUE` | Spawn fallback |
+| `range NAME LO HI` | Numeric refinement |
+| `rel [KEY] NAME TARGETS` | Functional relationship |
+| `srel [KEY] NAME FIBERS` | Set-valued relationship |
+| `inv NAME REL` | Inverse relationship |
+| `bind NAME KIND VALUES` | Entity, mask, point, number, or vector binding |
+| `alias NAME MASK` | Static stored mask |
+| `as`, `ja` | Spelling alias; the longer `as` form declares a derived tag |
+| `role ROLE NAME` | System-role mapping |
+| `def NAME COL=VALUE ...` | Spawn prototype |
+| `fn NAME BODY` | Legacy callable |
+| `reap seal\|host` | Reclamation policy |
 
-`HHHHHHHHHHHHHHHH` is exactly sixteen hexadecimal digits and cannot be zero. `N` is positive. The canonical dumper emits lowercase IDs, normalized numbers, canonical referenced names, footprint sets in declaration order, sorted enum reservations, and the fixed field order above.
+Declaration order matters where a row refers to an earlier entry. Headers cannot be redeclared. A unique column cannot be partially present, default-filled, or directly assigned.
 
-The declaration ID is nominal identity across spelling changes. The declaration version is local semantic evolution. Schema identity is the structural fingerprint of the complete registry: every high-integrity ID, version, descriptor, callable body, legacy declaration descriptor, spelling alias, role, and reap policy participates, while live row values and entity population do not. The length of a legacy numeric-pair payload is live compatibility representation, not a declared capability, and is therefore excluded; an explicit `array` domain is the typed schema route. Explicit high-integrity IDs reserve the manifest namespace before deterministic IDs are derived for legacy entries, so declaration order cannot create an identity collision.
+Entity bindings hold stable keys resolved against the current key column. A point or vector binding is a distinct declared face; context does not reinterpret a binding as another kind.
 
-## Registry types
+## Typed declarations
 
-The closed primitive types are `mask`, `nat`, `int`, `num`, `sym`, `char`, and `entity`. An earlier `enum` or `ctor` name is a nominal type. `unit` is admitted only as the signature result or as the spelling for an empty input list. These exact lowercase primitive tokens cannot themselves name an enum or constructor, because canonical dump and reload must preserve whether a type is primitive or nominal.
+```text
+array NAME id:HHHHHHHHHHHHHHHH v:N CARRIER scalar|entity|fixed:N
+service NAME id:HHHHHHHHHHHHHHHH v:N input sig:ARGS->RESULT trust:checked|trusted
+service NAME id:HHHHHHHHHHHHHHHH v:N output sig:ARGS->unit trust:checked|trusted
+enum NAME id:HHHHHHHHHHHHHHHH v:N CASE=U32 ... reserve:U32,...
+ctor NAME id:HHHHHHHHHHHHHHHH v:N range:LO..HI
+ctor NAME id:HHHHHHHHHHHHHHHH v:N enum:ENUM
+fn NAME id:HHHHHHHHHHHHHHHH v:N sig:ARGS->RESULT fx:EFFECTS det:BOUNDARY trust:trusted read:NAMES write:NAMES use:SERVICES = {BQN}
+```
 
-A signature is `sig:unit->T` for no explicit arguments or `sig:A,B,...->T` otherwise. Registry signatures are exact: ordinary Ano arithmetic may promote within its operator family, but typed callable arguments and typed reducer operands must match the declared registry type. Equal physical representation grants neither a conversion nor a nominal value.
+The alternatives above describe the grammar; the vertical bars are not literal declaration syntax. IDs are nonzero sixteen-digit hexadecimal values. Versions are positive integers. References in typed descriptors use earlier canonical names.
 
-## Resident arrays
+Primitive types are `mask`, `nat`, `int`, `num`, `sym`, `char`, and `entity`. Earlier enums and constructors supply nominal carriers. Signatures use `unit->T` for no arguments and `A,B->T` for two. `unit` is an allowed result, not an ordinary stored carrier.
 
-An `array` line declares a slot, never its payload. `scalar` seals exactly one value, `entity` seals exactly the current entity count, and `fixed:N` seals exactly `N` values. The carrier chooses the value family and every attachment crosses `seal_resident_array`:
+The schema fingerprint covers declarations and their metadata, not changing entity population or row values. An explicit declaration ID remains stable across a supported rename; its local version records semantic changes.
 
-- `mask`, `nat`, `int`, and `num` accept numeric arrays only and recheck their carrier.
-- `sym` accepts every UTF-8 string, including empty and boundary-bearing values; hexadecimal sidecar framing makes this total without changing legacy `.reg` rows.
-- `char` accepts Unicode scalar values.
-- `entity` accepts only live keys that resolve uniquely in the current registry.
-- An enum accepts case names or discriminants and stores canonical live discriminants.
-- A range constructor accepts numbers and rechecks its finite closed interval; an enum constructor reuses its enum's live discriminants.
+## Resident values
 
-A `ResidentArrayHandle` carries the full schema fingerprint, stable declaration ID, declaration version, canonical name, and normalized payload. Validation checks all five dimensions and reseals every element. A source-level reference to an unattached array refuses; registry metadata never fabricates a payload.
+An `array` row declares a slot, not its payload. `scalar` requires one value, `entity` requires the current entity count, and `fixed:N` requires N values. `seal_resident_array` validates every attachment against its descriptor.
 
-Resident arrays persist through a canonical one-line sidecar:
+Constructed nominal values pass through `construct`. Range constructors check finite inclusive bounds; enum constructors admit declared live discriminants. Equal physical representation does not create a nominal value.
 
-`ano-resident-array-v1<TAB>SCHEMA<TAB>DECL<TAB>VERSION<TAB>NAME<TAB>KIND<TAB>PAYLOAD...<LF>`
+Handles and constructed values carry the schema fingerprint, declaration ID/version, and canonical name. Validation rechecks the payload; a source reference to an unattached array refuses.
 
-`SCHEMA` and `DECL` are sixteen hexadecimal digits. Numeric and entity payloads canonicalize both IEEE signed zeros to Ano `+0`; every other admitted bit pattern is exact, and a sidecar carrying `-0` is noncanonical and refuses. Symbols use UTF-8 hexadecimal, characters use eight-digit Unicode scalar values, and enum discriminants use eight-digit hexadecimal. `save` validates before atomic publication; `load` rejects malformed framing and revalidates against the supplied registry. The format has no unchecked or best-effort load mode.
+Canonical sidecars use these headers and tab-separated fields:
 
-## Callables and footprints
+```text
+ano-resident-array-v1  SCHEMA DECL VERSION NAME KIND PAYLOAD...
+ano-constructed-value-v1  SCHEMA DECL VERSION NAME number F64BITS
+ano-constructed-value-v1  SCHEMA DECL VERSION NAME enum ENUMDECL U32
+```
 
-A typed callable owns a closed signature, effect row, determinism boundary, trust boundary, three explicit footprints, and one raw BQN dfn. The effect row is `pure` or a comma-separated subset of `read,write,service`. `read:-`, `write:-`, and `use:-` spell empty footprints. Each nonempty footprint must name earlier canonical declarations of the appropriate capability, contain no duplicates, normalize to declaration order, and agree exactly with the corresponding `fx` bit.
-The BQN backend admits no inert footprint promises. `read:` may name emitted columns, fields, relationships, static masks, and materialized numeric, mask, or vector bindings; `write:` may name only non-unique columns and fields. Resident arrays remain host attachments behind `seal_resident_array`, and relationships remain behind their checked command path until a lowering can carry those capabilities explicitly.
+Fields are separated by tabs and the record ends in LF. Numeric payloads preserve admitted bits after zero canonicalization. Symbol payloads use UTF-8 hexadecimal; char payloads use Unicode scalar encodings. Decode revalidates against the supplied registry.
 
+## Callables
 
-The determinism boundary is one of:
+Typed callables declare their signature, effect set, determinism, trust, read/write footprints, and service use. Empty footprints are `-`. `fx:pure` has no effects; otherwise the corresponding `read`, `write`, and `service` bits must agree with the named footprints.
 
-| boundary | law |
-|---|---|
-| `det:deterministic` | no service footprint |
-| `det:snapshot` | may use input services frozen for the statement, never an output service |
-| `det:nondeterministic` | must use at least one output service |
+`det:deterministic` has no service use. `det:snapshot` may use frozen input services. `det:nondeterministic` requires an output service. Raw BQN bodies are admitted under `trust:trusted`; this is not a machine-checked purity proof.
 
-Raw BQN is admitted only under `trust:trusted`, must be one comment-free dfn on one registry line, and cannot claim a nominal result. Nominal results cross only a checked constructor.
+Value calls require exact argument carriers, a non-unit result, and the supported unary/binary value ABI. Effect calls require unit and the supported write/service shape. Typed reducers are pure deterministic homogeneous `A,A->A` functions with exactly matching operands. Typed pipelines remain refused without a domain signature.
 
-Steel consumes the descriptor before lowering. Value calls require the exact argument types, a non-`unit` result, no write or output-service effect, and the current unary or binary value ABI. Effect calls require `unit`, at most one mutable column write target, or a declared output service when there is no write target. A typed reducer is exactly a pure deterministic homogeneous `A,A->A` callable, and its operand must be exactly `A`; declaration of a numeric refinement is not erased to the broad runtime number family. Typed pipeline calls refuse until a domain signature exists, rather than borrowing the legacy untyped pipeline ABI. These refusals keep descriptor fields from becoming decorative metadata.
+A legacy callable does not acquire typed guarantees merely by appearing beside typed entries.
 
-A legacy `fn NAME [BQN]` remains loadable for old fixtures. It retains its historical untyped numeric-reducer and raw verb conventions, but it does not acquire a high-integrity identity or silently count as a typed capability.
+## Services and enums
 
-## Services
+Services declare input/output direction and a signature, not a registry body. Deictic aliases can bind the built-in resolver implementation to a matching declared input service. Its identity and version then participate in alias validation; undeclared legacy-v1 resolvers remain a separate contract.
 
-A service is a versioned host boundary with no registry body. An input service must return a value; an output service must return `unit`. `trust:checked` says the host adapter enforces the signature, while `trust:trusted` admits an implementation outside Steel's checked core. Callable `use:` footprints name services explicitly.
+Enum discriminants are stable identities. Removing a live case requires reserving its discriminant; a reserved value cannot become live again.
 
-The deictic resolver adapter is concrete today. If a built-in resolver ID resolves to an earlier service declaration, it must be an input `unit->entity` or `unit->mask` service matching the implementation's carrier. The dynamic alias stores that declaration's stable ID and version. Changing either, or removing the declaration even when its version was `1`, stales the alias and forces migration revalidation. Absence of a declaration preserves a distinct legacy built-in service-v1 contract; legacy-v1 and declared-v1 are never interchangeable.
+## Aliases and migration
 
-## Enums and constructors
+Spelling aliases are schema. Static alias masks are registry data. Dynamic `^name` aliases are separate session state in `.reg.aliases`; they do not overwrite bare declarations.
 
-An enum has at least one live case. Case names are unique under registry name equality, live discriminants are unique, and reserved discriminants are strictly ascending in canonical text. A live discriminant cannot also be reserved.
+`kore migrate live.reg candidate.reg migration.map` requires an explicit declaration map. Supported operations include preserve, rename, legacy widening, drop/discard, add, and unalias. Legacy widening is limited to `bool -> nat|int|num`, `nat -> int|num`, and `int -> num`.
 
-A constructor is the sole nominal fabrication boundary. `range:LO..HI` uses finite ordered inclusive bounds. `enum:NAME` must name an earlier enum. `construct` returns a `ConstructedValue` stamped with schema, constructor ID, constructor version, canonical name, and either an exact numeric payload or an enum ID plus live discriminant. Validation repeats the refinement check; changing a public struct in memory cannot bypass it.
+A typed semantic change must retain its stable ID and increase its local version. Old plans and runtime values must cross the migration receipt and revalidate under the new schema.
 
-Constructed values use the same persistence law:
+Kore journal-publishes the registry, alias environment, schema manifest, and migration event log. External resident values are resealed through the receipt before their host publishes them. [kore/kore.md](../kore/kore.md) describes recovery. Spatial schema conversion remains unimplemented.
 
-`ano-constructed-value-v1<TAB>SCHEMA<TAB>DECL<TAB>VERSION<TAB>NAME<TAB>number<TAB>F64BITS<LF>`
+## Reading a declaration
 
-`ano-constructed-value-v1<TAB>SCHEMA<TAB>DECL<TAB>VERSION<TAB>NAME<TAB>enum<TAB>ENUMDECL<TAB>U32<LF>`
+In `col gold num 100 200 300`, `gold` is the declaration name, `num` is its carrier, and the three values correspond to the registry's three entity rows. The script may resolve the name as `Gold`; this case handling does not change symbol payloads.
 
-Decode is strict and always revalidates. A wrong constructor name, stale schema, wrong enum identity, retired discriminant, NaN, or newly out-of-range number refuses.
+A presence mask answers whether a component exists on a row. Its stored numeric value answers what that component contains. Removing a component is therefore different from assigning zero. Likewise, a functional relationship's stored key is different from the foundness mask obtained by resolving that key.
 
-## Aliases and identity
+For a concrete keyed world, see [138-typed-keys.reg](../demos/registries/138-typed-keys.reg). For typed declarations and their refusal/evolution cases, see [registry_contracts.rs](../steel/tests/registry_contracts.rs). These examples have the surrounding declarations required to interpret their IDs and signatures.
 
-The three alias mechanisms retain separate identities and lifetimes.
+## Trust and replacement
 
-- A spelling alias (`as` or `ja` with two names) is immutable schema translation. Its source, target, and Japanese flag participate in the schema fingerprint.
-- A static `alias` mask is legacy registry data. Its stable identity is the persisted manifest identity derived for that entry; it is not the dynamic overlay.
-- A dynamic `^name` alias is session state in `.reg.aliases`. It carries registry schema, target identity, environment version, and any resolver service declaration identity and version. Its sidecar has one canonical LF-terminated UTF-8 byte form and is published by create-new staged atomic replacement.
+A typed signature controls which carriers a call accepts. Footprints identify the state it may read or write. A determinism declaration controls the permitted service boundary. These checks serve different purposes: matching a signature does not prove that an arbitrary BQN body tells the truth about its effects.
 
-None of these can mint a nominal enum or constructor value. A spelling alias never creates a second declaration identity, and deleting a dynamic alias never mutates a bare declaration.
+A migration must account for both declarations and live data. Preserving an ID across a rename preserves identity; changing its meaning requires an appropriate version change and revalidation. A stale cached plan or resident value cannot be made current by relabeling its schema fingerprint.
 
-## Migration and cache law
-
-`ano-schema-v1` admits one LF-terminated UTF-8 form: canonical decimal versions, lowercase fixed-width fingerprints and nonzero declaration IDs, exact tab framing, and no carriage returns. The manifest, receipt, and validated migration outcome expose read-only data outside Steel; the task-`99` header hook receives immutable registries and can authorize a transition but cannot rewrite checked descriptors in safe Rust.
-
-A high-integrity declaration crosses migration only under `preserve` or `rename` with the same stable ID; `widen` remains limited to the established legacy scalar carrier widenings. Version regression refuses. A changed callable body or descriptor, array carrier or domain, service signature/direction/trust, enum set, or constructor range must increase `v`. A spelling-only rename may retain the version because identity and denotation remain stable.
-
-Enum reservations are permanent. Removing a live case requires reserving its old discriminant, and a reserved discriminant can never become live. Enum and constructor references follow the explicit stable declaration map rather than matching by spelling.
-
-Every plan, declaration handle, resident array, constructed value, resolver alias, and service/cache token is schema-bound. The migration receipt is the only bridge. It proves the exact old and new structural fingerprints, maps the stable declaration, then reseals resident arrays and revalidates constructed values under `Σ′`. A narrower range, retired enum case, changed array extent, stale service identity or version, or incompatible target makes migration fail without publishing a partial world.
-
-Task `99` extends this same declaration and receipt machinery with habitats, frames, placements, locators, interpolators, and spatial services. It may add new descriptors; it may not bypass the final registry validation gate or infer spatial authority from an array extent.
+The file transaction covers the registry and its managed sidecars. A host holding external resident arrays or constructed values must separately use the migration receipt before publishing those values. This distinction matters when a file migration succeeds but a host still holds an old handle.

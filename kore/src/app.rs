@@ -1,10 +1,9 @@
-// app.rs — the shared application state: kore.c's `static struct App A` as an owned
-// struct, plus the OUTPUTS store ops and the say/log helpers. COMPLETE — no porter owns this
-// file; every module takes &mut App. Text policy: file content and world-model text (lines,
+// Shared application state, output storage, and history helpers.
+// Every module takes &mut App. File content and world-model text (lines,
 // names, syms, code, prompt, labels, values, the history log) are Vec<u8> — .reg/.ano bytes are
 // byte-transparent; paths and verdicts are String, byte fields entering a message go through
 // String::from_utf8_lossy (the corpus is valid UTF-8; the deviation exists only on malformed input).
-// Defaults mirror the C's zeroed static: everything zero/empty/false, sess_ja included.
+// Defaults are zero, empty, or false, including sess_ja.
 
 use crate::term::Rect;
 use crate::world::World;
@@ -53,7 +52,7 @@ pub struct SDef {
     pub name: Vec<u8>,
 }
 
-// One code-undo snapshot: the whole buffer plus the cursor (kore.c cundo).
+// One code-undo snapshot: the whole buffer plus the cursor.
 pub struct CodeSnap {
     pub code: Vec<Vec<u8>>,
     pub ccx: i32,
@@ -169,7 +168,7 @@ impl App {
         self.verdict_bad = true;
     }
 
-    // Append to the history feed; snaps the view back to the tail (kore.c logOut).
+    // Append to the history feed; snaps the view back to the tail.
     pub fn log(&mut self, s: &[u8]) {
         self.out_log.extend_from_slice(s);
         self.out_scroll = 0;

@@ -14,7 +14,7 @@ use crate::term::{
 use crate::text;
 use crate::world::{self, EKind, FIELD_PAL, VType};
 
-// The EV_CHAR raw bytes: the NUL-terminated run of e.u8b (kore.c e.u8 semantics).
+// The EV_CHAR raw bytes: the NUL-terminated run of e.u8b.
 fn ev_bytes(e: &Ev) -> &[u8] {
     let n = e.u8b.iter().position(|&b| b == 0).unwrap_or(8);
     &e.u8b[..n]
@@ -25,7 +25,7 @@ fn contains(hay: &[u8], needle: &[u8]) -> bool {
     !needle.is_empty() && hay.windows(needle.len()).any(|w| w == needle)
 }
 
-// kore.c split lines: \n-separated, the post-final-newline empty tail dropped once a line
+// Split lines: \n-separated, the post-final-newline empty tail dropped once a line
 // exists; strip_cr mirrors code_load's CRLF strip (the undo-pop splitter keeps \r).
 fn split_lines(src: &[u8], strip_cr: bool) -> Vec<Vec<u8>> {
     let mut out: Vec<Vec<u8>> = Vec::new();
@@ -49,7 +49,7 @@ fn split_lines(src: &[u8], strip_cr: bool) -> Vec<Vec<u8>> {
     out
 }
 
-// Segment count: 1 (the entity table) + one per E_FIELD. kore.c nsegs.
+// Segment count: 1 (the entity table) + one per E_FIELD.
 fn nsegs(app: &App) -> i32 {
     1 + app
         .world
@@ -65,7 +65,7 @@ fn hit(r: Rect, x: i32, y: i32) -> bool {
 
 // ---------- layout and the frame ----------
 
-// kore.c layout: railW = MODE_RAIL ? clamp(W/4, 20, 34) : 0; promptH = prompt line
+// railW = MODE_RAIL ? clamp(W/4, 20, 34) : 0; promptH = prompt line
 // count + 2 capped at max(H/3, 3); statusH 1; outH 5; outputsH = (H-promptH-statusH-outH)
 // * 2/5; codeH = MODE_REG ? 0 : remainder * 2/5; rects per the map.
 pub fn layout(app: &mut App, t: &Term) {
@@ -139,7 +139,7 @@ pub fn layout(app: &mut App, t: &Term) {
     };
 }
 
-// Frame order (kore.c draw): frame_clear, layout, draw_rail, draw_code, draw_world,
+// Frame order: frame_clear, layout, draw_rail, draw_code, draw_world,
 // draw_outputs, draw_out, draw_prompt, draw_status, flush_frame. Runs unconditionally
 // every loop pass — no dirty tracking, no diffing.
 pub fn draw(app: &mut App, t: &mut Term) {
@@ -159,7 +159,7 @@ pub fn draw(app: &mut App, t: &mut Term) {
 
 // Title `demos %d`, accent C_RAILC; railTop follows railSel; entries strip a leading
 // "demos/", directory part dim, filename C_NIHONGO on a "-nihongo" hit; selected row
-// pre-filled A_REV. kore.c draw_rail.
+// pre-filled A_REV.
 pub fn draw_rail(app: &mut App, t: &mut Term) {
     let r = app.rail_r;
     if r.w <= 0 {
@@ -282,7 +282,7 @@ pub fn code_load(app: &mut App, path: &str) {
     app.code_insert = false;
 }
 
-// Display column -> byte offset in a UTF-8 line (cw accumulation). kore.c.
+// Display column -> byte offset in a UTF-8 line (cw accumulation).
 pub fn line_byte_at(line: &[u8], col: i32) -> usize {
     let mut w = 0i32;
     let mut i = 0usize;
@@ -294,7 +294,7 @@ pub fn line_byte_at(line: &[u8], col: i32) -> usize {
     i
 }
 
-// Byte offset -> display column. kore.c.
+// Byte offset -> display column.
 pub fn line_col_of(line: &[u8], byte: usize) -> i32 {
     let mut w = 0i32;
     let mut i = 0usize;
@@ -423,7 +423,7 @@ pub fn code_undo_pop(app: &mut App) {
 }
 
 // / typing: ESC clears and closes; Enter closes and jumps forward when non-empty; BS
-// deletes one rune; chars append (cap 127 bytes). kore.c search_key.
+// deletes one rune; chars append (cap 127 bytes).
 pub fn search_key(app: &mut App, e: &Ev) {
     if e.etype == EV_KEY && e.key == K_ESC {
         app.searching = false;
@@ -533,7 +533,7 @@ fn code_insert_str(app: &mut App, u8b: &[u8]) {
     app.code_dirty = true;
 }
 
-// The vim table (kore.c code_key): insert mode (ESC leaves, Tab = two spaces,
+// The vim table: insert mode (ESC leaves, Tab = two spaces,
 // Enter splits, BS deletes/joins, chars insert; unmatched EV_KEY falls through to the
 // browse arrows); browse counts 1-9 (0 while pending), hjkl/0/^/$/w/b motions, gg/G with
 // counts, i/a/o/x/dd with undo pushes, u pop, n/N when a pattern is set, / search, s save;
@@ -802,7 +802,7 @@ pub fn code_key(app: &mut App, e: &Ev) {
 }
 
 // s: no demo no-ops; world::code_guard first (play copy), then all lines \n-joined via
-// world::write_commit; `saved %s` / `cannot write %s`. kore.c code_save.
+// world::write_commit; `saved %s` / `cannot write %s`.
 pub fn code_save(app: &mut App) {
     if app.demo_path.is_empty() {
         return;
@@ -827,7 +827,7 @@ pub fn code_save(app: &mut App) {
 
 // Title `code · %s%s%s · %d/%d` (+` · play copy`, +` +` dirty), INSERT/BROWSE chip;
 // per-line syntax colors directives, comments, hinges, defs, operators, and digits. Search
-// highlights use rev_cell; insert mode uses DECSCUSR 5. kore.c draw_code.
+// highlights use rev_cell; insert mode uses DECSCUSR 5.
 pub fn draw_code(app: &mut App, t: &mut Term) {
     let r = app.code_r;
     if r.h <= 1 {
@@ -991,7 +991,7 @@ pub fn draw_code(app: &mut App, t: &mut Term) {
 // ---------- the world table ----------
 
 // Flatten the world surface into app.vrows (cap 32768, guard 32760): n table rows, then
-// per E_FIELD a blank row, a title row, latH?latH:1 field rows. kore.c world_vrows.
+// per E_FIELD a blank row, a title row, latH?latH:1 field rows.
 pub fn world_vrows(app: &mut App) {
     app.vrows.clear();
     let mut r = 0;
@@ -1037,7 +1037,7 @@ pub fn world_vrows(app: &mut App) {
     }
 }
 
-// The vrow index holding the cursor. kore.c cursor_vrow.
+// The vrow index holding the cursor.
 pub fn cursor_vrow(app: &App) -> i32 {
     for (i, vr) in app.vrows.iter().enumerate() {
         if vr.seg == app.w_seg && vr.row == app.w_row && (vr.kind == 0 || vr.kind == 2) {
@@ -1048,7 +1048,7 @@ pub fn cursor_vrow(app: &App) -> i32 {
 }
 
 // Field cell geometry: char fields cellW 1 pad 0; num/bool cellW = max fmt_num width,
-// pad 1. kore.c field_cellw.
+// pad 1.
 pub fn field_cellw(app: &App, ent: usize) -> (i32, i32) {
     let e = &app.world.ents[ent];
     let mut cell_w = 1i32;
@@ -1327,7 +1327,7 @@ pub fn draw_world(app: &mut App, t: &mut Term) {
 
 // Browse keys: hjkl/arrows clamp within the segment; j at a table segment's last row steps
 // into the next segment, k at row 0 steps back (table mode only); PGUP/PGDN ±10; Enter
-// opens the edit (space views route through the entity/field pick). kore.c world_key.
+// opens the edit (space views route through the entity/field pick).
 pub fn world_key(app: &mut App, e: &Ev) {
     if app.editing {
         edit_key(app, e);
@@ -1514,7 +1514,7 @@ pub fn world_key(app: &mut App, e: &Ev) {
 }
 
 // The inline edit: ESC cancels (`edit cancelled`), Enter commits via cell_edit_commit,
-// BS deletes one rune, chars append (cap 511 bytes). kore.c edit_key.
+// BS deletes one rune, chars append (cap 511 bytes).
 pub fn edit_key(app: &mut App, e: &Ev) {
     if e.etype == EV_KEY && e.key == K_ESC {
         app.editing = false;
@@ -1546,7 +1546,7 @@ pub fn edit_key(app: &mut App, e: &Ev) {
 
 // The interactive commit wrapper (bypassed by --edit): world_guard -> undo_push ->
 // cell_commit; failure undo_drops and says `edit: %s`; success `cell written · step %d
-// staged`; either way spc_return. kore.c cell_edit_commit.
+// staged`; either way spc_return.
 pub fn cell_edit_commit(app: &mut App) {
     app.editing = false;
     if !world::world_guard(app) {
@@ -1578,7 +1578,7 @@ pub fn cell_edit_commit(app: &mut App) {
     spc_return(app);
 }
 
-// Restore the space cursor a map/bitmap edit parked. kore.c spc_return.
+// Restore the space cursor a map/bitmap edit parked.
 pub fn spc_return(app: &mut App) {
     if app.spc_ret == 0 {
         return;
@@ -1592,7 +1592,7 @@ pub fn spc_return(app: &mut App) {
 // ---------- the space views ----------
 
 // The declared lattice, else the positioned entities' bounding box (max coord + 1, coords
-// in [0, 4096)). kore.c space_dims.
+// in [0, 4096)).
 pub fn space_dims(app: &App) -> (i32, i32) {
     let w = &app.world;
     let mut gw = w.lat_w;
@@ -1780,7 +1780,7 @@ pub fn draw_space(app: &mut App, t: &mut Term) {
 
 // The same picture at pixel scale: a color plane, fields then entities, rendered as ▀
 // half-blocks (fg upper pixel, bg lower, C_BG past the edge), num fields the gray ramp
-// 236 + (t*12.0) as i32; cursor reverses the pixel's terminal cell. kore.c draw_bitmap.
+// 236 + (t*12.0) as i32; cursor reverses the pixel's terminal cell.
 pub fn draw_bitmap(app: &mut App, t: &mut Term) {
     let r = app.world_r;
     let (gw, gh) = space_dims(app);
@@ -1914,7 +1914,7 @@ pub fn draw_bitmap(app: &mut App, t: &mut Term) {
 
 // Newest group first: seam `— step %d` / `— run` dim, records `q%d · label → value`,
 // multi-line values indented at x+6 (500-byte caps, text::u8_tail_fix), top-anchored
-// scroll clamped to outputs_total_lines() - vis. kore.c draw_outputs.
+// scroll clamped to outputs_total_lines() - vis.
 pub fn draw_outputs(app: &mut App, t: &mut Term) {
     let r = app.outputs_r;
     if r.h <= 1 {
@@ -2010,7 +2010,7 @@ pub fn draw_outputs(app: &mut App, t: &mut Term) {
 
 // The history strip: log tail with per-line tints (`> ` prompt hue, `$ ` gold dim,
 // error/FAIL/cannot and ` IS DEAD !`/` IS EMPTY !` error hue, ` rows -> ` world dim),
-// the verdict line bold at r.y+r.h-2 (`—` when empty). kore.c draw_out.
+// the verdict line bold at r.y+r.h-2 (`—` when empty).
 pub fn draw_out(app: &mut App, t: &mut Term) {
     let r = app.out_r;
     if r.h <= 1 {
@@ -2179,7 +2179,7 @@ pub fn draw_prompt(app: &mut App, t: &mut Term) {
     t.scrollbar(r, app.ptop, vis, nlines, C_PROMPTC);
 }
 
-// The byte bounds of the prompt line containing byte position at. kore.c prompt_line_at.
+// The byte bounds of the prompt line containing byte position at.
 pub fn prompt_line_at(prompt: &[u8], at: usize) -> (usize, usize) {
     let mut s = at;
     while s > 0 && prompt[s - 1] != b'\n' {
@@ -2192,7 +2192,7 @@ pub fn prompt_line_at(prompt: &[u8], at: usize) -> (usize, usize) {
     (s, e)
 }
 
-// Insert '\n' at the cursor (shift-enter, alt-enter). kore.c prompt_newline.
+// Insert '\n' at the cursor (shift-enter, alt-enter).
 fn prompt_newline(app: &mut App) {
     if app.prompt.len() + 1 >= 1023 {
         return;
@@ -2204,7 +2204,7 @@ fn prompt_newline(app: &mut App) {
 // ESC leaves (world/rail/code by mode); Enter: trailing `\` becomes a newline, else
 // world::repl_submit; K_NEWLINE inserts '\n'; BS/arrows/HOME/END rune- and line-wise;
 // Up/Down walk lines then history (past the newest restores an empty prompt); chars
-// insert at the cursor (cap 1023). kore.c prompt_key.
+// insert at the cursor (cap 1023).
 pub fn prompt_key(app: &mut App, e: &Ev) {
     if e.etype == EV_KEY {
         match e.key {
@@ -2356,7 +2356,7 @@ pub fn draw_status(app: &mut App, t: &mut Term) {
 
 // ---------- dispatch ----------
 
-// The order is contract (kore.c handle): EV_NONE; the armed >reset modal (y/Y runs
+// The order is contract: EV_NONE; the armed >reset modal (y/Y runs
 // world::reset_all, anything else `reset cancelled`); K_RESETALL -> kore_command("reset");
 // mouse; text-entry contexts swallow (prompt / editing / searching / insert); global chars
 // q : > m r n u w t E with the code-focus yields (n with a search set, u always, w always;
@@ -2848,7 +2848,7 @@ pub fn drag_skeleton(app: &mut App) {
     app.say("selection painted — finish the effect");
 }
 
-// Executable of that name on $PATH (a name with a slash checks directly). kore.c.
+// Executable of that name on $PATH (a name with a slash checks directly).
 fn path_has(cmd: &str) -> bool {
     if cmd.contains('/') {
         return sys::access_x(cmd);
@@ -2889,7 +2889,7 @@ pub fn editor_pick() -> String {
 
 // E: guard (world_guard under world focus / no demo, else code_guard), term leave,
 // sys::spawn_wait, term re-enter + size, reload whichever file was edited (`reloaded %s`).
-// kore.c editor_hop.
+//
 pub fn editor_hop(app: &mut App, t: &mut Term) {
     let ed = editor_pick();
     // the hop is a mutating act: corpus files guard into their play copies first

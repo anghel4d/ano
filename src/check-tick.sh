@@ -7,7 +7,7 @@
 # (they witness only the pristine world). Pins assert without mutating: pinned and stripped
 # tick one save byte-identical worlds. A class mismatch is a real finding: the test was never good,
 # a grammar intentionally changed, or the implementation broke. ANO_TICK_SATURATE=1 also
-# runs the measured `saturate=K` fixed points (~1000 ticks each). Proofs: proofs/tick-induction.md.
+# runs the measured `saturate=K` fixed points (~1000 ticks each). Scope and assumptions: proofs/tick-induction.md.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"

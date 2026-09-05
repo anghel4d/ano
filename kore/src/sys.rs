@@ -228,8 +228,8 @@ fn cstrings(argv: &[&str]) -> Vec<CString> {
         .collect()
 }
 
-// Run argv to completion, child stdout AND stderr merged onto one pipe (dup2 both —
-// kernel interleaving order, exactly as kore.c run_child). Capture appended to cap.
+// Run argv to completion, merging child stdout and stderr onto one pipe.
+// Append the kernel-interleaved capture to cap.
 // exec failure prints `kore: cannot exec <argv0>: <strerror>\n` through the pipe, exit 127.
 // Returns the exit status, or -1 on fork/pipe failure or abnormal termination.
 pub fn run_capture(argv: &[&str], cap: &mut Vec<u8>) -> i32 {

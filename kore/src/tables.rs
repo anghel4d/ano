@@ -1,5 +1,5 @@
-// GENERATED FILE -- do not edit. Produced by kore/tools/gen_tables.py from
-// common/ano_unicode_tables.h and common/ano_collate_tables.h (UCD/DUCET 17.0.0).
+// Unicode case, class, and collation tables (UCD/DUCET 17.0.0).
+// Retained from the retired C-to-Rust conversion; the arrays are self-contained.
 // Two-stage case/class lookup: ANO_UC_STAGE2[ANO_UC_STAGE1[cp >> 8] as usize * 256 + (cp & 0xFF) as usize]
 // indexes ANO_UC_RECORDS; record 0 is the identity record.
 // A collation element packs primary(16).secondary(11).tertiary(5) in one u32.

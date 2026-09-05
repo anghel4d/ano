@@ -20,7 +20,7 @@ fn main() {
     std::process::exit(kore_main());
 }
 
-// Mode selection precedes the terminal (kore.c main): `--check <files>` ORs
+// Mode selection precedes the terminal: `--check <files>` ORs
 // world::check_reg codes; `--edit` with exactly 5 operands runs world::edit_reg; any other
 // `-` flag prints usage (verbatim, three lines) on stderr, exit 2. Bare -> MODE_RAIL
 // (walk_demos + sort by text::cmp_demo, verdict `%d demos — enter opens, r resets the
@@ -119,7 +119,7 @@ fn kore_main() -> i32 {
 }
 
 // Recursive walk from `demos` relative to CWD, dot-entries skipped, `.ano` suffix, cap
-// KMAXDEMO; sorted by text::cmp_demo. kore.c walk_demos.
+// KMAXDEMO; sorted by text::cmp_demo.
 pub fn walk_demos(app: &mut App, dir: &str) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
@@ -201,7 +201,7 @@ pub fn run_steel(argv: &[&str]) -> (Vec<u8>, i32) {
     (cap, code)
 }
 
-// Trailing space/tab/\r stripped copy — the 0x1D tag label. kore.c label_dup.
+// Trailing space/tab/\r stripped copy — the 0x1D tag label.
 pub fn label_dup(s: &[u8]) -> Vec<u8> {
     let mut d = s.to_vec();
     while matches!(d.last(), Some(b' ' | b'\t' | b'\r')) {
@@ -210,7 +210,7 @@ pub fn label_dup(s: &[u8]) -> Vec<u8> {
     d
 }
 
-// buf_take_rstrip (kore.c): take the buffer with trailing \n \r space tab stripped.
+// buf_take_rstrip: take the buffer with trailing \n \r space tab stripped.
 fn take_rstrip(b: &mut Vec<u8>) -> Vec<u8> {
     while matches!(b.last(), Some(b'\n' | b'\r' | b' ' | b'\t')) {
         b.pop();
@@ -267,7 +267,7 @@ fn scan_q_tag(tag: &[u8]) -> Option<i32> {
     scan_i32(tag, &mut i)
 }
 
-// The one demux (kore.c cap_split). Nonzero exit: the whole capture to history,
+// The one demux. Nonzero exit: the whole capture to history,
 // a leading 0x1F stripped per non-empty line, no group. Exit 0: walk lines — 0x1F to
 // history sentinel-stripped EVEN mid-record; 0x1D closes any open value (rstripped) and
 // opens a record (tag <= 63 bytes; `q%d@%d` resolves the label through app.run_line, else
