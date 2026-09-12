@@ -14,4 +14,4 @@ Carry authorized work through to a reviewable result. Make routine implementatio
 
 Keep prose clear and economical, one source line per paragraph or list item. Include enough explanation, examples, and qualifications to preserve meaning. Preserve the author's voice and comments, spec numbering, and idiomatic examples. Keep function comments focused on inputs, outputs, and invariants; inline comments should be terse.
 
-Do not add yourself as a contributor. Do not commit or push without explicit per-commit approval; show the diff and let the author commit.
+Never credit an agent or AI tool as an author, coauthor, or contributor, or add AI/tool attribution or contributor trailers. As soon as any usable in-scope checkpoint is ready and its relevant verification is complete, commit it and push the current branch immediately unless the user explicitly instructs otherwise. Repeat at each usable checkpoint; do not wait until the entire workflow ends, pile up completed uncommitted work, or request redundant per-commit approval.
