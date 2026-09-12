@@ -3,5 +3,5 @@
 --! expect inRange = 1 0 1 1 0 1 1 0 0 0 0
 --! expect collide = 0 0 0 0 0 0 0 1 1 1 1
 
-[ t と c 、 InRange 付 | t <- 塔 、 c <- クリープ 、 dist ( t 、 c ) 50 未満 ]
+[ t と c 、 射程内 付 | t <- 塔 、 c <- クリープ 、 dist ( t 、 c ) 50 未満 ]
 [ a と b 、 衝突 | a <- 物体 、 b <- 物体 、 a b 未満 、 overlap ( a 、 b ) ]

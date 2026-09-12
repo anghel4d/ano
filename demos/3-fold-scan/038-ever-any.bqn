@@ -1,4 +1,3 @@
-# s62 — ever-any |\: the ∨-scan latch along a route (fire reaching each point).
 # ano:  |\ Burning @ Path
 # Semantics: |\ accumulates OR along the scope's declared order (index order here), one running value per selected cell — the ever-any latch: 0 until the first burning cell, 1 from it on.
 # Invariant: the scan equals the hand-computed latch, is monotone non-decreasing (once on, never off), and has the length of its selection; the |/ fold is the latch's last value.

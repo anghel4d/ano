@@ -1,5 +1,3 @@
--- Native world kinds, entity half (s53a), ASCII twin: kanji columns in num/bool/sym, a presence mask behind 両手 (junk decoys per ex06), a functional rel with its inverse srel, an explicit srel, entity/mask/num bindings, and a kanji-named reducer — every emission site of the name mangler on one world. (was s53-native-kinds-a)
--- A guild born in kanji: masters, disciples, factions. Every entity-world registry kind on one fixture, so a mangler regression has nowhere to hide.
 -- Statement walk: pres+bind-num masked add; gamma count over the inverse fiber under a sym predicate; rel hop into the sym column; mask binding AND col with a gamma over the explicit srel; then two queries — the kanji reducer and an entity-binding mirror-read.
 --! registry ../registries/098-native-kinds-a.reg
 --! out 600

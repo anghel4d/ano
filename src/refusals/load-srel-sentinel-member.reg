@@ -1,0 +1,6 @@
+# expect: srel targets row 0 member 1: relationship target -1 is reserved for functional no-link; use an empty fiber
+# A set relationship spells no links as an empty fiber. -1 is the FUNCTIONAL sentinel and
+# never a member, so it refuses rather than becoming a second silent convention.
+n 3
+col hp num 1 2 3
+srel targets 0 -1 | 1 | 2

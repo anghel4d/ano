@@ -1,8 +1,3 @@
--- Assign spiral to existing entities (ex29). Twin of 057-spiral-assign.bqn.
--- Five coins already in the world rearrange onto the spiral: no spawning here, the same polar formula writes positions to an existing selection, and index counts within the selection, not the world.
--- One world: the demo's 8 entities plus row 8, the Player anchor (pos 100 200, not a Coin) — the .bqn's external playerPos folded into the entity world, expected values remapped over 9 rows.
--- index is the position within the SELECTION (0..4 over the 5 coins), not the world row id: coin rows 0 2 3 5 7 take spiral indices 0..4, so row 0 lands exactly on the player (r=0). The scatter is masked: non-coin rows 1 4 6 keep 10 10, 20 20, 30 30 and the player row keeps 100 200, byte-identical.
--- Spiral floats are pinned as exact doubles from the flake's CBQN (the .bqn asserts within 1e-9). Left to the .bqn twin: the zip-shape counterexample (5 pairs, never a flat 10-list).
 --! registry ../registries/057-spiral-assign.reg
 --! expect coin = 1 0 1 1 0 1 0 1 0
 --! expect pos = 100 200 10 10 99.26272266318988 200.67559020761567 100.17431148549531 198.00761060381652 20 20 101.82628428702617 202.3800600208737 30 30 96.06076898795116 199.3054072893323 100 200

@@ -1,0 +1,5 @@
+# expect: registry line 5: default hp: value -3 outside nat
+# The default is the spawn fill: it must sit in the column's carrier set.
+n 2
+col hp nat 60 10
+default hp -3

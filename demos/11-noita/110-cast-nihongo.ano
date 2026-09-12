@@ -1,4 +1,3 @@
--- Japanese conjugate of n1 (the cast).
 --! registry ../registries/110-cast.reg
 --! ja
 --! expect-n 7

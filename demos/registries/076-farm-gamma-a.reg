@@ -1,13 +1,8 @@
-# ex36 pen/cattle world (mirrors demos/8-gamma/076-farm-gamma.bqn headcount section and 079-global-vs-gamma.bqn)
-# Shared by 076-farm-gamma-a.ano, 079-global-vs-gamma-a.ano, 080-global-vs-gamma-b.ano.
-# Rows 0-6 animals, rows 7-10 pens; .bqn pen 0 0 1 1 1 2 0 remaps to penOf 7 7 8 8 8 9 7; pen rows dangle (-1).
-# cattle is 0 at pen rows so the global fold #/ (Cattle) still counts 5 (.bqn +´cattle over the animal table).
-# headcount starts at -1 sentinels; untouched animal rows must keep them.
 n 11
 col animal bool 1 1 1 1 1 1 1 0 0 0 0
 col pen bool 0 0 0 0 0 0 0 1 1 1 1
 col cattle bool 1 0 1 1 1 0 1 0 0 0 0
-col headcount num -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+col headcount int -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 rel penOf 7 7 8 8 8 9 7 -1 -1 -1 -1
 inv livestock penOf
 ja 動物 animal

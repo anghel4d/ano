@@ -1,6 +1,3 @@
--- Native Japanese registry from the ASCII surface (s50): the kanji nouns ARE the columns — no ja aliases exist to consult. The unspaced selection is the maximal-munch witness: 北&両手>60 lexes NAME AMP NAME GT NUM. (was s50-native-registry)
--- The s50-s56 run proves a world can be BORN Japanese, not translated: every registry kind, sigil, and system role, exercised on kanji names.
--- The emitter mangles the kanji names to stable BQN identifiers (jp0..); the pins assert through the same mangled columns.
 --! registry ../registries/095-native-registry.reg
 --! expect 金 = 1100 200 300 1400 500 600
 

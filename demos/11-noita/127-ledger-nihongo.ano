@@ -1,4 +1,3 @@
--- Japanese conjugate of w5 (the timeless ledger: delay, recharge, mana as columns; a cast block's cost is a fold).
 --! registry ../registries/127-ledger.reg
 --! ja
 --! expect mana = 69 0 0 0 0

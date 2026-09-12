@@ -1,4 +1,3 @@
--- Japanese conjugate of 023-barrier-granularity-b (spawn barrier over saved mask). と conjunction; 、 hinge; 生成 spawn is prefix; 消 is the lone-statement barrier (T_TILDE).
 --! registry ../registries/022-barrier-granularity-a.reg
 --! ja
 --! expect-n 6

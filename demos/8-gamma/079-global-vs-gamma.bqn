@@ -1,5 +1,3 @@
-# The defect gamma fixes: the global fold broadcasts one scalar into every pen (ex36 under old §11 semantics).
-# ano (old, wrong): Pen , Headcount = #/ (livestock & Cattle)    -- the §11 read: one scalar, broadcast into every pen
 # ano (new):        Pen , Headcount = #/ (livestock' & Cattle)
 # Semantics: `fold/ col @ scope` remains the scoped-global fold and is always one scalar; `fold/ rel'…` is always per-source — the result-type split is lexical, never a registry lookup.
 # Invariant: the broadcast column and the per-pen gamma column disagree; the gamma column matches the hand count and folds back to the global scalar.
@@ -13,5 +11,5 @@ perPen    ← +´¨ (pen∾≠pens) ⊔ cattle    # gamma: fold each fiber of li
 
 ! 5‿5‿5‿5 ≡ broadcast
 ! 2‿3‿0‿0 ≡ perPen
-! broadcast ≢ perPen           # the defect: the broadcast is not the grouped column
+! broadcast ≢ perPen
 ! (+´cattle) ≡ +´perPen        # the scoped-global scalar is the fold of the gamma column

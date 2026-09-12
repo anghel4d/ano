@@ -1,9 +1,6 @@
-# Expand alias (ex23): replicate exposed as a flat-map pipeline stage.
 # ano: Spawner |> expand Count , spawn Minion
 # Semantics: expand Count replicates each selected source Count times before the effect — the one stage whose output has multiplicity, so it exists only feeding a generator; spawn Minion then mints one fresh key per replicated row.
-# Invariant: the expanded stream is the count-replicate of the source keys, equal to an explicit per-source flat-map, and expand-then-spawn-one equals ex22's spawn-times-Count row for row.
 
-# Same world as ex22.
 keys    ← 0‿1‿2‿3‿4
 spawner ← 1‿1‿1‿0‿0
 count   ← 2‿0‿3‿0‿0
@@ -19,7 +16,6 @@ flat ← ∾ (spawner/count) ⥊¨ src
 
 # spawn Minion over the expanded stream: one fresh key per row...
 newA ← (1+⌈´keys) + ↕≠expanded
-# ...equals ex22's spawn Minion * Count over the unexpanded selection.
 newB ← (1+⌈´keys) + ↕+´spawner/count
 ! newA ≡ newB
 ! ∧´ ¬ newA ∊ keys                 # still generation: the keys are fresh

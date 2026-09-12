@@ -1,0 +1,6 @@
+-- An in-carrier target beyond the world: the program runs, the row drops from the mask, and
+-- the crossing reports DEAD.
+--! registry unkeyed-oob-world
+--! expect gold = 0 1 0 0
+
+Nord & mentor.Dead , Gold += 1

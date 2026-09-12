@@ -1,4 +1,3 @@
-# Core sentence form (ex2).
 # ano: source & predicate , effect
 # Semantics: gather the rows of source where predicate holds, apply the effect to that fiber, scatter back in place — one barrier.
 # Invariant: effect-under-mask-compress touches exactly the selected rows and preserves the rest.

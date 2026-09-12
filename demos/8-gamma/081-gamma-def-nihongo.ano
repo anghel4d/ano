@@ -1,9 +1,8 @@
--- Japanese conjugate of 081-gamma-def (gamma primitive: grouped fold over the fibers of r' aligned to targets). Folds 総数/総和/或/皆/平均 over 標的物, の hop into r's fibers, に … にする effect set; 選択 subset for the picked half.
 --! registry ../registries/081-gamma-def.reg
 --! expect cCount = -1 -1 -1 -1 -1 2 0 3 0
 --! expect cSum = -1 -1 -1 -1 -1 8 0 15 0
---! expect cAny = -1 -1 -1 -1 -1 1 0 1 0
---! expect cAll = -1 -1 -1 -1 -1 0 1 0 1
+--! expect cAny = 0 0 0 0 0 1 0 1 0
+--! expect cAll = 0 0 0 0 0 0 1 0 1
 --! expect cAvg = -1 -1 -1 -1 -1 4 -1 5 -1
 --! expect cPick = -1 -1 -1 -1 -1 2 -1 3 -1
 --! ja

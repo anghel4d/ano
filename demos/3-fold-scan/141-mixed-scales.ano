@@ -1,0 +1,36 @@
+-- Integers and fractions in one column. Nothing here is extreme, but every prefix rounds, so the sum, the product and the mean all land on values that a reassociated accumulation would miss by an ulp.
+-- The == lines are the load-bearing pins: they compare inside the backend rather than through the 1e-9 comparator, and they are exactly the law the mean's finish once broke.
+--! registry ../registries/141-mixed-scales.reg
+
+--! out 6.6
++/ Mix
+
+--! out 1 1.1 3.1 3.3 6.3 6.6
++\ Mix
+
+--! out 0 0 0 0 0 1
+(+\ Mix) == (+/ Mix)
+
+--! out 0.036
+*/ Mix
+
+--! out 1 0.1 0.2 0.04 0.12 0.036
+*\ Mix
+
+--! out 0 0 0 0 0 1
+(*\ Mix) == (*/ Mix)
+
+--! out 1.1
+avg/ Mix
+
+--! out 1 0.55 1.0333333333333334 0.825 1.26 1.1
+avg\ Mix
+
+--! out 0 0 0 0 0 1
+(avg\ Mix) == (avg/ Mix)
+
+--! out 3
+max/ Mix
+
+--! out 0.1
+min/ Mix

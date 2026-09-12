@@ -1,4 +1,3 @@
--- Registry beside the twin (bare-name form). Twin of 129-beside.bqn. (was r1-beside)
 -- A bare `--! registry <name>` loads <name>.reg from this same directory, so the fixture
 -- may sit right next to the program that names it.
 --! registry 129-beside

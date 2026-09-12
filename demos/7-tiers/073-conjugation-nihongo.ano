@@ -1,4 +1,3 @@
--- Japanese conjugate of 073-conjugation. Dense-rank scatter write-back; rank() fn stays ASCII, Rank column is 順位.
 --! registry ../registries/073-conjugation.reg
 --! ja
 --! expect rank = 3 0 2 1 4

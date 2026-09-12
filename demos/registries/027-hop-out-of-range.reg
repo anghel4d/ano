@@ -1,4 +1,3 @@
-# s59 — hop-out-of-range fixture (mirrors demos/2-effects/027-hop-out-of-range.bqn)
 # No id column; two rows despawn, so the stored id 5 sits AT OR BEYOND the new row count
 # of 4 — a positional gather is a hard index fault, never a mask clear. The hidden
 # fixture-row column resolves it to the survivor's new slot instead.

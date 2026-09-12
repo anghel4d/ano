@@ -1,4 +1,3 @@
-# w1 — the deck (mirrors demos/11-noita/120-cast-block.bqn, main wand)
 # Wand [Double, SB, SB, SB, DP, SB]: rows 1-6 in slot order; drawAdd is the card's draw count (multicast 2/3, modifier 1, projectile 0).
 n 7
 col keys num 0 1 2 3 4 5 6

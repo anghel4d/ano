@@ -1,4 +1,3 @@
--- Japanese conjugate of 39 (Tier-3 opaque dispatch). で postfix inside the folded RHS.
 --! registry ../registries/071-tier3-opaque.reg
 --! ja
 --! expect outDeg = 2 1 3 0 2

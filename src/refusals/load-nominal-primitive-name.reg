@@ -1,0 +1,4 @@
+# expect: registry line 4: nominal declaration 'num' collides with a primitive carrier word
+# A nominal spelling must survive canonical dump and reload as the same nominal type.
+n 0
+enum num id:0000000000000001 v:1 Value=1 reserve:-

@@ -1,8 +1,3 @@
--- ex35 outer row: comprehension over two axes, and the checkerboard as the same table with a parity predicate. Twin of 064-two-habitats.bqn.
--- The outer row of the two-habitats table: a comprehension crosses two selections, and the checkerboard is the same cross wearing a parity predicate.
--- Layout: one n-5 world concatenating the .bqn's a (1 2 3, rows 0-2) and b (10 20, rows 3-4) into col val, archetype masks A and B; the table's [f | a<-A, b<-B] is the value form cross f A B, with f registered as the id-indexed sum (𝕨⊑val)+𝕩⊑val over the concatenated layout.
--- The .bqn's 3‿2 result shape is BQN-internal; out pins the row-major ravel 11 21 12 22 13 23.
--- The checkerboard row says 64 64 in the table; the .bqn's world is ↕4, so the twin says 4 4. Cell (0,0) is selected.
 --! registry ../registries/065-two-habitats-b.reg
 
 --! out 11 21 12 22 13 23

@@ -1,7 +1,3 @@
--- Farm gamma, crops spread (ex36): masked +Planted gated by a gamma count over the neighbor fiber, one barrier step. Twin of 076-farm-gamma.bqn (planted section).
--- The crops at field scale: a 5x5 lattice, a cross-shaped seed, one barrier step of two-planted-neighbors growth. The stencil is a fiber like any other.
--- 5x5 lattice world; neighbors is the registered 4-stencil srel, fibers shrink at the boundary (out-of-grid contributes nothing to the count).
--- The neighbor count reads the pre-state: the cross seed centered at (2,2) grows to the 3x3 block, edge cells with one planted neighbor stay unplanted, newly planted cells never feed the count within the step (no cascade).
 --! registry ../registries/077-farm-gamma-b.reg
 --! expect planted = 0 0 0 0 0 0 1 1 1 0 0 1 1 1 0 0 1 1 1 0 0 0 0 0 0
 

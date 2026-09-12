@@ -1,4 +1,3 @@
-# Value effects (ex10): aligned masked arithmetic over dense columns.
 # ano: Nord , Gold += 1000
 #      Bandit , Health -= 25
 #      Merchant , Gold *= 2

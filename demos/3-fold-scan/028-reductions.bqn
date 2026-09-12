@@ -1,36 +1,26 @@
-# Ex14 — Reductions: collapse a selected vector to a scalar under an associative reducer.
-# ano:  +/ Gold @ Nord
-#       */ (1 - Resist) @ Hits
-#       &/ Alive @ Party
-#       |/ Burning @ Forest
-#       #/ (Nord & TwoHanded > 60)
-# Semantics: fold/ col @ scope is the scoped-global fold, one scalar over the scope; #/ counts a mask; an empty scope yields the fold's registered identity.
-# Invariant: each fold equals its hand-computed scalar, gather order cannot matter under the associative+commutative reducer, and the empty scope returns the identity.
+# ano: count and sum over Merchant & !Whiterun beside Merchant & !^Whiterun
+# Semantics: the overlay changes the selection, not the reducer. Sum has numeric identity 0; maximum has no identity, so the empty maximum has no result row.
 
-# world: 8 entities as columns
-nord      ← 1‿0‿1‿1‿0‿1‿0‿0
-gold      ← 100‿50‿20‿5‿0‿25‿7‿3
-hits      ← 0‿1‿1‿0‿0‿1‿0‿0
-resist    ← 0‿0.25‿0.5‿0‿0‿0.75‿0‿0
-party     ← 1‿1‿0‿1‿0‿0‿0‿0
-alive     ← 1‿1‿0‿1‿1‿1‿1‿0
-forest    ← 0‿0‿0‿0‿1‿1‿1‿1
-burning   ← 0‿0‿1‿0‿0‿1‿0‿0
-twoHanded ← 70‿80‿61‿60‿90‿10‿65‿50
+merchant ← 1‿1‿0‿1‿0‿1‿0‿0
+bare     ← 1‿0‿1‿0‿0‿0‿1‿0
+live     ← 0‿0‿0‿1‿0‿1‿0‿0
+gold     ← 100‿50‿20‿5‿0‿25‿7‿3
+none     ← 8⥊0
 
-! 150     ≡ +´ nord/gold                # 100+20+5+25
-! 0.09375 ≡ ×´ hits/(1-resist)          # 0.75×0.5×0.25
-! 1       ≡ ∧´ party/alive
-! 1       ≡ ∨´ forest/burning
-! 2       ≡ +´ nord∧twoHanded>60        # entities 0 and 2
+bareSel ← merchant ∧ ¬bare
+liveSel ← merchant ∧ ¬live
+LeftSum ← {+˜´⌽(0∾𝕩)}
+NoMaximum ← {0=≠𝕩 ? ⟨⟩ ; ⟨⌈˜´⌽𝕩⟩}
 
-# order-independence: an associative+commutative reducer cannot see gather order
-! (+´ nord/gold) ≡ +´ ⌽nord/gold
-! (×´ hits/(1-resist)) ≡ ×´ ⌽hits/(1-resist)
+! 3 ≡ +´bareSel
+! 2 ≡ +´liveSel
+! 80 ≡ LeftSum bareSel/gold
+! 150 ≡ LeftSum liveSel/gold
+! 0 ≡ LeftSum none/gold
+! 0 = ≠ NoMaximum none/gold
 
-# empty scope: the registered identity
-none ← 8⥊0
-! 0 ≡ +´ none/gold
-! 1 ≡ ×´ none/(1-resist)
-! 1 ≡ ∧´ none/alive
-! 0 ≡ ∨´ none/burning
+# Deleting the live entry exposes the unchanged bare mask again.
+Resolve ← {𝕨 ? 𝕩 ; bare}
+! live ≡ 1 Resolve live
+! bare ≡ 0 Resolve live
+! bare ≡ 1‿0‿1‿0‿0‿0‿1‿0

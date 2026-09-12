@@ -1,23 +1,18 @@
 ---
 name: tersify
-description: Tighten prose and naming in the given markdown files
+description: Tighten requested prose and names without changing meaning. Use only when explicitly invoked.
 argument-hint: "[files or section]"
+disable-model-invocation: true
 ---
-Simplify the FUCK out of the prose in $ARGUMENTS.
-Tersify must always preserve semantic meaning.
 
-Prose:
-- One clause each. Cut dragging run-on sentences down to their meaning.
-- No sentence should use a ; or - or -- or — to splice two thoughts. Needing one means the sentence is too long, so truncate it and get the meaning across already. a -> b is ok.
-- A point needing paragraphs means the idea is unclear. Sharpen the claim instead.
-- Use the shorter synonym when a reader reads it identically. eg: "the selection predicate" --> "the predicate"
-- Flat prose. No decorative bolding. Bold only academically for load-bearing terms.
-- One long line per paragraph or list item. Do not hard-wrap at a column.
-- Keep my own headings, section numbering, and my own comments verbatim.
-- Preserve semantic meaning.
+Simplify the FUCK out of the requested prose. Preserve meaning.
 
-Naming, in code examples:
-- Keep each example idiomatic to the language it cites.
-- Rename only where prose was doing a good name's work. Conservative, no meaning change.
+- Edit only the requested files or sections; leave already concise text alone.
+- Cut repetition, filler, and needless abstraction. Prefer precise, familiar words.
+- Preserve requirements, qualifications, exceptions, and uncertainty. Flag ambiguity rather than silently resolving it.
+- Keep the author's voice, headings, numbering, quotations, and comments unless explicitly targeted.
+- Use clear sentences and enough paragraphs to explain the idea. Do not shorten by dropping relationships or banning punctuation.
+- Keep prose flat: no decorative bolding, one source line per paragraph or list item.
+- Rename local or example names only when requested and clearer without changing meaning. Keep examples idiomatic; preserve APIs and behavior.
 
-After: show `git diff --stat`.
+Review the diff for lost meaning and unintended edits. Briefly report the changes.

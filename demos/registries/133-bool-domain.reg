@@ -1,0 +1,5 @@
+# alarm is bool: the barrier retracts every write by 0< — positive is true.
+n 4
+col alive bool 1 1 1 1
+col alarm bool 0 1 0 1
+col trips num 2 0 3 -1

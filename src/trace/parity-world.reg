@@ -1,0 +1,16 @@
+# One keyed world carrying every crossing class at once: a functional rel with a sentinel, live
+# keys and a dead key; a set rel with a dead member and empty fibers; a spawn archetype whose
+# minted rows take the declared -1 fill.
+n 5
+unique id nat 7 11 13 17 19
+rel id mentor -1 7 99 11 7
+default mentor -1
+srel id targets 11 99 | | | 17 |
+col nord bool 1 1 1 1 1
+col lead bool 1 1 0 1 0
+col rich bool 0 1 0 1 0
+col dead bool 1 0 0 0 0
+col recruit bool 0 0 0 0 0
+col gold num 5 9 3 7 1
+col tally num 0 0 0 0 0
+col reach num 0 0 0 0 0

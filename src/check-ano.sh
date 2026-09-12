@@ -1,33 +1,70 @@
 #!/usr/bin/env bash
-# Runs every .ano demo under demos/ through anoc --run (bqn from PATH), then checks
-# every X-nihongo.ano conjugate emits byte-for-byte what its twin X.ano emits — two
-# surfaces, one BQN program, enforced corpus-wide on every run — then runs the negative
-# battery (check-refusals.sh over src/refusals/, fixtures that must refuse). Inputs:
-# none (env ANOC overrides the binary, default: anoc beside this script).
-# Output: one line per file (ok/FAIL), per pair (ok-emit/FAIL-emit), and per refusal
-# fixture (ok-refuse/FAIL-refuse). Exit: nonzero iff anything fails.
+# Compares each active Japanese twin's emitted BQN with its ASCII twin, then chains the refusal
+# battery and the tick battery. The pristine pin-checked demo run lives in check-tick.sh as tick one
+# of each demo's classified orbit; twins ride their ASCII stem because emission is byte-identical.
+# Quarantined skips are always visible.
 set -u
-ANOC="${ANOC:-$(dirname "$0")/anoc}"
 here="$(cd "$(dirname "$0")" && pwd)"
-root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
+repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "$here/..")"
+if [ -z "${STEEL:-}" ]; then
+  tdir="${CARGO_TARGET_DIR:-$repo/target}"
+  case "$tdir" in /*) ;; *) tdir="$repo/$tdir" ;; esac
+  ( cd "$repo" && cargo build --release -p steel ) || exit 1
+  STEEL="$tdir/release/steel"
+fi
+# shellcheck source=demo-quarantine.sh
+source "$here/demo-quarantine.sh"
+ano_quarantine_load "$repo" || exit 1
+work="$(mktemp -d "${TMPDIR:-/tmp}/ano-check-XXXXXX")"
+trap 'rm -rf "$work"' EXIT
 fail=0
-while IFS= read -r f; do
-  if "$ANOC" --run "$f" >/dev/null 2>&1; then
-    echo "ok   $f"
-  else
-    echo "FAIL $f"
+seen=0
+twin=0
+
+while IFS= read -r -d '' file; do
+  seen=$((seen + 1))
+  number="$(ano_demo_number "$file")" || {
+    echo "FAIL-name   $file"
     fail=1
+    continue
+  }
+  if ano_demo_quarantined "$number"; then
+    echo "skip-quarantine $file"
+    continue
   fi
-done < <(find "$root/demos" -name '*.ano' | sort)
-while IFS= read -r f; do
-  twin="${f%-nihongo.ano}.ano"
-  [ -f "$twin" ] || continue
-  if cmp -s <("$ANOC" --emit "$f" 2>/dev/null) <("$ANOC" --emit "$twin" 2>/dev/null); then
-    echo "ok-emit   $f"
-  else
-    echo "FAIL-emit $f"
-    fail=1
-  fi
-done < <(find "$root/demos" -name '*-nihongo.ano' | sort)
-ANOC="$ANOC" bash "$here/check-refusals.sh" || fail=1
-exit $fail
+  case "$file" in
+    *-nihongo.ano)
+      ascii="${file%-nihongo.ano}.ano"
+      twin=$((twin + 1))
+      if [ ! -f "$ascii" ]; then
+        echo "FAIL-twin   $file (missing $ascii)"
+        fail=1
+        continue
+      fi
+      left="$work/twin-$twin-ascii.bqn"
+      right="$work/twin-$twin-nihongo.bqn"
+      if "$STEEL" --emit "$ascii" >"$left" 2>"$work/twin-$twin-ascii.err" \
+        && "$STEEL" --emit "$file" >"$right" 2>"$work/twin-$twin-nihongo.err" \
+        && cmp -s "$left" "$right"; then
+        echo "ok-twin     $file"
+      else
+        echo "FAIL-twin   $file"
+        sed 's/^/  /' "$work/twin-$twin-ascii.err" "$work/twin-$twin-nihongo.err"
+        diff -u "$left" "$right" | sed 's/^/  /' || true
+        fail=1
+      fi
+      ;;
+  esac
+done < <(find "$repo/demos" -type d -name .kore -prune -o -type f -name '*.ano' -print0 | sort -z)
+
+if [ "$seen" -eq 0 ]; then
+  echo "FAIL-account no .ano demos found"
+  fail=1
+fi
+if ! STEEL="$STEEL" bash "$here/check-refusals.sh"; then
+  fail=1
+fi
+if ! STEEL="$STEEL" bash "$here/check-tick.sh"; then
+  fail=1
+fi
+exit "$fail"

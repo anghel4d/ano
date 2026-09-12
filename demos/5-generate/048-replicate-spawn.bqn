@@ -1,4 +1,3 @@
-# Replicate spawn (ex22): a per-source count emits that many fresh rows.
 # ano: Spawner , spawn Minion * Count
 # ano: Nest    , spawn Egg * Fertility
 # Semantics: for each selected source, mint Count fresh keys carrying the Minion components; the parent link column is the count-replicate of the source keys.

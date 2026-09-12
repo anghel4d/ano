@@ -1,4 +1,3 @@
-# s05b — neighbor quantifiers, split from 013-set-hop (mirrors demos/1-selection/011-neighbor-quantifiers.bqn)
 n 6
 col plot bool 1 1 1 1 1 1
 col planted bool 1 0 1 0 1 0

@@ -1,8 +1,6 @@
-# Hop after despawn, the out-of-range shape (PROBLEM 2).
 # ano: Cursed , ~
 #      Nord & mentor.Dead , -Trained
 # Semantics: two rows despawn, leaving a stored id (5) at or beyond the new row count (4). A positional gather into the shifted column is a hard index fault; resolution by index-of against the surviving fixture-row ids reads the right survivor and never faults — staleness stays a mask question (left-join-null), not an error path.
-# Invariant: the emitted program contains no read that can exceed the shifted column's length; the fault shape is pinned below.
 
 cursed  ← 1‿1‿0‿0‿0‿0
 mentor  ← ¯1‿¯1‿5‿¯1‿2‿¯1           # fixture-row ids; 5 survives despawn, 4 rows remain
@@ -16,7 +14,7 @@ keep ← ¬cursed
 idx‿mentor‿dead‿nord‿trained ↩ keep⊸/¨ idx‿mentor‿dead‿nord‿trained
 
 ! idx ≡ 2‿3‿4‿5
-! 5 ≥ ≠idx                          # the fault shape: a stored id at/beyond the new count
+! ∨´ mentor ≥ ≠idx                  # the fault shape, read from the column itself: a stored id at/beyond the new count
 
 # statement 2: Nord & mentor.Dead , -Trained
 f     ← idx⊐mentor

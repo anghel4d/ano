@@ -1,4 +1,3 @@
-# s05a — the set-hop image + in-degree, split from 013-set-hop (mirrors demos/1-selection/010-frenzy-image.bqn)
 # attackers is the inverse read of targets, spelled as an explicit srel (inv needs a functional rel).
 n 8
 col frenzy bool 1 1 0 0 0 0 0 0

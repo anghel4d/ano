@@ -1,14 +1,23 @@
--- avg/ is fold-and-finish (sum-fold over count-fold, one finishing divide); #/ is the sum-fold of the mask (spec §12, pre-renumbering §11). Twin of 032-avg-fold-finish.bqn. (was s11-avg-fold-finish)
--- A herd of cows on a scale, their mean weight asked three ways. avg/ is not a primitive fold — the mean of means is not the mean — so it decomposes into the two honest folds and one finishing divide.
--- The third query pins the sum-fold half separately (the .bqn's 2400); the count-fold half is #/ Cow itself.
--- Omitted, left to the .bqn twin: the pairwise-mean associativity-failure witness (675 vs 550; raw associations 512.5 / 712.5), the raw-fold empty identities, and the avg empty-scope row failure — internal counterexamples of the wrong form, and a failed row has no --! spelling.
+-- Mean is a state-plus-projection machine: its fold finishes the final (left sum,count) state, exactly the last value of its scan. Count is a different machine with an explicit empty 0; empty mean has no row.
 --! registry ../registries/032-avg-fold-finish.reg
 
 --! out 600
 avg/ Weight @ Cow
 
+--! out 400 450 500 600
+avg\ Weight @ Cow
+
+--! out 0 0 0 1
+(avg\ Weight @ Cow) == (avg/ Weight @ Cow)
+
 --! out 4
 #/ Cow
 
+--! out 1 2 2 3 4 4
+#\ Cow
+
 --! out 2400
 +/ Weight @ Cow
+
+--! out
+avg/ Weight @ None

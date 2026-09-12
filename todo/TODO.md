@@ -1,21 +1,38 @@
 # TODO
 
-Live items only. Anything unresolved that the suites surfaced lives in `ISSUES.md`; unsettled design lives in the spec's "Open Questions, Next Steps".
+The [historical rulings](00-historical-rulings.md) preserve the author's decisions. Current behavior is described in [the language reference](../docs/ano-language.md).
 
-1. **Consider shipping proven-affine compilation.** Every statement is affine and alias-free by grammar, so the polyhedral arsenal (fusion, tiling, vectorization, parallelization) applies to all statements with no legality analysis. A backend that proves the schedule and emits raw column instructions is the Groq/TPU bet scoped to ano's fragment; the same property gives the CUDA lowering for free. Grading and lineage: `ano-sky.md`, "The speed claim, graded". (Added 2026-07-05.)
-2. **Forge Steel.** The reference implementation in Rust: the whole compiler and the standalone launcher, std-only, ported whole and gated on the 26w28b battery against the C tree — byte-identical emit over the corpus, dump fixpoints, the hand-test set — before it takes over. Cano, the embedded C implementation, is derived *from* verified Steel, never the inverse. CBQN stays the differential oracle. Ruling recorded at the spec's Bootstrap host entry and CLAUDE.md. (Added 2026-07-10.)
-3. **REGFIX item 6, carried on archive.** Named, not started — do not build without the author's explicit go: the `.anoreg` extension; the widened entry taxonomy (spaces as basis vectors, arrays as registry-resident values, extern func as `struct { ano_fptr, attributes }`, net as `struct { socket, format }` — I/O enters through registration, never through syntax); enums as declared value sets (DATAMODEL.md delta 4); the registry API header, `ano_reg_*` constructors with checked value types — Cano's side of the ABI under the Steel ruling. The ano editor / dbg panel lives in anoptic_engine; INTERACTIVE.md holds its picture. (Carried 2026-07-10.) Column-typing half absorbed by todo/02 (2026-07-11): `unique` and keyed rel/srel landed as registry kinds; the rest stays carried, not started.
-4. **Derive kore's palette from the shell theme.** The 26w28d palette forces pastel ink on a dark canvas (kore.c's `C_BG`/`C_TEXT`) so the colors never wash out on a light terminal; the right fix is deriving them from the terminal's own theme the way nvim does — OSC 10/11 fg/bg queries at startup, adapt the accents, fall back to the forced canvas where the terminal won't answer. (Added 2026-07-10.)
-5. **Space-view follow-ups from the 08 audit.** Viewport panning (a world anchored off-origin — 28, 29 at ~(100,200) — draws entirely off-panel; the map needs a camera), a ground layer toggle (the map shows one field per cell, later-field-wins — 30's uniform cost paints a solid wall over elevation's gradient), and the inline-edit overlay in the space views (map/bitmap edits today type against the status-line hint alone; the table's edit box should follow the cursor into the space). Pair-order and fractional-pos questions live in todo/00-open-rulings Q14/Q15. (Added 2026-07-11.)
+## Open work
 
-## Closed
+1. [06: seeded fold and fallible traverse](06-seeded-fold-and-traverse.md). Obtain a ruling before extending grammar or the unseeded recurrence.
+2. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
 
-✅ 2026-07-11 — `todo/` executed, 01-10 archived to .archive/: kore query outputs (01 — `--label` and the OUTPUTS store), the registry type layer and keyed-hop integrity (02, the s10 bundle), the corpus normalization (03 — faction→leader in 1/08, the s05 split into 010-013, teaching headers across every demo plus the soul gate 025, the 001-132 renumbering with provenance in (was …) header markers), the fold/scan formalization and the boolean-scan latches (04), the reducer spellings (05), the manual's srel/vec chapter (06), the editors (07), the world map and bitmap (08), the float64/inf seal (09), the debug observability channel (10). The blocking residue lives in 11-next-steps.md; the unanswered decision points stay in 00-open-rulings.md.
+## Completed non-spatial work
 
-✅ 2026-07-10 — EDITOR.md landed (PATCHES.md snapshot 26w28c): the `--save` pipe-back (flag-gated, emitted BQN byte-identical over all 235 demos; closes ISSUES.md's dump-is-pre-state entry) plus two small dump-side companions — dnum spells integers as plain digits and numLit re-reads what dnum writes — and kore, the TUI world-at-hand: demos rail, code, world table ⇄ space, output, the REPL line over `anoc --run --save` with session defs and a replayable log, direct cell mutation as .reg text splices, the undo ring as files. The text-format seams this surfaced are recorded in ISSUES.md. Suggest archiving EDITOR.md to .archive/ at commit.
+[Sigils](01-sigil-semantics.md), [dynamic aliases](02-dynamic-alias-overlay.md), [folds/scans](03-folds-and-scans.md), [diagnostic domains](04-diagnostic-domains.md), and [registry/runtime contracts](05-registry-and-runtime-followups.md) are implemented. Their remaining quarantined cases depend on spatial work.
 
-✅ 2026-07-08 — REGFIX.md landed (PATCHES.md snapshot 26w28b): names_eq for every registry name resolution with load-tier strictness, `as` in both arities, one-resolver roles, `--dump` with the fixpoint axis, s56/s57 witnesses. Scope re-ruled by the author mid-landing, superseding REGFIX's def clause: the fold is registry names only — defs, binders, and every program variable stay exact-byte, so no demo revision was needed and the corpus stands untouched. One surfaced tradeoff recorded in ISSUES.md (dump is pre-state today).
+## Demo evidence quarantine
 
-2026-07-08 — Four rulings, recorded where they execute across REGFIX.md's items and Docs: registry names always case-insensitive, values always case-sensitive (the defs-included half re-ruled out the same day: program variables stay exact-byte); one resolver for roles (`reg_role` falls back to `reg_find`); the emitter's contextual specials stay exact-lowercase and shadowable by entries; keywords exact, declared names fold. The demos' STABLE seal lifted. NEXT.md and NEXT-2.md executed and deleted; their record lives in PATCHES.md and git history (178172b, b8ea048).
+Exactly 56 demo numbers are decommissioned until rewritten from first principles:
 
-The 2026-07-02 design review's ten items all landed, verified by both suites green (80 .bqn witnesses, 105 .ano twins): γ as the grouped fold (§13), the recurrence entry and the honest Fibonacci gloss (Open Questions; §21), the split hop with quantifiers and the idempotent image rule (§5), the identity entry (Open Questions), the Tier 1 regenerable-key math and Tier 3 parametricity, the Tier 2 diagonal action and value-only rank ties, the repositioning (Technical Explanation: query-and-command engine, determinism/replay, totality over the eBPF framing), the lineage rows (Inform 7, OPS5/CLIPS, Rete note; Lisp row cut) and the designed なる register (§11), the precedence table and grammar appendix with desugarings, barrier granularity, and the enum sigil, and the snippet repairs plus the nihongo fixes (ゼロが/する case frame scoped to the voice split, Ikegami and Rubin cited).
+```text
+033–037, 044, 046–047, 050–053, 055–078,
+089–091, 093, 099, 101–102, 104–110, 114–119
+```
+
+Primary ownership avoids double counting:
+
+| task | numbers | count |
+|---|---|---:|
+| `02` dynamic aliases | `071`, `093` | 2 |
+| `03` folds/scans | `033` | 1 |
+| `99` spatial lattice | `034–037`, `044`, `046–047`, `050–053`, `055–070`, `072–078`, `089–091`, `099`, `101–102`, `104–110`, `114–119` | 53 |
+| **total** |  | **56** |
+
+A number is the unit of quarantine: Ano, Nihongo, BQN, registry, expected output, README/test claims, and manifest entries leave or return together. Cross-task dependencies remain explicit: `028` also needs `03`; `033` also needs `99`; `071` and `093` also need `99`; diagnostic-domain obligations are especially relevant to `105–109` and `114–115` but add no new demolition number.
+
+Do not expand the list merely because a still-correct demo uses `&`, `|`, a relationship, a fold, or a scan. Controls `011`, `012`, `038`, and `039` remain valid mask fold/scan witnesses; `040` remains a valid registered-reducer spelling witness; `008`, `015`, `026`, `027`, and `087` remain valid foundness/dead-link result witnesses.
+
+## Completion
+
+Code, grammar, reference docs, Steel/Kore behavior, exact refusals, persistence/replay, and active demonstrations must agree. Abstract proofs and BQN examples do not establish compiler agreement by themselves.

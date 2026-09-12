@@ -1,4 +1,3 @@
--- Bilingual bridge (s52), ASCII twin: English column names scripted in English. The JA conjugate says the same thing through the registry's ja aliases — different surface spellings, one emitted program. (was s52-bilingual-bridge)
 -- Scouts short on supplies lose heart, in either language: the ja alias table is the bridge, and --emit proves both crossings land on the same bytes.
 --! registry ../registries/097-bilingual-bridge.reg
 --! expect morale = 40 50 50 40 50

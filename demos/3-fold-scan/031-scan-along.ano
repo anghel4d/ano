@@ -1,16 +1,20 @@
--- Explicit ordered scan source: along carries path order; the mask spelling of the same cells loses it (ex17). Twin of 031-scan-along.bqn.
--- A path walked out of index order: entity 4, then 2, then 7, then 1. A mask remembers who was visited but not when; along remembers both.
--- pathCells is an ordered index sequence (visit entity 4, then 2, then 7, then 1), registered as a vec binding — compiling along down to a mask is the exact bug this pair of prefixes catches.
--- Omitted, left to the .bqn twin: the fold total in path order (a fold has no along; a vec binding is not a mask scope) and the explicit prefix-inequality witness — it follows from the two pinned vectors.
+-- along names the traversal itself. Associative, non-associative, extremum, and prefix-machine heads all consume exactly this order; they never align a same-length buffer by accident.
 --! registry ../registries/031-scan-along.reg
 
 --! out 2 5 9 10
 scan(+) Weight along pathCells
 
--- the mask spelling of the same four cells: index order, different prefixes
+--! out 2 -1 -5 -6
+scan(-) Weight along pathCells
+
+--! out 2 2 2 1
+scan(min) Weight along pathCells
+
+--! out 2 2.5 3 2.5
+scan(avg) Weight along pathCells
+
 --! out 1 4 6 10
 +\ Weight @ Mask
 
--- the fold's total is order-independent; only the scan's prefixes see the order
 --! out 10
 +/ Weight @ Mask

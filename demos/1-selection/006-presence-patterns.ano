@@ -1,6 +1,4 @@
--- Presence patterns (ex6). Twin of 006-presence-patterns.bqn.
 -- Six warriors; some carry the TwoHanded component and some lack it, with junk behind the missing cells. A component you don't have is not a zero — presence is its own question, and (Nord, ...) asks it three ways: has it above 60, has it at all, lacks it.
--- Three presence states: present-constrained, present-any (_), absent (!). Junk 99/77 sits behind absent TwoHanded; the value predicate must imply the presence guard — gold row 2 staying 0 is the .bqn's "presence guards the value predicate" witness. Row 3 has the component (70>60) but is not Nord; row 5 has junk 77 and no component, so Untrained, not Gold.
 --! registry ../registries/006-presence-patterns.reg
 --! expect gold = 1000 0 0 0 1000 0
 --! expect trained = 1 1 0 0 1 0

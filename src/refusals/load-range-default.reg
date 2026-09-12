@@ -1,0 +1,6 @@
+# expect: registry line 6: range hp: default 0 outside 10..100
+# The spawn fill (declared default, else the type zero) must sit inside the range: a range
+# excluding it demands a `default` line first, so every minted row is born in-domain.
+n 2
+col hp num 50 60
+range hp 10 100

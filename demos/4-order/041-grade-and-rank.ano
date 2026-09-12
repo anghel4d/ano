@@ -1,8 +1,5 @@
--- Grade and rank (ex18): dense value-only rank under the Unit mask, then top-5 threat by grade desc. Twin of 041-grade-and-rank.bqn.
 -- Eight combatants rolling initiative and radiating threat. Grade answers "in what order?"; rank answers "in what place?" — grade is a permutation to index by, rank a value to store.
--- rank() is value-only (dense): the tied 7s (rows 1,3) share rank 1; the ¯1 sentinel survives on non-Unit rows 2,5 (Tier-2 masked write).
 -- +Targeted is a mask-or: pre-targeted row 3 (threat 10, not in the top 5) survives, so the post mask has 6 ones, not 5.
--- The .bqn's third assert ((slot⊑˜1) = slot⊑˜3) is subsumed by the pinned slot column (both rows carry 1).
 --! registry ../registries/041-grade-and-rank.reg
 --! expect slot = 3 1 -1 1 4 -1 0 2
 --! expect targeted = 0 1 1 1 1 1 0 1

@@ -1,0 +1,4 @@
+# expect: registry line 4: col hp: value 2.5 outside nat
+# nat sits on the integer grid: a fraction at rest refuses. A written fraction floors at the barrier.
+n 2
+col hp nat 60 2.5

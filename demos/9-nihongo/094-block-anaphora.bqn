@@ -1,10 +1,8 @@
-# Ex49 — Block-local anaphora: the continuation is a new barrier over the saved mask.
 # ano: 死んだ北が、幽霊を生み、消える。
-# ano: あの Nord & Dead が spawn Ghost
+# ano: あの Nord & Dead が spawn Wraith
 # ano: ~
-# ano: Nord & Dead , spawn Ghost
+# ano: Nord & Dead , spawn Wraith
 # ano: ~
-# Semantics: per the barrier ruling the ~ continuation is a new statement and a new barrier that reuses the antecedent's saved selection mask, not its pre-state — barrier one appends the ghosts, barrier two despawns the saved mask padded with zeros over the freshly minted rows, so the ghosts survive because the mask was saved at gather, not re-gathered.
 # Invariant: after both barriers the dead Nords are gone, every other original row remains, and one ghost per dead Nord survives.
 
 type ← ⟨"nord","nord","imperial","nord","nord","khajiit"⟩

@@ -1,4 +1,3 @@
--- 46b の日本語対訳: 全零の新しい行は反復のもとで零のまま。八段のステンシルはどれも自分の前状態を読むので、生まれたての行は永遠に零。
 --! registry ../registries/090-spatial-recurrence-b.reg
 --! ja
 --! expect height = 0 0 0 0 0 0 0 0

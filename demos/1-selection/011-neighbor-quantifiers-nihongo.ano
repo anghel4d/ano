@@ -1,4 +1,3 @@
--- Japanese conjugate of s05b (quantifiers over the neighbor fiber). Twin of 011-neighbor-quantifiers.ano.
 --! registry ../registries/011-neighbor-quantifiers.reg
 --! ja
 --! expect sprouting = 0 1 0 1 0 1

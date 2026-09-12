@@ -1,4 +1,3 @@
--- Japanese conjugate of 38 (Tier 2 records: masked add, scoped fold barrier witness, rank scattered back). Scope particle で is postfix (北 で = @ Nord); rank stays ASCII.
 --! registry ../registries/070-tier2-records.reg
 --! ja
 --! expect gold = 1100 250 40 1010 520 1305

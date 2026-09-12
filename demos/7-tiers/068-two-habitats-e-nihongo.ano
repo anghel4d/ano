@@ -1,4 +1,3 @@
--- Japanese conjugate of 35 (def row: derived column read back as a query; derived ridge field written over the full 4x4 lattice). def name = body → 定義 name = …; = effect set → に…にする; x + y are two single primaries so no RHS parens; ridge/Ridge both alias 尾根.
 --! registry ../registries/068-two-habitats-e.reg
 --! ja
 --! expect ridge = 0 1 2 3 1 2 3 4 2 3 4 5 3 4 5 6

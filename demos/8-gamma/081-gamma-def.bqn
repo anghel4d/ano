@@ -1,4 +1,3 @@
-# Gamma, the primitive: grouped fold over the fibers of a relationship r: I -> J, aligned to selected targets (decision record; the §11 grouped fold).
 # ano: fold/ rel'.Comp   fold/ (rel' & pred)   -- always per-source; fold/ col @ scope is always one scalar
 # Semantics: ids group vals into fibers, the fold collapses each fiber to one value per selected target j; an empty fiber takes the fold's registered identity, and a fold with no identity drops the row — the §5 left-join-null rule extended from the dangling link to the empty fiber.
 # Invariant: grouped counts agree with /⁼, the column follows the selection's target order, identity folds keep empty-fiber rows at the identity, avg drops them.

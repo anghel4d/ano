@@ -1,5 +1,3 @@
-# w3-c — the interleaved wand (mirrors demos/11-noita/123-modifier-chain.bqn, the interleaved section)
-# Same wand as w3-b; no srel — the bind column is computed in-program (reverse min-scan along revDeck)
 # and stands in relation position itself: the value-level rel.
 n 7
 col keys num 0 1 2 3 4 5 6

@@ -1,0 +1,6 @@
+-- The dead link sits on a row the predicate excludes and the crossing is effect-side: the
+-- effect domain is S, so nothing is reported.
+--! registry excluded-world
+--! expect gold = 5 5 5 7
+
+Flag , Gold = mentor.Gold

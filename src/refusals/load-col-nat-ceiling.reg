@@ -1,0 +1,5 @@
+# expect: registry line 5: col k: value 1e+16 outside nat
+# The nat ceiling is 2^53, the last contiguous integer of the double: past it, integer
+# arithmetic loses exactness, so the seal refuses what the barrier would clamp.
+n 2
+col k nat 5 1e16

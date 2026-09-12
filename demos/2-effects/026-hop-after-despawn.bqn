@@ -1,8 +1,6 @@
-# Hop after despawn, the wrong-entity shape (PROBLEM 1).
 # ano: Cursed , ~
 #      Nord & mentor.Dead , -Trained
 # Semantics: with no id column the rel is keyed to the fixture row index. A despawn shifts rows, so the hop must resolve through the surviving fixture-row ids (index-of, one found-guard), never a positional gather into the shifted column — mentor 3 names old row 3, not whatever now sits in slot 3.
-# Invariant: not-found is dangling is dead — the ¯1 sentinel and a despawned target fail the same guard (left-join-null); the wrong-entity counterexample is pinned at the end.
 
 cursed  ← 0‿1‿0‿0‿0‿0
 mentor  ← ¯1‿¯1‿3‿¯1‿3‿0            # fixture-row ids
@@ -25,6 +23,5 @@ trained ∧↩ ¬ nord∧alive∧mDead
 
 ! trained ≡ 1‿0‿1‿0‿0               # old rows 2, 4, 5 lose it; dangling rows keep it
 
-# the wrong-entity counterexample: a positional read of the shifted column keeps old row
 # 2 Trained, because shifted slot 3 holds old row 4 (alive), not old row 3 (dead)
 ! 0 ≡ 3⊑dead
