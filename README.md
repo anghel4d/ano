@@ -1,5 +1,7 @@
 # ano
 
+Salve et Coagula.
+
 あの — forays into a new embedded scripting language, and a language-research foray into its accidental isomorphism with Japanese grammar.
 
 How ano works in one line of pseudocode:

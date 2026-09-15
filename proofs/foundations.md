@@ -47,7 +47,9 @@ A general relation is a span `I ←p R →q J`. Pulling a target column to `R` p
 
 Given `u : J → I` and a commutative monoid `(V, ⊕, 0)`, define the unordered pushforward `(u_! f)(i) = ⊕ { f(j) | u(j) = i }`. Its column implementation is segmented reduction or scatter-reduce.
 
-Commutativity is required only when the fiber has no declared order or when parallel merge must be order-independent. An ordered fiber may fold an associative noncommutative monoid in its declared order. A semigroup without an identity is partial on empty fibers. `avg/` is a monoidal fold of sufficient statistics `(sum,count)` followed by a finisher; it is not itself the monoid operation.
+Commutativity is required only when the fiber has no declared order or when parallel merge must be order-independent. An ordered fiber may fold an associative noncommutative monoid in its declared order. A semigroup without an identity is partial on empty fibers. That is A12: `max/` over nothing is no row, while `+/` yields `0`. `avg/` is a monoidal fold of sufficient statistics `(sum,count)` followed by a finisher. It is not itself the monoid operation. `avg\` and `#\` are the prefix form of that machine (Haskell `mapAccumL`, a Mealy step `S × A → S × B`), not `scanl1` over the output carrier.
+
+The homogeneous unseeded fold is `foldl1`. The homogeneous scan is `scanl1`. Their law is `last (scan f xs) = fold f xs` on nonempty input. `foldMap` is the same fold after an explicit map into a monoid: `+/ Gold` already is `foldMap Sum` along the Gold projection. Traversal order is a property of the fiber or the `along` witness, not of the operator. `foldl` versus `foldr` is the wrong factoring once `-` is admitted. A fallible step (`traverse`) is not a surface.
 
 The ordinary fold is reduction along `X → 1`. γ is reduction along a relationship leg. Histogramming and additive scatter are the same fiber reduction with different destination maps. Boolean image uses OR, so duplicate edges collapse by idempotence. A comprehension effect in current Ano likewise takes the Boolean image of the surviving pair relation unless the surface explicitly requests multiplicity.
 

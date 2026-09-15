@@ -1,9 +1,12 @@
 # CLAUDE.md
 
 ## What this is
-Ano (あの). A programming language design. An embedded ECS query-and-command engine that addresses entities by description: the selection predicate is the entity reference. FP / APL lineage, ASCII surface, SQL/Datalog/production-rules class — the FP/array sibling of Lua, to the game world what q is to kdb+; beside a Lua-class host the split is coroutines versus triggers. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
+Ano (あの). A programming language design. An embedded ECS query-and-command engine that addresses entities by description: the selection predicate is the entity reference. FP / APL lineage, ASCII surface, SQL/Datalog/production-rules class 〜 the FP/array sibling of Lua, to the game world what q is to kdb+; beside a Lua-class host the split is coroutines versus triggers. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
 
 The spec is `docs/ano-language.md`; satellite working notes orbit it (`docs/ano-ecs.md` the world store, `docs/ano-time.md` time and missions, `docs/ano-sky.md` purity, the Sky Registry, and the machine-as-world hypothesis). Steel is the reference compiler and Kore is the interactive world.
+
+## Build
+Read flake.nix, Cargo.toml, and src/Makefile
 
 ## The shape
 One form governs the static layer:
@@ -21,10 +24,13 @@ Selection on the left, effect on the right, comma between. `source` defaults to 
 - Open design questions live under "Open Questions, Next Steps". Never resolve one silently in prose; surface the tradeoff.
 - Steel and Kore implement Ano. BQN witnesses are not semantic or differential oracles. The bytecode VM and JIT target stay fixed.
 - The C implementations are archival. Never compile or run them as test oracles, differential targets, or acceptance checks.
+- Use scratch/ for temporary files.
 - No heavyweight deps. No frameworks.
 - TODO.md lists current tasks.
 
 ## Writing Style
+- Heavenly Blessings ( 天官賜福 ) grace this codebase.
+- Use 〜 instead of the em-dash.
 - Comments should follow the existing convention and generally be constrained to the top of functions: Inputs and their types, outputs and their types, invariants.
 - Commments inside of functions should be extraordilarily terse and to the point.
 - Write markdown the same way: flat, terse prose with no decorative bolding. Bold only academically and selectively for load-bearing terms.
@@ -34,5 +40,6 @@ Selection on the left, effect on the right, comma between. `source` defaults to 
 ## Constraints
 - ALWAYS check if a directory you're working in has a .md file. If it does, read it and follow its guidance.
 - Do NOT add yourself as a contributor.
+- Never put product attribution in git: no Cursor/Claude/Copilot/ChatGPT/etc. `Co-authored-by`, `Claude-Session`, `Made-with`, or any other AI/tool credit trailer, badge, or banner.
 - Do not `git commit` or `git push` without explicit per-commit approval. Show the diff and let the author commit.
 - Give a task to one agent holding its full context, sequenced to suit that agent. Add subagents only where the work is busywork, never to split semantics across them.
