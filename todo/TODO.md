@@ -6,7 +6,7 @@ The [historical rulings](00-historical-rulings.md) preserve the author's decisio
 
 1. [06: seeded fold and fallible traverse](06-seeded-fold-and-traverse.md). Obtain a ruling before extending grammar or the unseeded recurrence.
 2. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
-3. [Sequential composition](../docs/ano-language.md#10-simultaneous-and-sequential-effects). Implement `|>` between effects on the right of `,` in Steel/Kore: later stages read earlier stages' results, while `;` effects share the incoming state. Restore the missing effect-pipeline grammar and stage boundaries, and correct the existing selection-pipeline defects recorded in [implementation limits](../docs/ISSUES.md). The composition semantics are settled; implementation remains open.
+3. [Sequential composition](../docs/ano-language.md#10-simultaneous-and-sequential-effects). Implement `|>` between effects on the right of `,` in Steel/Kore: later stages read earlier stages' results, while `;` effects share the incoming state. Restore the missing effect-pipeline grammar and stage boundaries recorded in [implementation limits](../docs/ISSUES.md). The composition semantics are settled; implementation remains open.
 
 ## Completed non-spatial work
 

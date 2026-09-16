@@ -82,14 +82,12 @@ struct Ev {
     rel_ent: Option<usize>,
 }
 
-// Pipeline view: base mask temp (None = iota/callable-rebased), idx ordered indices into the
-// filtered space, expand_cnt from an expand stage, is_iota flag.
+// Pipeline view: ordered indices into a filtered base, with copy multiplicity after expand.
 #[derive(Default)]
 struct View {
     base: Option<String>,
     idx: String,
-    expand_cnt: Option<String>,
-    is_iota: bool,
+    expanded: bool,
 }
 
 // One pending column replacement. fam merge family: b'+' b'*' b'=' b'|' b'&' b'v'.
@@ -1092,9 +1090,10 @@ impl<'a> Em<'a> {
             return Err(fail(nd.line, "unsupported pipeline stage"));
         };
         let mut vw = View::default();
-        if let NodeKind::IotaX(inner) = &src.kind {
+        if matches!(src.kind, NodeKind::Pipe { .. }) {
+            vw = self.emit_pipe(src)?;
+        } else if let NodeKind::IotaX(inner) = &src.kind {
             let n = self.emit_val(inner, Mode::World)?;
-            vw.is_iota = true;
             vw.idx = format!("(↕{})", n.v);
         } else {
             let msk = self.emit_mask(src)?;
@@ -1120,14 +1119,18 @@ impl<'a> Em<'a> {
                     );
                 }
                 NodeKind::Take { k } => {
-                    vw.idx = format!("({}↑{})", *k as i32, vw.idx);
+                    vw.idx = format!("(({}⌊≠{})↑{})", num_lit(*k), vw.idx, vw.idx);
                 }
                 NodeKind::Expand(inner) => {
                     let cv = self.emit_val(inner, Mode::World)?;
-                    vw.expand_cnt = Some(match &vw.base {
-                        Some(b) => format!("({}/{})", b, cv.v),
-                        None => cv.v,
-                    });
+                    let counts = if cv.unit {
+                        format!("((≠{})⥊{})", vw.idx, cv.v)
+                    } else {
+                        let ids = self.view_world_ids(&vw);
+                        format!("({}⊏{})", ids, cv.v)
+                    };
+                    vw.idx = format!("({}/{})", counts, vw.idx);
+                    vw.expanded = true;
                 }
                 NodeKind::Call { callee, args } => {
                     let cn = self.rs(*callee);
@@ -1152,13 +1155,12 @@ impl<'a> Em<'a> {
                             ));
                         }
                     }
-                    let mut a = format!("⟨{}", vw.idx);
+                    let mut a = format!("⟨{}", self.view_world_ids(&vw));
                     for k in args {
                         let av = self.emit_val(k, Mode::World)?;
                         a = format!("{}, {}", a, av.v);
                     }
                     vw.idx = format!("({} {}⟩)", self.fnv(fe), a);
-                    vw.is_iota = true;
                     vw.base = None;
                 }
                 _ => return Err(fail(st.line, "unsupported pipeline stage")),
@@ -2284,11 +2286,15 @@ impl<'a> Em<'a> {
             }
             NodeKind::Pipe { .. } => {
                 let vw = self.emit_pipe(nd)?;
-                if let Some(c) = &vw.expand_cnt {
-                    // Spawner |> expand Count , spawn X : counts feed the spawn
-                    self.pipe_expand = c.clone();
+                let ids = self.view_world_ids(&vw);
+                if vw.expanded {
+                    // Effects gather in world order; copies keep their source's multiplicity.
+                    let copies = self.tv();
+                    self.stage(format!("{} ← {}", copies, ids));
+                    self.pipe_expand = format!("({{+´{}=𝕩}}¨/((↕{})∊{}))", copies, self.fr_n(), copies);
+                    return Ok(format!("((↕{})∊{})", self.fr_n(), copies));
                 }
-                Ok(format!("((↕{})∊{})", self.fr_n(), self.view_world_ids(&vw)))
+                Ok(format!("((↕{})∊{})", self.fr_n(), ids))
             }
             NodeKind::Shape(_) => {
                 // pure shape source: everything in frame

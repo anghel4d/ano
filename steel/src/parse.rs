@@ -390,7 +390,11 @@ impl P<'_, '_> {
                 if self.pk() != TokKind::Num {
                     return Err(perr(self.tline(), "expected count after 'take'"));
                 }
-                let n = Node::new(NodeKind::Take { k: self.tnum() }, line);
+                let k = self.tnum();
+                if !k.is_finite() || k < 0.0 || k.fract() != 0.0 {
+                    return Err(perr(line, "take count must be a finite nonnegative integer"));
+                }
+                let n = Node::new(NodeKind::Take { k }, line);
                 self.adv();
                 Ok(n)
             }
