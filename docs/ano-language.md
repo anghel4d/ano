@@ -33,9 +33,9 @@ source & predicate , effect
 
 Selection on the left, effect on the right, comma between. `source` defaults to the live world.
 
-## Current implementation
+## Language contract and implementation
 
-This reference describes the current Steel/Kore implementation. The author's WIP [tour](../tour.md) and research notes are separate from executable contracts. The registry supplies names and callables; the examples below assume matching declarations.
+This reference specifies Ano's language semantics and identifies gaps in the current Steel/Kore implementation. The implementation does not override the language contract: in particular, sequential effect composition with `|>` is required but not yet implemented. The author's WIP [tour](../tour.md) introduces the language; research notes remain separate from executable contracts. The registry supplies names and callables; the examples below assume matching declarations.
 
 Steel emits BQN and executes it through CBQN. General nominal spatial types, a native Ano JIT, seeded folds, fallible traversal, and mission manifests are not implemented. [Implementation limits](ISSUES.md) records the current gaps.
 
@@ -112,7 +112,7 @@ master , Gold += 1000
 
 ### 7. Value effects
 
-`+=`, `-=`, `*=`, and `/=` update selected rows. Expressions read the statement's pre-state. The destination carrier and range govern publication; runtime promotion is not storage subtyping.
+`+=`, `-=`, `*=`, and `/=` update selected rows. Expressions read the incoming state of their effect stage. Effects composed with `;` share that state; a stage after `|>` reads the preceding stage's result (section 10). The destination carrier and range govern publication; runtime promotion is not storage subtyping.
 
 ### 8. Assignment
 
@@ -134,15 +134,39 @@ Dead , ~
 
 These are the Rust registry and emitted BQN operations. They do not imply an implemented archetype/chunk or generational allocator.
 
-### 10. Sequenced effects
+### 10. Simultaneous and sequential effects
+
+The comma is the hinge: selection on the left, effects on the right. Both sides admit sequential composition with `|>`: each stage receives the preceding stage's result. On the selection side, stages transform the selected view; on the effect side, later stages observe the state produced by earlier effects.
+
+`;` batches effects at one barrier. Every effect in the batch reads the same incoming state, and their writes take effect together. Textual order does not make one effect's writes visible to another. Conflicting writes require a supported merge law; incompatible writes refuse rather than becoming last-writer-wins.
+
+```haskell
+Nord , Silver = Gold ; Gold = Silver
+```
+
+This swaps Silver and Gold for each selected row with both values present. With Silver 30 and Gold 10 before the batch, the result is Silver 10 and Gold 30. Reversing the two effects gives the same result.
+
+`|>` sequences effects from left to right. The preceding stage completes before the next stage reads its values; each stage's incoming state includes the preceding stage's writes.
+
+```haskell
+Nord , Silver = Gold |> Gold = Silver
+```
+
+Starting again from Silver 30 and Gold 10, Silver first becomes 10, then Gold reads the updated Silver and becomes 10. Both end with the original Gold. Reversing these stages instead leaves both with the original Silver. The pipe composes the two assignments on the right of the comma.
+
+```haskell
+Nord , Gold += 100 |> Silver = Gold
+```
+
+Here Silver receives the increased Gold. With `;` in place of `|>`, Silver would receive the original Gold instead. A statement containing an effect pipeline therefore cannot be described as every effect reading one statement-wide pre-state.
+
+**Implementation gap:** Steel/Kore currently support the semicolon batch, but reject an effect pipeline on the right of the comma. Their existing selection-pipeline path does not implement sequential effect composition. The `|>` effect examples above specify required behavior, not passing demonstrations. See [implementation limits](ISSUES.md) and the [worked examples](ano-examples.md#simultaneous-and-sequential-effects).
 
 ```haskell
 Nord , Gold += 1000 ; +Blessed
 Nord & Dead , spawn Ghost
 ~
 ```
-
-`;` batches effects in one barrier. Their reads use the same pre-state. Conflicting writes require a supported merge law; incompatible writes refuse rather than becoming last-writer-wins.
 
 A subsequent statement is another barrier. A leading comma, lone `~`, or omitted-subject effect can reuse the saved antecedent mask. It reuses the selection, not the old world. A cold omitted-subject effect uses `^cursor`; a cold explicit continuation refuses.
 
@@ -226,6 +250,8 @@ Unit , Slot = rank(Initiative)
 Enemy |> order by Threat desc |> take 5 , +Targeted
 top 5 (grade desc Threat) , +Targeted
 ```
+
+On the left of the comma, `Enemy |> order by Threat desc |> take 5` selects enemies, orders that view by descending Threat, then takes up to five rows from the ordered result. Each stage consumes the preceding stage's result. The same sequential-composition operator sequences effects on the right of the comma (section 10); its meaning is not limited to selection stages.
 
 Grade orders a view; rank produces values. The current dense-rank form gives tied values the same rank. Ordered views retain row identity for later effects. `rank` is a resolved built-in form, not one of the lexer keywords.
 
@@ -315,9 +341,13 @@ An admitted infinity is not an empty-extrema identity. A failed publication does
 
 ## Appendix: Grammar
 
-The authoritative tables and parser are [lex.rs](../steel/src/lex.rs), [parse.rs](../steel/src/parse.rs), and [lib.rs](../steel/src/lib.rs). [ano-keywords.md](ano-keywords.md) lists tokens and context-sensitive forms.
+The implemented token tables, parser, and AST are [lex.rs](../steel/src/lex.rs), [parse.rs](../steel/src/parse.rs), and [lib.rs](../steel/src/lib.rs). [ano-keywords.md](ano-keywords.md) lists tokens and context-sensitive forms. Missing parser support does not remove a form from the language contract.
 
-The main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms are parsed by their statement context rather than being ordinary value operators.
+The composition precedence, from loosest to tightest, is the `,` / `=>` hinge, `;`, `|>`, then individual effects and assignments. `|>` composes stages left to right and applies on both sides of the hinge. Thus `Nord , Silver = Gold |> Gold = Silver` has one selection and two sequential effects: the pipe composes the assignments, rather than becoming part of the first assignment's value expression.
+
+Within expressions, the main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms have their own grammatical context rather than being ordinary value operators.
+
+The current effect parser consumes an individual effect followed by semicolon-separated effects; it omits the intervening `|>` composition level. The emitter likewise accumulates a statement's effects into one batch. Both must support sequential effect stages to implement section 10.
 
 Unary minus negates a numeric value; repeated mask negation composes normally. Newlines inside parentheses or comprehension brackets, and after a hinge, effect separator, or unfinished operator, continue the same statement. A newline after a complete statement remains a barrier. Within a comprehension effect, the unparenthesized `|` begins the generator list; put value-level `|` expressions in parentheses or call arguments.
 

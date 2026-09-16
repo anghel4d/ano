@@ -1,6 +1,6 @@
 # Tokens and forms
 
-The executable tables are in [steel/src/lex.rs](../steel/src/lex.rs); grammar is in [parse.rs](../steel/src/parse.rs). Name resolution and capability checks happen later. This page does not reserve additional words.
+The executable tables are in [steel/src/lex.rs](../steel/src/lex.rs); the implemented parser is [parse.rs](../steel/src/parse.rs). The [language reference](ano-language.md) specifies the grammar and identifies missing implementation support. Name resolution and capability checks happen later. This page does not reserve additional words.
 
 ## ASCII keywords
 
@@ -33,8 +33,8 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 |---|---|
 | `,` | Selection/effect hinge; also tuple/call structure |
 | `=>` | Standing-rule hinge |
-| `;` | Effects sharing one barrier |
-| `\|>` | Pipeline |
+| `;` | Simultaneous effects sharing the incoming state and one barrier |
+| `\|>` | Sequential composition: each stage receives the preceding stage's result, on either side of the hinge |
 | `&`, `\|`, `!` | Mask operations; Greater/Lesser overload by carrier |
 | `=`, `==`, `!=`, `<`, `<=`, `>`, `>=` | Contextual assignment or comparison |
 | `+=`, `-=`, `*=`, `/=` | Value updates |
@@ -49,6 +49,10 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 | `:Name` | Symbol literal |
 | `f/`, `f\` | Fused fold/scan head |
 | `#` | Count operator head inside `fold(#)` or `scan(#)` |
+
+`Silver = Gold ; Gold = Silver` swaps the two values: both reads see the incoming state. `Silver = Gold |> Gold = Silver` leaves both with the original Gold: the second effect reads the first effect's result. These are effect expressions on the right of `,`; complete examples and implementation status are in [section 10](ano-language.md#10-simultaneous-and-sequential-effects).
+
+Composition binds from loosest to tightest as hinge, `;`, `|>`, then individual effects and assignments. Steel/Kore currently omit the effect-pipeline level, so the second expression is required language behavior that they do not yet execute.
 
 A bare caret refuses. A fused head cannot contain interior whitespace. Division reduction uses `fold(/)`, not `//`.
 

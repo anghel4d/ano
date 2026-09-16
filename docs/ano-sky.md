@@ -39,8 +39,8 @@ Together, an `.ano` file takes the mathematical laws injected from above, applie
 
 The essay above is the author's design motivation. Its C-engine terminology is historical; Steel and Kore are the Rust reference implementation.
 
-Steel emits BQN for CBQN. Registry declarations supply data and callable contracts. Effects read pre-state and publish at barriers.
+Steel emits BQN for CBQN. Registry declarations supply data and callable contracts. Effects in a simultaneous batch read the same incoming state and publish at one barrier. Sequential `|>` effect stages must pass the resulting state forward; Steel/Kore do not yet implement them (see [section 10](ano-language.md#10-simultaneous-and-sequential-effects)).
 
 A general proof-carrying rewrite registry, Haskell embedding, and machine-as-world compiler are not implemented. Trust declarations and successful examples do not grant rewrite authority. The required proof-to-compiler bridge is recorded in [foundations.md](../proofs/foundations.md).
 
-Current behavior belongs in [the language reference](ano-language.md). This essay establishes no measured speedup or native-backend guarantee.
+The language contract and its implementation gaps belong in [the language reference](ano-language.md). This essay establishes no measured speedup or native-backend guarantee.
