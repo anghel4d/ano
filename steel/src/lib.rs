@@ -162,6 +162,7 @@ pub enum TokKind {
     Desc,
     Top,
     Grade,
+    Count,  // # in fold(#) / scan(#)
     FoldKw, // fold
     ScanKw, // scan
 Cross,
@@ -230,6 +231,7 @@ impl TokKind {
             TokKind::Desc => "T_DESC",
             TokKind::Top => "T_TOP",
             TokKind::Grade => "T_GRADE",
+            TokKind::Count => "T_COUNT",
             TokKind::FoldKw => "T_FOLDKW",
             TokKind::ScanKw => "T_SCANKW",
             TokKind::Cross => "T_CROSS",

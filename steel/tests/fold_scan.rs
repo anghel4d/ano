@@ -604,10 +604,6 @@ fn absent_surfaces_refuse() {
     assert!(!scan2.contains("scan2"), "{}", scan2);
     // `>` stays comparison; `>/` is not a reducer spelling
     assert!(err(">/ Gold\n").contains("unexpected token"));
-    // no long count spelling: bare '#' keeps its lex refusal
-    for source in ["fold(#) Gold\n", "scan(#) Gold\n", "scan(#) Gold along Silver\n"] {
-        assert!(err(source).contains("'#' begins only '#/' or '#\\'"), "{}", source);
-    }
     // a per-fiber scan needs a ragged result representation that does not exist yet
     assert!(err("+\\ near'.Gold\n").contains("scan over fibers is not yet supported"));
 }

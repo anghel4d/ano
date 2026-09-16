@@ -48,6 +48,7 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 | `^name` | One dynamic-alias token |
 | `:Name` | Symbol literal |
 | `f/`, `f\` | Fused fold/scan head |
+| `#` | Count operator head inside `fold(#)` or `scan(#)` |
 
 A bare caret refuses. A fused head cannot contain interior whitespace. Division reduction uses `fold(/)`, not `//`.
 

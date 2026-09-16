@@ -1662,28 +1662,16 @@ pub fn session_seam(app: &App, line: &str) {
     }
 }
 
-// The def-head name: `def ` (4 bytes) or `定義 ` (7 bytes), spaces skipped, name to
-// space/'='/'\n'. Exact bytes — defs never case-fold.
+// Session definitions use the same reader and identifier spelling as the compiler.
 pub fn def_head(body: &[u8], ja: bool) -> Option<Vec<u8>> {
-    let kw: &[u8] = if ja { "定義 ".as_bytes() } else { b"def " };
-    if !body.starts_with(kw) {
+    let mut names = steel::Interner::new();
+    let tokens = steel::lex::lex(body, ja, &mut names).ok()?;
+    if tokens.kind.first() != Some(&steel::TokKind::Def)
+        || tokens.kind.get(1) != Some(&steel::TokKind::Name)
+    {
         return None;
     }
-    let mut p = kw.len();
-    while p < body.len() && body[p] == b' ' {
-        p += 1;
-    }
-    let mut out = Vec::new();
-    while p < body.len()
-        && body[p] != b' '
-        && body[p] != b'='
-        && body[p] != b'\n'
-        && out.len() < 127
-    {
-        out.push(body[p]);
-        p += 1;
-    }
-    if out.is_empty() { None } else { Some(out) }
+    Some(names.resolve(tokens.name[1]).as_bytes().to_vec())
 }
 
 // Any line of the body def-heads to name.
@@ -2711,5 +2699,48 @@ mod alias_session {
             assert_eq!(env.version(), version);
             assert_eq!(&plan_with_env(&base_reg, &env, SRC), expected);
         }
+    }
+}
+
+
+#[cfg(test)]
+mod parser_session {
+    use super::*;
+
+    #[test]
+    fn definitions_survive_whitespace_and_reload() {
+        const CHILD: &str = "ANO_PARSER_SESSION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let dir = std::env::temp_dir().join(format!("ano-kore-parser-{}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let mut steel = std::env::current_exe().unwrap();
+            steel.pop(); steel.pop(); steel.push("steel");
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "world::parser_session::definitions_survive_whitespace_and_reload", "--nocapture"])
+                .env(CHILD, "1").env("STEEL", steel).current_dir(&dir).output().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(result.status.success(), "{}\n{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
+            return;
+        }
+        let path = std::env::current_dir().unwrap().join("world.reg");
+        std::fs::write(&path, "n 3\ncol Gold num 50 120 200\n").unwrap();
+        let mut app = App::new();
+        app.mode = Mode::Reg;
+        app.world = world_load(path.to_str().unwrap()).unwrap();
+        for statement in ["def\trich = Gold > 100", "rich , Gold += 10", "  def rich\t= Gold > 150", "rich , Gold += 20"] {
+            app.prompt = statement.as_bytes().to_vec();
+            repl_submit(&mut app);
+        }
+        // Reload the session as a reopened world, then use its last definition again.
+        let mut reopened = App::new();
+        reopened.mode = Mode::Reg;
+        reopened.world = world_load(path.to_str().unwrap()).unwrap();
+        session_rehydrate(&mut reopened);
+        reopened.prompt = b"rich , Gold += 1".to_vec();
+        repl_submit(&mut reopened);
+        let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
+        let gold = reg.ents.iter().find(|entry| entry.name == "Gold").unwrap();
+        let steel::RegEntryKind::Col { nums, .. } = &gold.kind else { panic!("Gold must remain a column") };
+        assert_eq!(nums, &[50.0, 130.0, 231.0]);
     }
 }

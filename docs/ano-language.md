@@ -146,6 +146,8 @@ Nord & Dead , spawn Ghost
 
 A subsequent statement is another barrier. A leading comma, lone `~`, or omitted-subject effect can reuse the saved antecedent mask. It reuses the selection, not the old world. A cold omitted-subject effect uses `^cursor`; a cold explicit continuation refuses.
 
+Augmented assignments such as `Gold += 100` admit the same omitted subject. Bare `Gold = 100` remains a comparison query; use `, Gold = 100` to assign through a saved antecedent. Registered verbs accept ordinary argument lists, including `verb()` and `verb(a, b)`; the registry still supplies their signatures and effects.
+
 ### 11. Standing rules
 
 ```haskell
@@ -186,7 +188,7 @@ Current reductions use exact left accumulation. A homogeneous operation starts w
 | `avg` | Sum/count, then divide | No row |
 | `-`, `fold(/)` | Left subtraction/division | No row |
 
-`fold(f)` and `f/` resolve through the same operation table. The lexer does not admit `//` for division reduction. Registered homogeneous reducers must satisfy the current carrier and callable contracts.
+`fold(f)` and `f/` resolve through the same operation table. This includes `fold(#)` for count and `scan(#)` for prefix count. The lexer does not admit `//` for division reduction. Registered homogeneous reducers must satisfy the current carrier and callable contracts.
 
 There is no explicit seed argument. That remains an open decision in [task 06](../todo/06-seeded-fold-and-traverse.md).
 
@@ -316,6 +318,10 @@ An admitted infinity is not an empty-extrema identity. A failed publication does
 The authoritative tables and parser are [lex.rs](../steel/src/lex.rs), [parse.rs](../steel/src/parse.rs), and [lib.rs](../steel/src/lib.rs). [ano-keywords.md](ano-keywords.md) lists tokens and context-sensitive forms.
 
 The main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms are parsed by their statement context rather than being ordinary value operators.
+
+Unary minus negates a numeric value; repeated mask negation composes normally. Newlines inside parentheses or comprehension brackets, and after a hinge, effect separator, or unfinished operator, continue the same statement. A newline after a complete statement remains a barrier. Within a comprehension effect, the unparenthesized `|` begins the generator list; put value-level `|` expressions in parentheses or call arguments.
+
+The parser rejects excessive expression nesting with a diagnostic before recursive descent or downstream expression traversal can exhaust the stack. Parenthesis, parser-recursion, operator-chain, and expression-tree depth each have a conservative 64-level ceiling; a program may still contain arbitrarily many separate statements.
 
 Both readers produce the same token kinds and parser input. Japanese noun spellings survive until resolution; paired active demos check equivalent emission. See [ano_nihongo.md](ano_nihongo.md).
 

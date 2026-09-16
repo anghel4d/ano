@@ -47,6 +47,8 @@ Demo mutations use play copies beneath `.kore/play/`; originals remain unchanged
 
 The interactive `n` program retargets the registry and removes fixture output/post-state assertions. Running the original demo through `steel --run` still checks those assertions.
 
+Session definitions use Steel's lexer, so spaces, tabs, and leading indentation preserve the same definition name during submission, replacement, and reload.
+
 Queries enter the outputs pane. Compiler messages and trace events enter history. An identityless empty result creates no fabricated output record. The [trace reference](../src/trace/trace.md) defines the channel grammar.
 
 Map and bitmap views still use legacy lattice/position conventions. They are not a validated arbitrary-rank or nominal-frame interface; task 99 owns that repair.

@@ -78,12 +78,54 @@ fn atomstart(k: TokKind) -> bool {
 
 /* ---------- parser state ---------- */
 
+// Bound parser recursion and expression trees before they can exhaust consumer stacks.
+const MAX_EXPR_DEPTH: usize = 64;
+
+fn check_expr_depth(root: &Node) -> Result<(), Diag> {
+    let mut pending = vec![(root, 1)];
+    while let Some((node, depth)) = pending.pop() {
+        if depth >= MAX_EXPR_DEPTH {
+            return Err(perr(node.line, "expression nested too deeply"));
+        }
+        let mut push = |child| pending.push((child, depth + 1));
+        use NodeKind::*;
+        match &node.kind {
+            Not(x) | IotaX(x) | Expand(x) | Grade { key: x, .. }
+            | OrderBy { key: x, .. } | Top { inner: x, .. }
+            | Fold { operand: x, .. } | ScanExpr { operand: x, .. } => push(x),
+            And(l, r) | Or(l, r) | Cmp { l, r, .. } | Arith { l, r, .. }
+            | Hop { l, r } | CrossV { a: l, b: r, .. }
+            | ScanAlong { col: l, order: r, .. } => { push(l); push(r); }
+            Scope { l, r, origin } => {
+                push(l); push(r);
+                if let Some(origin) = origin { push(origin); }
+            }
+            To { shape, poured } => {
+                push(shape);
+                if let Some(poured) = poured { push(poured); }
+            }
+            Call { args, .. } | Tuple(args) | Shape(args) => {
+                for arg in args { push(arg); }
+            }
+            Pipe { src, stages } => {
+                push(src);
+                for stage in stages { push(stage); }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+
 // Cursor over a preprocessed stream (final token guaranteed Eof). depth bounds parse_expr
 // nesting so degenerate input errors, never overflows; eval sub-parsers get a fresh budget.
 struct P<'t, 'i> {
     t: &'t Toks,
     i: usize,
-    depth: i32,
+    depth: usize,
+    effect_value: bool,
+    bar_boundary: bool,
     it: &'i mut Interner,
 }
 
@@ -173,24 +215,33 @@ impl P<'_, '_> {
         ))
     }
 
-    // Input: cursor at T_NAME with '(' next. Output: Call, args comma-separated at min 5.
+    // Parenthesized arguments share one grammar in expressions, verbs, and pipelines.
+    fn parse_arguments(&mut self) -> Result<Vec<Node>, Diag> {
+        let boundary = std::mem::replace(&mut self.bar_boundary, false);
+        let result = (|| {
+            self.expect(TokKind::Lp, "'(' before call arguments")?;
+            let mut args = Vec::new();
+            if self.pk() != TokKind::Rp {
+                loop {
+                    args.push(self.parse_expr(5)?);
+                    if self.pk() != TokKind::Comma {
+                        break;
+                    }
+                    self.adv();
+                }
+            }
+            self.expect(TokKind::Rp, "')' after call arguments")?;
+            Ok(args)
+        })();
+        self.bar_boundary = boundary;
+        result
+    }
+
     fn parse_call(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         let callee = self.tname();
-        self.adv(); // name
-        self.adv(); // (
-        let mut args = Vec::new();
-        if self.pk() != TokKind::Rp {
-            loop {
-                args.push(self.parse_expr(5)?);
-                if self.pk() == TokKind::Comma {
-                    self.adv();
-                    continue;
-                }
-                break;
-            }
-        }
-        self.expect(TokKind::Rp, "')' after call arguments")?;
+        self.adv();
+        let args = self.parse_arguments()?;
         Ok(Node::new(NodeKind::Call { callee, args }, line))
     }
 
@@ -211,6 +262,13 @@ impl P<'_, '_> {
     // Input: cursor at T_LP. Output: parenthesized expr, Tuple on top-level comma, or
     // juxtaposed Call when a bare name is followed by atoms ((pieceOf char)).
     fn parse_paren(&mut self) -> Result<Node, Diag> {
+        let boundary = std::mem::replace(&mut self.bar_boundary, false);
+        let result = self.parse_paren_inner();
+        self.bar_boundary = boundary;
+        result
+    }
+
+    fn parse_paren_inner(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         self.adv();
         let mut e = self.parse_tupelem(2)?;
@@ -344,10 +402,15 @@ impl P<'_, '_> {
             TokKind::Name => {
                 let callee = self.tname();
                 self.adv();
-                let mut args = Vec::new();
-                while atomstart(self.pk()) {
-                    args.push(self.parse_expr(10)?);
-                }
+                let args = if self.pk() == TokKind::Lp {
+                    self.parse_arguments()?
+                } else {
+                    let mut args = Vec::new();
+                    while atomstart(self.pk()) {
+                        args.push(self.parse_expr(10)?);
+                    }
+                    args
+                };
                 Ok(Node::new(NodeKind::Call { callee, args }, line))
             }
             _ => Err(perr(line, "expected pipeline stage")),
@@ -363,6 +426,7 @@ impl P<'_, '_> {
             TokKind::Slash => self.it.intern("/"),
             TokKind::Amp => self.it.intern("&"),
             TokKind::Bar => self.it.intern("|"),
+            TokKind::Count => self.it.intern("#"),
             TokKind::Name => self.tname(),
             _ => return Err(perr(self.tline(), "expected operator or reducer name")),
         };
@@ -376,7 +440,20 @@ impl P<'_, '_> {
     fn parse_prefix(&mut self, min: i32) -> Result<Node, Diag> {
         let line = self.tline();
         let k = self.pk();
-        if k == TokKind::Bang && min <= 7 {
+        if k == TokKind::Minus {
+            self.adv();
+            let operand = self.parse_expr(13)?;
+            let kind = match operand.kind {
+                NodeKind::Num(value) => NodeKind::Num(-value),
+                _ => NodeKind::Arith {
+                    op: ArithOp::Sub,
+                    l: Box::new(Node::new(NodeKind::Num(0.0), line)),
+                    r: Box::new(operand),
+                },
+            };
+            return Ok(Node::new(kind, line));
+        }
+        if k == TokKind::Bang {
             self.adv();
             let x = self.parse_expr(8)?;
             return Ok(Node::new(NodeKind::Not(Box::new(x)), line));
@@ -505,11 +582,22 @@ impl P<'_, '_> {
     // left-assoc binaries at their level, . and ' postfix at 13, |> pipeline at 3,
     // @-then-NUM shape scope.
     fn parse_binloop(&mut self, mut l: Node, min: i32) -> Result<Node, Diag> {
+        let mut chain = 0;
         loop {
             let k = self.pk();
+            if k == TokKind::Bar && self.bar_boundary {
+                return Ok(l);
+            }
+            if k == TokKind::Eq && self.effect_value {
+                return Err(perr(self.tline(), "use '==' for comparison inside an effect"));
+            }
             let lv = binlevel(k);
             if lv == 0 || lv < min {
                 return Ok(l);
+            }
+            chain += 1;
+            if self.depth + chain >= MAX_EXPR_DEPTH {
+                return Err(perr(self.tline(), "expression nested too deeply"));
             }
             let line = self.tline();
             if k == TokKind::Dot {
@@ -614,7 +702,7 @@ impl P<'_, '_> {
     // Invariant: depth-capped, so a degenerate paren tower is a parse error, never
     // stack exhaustion.
     fn parse_expr(&mut self, min: i32) -> Result<Node, Diag> {
-        if self.depth >= 4096 {
+        if self.depth >= MAX_EXPR_DEPTH {
             return Err(perr(self.tline(), "expression nested too deeply"));
         }
         self.depth += 1;
@@ -622,13 +710,22 @@ impl P<'_, '_> {
             .parse_prefix(min)
             .and_then(|l| self.parse_binloop(l, min));
         self.depth -= 1;
-        r
+        let node = r?;
+        check_expr_depth(&node)?;
+        Ok(node)
     }
 
     /* ---------- effects ---------- */
 
     // Input: cursor at an effect head. Output: one effect node per GRAMMAR.md level 4.
     fn parse_effect(&mut self) -> Result<Node, Diag> {
+        let context = std::mem::replace(&mut self.effect_value, true);
+        let result = self.parse_effect_inner();
+        self.effect_value = context;
+        result
+    }
+
+    fn parse_effect_inner(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         match self.pk() {
             TokKind::Plus | TokKind::Minus => {
@@ -735,10 +832,15 @@ impl P<'_, '_> {
                 }
                 if let NodeKind::Name(name) = tgt.kind {
                     // registered verb
-                    let mut args = Vec::new();
-                    while atomstart(self.pk()) {
-                        args.push(self.parse_expr(10)?);
-                    }
+                    let args = if self.pk() == TokKind::Lp {
+                        self.parse_arguments()?
+                    } else {
+                        let mut args = Vec::new();
+                        while atomstart(self.pk()) {
+                            args.push(self.parse_expr(10)?);
+                        }
+                        args
+                    };
                     return Ok(Node::new(NodeKind::EVerb { name, args }, line));
                 }
                 Err(perr(self.tline(), "expected assignment after target"))
@@ -767,7 +869,10 @@ impl P<'_, '_> {
         self.adv();
         let sel = self.parse_expr(5)?;
         self.expect(TokKind::Comma, "',' before comprehension effect")?;
-        let eff = self.parse_effect()?;
+        let boundary = std::mem::replace(&mut self.bar_boundary, true);
+        let effect = self.parse_effect();
+        self.bar_boundary = boundary;
+        let eff = effect?;
         self.expect(TokKind::Bar, "'|' before comprehension binders")?;
         let mut rest = Vec::new();
         loop {
@@ -915,6 +1020,8 @@ impl P<'_, '_> {
                 t: &ts,
                 i: 0,
                 depth: 0,
+                effect_value: false,
+                bar_boundary: false,
                 it: &mut *self.it,
             };
             while q.pk() == TokKind::Nl {
@@ -932,7 +1039,18 @@ impl P<'_, '_> {
             }
             return Ok(s);
         }
-        if k == TokKind::Spawn
+        let mut target_end = 1;
+        if k == TokKind::Name {
+            while self.pk2(target_end) == TokKind::Dot
+                && self.pk2(target_end + 1) == TokKind::Name
+            {
+                target_end += 2;
+            }
+        }
+        let update = k == TokKind::Name
+            && matches!(self.pk2(target_end),
+                TokKind::PlusEq | TokKind::MinusEq | TokKind::StarEq | TokKind::SlashEq);
+        if update || k == TokKind::Spawn
             || ((k == TokKind::Plus || k == TokKind::Minus)
                 && self.pk2(1) == TokKind::Name
                 && matches!(self.pk2(2), TokKind::Nl | TokKind::Semi | TokKind::Eof))
@@ -1024,20 +1142,13 @@ impl P<'_, '_> {
 
 /* ---------- entry ---------- */
 
-// Inputs: token stream (final token guaranteed Eof), interner (the eval splice re-lexes the
-// quotation via lex::lex with ja = false and a FRESH depth budget). Output: NodeKind::Program
-// with statements in source order, or Diag.
-// Invariants: NL preprocessing FIRST, on a rebuilt stream — drop everything after the first
-// Eof, splice out NL runs preceding To/PipeGt, collapse other runs to one Nl carrying the
-// first NL's line, synthesize one trailing Eof with the previous token's line; statement
-// dispatch is the exact 11-case C order (def > lone ~ > leading comma > compr > eval splice >
-// elided effect head > source specials > hinge > query > juxtaposed verb > error); depth cap
-// 4096 ("expression nested too deeply"); def heads checked via lex::lex_reserved exact-byte;
-// ESpawn keeps count/at as positional Options, Stmt continuation/elided keeps sel = None.
+// Normalize continuation whitespace without merging complete statements, then parse in order.
+// Expressions are bounded before recursive descent can exhaust the stack.
 pub fn parse(toks: &Toks, it: &mut Interner) -> Result<Node, Diag> {
     let n = toks.len();
     let mut ts = Toks::new();
     let mut i = 0usize;
+    let mut groups = 0usize;
     while i < n {
         let k = toks.kind[i];
         if k == TokKind::Eof {
@@ -1048,13 +1159,34 @@ pub fn parse(toks: &Toks, it: &mut Interner) -> Result<Node, Diag> {
             while j < n && toks.kind[j] == TokKind::Nl {
                 j += 1;
             }
-            if j < n && matches!(toks.kind[j], TokKind::To | TokKind::PipeGt) {
-                i = j; // continuation: splice the run out
+            let pending = ts.kind.last().is_some_and(|kind| matches!(kind,
+                TokKind::Comma | TokKind::Arrow | TokKind::Semi
+                | TokKind::Eq | TokKind::PlusEq | TokKind::MinusEq
+                | TokKind::StarEq | TokKind::SlashEq
+                | TokKind::Plus | TokKind::Minus | TokKind::Star | TokKind::Slash
+                | TokKind::Pct | TokKind::Amp | TokKind::Bar | TokKind::Bang
+                | TokKind::EqEq | TokKind::Ne | TokKind::Lt | TokKind::Le
+                | TokKind::Gt | TokKind::Ge | TokKind::At | TokKind::Dot
+                | TokKind::LArrow | TokKind::PipeGt | TokKind::Fold | TokKind::ScanOp));
+            if groups > 0 || pending
+                || (j < n && matches!(toks.kind[j], TokKind::To | TokKind::PipeGt))
+            {
+                i = j;
                 continue;
             }
             ts.push(TokKind::Nl, Symbol::EMPTY, 0.0, toks.line[i]); // collapse the run to one NL
             i = j;
             continue;
+        }
+        match k {
+            TokKind::Lp | TokKind::Lb => {
+                groups += 1;
+                if groups >= MAX_EXPR_DEPTH {
+                    return Err(perr(toks.line[i], "expression nested too deeply"));
+                }
+            }
+            TokKind::Rp | TokKind::Rb => groups = groups.saturating_sub(1),
+            _ => {}
         }
         ts.push(k, toks.name[i], toks.num[i], toks.line[i]);
         i += 1;
@@ -1070,6 +1202,8 @@ pub fn parse(toks: &Toks, it: &mut Interner) -> Result<Node, Diag> {
         t: &ts,
         i: 0,
         depth: 0,
+        effect_value: false,
+        bar_boundary: false,
         it,
     };
     let mut stmts = Vec::new();

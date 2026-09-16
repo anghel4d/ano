@@ -523,7 +523,8 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                     b.name[ix] = it.intern("#");
                     i += 2;
                 } else {
-                    return Err(lex_err(line, "'#' begins only '#/' or '#\\'"));
+                    b.push(t(TokKind::Count), line);
+                    i += 1;
                 }
             }
             b'@' => {
@@ -802,6 +803,7 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("*", t(TokKind::Star), false, ""),
     ("/", t(TokKind::Slash), false, ""),
     ("%", t(TokKind::Pct), false, ""),
+    ("#", t(TokKind::Count), false, ""),
     ("=", t(TokKind::Eq), false, ""),
     ("|", t(TokKind::Bar), false, ""),
 ];
@@ -1377,8 +1379,8 @@ mod semantic_tests {
     fn bare_hash_still_refuses() {
         for src in [&b"#"[..], b"# /", b"a # b"] {
             let mut it = Interner::new();
-            let d = lex(src, false, &mut it).unwrap_err();
-            assert_eq!(d.msg, "line 1: '#' begins only '#/' or '#\\'");
+            let tokens = lex(src, false, &mut it).unwrap();
+            assert!(crate::parse::parse(&tokens, &mut it).is_err());
         }
     }
 
