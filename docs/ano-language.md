@@ -263,7 +263,7 @@ top 5 (grade desc Threat) , +Targeted
 
 On the left of the comma, `Enemy |> order by Threat desc |> take 5` selects enemies, orders that view by descending Threat, then takes up to five rows from the ordered result. Each stage consumes the preceding stage's result. The same sequential-composition operator sequences effects on the right of the comma (section 10); its meaning is not limited to selection stages.
 
-Grade orders a view; rank produces values. The current dense-rank form gives tied values the same rank. Ordered views retain row identity for later effects. `rank` is a resolved built-in form, not one of the lexer keywords.
+A scalar ordering key ties every admitted row and preserves the incoming order. Rows with no valid ordering key are omitted. Grade orders a view; rank produces values. The current dense-rank form gives tied values the same rank. Ordered views retain row identity for later effects. `rank` is a resolved built-in form, not one of the lexer keywords.
 
 ### 16. Outer product
 
@@ -283,7 +283,7 @@ Spawner , spawn Minion * Count
 Spawner |> expand Count , spawn Minion
 ```
 
-Each selected source contributes its copy count. A copy retains its source and a zero-based copy `index`. The two forms use that same source/copy relationship.
+Each selected source contributes its copy count. A copy retains its source and a zero-based copy `index`. The two forms use that same source/copy relationship. Further selection filters retain only their sources' copy counts, and simultaneously scheduled rules each retain their own expansion.
 
 ### 18. Reshape
 

@@ -1108,6 +1108,16 @@ impl<'a> Em<'a> {
             match &st.kind {
                 NodeKind::OrderBy { key, desc } => {
                     let kv = self.emit_val(key, Mode::World)?;
+                    if let Some(guard) = &kv.g {
+                        let admitted = if kv.unit {
+                            format!("((≠{})⥊{})", vw.idx, guard)
+                        } else {
+                            format!("({}⊏{})", self.view_world_ids(&vw), guard)
+                        };
+                        vw.idx = format!("({}/{})", admitted, vw.idx);
+                    }
+                    // A scalar key ties every admitted row and preserves the incoming order.
+                    if kv.unit { continue; }
                     let keyf = match &vw.base {
                         Some(b) => format!("({}/{})", b, kv.v),
                         None => kv.v.clone(),
@@ -2293,7 +2303,7 @@ impl<'a> Em<'a> {
                     // Effects gather in world order; copies keep their source's multiplicity.
                     let copies = self.tv();
                     self.stage(format!("{} ← {}", copies, ids));
-                    self.pipe_expand = format!("({{+´{}=𝕩}}¨/((↕{})∊{}))", copies, self.fr_n(), copies);
+                    self.pipe_expand = format!("({{+´{}=𝕩}}¨↕{})", copies, self.fr_n());
                     return Ok(format!("((↕{})∊{})", self.fr_n(), copies));
                 }
                 Ok(format!("((↕{})∊{})", self.fr_n(), ids))
@@ -2454,7 +2464,7 @@ impl<'a> Em<'a> {
             None
         } else {
             let counts = self.tv();
-            self.stage(format!("{} ← {}‿{} AnoScat (anoN⥊0)", counts, selection, expansion));
+            self.stage(format!("{} ← {}", counts, expansion));
             Some(counts)
         };
         let mut written: Vec<(usize, Option<String>)> = Vec::new();
@@ -2507,7 +2517,7 @@ impl<'a> Em<'a> {
             self.sel_var = next_selection;
             self.trace_sel = self.sel_var.clone();
             if let Some(counts) = &copies {
-                self.pipe_expand = format!("({}/{})", self.sel_var, counts);
+                self.pipe_expand = counts.clone();
             }
         }
         let alive = self.tv();
@@ -2807,7 +2817,7 @@ impl<'a> Em<'a> {
                     let c = self.emit_val(cnt, Mode::Sel)?;
                     if c.unit { format!("((+´{})⥊{})", self.sel_var, c.v) } else { c.v }
                 } else if !self.pipe_expand.is_empty() {
-                    self.pipe_expand.clone()
+                    format!("({}/{})", self.sel_var, self.pipe_expand)
                 } else if matches!(what.kind, NodeKind::Call { .. }) {
                     // spawn (pieceOf char): an empty sym spawns nothing for that cell (ex34)
                     let pv = self.emit_val(what, Mode::Sel)?;
@@ -3416,7 +3426,9 @@ impl<'a> Em<'a> {
         self.fr = f0;
         // every mask against the one pre-state
         let mut masks: Vec<String> = Vec::with_capacity(nr);
+        let mut expansions = Vec::with_capacity(nr);
         for (r, rule) in rules.iter().enumerate() {
+            self.pipe_expand.clear();
             let pred = strip_frame(stmt_sel(rule));
             let msk = match pred {
                 None => format!("(1¨↕{})", self.fr_n()),
@@ -3425,10 +3437,12 @@ impl<'a> Em<'a> {
             let mv = format!("s{}r{}m", self.stmt, r);
             self.stage(format!("{} ← {}", mv, msk));
             masks.push(mv);
+            expansions.push(self.pipe_expand.clone());
         }
         // every effect, staged into the one commit set; reads stay pre-state
         for (r, rule) in rules.iter().enumerate() {
             self.sel_var = masks[r].clone();
+            self.pipe_expand = expansions[r].clone();
             self.trace_sel = masks[r].clone();
             self.cur_rule = r as i32;
             for ef in stmt_effects(rule) {
@@ -3665,6 +3679,8 @@ impl<'a> Em<'a> {
                 _ => return Err(fail(f.line, "unsupported comprehension filter")),
             }
         }
+        // A comprehension's image is a set; generator copy counts do not feed its effects.
+        self.pipe_expand.clear();
         // effect over both sides: rows/cols with any surviving pair
         let a_any = self.tv();
         let b_any = self.tv();

@@ -257,3 +257,17 @@ fn sequential_stages_observe_refined_values_and_keep_minted_keys() {
     fixture.accepts("Nord , spawn Minion ; spawn Minion |> Silver = max/ Key @ Minion\n--! expect Silver = 22 2 0 0\n--! expect Key = 10 20 21 22");
     fixture.accepts("Nord , spawn Minion |> spawn Minion |> Silver = max/ Key @ Minion\n--! expect Silver = 22 2 0 0\n--! expect Key = 10 20 21 22");
 }
+
+
+#[test]
+fn ordering_keys_and_rule_expansion_keep_their_own_domains() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.0.join("world.reg"), format!("{WORLD}col Count num 2 3 4 5\ncol Minion bool 0 0 0 0\n")).unwrap();
+    fixture.accepts("--! out 2 0\nNord |> order by Gold desc |> order by 1");
+    fixture.accepts("--! out\n(Nord & !Nord) |> order by 1 |> take 1");
+    fixture.accepts("--! out 2\nNord |> order by mentor.Gold");
+    fixture.accepts("--! out 14\ndef a = Nord |> expand Count => spawn Minion\ndef b = !Nord |> expand Count => spawn Minion\n#/ Minion");
+    fixture.accepts("--! out 2\ndef a = Nord |> expand Count |> take 0 => spawn Minion\ndef b = !Nord => spawn Minion\n#/ Minion");
+    fixture.accepts("--! out 4\n(Nord |> expand Count) & Gold > 20 , spawn Minion\n#/ Minion");
+    fixture.accepts("--! out 8\n(Nord |> expand Count) & Gold > 20 , spawn Minion |> spawn Minion\n#/ Minion");
+}
