@@ -8,7 +8,6 @@ This list describes current code boundaries. Feature decisions belong in [todo/T
 - Steel's file runner schedules rule steps around installation runs. It has no positional mission schedule. Temporal `ago`/`window` services and `.mission` manifests are absent.
 - Seeded folds and fallible traversal have no surface. [Task 06](../todo/06-seeded-fold-and-traverse.md) preserves the open decision.
 - Named reducers over fibers and per-fiber scans are refused. Ragged scan results have no representation.
-- Sequential effects with `|>` on the right of `,` are required by [the language contract](ano-language.md#10-simultaneous-and-sequential-effects), but Steel/Kore do not implement them. The parser accepts only semicolon-separated effects, and the emitter accumulates one effect batch per statement. Existing selection-pipeline support does not satisfy this requirement.
 - Typed pipeline calls are refused until a domain signature is supported. An array declaration alone does not attach a runtime payload.
 - There is no implemented native Ano JIT or GPU backend.
 - Bounded demo tick checks do not establish termination or successful allocation for an unbounded number of ticks.

@@ -368,6 +368,8 @@ pub enum NodeKind {
     CrossV { f: Symbol, a: Box<Node>, b: Box<Node> },
     Binder { name: Symbol, source: Box<Node> }, // a <- Source
     // effects
+    EBatch(Vec<Node>), // simultaneous branches sharing an incoming state
+    ESequence(Vec<Node>), // ordered stages, each observing its predecessor
     EAssign { op: AssignOp, target: Box<Node>, rhs: Box<Node> }, // target: Name or Hop (pos.x)
     EAdd(Symbol), // +Comp
     EDel(Symbol), // -Comp
@@ -421,6 +423,8 @@ impl NodeKind {
             NodeKind::Expand(..) => 28,
             NodeKind::CrossV { .. } => 29,
             NodeKind::Binder { .. } => 30,
+            NodeKind::EBatch(..) => 45,
+            NodeKind::ESequence(..) => 46,
             NodeKind::EAssign { .. } => 31,
             NodeKind::EAdd(..) => 32,
             NodeKind::EDel(..) => 33,

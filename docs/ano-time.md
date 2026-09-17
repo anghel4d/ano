@@ -1,6 +1,6 @@
 # Rules, ticks, and replay
 
-The current Steel/Kore implementation executes a command statement as one effect batch at one barrier. The language also requires sequential `|>` effect stages within a statement, each observing the preceding stage's result; that implementation is missing (see [section 10](ano-language.md#10-simultaneous-and-sequential-effects)). Named standing rules install with `def name = selection => effects` and retract with `undef name`. Currently implemented rule batches read a shared pre-state; queued commands execute in order.
+A command statement can contain simultaneous `;` branches and sequential `|>` stages. Each sequential stage observes its predecessor's result; sibling simultaneous branches start from the same incoming state and merge their final writes at the enclosing barrier (see [section 10](ano-language.md#10-simultaneous-and-sequential-effects)). Named standing rules install with `def name = selection => effects` and retract with `undef name`. Rules scheduled together begin from a shared pre-state; sequential stages remain private to their rule branch. Queued commands execute in order.
 
 ## Current runner
 

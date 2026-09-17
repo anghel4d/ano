@@ -108,6 +108,7 @@ struct SpawnG {
     pos_pair: bool,
     proto_name: Option<Symbol>,
     proto_expr: Option<String>,
+    columns: Vec<(usize, String, Option<String>)>, // captured rows from a sequential branch
 }
 
 // Per-statement effect staging (C Fx). despawn_sel ORs across a rule tick.
@@ -144,6 +145,7 @@ struct Em<'a> {
     pipe_expand: String,
     need_idx: bool,
     world_shifted: bool,
+    mint_floors: Vec<(String, String)>, // keys reserved by earlier simultaneous branches
     tmp: i32,
     out_idx: usize,
     stmt: i32,
@@ -366,7 +368,7 @@ fn children(nd: &Node) -> Vec<&Node> {
         Call { args, .. } | EVerb { args, .. } => args.iter().collect(),
         Fold { operand, .. } | ScanExpr { operand, .. } => vec![operand.as_ref()],
         ScanAlong { col, order, .. } => vec![col.as_ref(), order.as_ref()],
-        Shape(v) | Tuple(v) | Program(v) => v.iter().collect(),
+        Shape(v) | Tuple(v) | Program(v) | EBatch(v) | ESequence(v) => v.iter().collect(),
         To { shape, poured } => {
             let mut v = vec![shape.as_ref()];
             if let Some(p) = poured {
@@ -2395,6 +2397,196 @@ impl<'a> Em<'a> {
         fx.commits.push(Commit { col_idx, new_expr: expr, fam, field, rules: bit });
     }
 
+    // A sequence evaluates privately from the batch input. Its final writes join the batch;
+    // sibling branches never observe intermediate stages. Lineage keeps the original subject
+    // through spawn/despawn, and captures newly spawned rows for the enclosing barrier.
+    fn emit_effect_sequence(&mut self, stages: &[Node], fx: &mut Fx, line: i32) -> R<()> {
+        let selection = self.sel_var.clone();
+        let trace_selection = self.trace_sel.clone();
+        let expansion = self.pipe_expand.clone();
+        let shifted = self.world_shifted;
+        let rule = self.cur_rule;
+        let mut saved = Vec::new();
+        let mut columns = Vec::new();
+        for i in 0..self.reg.ents.len() {
+            if matches!(self.ent(i).kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. }
+                | RegEntryKind::Rel { .. } | RegEntryKind::SRel { .. } | RegEntryKind::AliasMask { .. }
+                | RegEntryKind::Bind { kind: BindKind::Mask, .. })
+            {
+                let var = self.bqnv(i);
+                let old = self.tv();
+                self.stage(format!("{} ← {}", old, var));
+                saved.push((var, old.clone()));
+                columns.push((i, old));
+                if has_pres(self.ent(i)) {
+                    let var = self.presv(i);
+                    let old = self.tv();
+                    self.stage(format!("{} ← {}", old, var));
+                    saved.push((var, old));
+                }
+            }
+        }
+        let initial_n = self.tv();
+        self.stage(format!("{} ← anoN", initial_n));
+        saved.push(("anoN".to_string(), initial_n.clone()));
+        for var in ["anoSel", "anoIdx"] {
+            if var == "anoIdx" && !self.need_idx { continue; }
+            let old = self.tv();
+            self.stage(format!("{} ← {}", old, var));
+            saved.push((var.to_string(), old));
+        }
+        let mint_floors = self.mint_floors.clone();
+        let reserved = self.spawn_tot_all(fx).unwrap_or_else(|| "0".to_string());
+        let mut key_vars: Vec<_> = columns.iter()
+            .filter(|(i, _)| self.role("keys") == Some(*i) || is_uniq(self.ent(*i)))
+            .map(|(i, _)| self.bqnv(*i)).collect();
+        if self.need_idx { key_vars.push("anoIdx".to_string()); }
+        for var in key_vars {
+            let maximum = self.mint_maximum(&var);
+            let floor = self.tv();
+            self.stage(format!("{} ← {}+{}", floor, maximum, reserved));
+            self.mint_floors.retain(|(key, _)| *key != var);
+            self.mint_floors.push((var, floor));
+        }
+        let mut lineage = self.tv();
+        self.stage(format!("{} ← ↕anoN", lineage));
+        let mut copies = if expansion.is_empty() || self.fr.kind != FrameKind::Ent {
+            None
+        } else {
+            let counts = self.tv();
+            self.stage(format!("{} ← {}‿{} AnoScat (anoN⥊0)", counts, selection, expansion));
+            Some(counts)
+        };
+        let mut written: Vec<(usize, Option<String>)> = Vec::new();
+        let mut spawned = false;
+        let mut despawned = false;
+        self.cur_rule = -1;
+        for stage in stages {
+            let mut next = Fx::default();
+            self.emit_effect(stage, &mut next)?;
+            for c in &next.commits {
+                if let Some((_, field)) = written.iter_mut().find(|(i, _)| *i == c.col_idx) {
+                    if *field != c.field { *field = None; }
+                } else {
+                    written.push((c.col_idx, c.field.clone()));
+                }
+            }
+            let structural = next.despawn || !next.sp.is_empty();
+            spawned |= !next.sp.is_empty();
+            despawned |= next.despawn;
+            let mut next_selection = self.sel_var.clone();
+            if structural {
+                let keep = next.despawn_sel.as_ref().map(|mask| format!("(¬{})", mask));
+                let count = self.spawn_tot_all(&next);
+                let transform = |value: &str, fill: &str| {
+                    let kept = match &keep {
+                        Some(keep) => format!("({}/{})", keep, value),
+                        None => value.to_string(),
+                    };
+                    match &count {
+                        Some(count) => format!("({}∾({}⥊{}))", kept, count, fill),
+                        None => kept,
+                    }
+                };
+                let ids = self.tv();
+                self.stage(format!("{} ← {}", ids, transform(&lineage, "¯1")));
+                lineage = ids;
+                if self.fr.kind == FrameKind::Ent {
+                    next_selection = self.tv();
+                    self.stage(format!("{} ← {}", next_selection, transform(&self.sel_var, "0")));
+                    if let Some(counts) = &copies {
+                        let updated = self.tv();
+                        self.stage(format!("{} ← {}", updated, transform(counts, "0")));
+                        copies = Some(updated);
+                    }
+                }
+            }
+            self.stage(format!("anoSel ↩ {}", self.sel_var));
+            self.commit_stmt(&next, false)?;
+            self.world_shifted |= next.despawn;
+            self.sel_var = next_selection;
+            self.trace_sel = self.sel_var.clone();
+            if let Some(counts) = &copies {
+                self.pipe_expand = format!("({}/{})", self.sel_var, counts);
+            }
+        }
+        let alive = self.tv();
+        self.stage(format!("{} ← (↕{})∊{}", alive, initial_n, lineage));
+        let old_rows = format!("(0≤{})", lineage);
+        let mut final_writes = Vec::new();
+        for (i, field) in written {
+            let var = self.bqnv(i);
+            let old = &columns.iter().find(|(entry, _)| *entry == i).expect("stored effect target").1;
+            let value = if matches!(self.ent(i).kind, RegEntryKind::Field { .. }) {
+                var
+            } else {
+                format!("{}‿({}/{}) AnoScat {}", alive, old_rows, var, old)
+            };
+            let result = self.tv();
+            self.stage(format!("{} ← {}", result, value));
+            final_writes.push((i, field, result));
+        }
+        let spawn = if spawned {
+            let new_rows = format!("(0>{})", lineage);
+            let count = self.tv();
+            self.stage(format!("{} ← +´{}", count, new_rows));
+            let mut captured = Vec::new();
+            for (i, _) in &columns {
+                if matches!(self.ent(*i).kind, RegEntryKind::Field { .. }) { continue; }
+                // Relations over a foreign lattice do not ride entity structure.
+                if matches!(&self.ent(*i).kind, RegEntryKind::Rel { targets, .. } if targets.len() != self.reg.n as usize)
+                    || matches!(&self.ent(*i).kind, RegEntryKind::SRel { fib, .. } if fib.len() != self.reg.n as usize)
+                { continue; }
+                let value = self.tv();
+                self.stage(format!("{} ← {}/{}", value, new_rows, self.bqnv(*i)));
+                let presence = if has_pres(self.ent(*i)) {
+                    let p = self.tv();
+                    self.stage(format!("{} ← {}/{}", p, new_rows, self.presv(*i)));
+                    Some(p)
+                } else { None };
+                captured.push((*i, value, presence));
+            }
+            Some(SpawnG { cnt: format!("⟨{}⟩", count), tot: count, pos: None,
+                pos_pair: false, proto_name: None, proto_expr: None, columns: captured })
+        } else { None };
+        for (var, old) in saved {
+            if let Some((i, _)) = columns.iter().find(|(i, _)| self.bqnv(*i) == var) {
+                self.publish(*i, old)?;
+            } else {
+                self.stage(format!("{} ↩ {}", var, old));
+            }
+        }
+        self.sel_var = selection;
+        self.trace_sel = trace_selection;
+        self.pipe_expand = expansion;
+        self.world_shifted = shifted;
+        self.mint_floors = mint_floors;
+        self.cur_rule = rule;
+        for (i, field, value) in final_writes {
+            let base = self.merge_base(fx, i, self.bqnv(i), b'=', field.as_deref(), line, &self.ent(i).name)?;
+            let values = if let Some(field) = &field {
+                let axis = (field.as_bytes().first() == Some(&b'y')) as i32;
+                let updated = format!("({}⊸⊑¨({}/{}))", axis, self.sel_var, value);
+                let other = format!("({}⊸⊑¨({}/{}))", 1-axis, self.sel_var, base);
+                if axis == 1 { format!("({}⋈¨{})", other, updated) }
+                else { format!("({}⋈¨{})", updated, other) }
+            } else { format!("({}/{})", self.sel_var, value) };
+            let result = self.tv();
+            self.stage(format!("{} ← {}‿{} AnoScat {}", result, self.sel_var, values, base));
+            self.add_commit(fx, i, result, b'=', field);
+        }
+        if despawned {
+            let dead = format!("(¬{})", alive);
+            fx.despawn_sel = Some(match &fx.despawn_sel {
+                Some(mask) => format!("({}∨{})", mask, dead),
+                None => dead,
+            });
+            fx.despawn = true;
+        }
+        if let Some(spawn) = spawn { fx.sp.push(spawn); }
+        Ok(())
+    }
+
     // The effect dispatch (C emitEffect). Effects read pre-state; commits land at the end.
     // The phase flag rides the whole dispatch: every crossing staged here is an EFFECT
     // crossing over S, and only the discarded guard probe steps back out of it.
@@ -2408,6 +2600,11 @@ impl<'a> Em<'a> {
 
     fn emit_effect_inner(&mut self, ef: &Node, fx: &mut Fx) -> R<()> {
         match &ef.kind {
+            NodeKind::EBatch(effects) => {
+                for effect in effects { self.emit_effect(effect, fx)?; }
+                Ok(())
+            }
+            NodeKind::ESequence(stages) => self.emit_effect_sequence(stages, fx, ef.line),
             NodeKind::EAssign { op, target, rhs } => {
                 let (coln, field): (&Node, Option<&'a str>) = if let NodeKind::Hop { l, r } = &target.kind {
                     (l, Some(self.node_name(r)))
@@ -2670,7 +2867,7 @@ impl<'a> Em<'a> {
                     self.stage(format!("{} ← {}", pt, pv.v));
                     proto_expr = Some(pt);
                 }
-                fx.sp.push(SpawnG { cnt: c_v, tot, pos, pos_pair, proto_name, proto_expr });
+                fx.sp.push(SpawnG { cnt: c_v, tot, pos, pos_pair, proto_name, proto_expr, columns: Vec::new() });
                 Ok(())
             }
             NodeKind::EVerb { name, args } => self.emit_verb(ef.line, *name, args, fx),
@@ -2826,6 +3023,14 @@ impl<'a> Em<'a> {
         v
     }
 
+    fn mint_maximum(&self, column: &str) -> String {
+        let maximum = format!("(⌈´¯1∾{})", column);
+        match self.mint_floors.iter().find(|(key, _)| key == column) {
+            Some((_, floor)) => format!("({}⌈{})", floor, maximum),
+            None => maximum,
+        }
+    }
+
     // The batch total: sum of every spawn group's row count.
     fn spawn_tot_all(&self, fx: &Fx) -> Option<String> {
         let mut tot: Option<String> = None;
@@ -2908,7 +3113,7 @@ impl<'a> Em<'a> {
                 // spawn appends one row group per spawn effect, in effect order
                 if self.role("keys") == Some(i) || is_uniq(e) {
                     // Batch mint uses 1 + max(existing, -1) plus iota. No ceiling or collision check is emitted.
-                    app = Some(format!("((1+⌈´¯1∾{})+↕{})", cur, tot_all.as_deref().unwrap_or("")));
+                    app = Some(format!("((1+{})+↕{})", self.mint_maximum(&cur), tot_all.as_deref().unwrap_or("")));
                 } else {
                     for sg in &fx.sp {
                         let is_proto = sg.proto_name.map_or(false, |pn| self.find(self.rs(pn)) == Some(i));
@@ -2916,7 +3121,9 @@ impl<'a> Em<'a> {
                         // registered default, else the type zero
                         let pe = self.spawn_proto(sg);
                         let fi = pe.and_then(|pi| self.proto_field(pi, &e.name));
-                        let piece = if is_proto {
+                        let piece = if let Some((_, value, _)) = sg.columns.iter().find(|(entry, _, _)| *entry == i) {
+                            value.clone()
+                        } else if is_proto {
                             format!("({}⥊1)", sg.tot)
                         } else if let Some(f) = fi {
                             let pi = pe.unwrap_or_default();
@@ -2987,7 +3194,10 @@ impl<'a> Em<'a> {
                                 is_proto = true; // a proto field is present
                             }
                         }
-                        let piece = format!("({}⥊{})", sg.tot, if is_proto { 1 } else { 0 });
+                        let piece = match sg.columns.iter().find(|(entry, _, _)| *entry == i) {
+                            Some((_, _, Some(presence))) => presence.clone(),
+                            _ => format!("({}⥊{})", sg.tot, if is_proto { 1 } else { 0 }),
+                        };
                         papp = Some(match papp {
                             Some(a) => format!("{}∾{}", a, piece),
                             None => piece,
@@ -3001,7 +3211,7 @@ impl<'a> Em<'a> {
         }
         // the hidden idx column rides every structural commit like any other column
         if self.need_idx && structural {
-            let mint = tot_all.as_ref().map(|t| format!("((1+⌈´¯1∾anoIdx)+↕{})", t));
+            let mint = tot_all.as_ref().map(|t| format!("((1+{})+↕{})", self.mint_maximum("anoIdx"), t));
             match (&keep, &mint) {
                 (Some(k), Some(mm)) => self.stage(format!("anoIdx ↩ ({}/anoIdx)∾{}", k, mm)),
                 (Some(k), None) => self.stage(format!("anoIdx ↩ {}/anoIdx", k)),
@@ -3022,6 +3232,17 @@ impl<'a> Em<'a> {
             } else {
                 self.stage(format!("anoN ↩ anoN+{}", tot_all.as_deref().unwrap_or("")));
             }
+        }
+        if structural && self.fr.kind == FrameKind::Ent {
+            let kept = match &keep {
+                Some(k) => format!("({}/anoSel)", k),
+                None => "anoSel".to_string(),
+            };
+            let selection = match &tot_all {
+                Some(count) => format!("{}∾({}⥊0)", kept, count),
+                None => kept,
+            };
+            self.stage(format!("anoSel ↩ {}", selection));
         }
         // --trace: one tick-trace line per structural statement
         if let Some(pn) = pre_n {
@@ -3906,6 +4127,7 @@ fn emit_lowered(
         pipe_expand: String::new(),
         need_idx: false,
         world_shifted: false,
+        mint_floors: Vec::new(),
         tmp: 0,
         out_idx: 0,
         stmt: 0,
@@ -5978,6 +6200,12 @@ mod normalize {
                         rhs: Box::new(rhs),
                     }
                 }
+                NodeKind::EBatch(effects) => NodeKind::EBatch(effects.iter()
+                    .map(|effect| self.normalize(effect, Context::Neutral, TracePhase::Effect))
+                    .collect::<Result<Vec<_>, _>>()?),
+                NodeKind::ESequence(effects) => NodeKind::ESequence(effects.iter()
+                    .map(|effect| self.normalize(effect, Context::Neutral, TracePhase::Effect))
+                    .collect::<Result<Vec<_>, _>>()?),
                 NodeKind::EAdd(symbol) => NodeKind::EAdd(*symbol),
                 NodeKind::EDel(symbol) => NodeKind::EDel(*symbol),
                 NodeKind::EDespawn => NodeKind::EDespawn,
@@ -6017,7 +6245,11 @@ mod normalize {
                 }
                 NodeKind::Stmt { sel, effects, rule, cont, elided } => {
                     let dynamic_selection = sel.is_none() && (*cont || *elided);
-                    for effect in effects {
+                    let mut pending: Vec<_> = effects.iter().collect();
+                    while let Some(effect) = pending.pop() {
+                        if matches!(effect.kind, NodeKind::EBatch(_) | NodeKind::ESequence(_)) {
+                            pending.extend(super::children(effect));
+                        }
                         if let NodeKind::EAssign { target, rhs, .. } = &effect.kind {
                             let target_entry = self.target_entry(target);
                             let target_name = target_entry

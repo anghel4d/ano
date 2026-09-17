@@ -41,7 +41,7 @@ With `;`, both assignments read the original values and publish their writes tog
 Nord , Silver = Gold ; Gold = Silver
 ```
 
-With `|>`, the first assignment finishes before the second reads. Both values become the original Gold in each selected row. The following expectations specify the required result; current Steel/Kore reject this effect pipeline:
+With `|>`, the first assignment finishes before the second reads. Both values become the original Gold in each selected row. This example also runs in current Steel/Kore:
 
 ```haskell
 --! registry world.reg
@@ -68,4 +68,4 @@ The operator also sequences selection stages on the left of the comma. Using the
 Nord |> order by Gold desc |> take 1 , Silver = Gold
 ```
 
-Selection pipelines and effect pipelines share the left-to-right composition rule. The [missing effect-pipeline implementation](ISSUES.md) does not change that rule.
+Selection pipelines and effect pipelines share the left-to-right composition rule. All three programs above have executable column expectations; each starts independently from the stated registry.

@@ -6,9 +6,10 @@ The [historical rulings](00-historical-rulings.md) preserve the author's decisio
 
 1. [06: seeded fold and fallible traverse](06-seeded-fold-and-traverse.md). Obtain a ruling before extending grammar or the unseeded recurrence.
 2. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
-3. [Sequential composition](../docs/ano-language.md#10-simultaneous-and-sequential-effects). Implement `|>` between effects on the right of `,` in Steel/Kore: later stages read earlier stages' results, while `;` effects share the incoming state. Restore the missing effect-pipeline grammar and stage boundaries recorded in [implementation limits](../docs/ISSUES.md). The composition semantics are settled; implementation remains open.
 
 ## Completed non-spatial work
+
+[Sequential composition](../docs/ano-language.md#10-simultaneous-and-sequential-effects) is implemented in Steel/Kore, including simultaneous branches, grouped stages, structural effects, and persisted session updates. Selection pipelines preserve row identities and copy counts through calls, `take`, and `expand`.
 
 [Sigils](01-sigil-semantics.md), [dynamic aliases](02-dynamic-alias-overlay.md), [folds/scans](03-folds-and-scans.md), [diagnostic domains](04-diagnostic-domains.md), and [registry/runtime contracts](05-registry-and-runtime-followups.md) are implemented. Their remaining quarantined cases depend on spatial work.
 

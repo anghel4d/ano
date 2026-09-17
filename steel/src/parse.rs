@@ -104,13 +104,21 @@ fn check_expr_depth(root: &Node) -> Result<(), Diag> {
                 push(shape);
                 if let Some(poured) = poured { push(poured); }
             }
-            Call { args, .. } | Tuple(args) | Shape(args) => {
+            Call { args, .. } | Tuple(args) | Shape(args) | EBatch(args) | ESequence(args) => {
                 for arg in args { push(arg); }
             }
             Pipe { src, stages } => {
                 push(src);
                 for stage in stages { push(stage); }
             }
+            EAssign { target, rhs, .. } => { push(target); push(rhs); }
+            ESpawn { what, count, at } => {
+                push(what);
+                if let Some(count) = count { push(count); }
+                if let Some(at) = at { push(at); }
+            }
+            EVerb { args, .. } => { for arg in args { push(arg); } }
+            EVia { col, .. } => push(col),
             _ => {}
         }
     }
@@ -732,6 +740,18 @@ impl P<'_, '_> {
     fn parse_effect_inner(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         match self.pk() {
+            TokKind::Lp => {
+                if self.depth >= MAX_EXPR_DEPTH {
+                    return Err(perr(line, "expression nested too deeply"));
+                }
+                self.adv();
+                self.depth += 1;
+                let mut effects = Vec::new();
+                self.parse_effects(&mut effects)?;
+                self.depth -= 1;
+                self.expect(TokKind::Rp, "')' after effects")?;
+                Ok(Node::new(NodeKind::EBatch(effects), line))
+            }
             TokKind::Plus | TokKind::Minus => {
                 let add = self.pk() == TokKind::Plus;
                 self.adv();
@@ -853,15 +873,32 @@ impl P<'_, '_> {
         }
     }
 
-    // Inputs: effect list. Output: ';'-separated effects appended, at least one.
+    // Level 3: a left-to-right sequence of individual effects or parenthesized batches.
+    fn parse_effect_sequence(&mut self, first: Node) -> Result<Node, Diag> {
+        let line = first.line;
+        let mut stages = vec![first];
+        while self.pk() == TokKind::PipeGt {
+            self.adv();
+            stages.push(self.parse_effect()?);
+        }
+        let node = if stages.len() == 1 {
+            stages.pop().unwrap()
+        } else {
+            Node::new(NodeKind::ESequence(stages), line)
+        };
+        check_expr_depth(&node)?;
+        Ok(node)
+    }
+
+    // Level 2: simultaneous branches, each of which may contain a sequence.
     fn parse_effects(&mut self, effects: &mut Vec<Node>) -> Result<(), Diag> {
         loop {
-            effects.push(self.parse_effect()?);
-            if self.pk() == TokKind::Semi {
-                self.adv();
-                continue;
+            let first = self.parse_effect()?;
+            effects.push(self.parse_effect_sequence(first)?);
+            if self.pk() != TokKind::Semi {
+                return Ok(());
             }
-            return Ok(());
+            self.adv();
         }
     }
 
@@ -874,9 +911,15 @@ impl P<'_, '_> {
         let sel = self.parse_expr(5)?;
         self.expect(TokKind::Comma, "',' before comprehension effect")?;
         let boundary = std::mem::replace(&mut self.bar_boundary, true);
-        let effect = self.parse_effect();
+        let mut effects = Vec::new();
+        let result = self.parse_effects(&mut effects);
         self.bar_boundary = boundary;
-        let eff = effect?;
+        result?;
+        let eff = if effects.len() == 1 {
+            effects.pop().unwrap()
+        } else {
+            Node::new(NodeKind::EBatch(effects), line)
+        };
         self.expect(TokKind::Bar, "'|' before comprehension binders")?;
         let mut rest = Vec::new();
         loop {
@@ -975,13 +1018,13 @@ impl P<'_, '_> {
                 line,
             ));
         }
-        if k == TokKind::Tilde && matches!(self.pk2(1), TokKind::Nl | TokKind::Eof) {
-            // lone ~
-            self.adv();
+        if k == TokKind::Tilde {
+            let mut effects = Vec::new();
+            self.parse_effects(&mut effects)?;
             return Ok(Node::new(
                 NodeKind::Stmt {
                     sel: None,
-                    effects: vec![Node::new(NodeKind::EDespawn, line)],
+                    effects,
                     rule: false,
                     cont: true,
                     elided: false,
@@ -1057,7 +1100,7 @@ impl P<'_, '_> {
         if update || k == TokKind::Spawn
             || ((k == TokKind::Plus || k == TokKind::Minus)
                 && self.pk2(1) == TokKind::Name
-                && matches!(self.pk2(2), TokKind::Nl | TokKind::Semi | TokKind::Eof))
+                && matches!(self.pk2(2), TokKind::Nl | TokKind::Semi | TokKind::PipeGt | TokKind::Eof))
         {
             // elided subject
             let mut effects = Vec::new();
@@ -1123,10 +1166,11 @@ impl P<'_, '_> {
                 while atomstart(self.pk()) {
                     args.push(self.parse_expr(10)?);
                 }
-                let mut effects = vec![Node::new(NodeKind::EVerb { name, args }, vline)];
-                while self.pk() == TokKind::Semi {
+                let first = Node::new(NodeKind::EVerb { name, args }, vline);
+                let mut effects = vec![self.parse_effect_sequence(first)?];
+                if self.pk() == TokKind::Semi {
                     self.adv();
-                    effects.push(self.parse_effect()?);
+                    self.parse_effects(&mut effects)?;
                 }
                 return Ok(Node::new(
                     NodeKind::Stmt {
@@ -1571,6 +1615,9 @@ mod tests {
                 sx(b, effect, it);
                 sx_kids(b, rest, it);
                 b.push(')');
+            }
+            EBatch(_) | ESequence(_) => {
+                let _ = write!(b, "{:?}", n.kind);
             }
             Program(ss) => {
                 b.push_str("(PROGRAM");

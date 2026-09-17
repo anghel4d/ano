@@ -52,7 +52,7 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 
 `Silver = Gold ; Gold = Silver` swaps the two values: both reads see the incoming state. `Silver = Gold |> Gold = Silver` leaves both with the original Gold: the second effect reads the first effect's result. These are effect expressions on the right of `,`; complete examples and implementation status are in [section 10](ano-language.md#10-simultaneous-and-sequential-effects).
 
-Composition binds from loosest to tightest as hinge, `;`, `|>`, then individual effects and assignments. Steel/Kore currently omit the effect-pipeline level, so the second expression is required language behavior that they do not yet execute.
+Composition binds from loosest to tightest as hinge, `;`, `|>`, then individual effects and assignments. Parentheses can group a simultaneous batch into a sequence stage: `Nord , (Silver = Gold ; Gold = Silver) |> Gold += Silver`. Steel/Kore execute both forms; intermediate writes within a pipeline stay private to that branch until the enclosing batch commits.
 
 A bare caret refuses. A fused head cannot contain interior whitespace. Division reduction uses `fold(/)`, not `//`.
 

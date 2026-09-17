@@ -2708,6 +2708,56 @@ mod parser_session {
     use super::*;
 
     #[test]
+    fn effect_pipelines_persist_and_reopen_without_leaking_failed_stages() {
+        const CHILD: &str = "ANO_PIPELINE_SESSION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let dir = std::env::temp_dir().join(format!("ano-kore-pipeline-{}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let mut steel = std::env::current_exe().unwrap();
+            steel.pop(); steel.pop(); steel.push("steel");
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "world::parser_session::effect_pipelines_persist_and_reopen_without_leaking_failed_stages", "--nocapture"])
+                .env(CHILD, "1").env("STEEL", steel).current_dir(&dir).output().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(result.status.success(), "{}\n{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
+            return;
+        }
+        let path = std::env::current_dir().unwrap().join("world.reg");
+        std::fs::write(&path, "n 3\ncol Nord bool 1 0 1\ncol Gold num 10 20 30\ncol Silver num 1 2 3\n").unwrap();
+        let observe = || {
+            let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
+            ["Gold", "Silver"].map(|name| {
+                let entry = reg.ents.iter().find(|entry| entry.name == name).unwrap();
+                let steel::RegEntryKind::Col { nums, .. } = &entry.kind else { panic!("numeric column required") };
+                nums.clone()
+            })
+        };
+        let mut app = App::new();
+        app.mode = Mode::Reg;
+        app.world = world_load(path.to_str().unwrap()).unwrap();
+        for (source, gold, silver) in [
+            ("Nord , Silver = Gold ; Gold = Silver", [1.0, 20.0, 3.0], [10.0, 2.0, 30.0]),
+            ("Nord , Silver = Gold |> Gold = Silver", [1.0, 20.0, 3.0], [1.0, 2.0, 3.0]),
+            ("Nord , (Gold += 4 ; Silver = Gold) |> Gold += Silver", [6.0, 20.0, 10.0], [1.0, 2.0, 3.0]),
+        ] {
+            app.prompt = source.as_bytes().to_vec();
+            repl_submit(&mut app);
+            assert_eq!(observe(), [gold.to_vec(), silver.to_vec()], "{source}");
+        }
+        let before = observe();
+        app.prompt = b"Nord , Gold = 0 |> Silver = Gold / Gold".to_vec();
+        repl_submit(&mut app);
+        assert_eq!(observe(), before, "a refused later stage must not save an intermediate world");
+        let mut reopened = App::new();
+        reopened.mode = Mode::Reg;
+        reopened.world = world_load(path.to_str().unwrap()).unwrap();
+        session_rehydrate(&mut reopened);
+        reopened.prompt = b"Nord , Gold += 1 |> Silver = Gold".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(observe(), [vec![7.0, 20.0, 11.0], vec![7.0, 2.0, 11.0]]);
+    }
+
+    #[test]
     fn definitions_survive_whitespace_and_reload() {
         const CHILD: &str = "ANO_PARSER_SESSION_CHILD";
         if std::env::var_os(CHILD).is_none() {

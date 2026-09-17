@@ -27,7 +27,7 @@ Set-valued relationships are nested vectors here, not a shipped CSR store. Entit
 
 Steel lexes source, parses an AST, resolves registry names and operation descriptors, and emits BQN text. The emitter tracks value carriers, validity guards, source domains, and row witnesses. Its current domain distinctions are not the proposed general nominal habitat system.
 
-The current emitter selects from pre-state, stages a statement's effect values in one batch, checks compatibility, and commits its writes. The next statement observes the result. This implements simultaneous `;` effects, but omits the language's `|>` effect stages, where each stage must observe the preceding stage's result; see [section 10](ano-language.md#10-simultaneous-and-sequential-effects). Set-hop images become masks, so reaching a target twice does not perform an effect twice.
+The emitter selects from the incoming state and stages simultaneous `;` branches against that state. A `|>` branch evaluates its stages in order against a private world snapshot, applying publication checks at each stage, then contributes its final writes and structural changes to the enclosing batch. Merge checks still apply between simultaneous branches. The next statement observes the committed result; see [section 10](ano-language.md#10-simultaneous-and-sequential-effects). Set-hop images become masks, so reaching a target twice does not perform an effect twice.
 
 Functional hops resolve through the declared key column or legacy row indices. `-1` is the silent no-link sentinel. Invalid endpoint carriers refuse; an admissible but missing target fails foundness. See [relationship.rs](../steel/src/relationship.rs).
 

@@ -180,3 +180,80 @@ fn selection_pipelines_preserve_rows_order_and_copy_counts() {
     fixture.accepts("--! out 1\nNord |> expand Count |> take 1 |> keep , spawn Minion\n#/ Minion");
     fixture.refuses("Nord |> take 1.5", "take count must be a finite nonnegative integer");
 }
+
+
+#[test]
+fn simultaneous_and_sequential_assignments_follow_their_state_contracts() {
+    let fixture = Fixture::new();
+    let mut seed = 0x243f6a88u32;
+    for case in 0..8 {
+        let mut next = || {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed % 101) as i32 - 50
+        };
+        let gold = [next(), next(), next(), next()];
+        let silver = [next(), next(), next(), next()];
+        let delta = next();
+        let values = |v: &[i32]| v.iter().map(ToString::to_string).collect::<Vec<_>>().join(" ");
+        std::fs::write(fixture.0.join("world.reg"), format!(
+            "n 4\ncol Nord bool 1 0 1 0\ncol Gold num {}\ncol Silver num {}\n",
+            values(&gold), values(&silver)
+        )).unwrap();
+        for (effects, expected_gold, expected_silver) in [
+            ("Silver = Gold ; Gold = Silver".to_string(), [silver[0], gold[1], silver[2], gold[3]], [gold[0], silver[1], gold[2], silver[3]]),
+            ("Gold = Silver ; Silver = Gold".to_string(), [silver[0], gold[1], silver[2], gold[3]], [gold[0], silver[1], gold[2], silver[3]]),
+            ("Silver = Gold |> Gold = Silver".to_string(), gold, [gold[0], silver[1], gold[2], silver[3]]),
+            ("Gold = Silver |> Silver = Gold".to_string(), [silver[0], gold[1], silver[2], gold[3]], silver),
+            (format!("Gold += {delta} |> Silver = Gold"), [gold[0]+delta, gold[1], gold[2]+delta, gold[3]], [gold[0]+delta, silver[1], gold[2]+delta, silver[3]]),
+        ] {
+            fixture.accepts(&format!("-- seed 0x243f6a88 case {case}\nNord , {effects}\n--! expect Gold = {}\n--! expect Silver = {}", values(&expected_gold), values(&expected_silver)));
+        }
+    }
+}
+
+#[test]
+fn effect_sequences_compose_with_batches_guards_rules_and_comprehensions() {
+    let fixture = Fixture::new();
+    fixture.accepts("Nord , (Silver = Gold ; Gold = Silver) |> Gold += Silver\n--! expect Gold = 11 20 33 40\n--! expect Silver = 10 2 30 4");
+    for effects in [
+        "Silver = Gold ; Gold += Silver |> Marked = Gold > 20",
+        "Gold += Silver |> Marked = Gold > 20 ; Silver = Gold",
+    ] {
+        fixture.accepts(&format!("Nord , {effects}\n--! expect Gold = 11 20 33 40\n--! expect Silver = 10 2 30 4\n--! expect Marked = 0 0 1 0"));
+    }
+    fixture.accepts("Nord , mentor = 0 |> Silver = mentor.Gold\n--! expect Silver = 10 2 10 4");
+    fixture.accepts("Gold > 20 , Gold = 0 |> Silver = 99\n--! expect Silver = 1 2 99 99");
+    fixture.accepts("Nord , Gold += 1 |>\n Silver = Gold |>\n Gold *= 2\n--! expect Gold = 22 20 62 40\n--! expect Silver = 11 2 31 4");
+    fixture.accepts("Nord , +Marked |> Silver = Marked + 0\n--! expect Silver = 1 2 1 4");
+    fixture.accepts("Nord , ping() |> Silver = Gold\n--! expect Silver = 11 2 31 4");
+    fixture.accepts("Nord , Gold += 1\nGold += 1 |> Silver = Gold\n--! expect Silver = 12 2 32 4");
+    fixture.accepts("[a & b , Gold += 1 |> Silver = Gold | a <- Nord, b <- Breton]\n--! expect Silver = 11 21 31 41");
+    fixture.accepts("def a = Nord => Gold += 1 |> Silver = Gold\ndef b = !Nord => Gold += 2 |> Silver = Gold\n--! expect Silver = 11 22 31 42");
+    fixture.refuses("Nord , Silver = Gold |> Gold = Silver = 1", "use '==' for comparison inside an effect");
+    fixture.refuses("Nord , Gold = 1 ; Gold = 2 |> Silver = Gold", "no merge law");
+    fixture.refuses("Nord , Silver = Gold |>", "expected effect");
+}
+
+#[test]
+fn sequential_structural_effects_keep_the_subject_and_new_world() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.0.join("world.reg"), format!("{WORLD}col Minion bool 0 0 0 0\n")).unwrap();
+    fixture.accepts("Nord , spawn Minion |> Gold += #/ Minion\n--! expect Gold = 12 20 32 40 0 0\n--! expect Minion = 0 0 0 0 1 1");
+    fixture.accepts("Nord , spawn Minion |> ~\n--! expect Gold = 20 40 0 0\n--! expect Minion = 0 0 1 1");
+    fixture.accepts("Nord , ~ |> spawn Minion\n--! expect Gold = 20 40\n--! expect Minion = 0 0");
+    fixture.accepts("Nord , spawn Minion |> ~\n, Gold = 99\n--! expect Gold = 20 40 0 0");
+    fixture.accepts("Nord , +Marked\n+Marked |> Silver = Gold\n--! expect Silver = 10 2 30 4");
+    fixture.accepts("Nord , +Marked\n~ |> spawn Minion\n--! expect Gold = 20 40");
+
+    fixture.accepts("Nord , spawn Minion |> Gold += #/ Minion ; Silver = #/ Minion\n--! expect Gold = 12 20 32 40 0 0\n--! expect Silver = 0 2 0 4 0 0");
+}
+
+
+#[test]
+fn sequential_stages_observe_refined_values_and_keep_minted_keys() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.0.join("world.reg"), "n 2\ncol Nord bool 1 0\ncol Gold nat 10 20\nrange Gold 0 25\ncol Silver num 1 2\ncol Minion bool 0 0\nunique Key num 10 20\nrole keys Key\n").unwrap();
+    fixture.accepts("Nord , Gold += 100 |> Silver = Gold\n--! expect Gold = 25 20\n--! expect Silver = 25 2");
+    fixture.accepts("Nord , spawn Minion ; spawn Minion |> Silver = max/ Key @ Minion\n--! expect Silver = 22 2 0 0\n--! expect Key = 10 20 21 22");
+    fixture.accepts("Nord , spawn Minion |> spawn Minion |> Silver = max/ Key @ Minion\n--! expect Silver = 22 2 0 0\n--! expect Key = 10 20 21 22");
+}

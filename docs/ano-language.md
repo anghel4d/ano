@@ -35,7 +35,7 @@ Selection on the left, effect on the right, comma between. `source` defaults to 
 
 ## Language contract and implementation
 
-This reference specifies Ano's language semantics and identifies gaps in the current Steel/Kore implementation. The implementation does not override the language contract: in particular, sequential effect composition with `|>` is required but not yet implemented. The author's WIP [tour](../tour.md) introduces the language; research notes remain separate from executable contracts. The registry supplies names and callables; the examples below assume matching declarations.
+This reference specifies Ano's language semantics and identifies gaps in the current Steel/Kore implementation. Steel/Kore implement sequential effect composition with `|>` as well as simultaneous batches with `;`. The author's WIP [tour](../tour.md) introduces the language; research notes remain separate from executable contracts. The registry supplies names and callables; the examples below assume matching declarations.
 
 Steel emits BQN and executes it through CBQN. General nominal spatial types, a native Ano JIT, seeded folds, fallible traversal, and mission manifests are not implemented. [Implementation limits](ISSUES.md) records the current gaps.
 
@@ -160,7 +160,17 @@ Nord , Gold += 100 |> Silver = Gold
 
 Here Silver receives the increased Gold. With `;` in place of `|>`, Silver would receive the original Gold instead. A statement containing an effect pipeline therefore cannot be described as every effect reading one statement-wide pre-state.
 
-**Implementation gap:** Steel/Kore currently support the semicolon batch, but reject an effect pipeline on the right of the comma. Their existing selection-pipeline path does not implement sequential effect composition. The `|>` effect examples above specify required behavior, not passing demonstrations. See [implementation limits](ISSUES.md) and the [worked examples](ano-examples.md#simultaneous-and-sequential-effects).
+Parentheses group simultaneous effects into a pipeline stage:
+
+```haskell
+Nord , (Silver = Gold ; Gold = Silver) |> Gold += Silver
+```
+
+The first stage swaps the values; the second adds the new Silver to the new Gold. Without parentheses, `|>` binds more tightly than `;`: in `Nord , Silver = Gold ; Gold += Silver |> Marked = Gold > 20`, Silver reads the incoming Gold, while Marked reads the increased Gold inside its own branch. Reversing those simultaneous branches preserves the result. A pipeline's intermediate writes stay private to that branch; its final writes participate in the enclosing batch's merge checks.
+
+The selection supplies the subject for the whole effect expression. Changing a selected row's values does not re-run the predicate. Spawned rows are visible to subsequent reads, but do not automatically join that subject; despawn removes selected rows from later stages and continuations. Each stage applies the carrier/range checks before the next stage reads its result.
+
+These forms run in Steel and Kore, including standing rules, comprehensions, and continuations. Kore saves the resulting world after successful execution; a refused later stage does not save an intermediate state. The [worked examples](ano-examples.md#simultaneous-and-sequential-effects) include a complete registry.
 
 ```haskell
 Nord , Gold += 1000 ; +Blessed
@@ -181,7 +191,7 @@ undef mark
 
 `=>` installs a standing rule. Named retraction is a top-level control operation, not an effect. Duplicate live names and unknown retractions refuse.
 
-Rules scheduled together read one pre-state. Writes must have disjoint footprints, a supported merge, or guards proving row disjointness. There is no fixpoint evaluation.
+Rules scheduled together begin from one pre-state. Sequential stages within a rule see their own preceding stages, while other rules retain that shared incoming state. Final writes must have disjoint footprints, a supported merge, or guards proving row disjointness. There is no fixpoint evaluation.
 
 The standalone emitter schedules rule steps around fresh installation runs. Kore advances its staged program with `n`. Neither implements the proposed mission clock or history services. See [time](ano-time.md).
 
@@ -347,7 +357,7 @@ The composition precedence, from loosest to tightest, is the `,` / `=>` hinge, `
 
 Within expressions, the main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms have their own grammatical context rather than being ordinary value operators.
 
-The current effect parser consumes an individual effect followed by semicolon-separated effects; it omits the intervening `|>` composition level. The emitter likewise accumulates a statement's effects into one batch. Both must support sequential effect stages to implement section 10.
+The effect grammar parses semicolon-separated branches, each containing a left-to-right `|>` sequence of effects or parenthesized effect groups. The emitter evaluates each sequence from the enclosing batch's incoming state, commits each stage for the following stage's reads, then merges the branch's final writes at the enclosing barrier. Parallel branches still require compatible writes.
 
 Unary minus negates a numeric value; repeated mask negation composes normally. Newlines inside parentheses or comprehension brackets, and after a hinge, effect separator, or unfinished operator, continue the same statement. A newline after a complete statement remains a barrier. Within a comprehension effect, the unparenthesized `|` begins the generator list; put value-level `|` expressions in parentheses or call arguments.
 
