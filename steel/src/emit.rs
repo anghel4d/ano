@@ -1151,6 +1151,9 @@ impl<'a> Em<'a> {
                     let Some(fe) = self.find(cn) else {
                         return Err(fail(st.line, format!("unregistered callable '{}'", cn)));
                     };
+                    if crate::show::registered(self.ent(fe)) {
+                        return Err(fail(st.line, "show is an effect; put it on the right of the comma"));
+                    }
                     match self.ent(fe).kind {
                         RegEntryKind::Fn { .. } => {}
                         RegEntryKind::TypedFn { .. } => {
@@ -2933,6 +2936,39 @@ impl<'a> Em<'a> {
         }
     }
 
+    // Display is an observation at this effect stage; it contributes no world writes.
+    fn emit_show(&mut self, line: i32, callable: usize, args: &[Node]) -> R<()> {
+        if self.fr.kind != FrameKind::Ent {
+            return Err(fail(line, "show requires an entity selection"));
+        }
+        let columns = crate::show::columns(self.reg, self.it, args, line)?;
+        let ids = self.tv();
+        self.stage(format!("{} ← /{}", ids, self.sel_var));
+        let mut names = Vec::new();
+        let mut values = Vec::new();
+        let mut kinds = Vec::new();
+        let mut presence = Vec::new();
+        for i in columns {
+            let entry = self.ent(i);
+            names.push(format!("\"{}\"", entry.name.replace('"', "\"\"")));
+            values.push(format!("({}⊏{})", ids, self.bqnv(i)));
+            kinds.push(match col_ty(entry) {
+                Some(ColType::Sym) => "1".to_string(),
+                Some(ColType::Char) => "2".to_string(),
+                _ => "0".to_string(),
+            });
+            presence.push(if has_pres(entry) {
+                format!("({}⊏{})", ids, self.presv(i))
+            } else { format!("((≠{})⥊1)", ids) });
+        }
+        if self.dirs.label {
+            self.stage(format!("•Out (@+29)∾\"q{}@{}\"", self.stmt, line));
+        }
+        self.stage(format!("{} ⟨⟨{}⟩, ⟨{}⟩, ⟨{}⟩, ⟨{}⟩, {}⟩",
+            self.fnv(callable), names.join(", "), values.join(", "), kinds.join(", "), presence.join(", "), ids));
+        Ok(())
+    }
+
     // Legacy verbs take their target from the raw prefix. Typed effects take zero or one target
     // from the checked write footprint; zero-target output-service calls still execute at the barrier.
     fn emit_verb(&mut self, line: i32, name: Symbol, args: &[Node], fx: &mut Fx) -> R<()> {
@@ -2940,6 +2976,9 @@ impl<'a> Em<'a> {
         let Some(ei) = self.find(&n) else {
             return Err(fail(line, format!("verb '{}' needs a registered fn", n)));
         };
+        if crate::show::registered(self.ent(ei)) {
+            return self.emit_show(line, ei, args);
+        }
         let target = match &self.ent(ei).kind {
             RegEntryKind::Fn { body: Some(body) } => Some(verb_target(body)),
             RegEntryKind::TypedFn { descriptor, .. } if descriptor.writes.len() <= 1 => {
@@ -3883,6 +3922,9 @@ impl<'a> Em<'a> {
                     }
                     _ => {}
                 },
+                RegEntryKind::Fn { body: None } if crate::show::registered(e) => {
+                    self.out.push_str(&format!("{} ← {}\n", self.fnv(i), crate::show::BODY));
+                }
                 RegEntryKind::Fn { body: Some(raw) } if !raw.is_empty() => {
                     // raw form: either "<dfn>" or "<targetcol> <dfn>" (verbs) — bind the dfn part
                     if let Some(bp) = raw.find('{') {
@@ -5603,6 +5645,9 @@ mod normalize {
             let Some(index) = reg_find(&self.reg, spelling) else {
                 return Ok(());
             };
+            if crate::show::registered(&self.reg.ents[index]) {
+                return Err(super::fail(line, "show is an output effect, not a value"));
+            }
             match &self.reg.ents[index].kind {
                 RegEntryKind::Fn { .. } => Ok(()),
                 RegEntryKind::TypedFn { descriptor, .. } => {
@@ -5696,6 +5741,10 @@ mod normalize {
                     format!("verb '{}' needs a registered fn", spelling),
                 ));
             };
+            if crate::show::registered(&self.reg.ents[index]) {
+                crate::show::columns(&self.reg, &self.it, args, line)?;
+                return Ok(());
+            }
             match &self.reg.ents[index].kind {
                 RegEntryKind::Fn { .. } => Ok(()),
                 RegEntryKind::TypedFn { descriptor, .. } => {
@@ -6400,6 +6449,7 @@ mod normalize {
                                 let effect = reg_find(&self.reg, self.spelling(*callee)).is_some_and(|index| {
                                     match &self.reg.ents[index].kind {
                                         RegEntryKind::TypedFn { descriptor, .. } => descriptor.signature.output == RegType::Unit,
+                                        RegEntryKind::Fn { body: None } => crate::show::registered(&self.reg.ents[index]),
                                         RegEntryKind::Fn { body: Some(body) } => reg_find(&self.reg, &super::verb_target(body))
                                             .is_some_and(|target| matches!(self.reg.ents[target].kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. })),
                                         _ => false,

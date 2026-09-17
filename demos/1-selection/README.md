@@ -7,3 +7,4 @@ Live selection witnesses.
 - 006–009: presence, value predicates, functional hops, and named selections.
 - 010–013: set-hop image, quantifiers, empty fibers, and the combined fixture.
 - 014–015: masked scatter and keyed-hop foundness through a `unique` key column.
+- 144: the tutorial's registered `show()` effect, complete rows, and ordered column selection.

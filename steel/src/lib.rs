@@ -13,6 +13,7 @@ pub mod parse;
 pub mod reducer;
 pub mod registry;
 pub mod relationship;
+mod show;
 pub mod trace;
 
 pub const ANO_NAMESZ: usize = 256;

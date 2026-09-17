@@ -182,6 +182,26 @@ A subsequent statement is another barrier. A leading comma, lone `~`, or omitted
 
 Augmented assignments such as `Gold += 100` admit the same omitted subject. Bare `Gold = 100` remains a comparison query; use `, Gold = 100` to assign through a saved antecedent. Registered verbs accept ordinary argument lists, including `verb()` and `verb(a, b)`; the registry still supplies their signatures and effects. They also admit omitted subjects: `verb() |> Gold += 1` uses the saved subject in the current program, or `^cursor` when cold. Registry declarations distinguish these effect calls from value-returning query calls. Each Kore submission is a new program, so an omitted subject in a later submission starts cold.
 
+#### Displaying selected rows
+
+Register `fn show` in the world registry to use the tutorial's display effect:
+
+```haskell
+IsHostile , show()
+Race = :Nord , show(Race, TwoHanded, Gold)
+```
+
+`show()` displays every entity column in declaration order; named arguments select and reorder columns. Rows appear in table order with their current zero-based row indices. Scalar bindings, selection aliases, callable declarations, and lattice fields are not entity columns. Display changes no world values. An absent component displays `_`, and an empty selection still displays its headers.
+
+Display observes the same stage rules as other effects:
+
+```haskell
+Race = :Nord , Gold += 100 ; show(Gold)
+Race = :Nord , Gold += 100 |> show(Gold)
+```
+
+Run independently from the same initial world, the first displays the original Gold and the second displays the increased Gold. Kore places each table in its Outputs pane, labeled by the source statement. [Demo 144](../demos/1-selection/144-show.ano) runs the tutorial's examples with their registry.
+
 ### 11. Standing rules
 
 ```haskell

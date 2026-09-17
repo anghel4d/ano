@@ -53,6 +53,32 @@ Nord & TwoHanded > 60 , Gold += 1000
 
 The first fixture is [001-canonical-masked-update.ano](../demos/1-selection/001-canonical-masked-update.ano); its registry supplies the names and values. Names such as `show`, `polar`, and `phyllotaxis` are not universal built-ins. Examples using them require suitable registry entries.
 
+## Display selected rows
+
+Add the existing bodyless callable declaration to the registry:
+
+```text
+fn show
+```
+
+Then use the tutorial's display forms:
+
+```haskell
+IsHostile , show()
+Race = :Nord , show(Race, TwoHanded, Gold)
+```
+
+The first shows all entity columns; the second chooses and orders the displayed columns. Both include the current row index and preserve the world. Steel prints aligned text tables, and Kore displays the same tables in its Outputs pane. Empty selections show only headers; absent components display `_`. Control characters in values are escaped so a cell stays on one output row.
+
+Run the complete tutorial examples from the repository root:
+
+```sh
+target/debug/steel --run demos/1-selection/144-show.ano
+target/debug/kore demos/1-selection/144-show.ano
+```
+
+The [registry](../demos/registries/144-show.reg) supplies the ten fighters and `fn show`. The [Japanese counterpart](../demos/1-selection/144-show-nihongo.ano) resolves `表示` to the same registered display effect. Use `|> show(...)` after an update to display its result; `; show(...)` displays the simultaneous batch's incoming values.
+
 ## Checks
 
 Use the checks relevant to the change:

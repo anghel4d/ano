@@ -9,6 +9,7 @@ Use a demo with its registry. These names are supplied by fixtures, not built in
 | Subject | Example |
 |---|---|
 | Selection and masked update | [001](../demos/1-selection/001-canonical-masked-update.ano) |
+| Tutorial row display and column projection | [144](../demos/1-selection/144-show.ano), [registry](../demos/registries/144-show.reg) |
 | Scope | [004](../demos/1-selection/004-scoped-selection.ano) |
 | Language, commands, and limits | [Language reference](ano-language.md), [running Ano](ano-manual.md) |
 | Registry declarations | [Registry reference](ano-registry.md) |

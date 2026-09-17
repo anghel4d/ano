@@ -25,6 +25,8 @@ def undef spawn at to via along order by take desc top grade fold scan cross exp
 
 Lexer keywords, loader-reserved spellings, and emitter built-ins are different sets. `lex_reserved` additionally checks Japanese tokens/numerals and reducer spellings such as `max`, `min`, and `avg`.
 
+`show` is a registered display effect when the registry contains `fn show`; it is not an additional keyword. See [displaying selected rows](ano-language.md#displaying-selected-rows).
+
 `eval` is a statement-position parse-time literal splice. `rank`, `index`, `prev`, `row`, and legacy neighbor forms have context-sensitive handling. They are not extra entries in `kwkind`. A name's behavior must be checked at its actual resolution site.
 
 ## Punctuation

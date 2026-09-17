@@ -555,6 +555,38 @@ mod outputs_end_to_end {
         assert_eq!(recs[2].value, b"6");
     }
 
+    #[test]
+    fn show_tables_reach_outputs_with_their_source_and_stage_values() {
+        let dir = scratch("show");
+        let registry = dir.join("world.reg");
+        let saved = dir.join("after.reg");
+        std::fs::write(&registry, include_str!("../../demos/registries/144-show.reg")).unwrap();
+        let before = "Race = :Nord & TwoHanded > 60 , show(Race, Gold) ; Gold += 1000";
+        let after = "Race = :Nord & TwoHanded > 60 , show(Gold, Race)";
+        let program = format!("--! registry {}\n{before}\n{after}\n--! expect Gold = 1100 200 300 400 500 600 150 1350 90 520\n", registry.display());
+        let source = dir.join("show.ano");
+        std::fs::write(&source, &program).unwrap();
+        let steel = steel_bin();
+        let (capture, code) = run_steel(&[&steel, "--run", "--label", "--save", saved.to_str().unwrap(), source.to_str().unwrap()]);
+        assert_eq!(code, 0, "{}", String::from_utf8_lossy(&capture));
+        let mut app = App::new();
+        app.run_lines_set(program.as_bytes());
+        cap_split(&mut app, &capture, code, 1);
+        assert_eq!(app.qgroups.len(), 1);
+        let tables = &app.qgroups[0].recs;
+        assert_eq!(tables.len(), 2);
+        assert_eq!(tables[0].label, before.as_bytes());
+        assert_eq!(tables[0].value, b"row  Race  Gold\n0    Nord  100\n7    Nord  350");
+        assert_eq!(tables[1].label, after.as_bytes());
+        assert_eq!(tables[1].value, b"row  Gold  Race\n0    1100  Nord\n7    1350  Nord");
+        // Reopen the saved registry: the display registration and world values both survive.
+        std::fs::write(&source, format!("--! registry {}\n{after}\n--! expect Gold = 1100 200 300 400 500 600 150 1350 90 520\n", saved.display())).unwrap();
+        let (reopened, code) = run_steel(&[&steel, "--run", source.to_str().unwrap()]);
+        assert_eq!(code, 0, "{}", String::from_utf8_lossy(&reopened));
+        assert_eq!(reopened, b"row  Gold  Race\n0    1100  Nord\n7    1350  Nord\n");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     // Every query suppressed: the run leaves no group and no seam — the OUTPUTS pane keeps
     // showing its placeholder, not a stack of empty steps.
     #[test]

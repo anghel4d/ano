@@ -22,7 +22,7 @@
 | `as`, `ja` | Spelling alias; the longer `as` form declares a derived tag |
 | `role ROLE NAME` | System-role mapping |
 | `def NAME COL=VALUE ...` | Spawn prototype |
-| `fn NAME BODY` | Legacy callable |
+| `fn NAME [BODY]` | Legacy callable; bodyless `fn show` registers row display |
 | `reap seal\|host` | Reclamation policy |
 
 Declaration order matters where a row refers to an earlier entry. Headers cannot be redeclared. A unique column cannot be partially present, default-filled, or directly assigned.
@@ -74,6 +74,11 @@ Typed callables declare their signature, effect set, determinism, trust, read/wr
 Value calls require exact argument carriers, a non-unit result, and the supported unary/binary value ABI. Effect calls require unit and the supported write/service shape. Typed reducers are pure deterministic homogeneous `A,A->A` functions with exactly matching operands. Typed pipelines remain refused without a domain signature.
 
 A legacy callable does not acquire typed guarantees merely by appearing beside typed entries.
+
+`fn show` registers Steel/Kore's standard row-display effect. It takes no world-write footprint: `selection , show()` prints every entity column, and `selection , show(Gold, Race)` displays only those named columns in that order. The output starts with the current zero-based `row` index. Column arguments name declarations rather than passing ordinary value expressions; absent components display `_`. Empty selections display the headers. [Demo 144](../demos/1-selection/144-show.ano) supplies the tutorial's complete world.
+
+Spelling aliases can name the same display declaration. A `show` declaration with an explicit body uses that callable's implementation instead. `show` is not a lexer keyword and an undeclared call refuses. The bodyless registration survives registry dump/save and Kore reload.
+
 
 ## Services and enums
 
