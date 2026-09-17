@@ -2723,7 +2723,7 @@ mod parser_session {
             return;
         }
         let path = std::env::current_dir().unwrap().join("world.reg");
-        std::fs::write(&path, "n 3\ncol Nord bool 1 0 1\ncol Gold num 10 20 30\ncol Silver num 1 2 3\n").unwrap();
+        std::fs::write(&path, "n 3\ncol Nord bool 1 0 1\ncol Gold num 10 20 30\ncol Silver num 1 2 3\nbind cursor entity 1\nfn ping Gold {s 𝕊 cs: (⊑cs)+s}\n").unwrap();
         let observe = || {
             let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
             ["Gold", "Silver"].map(|name| {
@@ -2755,6 +2755,9 @@ mod parser_session {
         reopened.prompt = b"Nord , Gold += 1 |> Silver = Gold".to_vec();
         repl_submit(&mut reopened);
         assert_eq!(observe(), [vec![7.0, 20.0, 11.0], vec![7.0, 2.0, 11.0]]);
+        reopened.prompt = b"ping() |> Silver = Gold".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(observe(), [vec![7.0, 21.0, 11.0], vec![7.0, 21.0, 11.0]]);
     }
 
     #[test]

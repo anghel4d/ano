@@ -76,6 +76,20 @@ fn atomstart(k: TokKind) -> bool {
     )
 }
 
+// Calls acquire an effect context only at a statement boundary or after registry resolution.
+pub(crate) fn call_effect(node: &Node) -> Option<Node> {
+    let kind = match &node.kind {
+        NodeKind::Call { callee, args } => NodeKind::EVerb { name: *callee, args: args.clone() },
+        NodeKind::Pipe { src, stages } => {
+            let mut effects = vec![call_effect(src)?];
+            effects.extend(stages.iter().map(|stage| call_effect(stage).unwrap_or_else(|| stage.clone())));
+            NodeKind::ESequence(effects)
+        }
+        _ => return None,
+    };
+    Some(Node::new(kind, node.line))
+}
+
 /* ---------- parser state ---------- */
 
 // Bound parser recursion and expression trees before they can exhaust consumer stacks.
@@ -650,11 +664,18 @@ impl P<'_, '_> {
                 continue;
             }
             if k == TokKind::PipeGt {
+                let call_head = min == 2 && matches!(l.kind, NodeKind::Call { .. });
                 let src = Box::new(l);
                 let mut stages = Vec::new();
                 while self.pk() == TokKind::PipeGt {
                     self.adv();
-                    stages.push(self.parse_stage()?);
+                    let mut target_end = 1;
+                    while self.pk2(target_end) == TokKind::Dot && self.pk2(target_end + 1) == TokKind::Name {
+                        target_end += 2;
+                    }
+                    let effect = call_head && (matches!(self.pk(), TokKind::Spawn | TokKind::Tilde | TokKind::Plus | TokKind::Minus | TokKind::Lp)
+                        || (self.pk() == TokKind::Name && (assignop(self.pk2(target_end)).is_some() || self.pk2(1) == TokKind::Via)));
+                    stages.push(if effect { self.parse_effect()? } else { self.parse_stage()? });
                 }
                 l = Node::new(NodeKind::Pipe { src, stages }, line);
                 continue;
@@ -1154,6 +1175,16 @@ impl P<'_, '_> {
                 },
                 line,
             ));
+        }
+        if self.pk() == TokKind::Semi {
+            if let Some(first) = call_effect(&sel) {
+                self.adv();
+                let mut effects = vec![first];
+                self.parse_effects(&mut effects)?;
+                return Ok(Node::new(NodeKind::Stmt {
+                    sel: None, effects, rule: false, cont: false, elided: true,
+                }, line));
+            }
         }
         if matches!(self.pk(), TokKind::Nl | TokKind::Eof) {
             return Ok(Node::new(NodeKind::Query(Box::new(sel)), line));

@@ -6340,7 +6340,31 @@ mod normalize {
                     let mut normalized = Vec::with_capacity(items.len());
                     let mut have_antecedent = false;
                     let mut fresh_rules = false;
-                    for item in items {
+                    for original in items {
+                        let mut item = original.clone();
+                        if let NodeKind::Query(inner) = &original.kind {
+                            let head = match &inner.kind {
+                                NodeKind::Pipe { src, .. } => src.as_ref(),
+                                _ => inner.as_ref(),
+                            };
+                            if let NodeKind::Call { callee, .. } = &head.kind {
+                                let effect = reg_find(&self.reg, self.spelling(*callee)).is_some_and(|index| {
+                                    match &self.reg.ents[index].kind {
+                                        RegEntryKind::TypedFn { descriptor, .. } => descriptor.signature.output == RegType::Unit,
+                                        RegEntryKind::Fn { body: Some(body) } => reg_find(&self.reg, &super::verb_target(body))
+                                            .is_some_and(|target| matches!(self.reg.ents[target].kind, RegEntryKind::Col { .. } | RegEntryKind::Field { .. })),
+                                        _ => false,
+                                    }
+                                });
+                                if effect {
+                                    let effects = vec![crate::parse::call_effect(inner).expect("call head")];
+                                    item = Node::new(NodeKind::Stmt {
+                                        sel: None, effects, rule: false, cont: false, elided: true,
+                                    }, original.line);
+                                }
+                            }
+                        }
+                        let item = &item;
                         let installed_rule = match &item.kind {
                             NodeKind::DefStmt { body, .. } => {
                                 matches!(body.kind, NodeKind::Stmt { .. })

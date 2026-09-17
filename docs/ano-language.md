@@ -180,7 +180,7 @@ Nord & Dead , spawn Ghost
 
 A subsequent statement is another barrier. A leading comma, lone `~`, or omitted-subject effect can reuse the saved antecedent mask. It reuses the selection, not the old world. A cold omitted-subject effect uses `^cursor`; a cold explicit continuation refuses.
 
-Augmented assignments such as `Gold += 100` admit the same omitted subject. Bare `Gold = 100` remains a comparison query; use `, Gold = 100` to assign through a saved antecedent. Registered verbs accept ordinary argument lists, including `verb()` and `verb(a, b)`; the registry still supplies their signatures and effects.
+Augmented assignments such as `Gold += 100` admit the same omitted subject. Bare `Gold = 100` remains a comparison query; use `, Gold = 100` to assign through a saved antecedent. Registered verbs accept ordinary argument lists, including `verb()` and `verb(a, b)`; the registry still supplies their signatures and effects. They also admit omitted subjects: `verb() |> Gold += 1` uses the saved subject in the current program, or `^cursor` when cold. Registry declarations distinguish these effect calls from value-returning query calls. Each Kore submission is a new program, so an omitted subject in a later submission starts cold.
 
 ### 11. Standing rules
 

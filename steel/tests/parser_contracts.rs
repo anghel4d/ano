@@ -271,3 +271,17 @@ fn ordering_keys_and_rule_expansion_keep_their_own_domains() {
     fixture.accepts("--! out 4\n(Nord |> expand Count) & Gold > 20 , spawn Minion\n#/ Minion");
     fixture.accepts("--! out 8\n(Nord |> expand Count) & Gold > 20 , spawn Minion |> spawn Minion\n#/ Minion");
 }
+
+
+#[test]
+fn implicit_calls_resolve_as_effects_without_changing_value_calls() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.0.join("world.reg"), format!("{WORLD}fn identity {{𝕩}}\n")).unwrap();
+    fixture.accepts("ping()\n--! expect Gold = 10 21 30 40");
+    fixture.accepts("ping() |> Silver = Gold\n--! expect Silver = 1 21 3 4");
+    fixture.accepts("Nord , +Marked\nping() |> Silver = Gold\n--! expect Silver = 11 2 31 4");
+    fixture.accepts("Nord , +Marked\nping() |> award(2, 3) |> Silver = Gold\n--! expect Silver = 16 2 36 4");
+    fixture.accepts("ping() ; Silver = Gold\n--! expect Gold = 10 21 30 40\n--! expect Silver = 1 20 3 4");
+    fixture.accepts("ping() |> +Marked\n--! expect Marked = 0 1 0 0");
+    fixture.accepts("--! out 10 20 30 40\nidentity(Gold)\n--! expect Gold = 10 20 30 40");
+}
