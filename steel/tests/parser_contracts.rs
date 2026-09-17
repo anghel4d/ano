@@ -285,3 +285,56 @@ fn implicit_calls_resolve_as_effects_without_changing_value_calls() {
     fixture.accepts("ping() |> +Marked\n--! expect Marked = 0 1 0 0");
     fixture.accepts("--! out 10 20 30 40\nidentity(Gold)\n--! expect Gold = 10 20 30 40");
 }
+
+
+#[test]
+fn sequence_branches_retain_certified_merge_operations() {
+    let fixture = Fixture::new();
+    for effects in [
+        "Gold += 1 |> Gold += 2 ; Gold += 3",
+        "Gold += 3 ; Gold += 1 |> Gold += 2",
+        "Gold += 1 |> Gold += 2 ; Gold += 1 |> Gold += 2",
+    ] {
+        fixture.accepts(&format!("Nord , {effects}\n--! expect Gold = 16 20 36 40"));
+    }
+    for effects in [
+        "Gold *= 2 |> Gold *= 3 ; Gold *= 4",
+        "Gold *= 4 ; Gold *= 2 |> Gold *= 3",
+    ] {
+        fixture.accepts(&format!("Nord , {effects}\n--! expect Gold = 240 20 720 40"));
+    }
+    fixture.accepts("Nord , Gold += Gold |> Gold += Gold ; Gold += Gold\n--! expect Gold = 50 20 150 40");
+    fixture.accepts("Nord , Gold += 1 |> Gold -= 2 ; Gold += 3\n--! expect Gold = 12 20 32 40");
+    fixture.accepts("Nord , Gold *= 2 |> Gold /= 4 ; Gold *= 3\n--! expect Gold = 15 20 45 40");
+    fixture.accepts("Nord , +Marked |> +Marked ; +Marked\n--! expect Marked = 1 0 1 0");
+    fixture.refuses("Nord , Gold = 1 |> Gold += 2 ; Gold += 3", "no merge law");
+    fixture.refuses("Nord , Gold += 1 |> Gold *= 2 ; Gold += 3", "no merge law");
+    std::fs::write(fixture.0.join("world.reg"), "n 3\ncol Nord bool 1 1 0\ncol Gold num 0 inf inf\n").unwrap();
+    fixture.accepts("Nord , Gold *= 2 |> Gold *= 3 ; Gold *= 4\n--! expect Gold = 0 inf inf");
+    fixture.accepts("Nord , Gold += 1 |> Gold += 2 ; Gold += 3\n--! expect Gold = 6 inf inf");
+}
+
+
+#[test]
+fn numeric_expectations_admit_equal_infinities_without_accepting_wrong_signs() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.0.join("world.reg"), "n 3\ncol Gold num -inf 0 inf\ncol Label sym inf zero -inf\n").unwrap();
+    fixture.accepts("--! expect Gold = -infinity +0 infinity\n--! expect Label = inf zero -inf\n--! out -inf 0 inf\nGold");
+    for expected in ["inf 0 inf", "-inf 0 -inf", "-inf 1 inf", "-inf 0"] {
+        let output = fixture.run(&format!("--! expect Gold = {expected}\nGold"), true);
+        assert_eq!(output.status.code(), Some(1), "wrong expectation accepted: {expected}");
+        // Expected runtime refusals need no retained backend diagnostic file.
+        for line in String::from_utf8_lossy(&output.stderr).lines() {
+            if let Some((_, path)) = line.split_once(", kept ") {
+                let path = std::path::Path::new(path);
+                if path.parent() == Some(std::env::temp_dir().as_path())
+                    && path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("steel-"))
+                    && path.extension().is_some_and(|extension| extension == "bqn")
+                { std::fs::remove_file(path).unwrap(); }
+            }
+        }
+    }
+    for expected in ["nan", "1junk"] {
+        fixture.refuses(&format!("--! expect Gold = {expected}\nGold"), "invalid numeric value");
+    }
+}

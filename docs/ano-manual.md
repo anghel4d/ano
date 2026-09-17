@@ -49,7 +49,7 @@ The command-line parser is [steel/src/main.rs](../steel/src/main.rs). Kore comma
 Nord & TwoHanded > 60 , Gold += 1000
 ```
 
-`--! registry` selects the fixture. `--! expect` checks a column, `--! expect-n` checks entity count, `--! out` checks query output, and `--! ja` selects the Japanese reader. Ordinary `--` comments are not directives.
+`--! registry` selects the fixture. `--! expect` checks a column, `--! expect-n` checks entity count, `--! out` checks query output, and `--! ja` selects the Japanese reader. Ordinary `--` comments are not directives. Numeric expectations accept the registry's numeric spellings, including signed `inf`/`infinity`, and refuse malformed values or NaN. Equal infinities compare equal; finite values use the existing absolute tolerance of 1e-9. Symbol-column expectations remain textual.
 
 The first fixture is [001-canonical-masked-update.ano](../demos/1-selection/001-canonical-masked-update.ano); its registry supplies the names and values. Names such as `show`, `polar`, and `phyllotaxis` are not universal built-ins. Examples using them require suitable registry entries.
 

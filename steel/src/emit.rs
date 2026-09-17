@@ -91,12 +91,14 @@ struct View {
 }
 
 // One pending column replacement. fam merge family: b'+' b'*' b'=' b'|' b'&' b'v'.
+#[derive(Clone)]
 struct Commit {
     col_idx: usize,
     new_expr: String,
     fam: u8,
     field: Option<String>,
     rules: u32,
+    steps: Option<Vec<(char, String)>>, // ordered operands for a certified merge family
 }
 
 // One spawn group: cnt selection-space counts temp, tot "(+´cnt)", pos copy-space positions
@@ -2393,10 +2395,17 @@ impl<'a> Em<'a> {
     }
 
     // Replaces an existing commit for the column (the rebase result) and ORs the rule bit.
-    fn add_commit(&self, fx: &mut Fx, col_idx: usize, expr: String, fam: u8, field: Option<String>) {
+    fn add_commit(&self, fx: &mut Fx, col_idx: usize, expr: String, fam: u8, field: Option<String>, steps: Option<Vec<(char, String)>>) {
         let bit = if self.cur_rule >= 0 { 1u32 << self.cur_rule } else { 0 };
         for c in fx.commits.iter_mut() {
             if c.col_idx == col_idx {
+                c.steps = match (c.steps.take(), steps) {
+                    (Some(mut previous), Some(next)) if c.fam == fam => {
+                        previous.extend(next);
+                        Some(previous)
+                    }
+                    _ => None,
+                };
                 c.new_expr = expr;
                 c.fam = fam;
                 c.field = field;
@@ -2404,7 +2413,7 @@ impl<'a> Em<'a> {
                 return;
             }
         }
-        fx.commits.push(Commit { col_idx, new_expr: expr, fam, field, rules: bit });
+        fx.commits.push(Commit { col_idx, new_expr: expr, fam, field, rules: bit, steps });
     }
 
     // A sequence evaluates privately from the batch input. Its final writes join the batch;
@@ -2467,7 +2476,7 @@ impl<'a> Em<'a> {
             self.stage(format!("{} ← {}", counts, expansion));
             Some(counts)
         };
-        let mut written: Vec<(usize, Option<String>)> = Vec::new();
+        let mut written: Vec<Commit> = Vec::new();
         let mut spawned = false;
         let mut despawned = false;
         self.cur_rule = -1;
@@ -2475,10 +2484,18 @@ impl<'a> Em<'a> {
             let mut next = Fx::default();
             self.emit_effect(stage, &mut next)?;
             for c in &next.commits {
-                if let Some((_, field)) = written.iter_mut().find(|(i, _)| *i == c.col_idx) {
-                    if *field != c.field { *field = None; }
+                if let Some(previous) = written.iter_mut().find(|previous| previous.col_idx == c.col_idx) {
+                    if previous.field != c.field { previous.field = None; }
+                    previous.steps = match (previous.steps.take(), &c.steps) {
+                        (Some(mut steps), Some(next)) if previous.fam == c.fam => {
+                            steps.extend(next.iter().cloned());
+                            Some(steps)
+                        }
+                        _ => None,
+                    };
+                    if previous.fam != c.fam { previous.fam = b'='; }
                 } else {
-                    written.push((c.col_idx, c.field.clone()));
+                    written.push(c.clone());
                 }
             }
             let structural = next.despawn || !next.sp.is_empty();
@@ -2524,7 +2541,11 @@ impl<'a> Em<'a> {
         self.stage(format!("{} ← (↕{})∊{}", alive, initial_n, lineage));
         let old_rows = format!("(0≤{})", lineage);
         let mut final_writes = Vec::new();
-        for (i, field) in written {
+        for commit in written {
+            let i = commit.col_idx;
+            let field = commit.field;
+            let steps = if spawned || despawned { None } else { commit.steps };
+            let fam = if steps.is_some() { commit.fam } else { b'=' };
             let var = self.bqnv(i);
             let old = &columns.iter().find(|(entry, _)| *entry == i).expect("stored effect target").1;
             let value = if matches!(self.ent(i).kind, RegEntryKind::Field { .. }) {
@@ -2534,7 +2555,7 @@ impl<'a> Em<'a> {
             };
             let result = self.tv();
             self.stage(format!("{} ← {}", result, value));
-            final_writes.push((i, field, result));
+            final_writes.push((i, field, result, fam, steps));
         }
         let spawn = if spawned {
             let new_rows = format!("(0>{})", lineage);
@@ -2572,8 +2593,20 @@ impl<'a> Em<'a> {
         self.world_shifted = shifted;
         self.mint_floors = mint_floors;
         self.cur_rule = rule;
-        for (i, field, value) in final_writes {
-            let base = self.merge_base(fx, i, self.bqnv(i), b'=', field.as_deref(), line, &self.ent(i).name)?;
+        for (i, field, value, fam, steps) in final_writes {
+            let base = self.merge_base(fx, i, self.bqnv(i), fam, field.as_deref(), line, &self.ent(i).name)?;
+            if fx.commits.iter().any(|c| c.col_idx == i) {
+                if let Some(steps) = &steps {
+                    let mut merged = base;
+                    for (op, operand) in steps {
+                        let result = self.tv();
+                        self.stage(format!("{} ← {}{}{}", result, merged, op, operand));
+                        merged = result;
+                    }
+                    self.add_commit(fx, i, merged, fam, field, Some(steps.clone()));
+                    continue;
+                }
+            }
             let values = if let Some(field) = &field {
                 let axis = (field.as_bytes().first() == Some(&b'y')) as i32;
                 let updated = format!("({}⊸⊑¨({}/{}))", axis, self.sel_var, value);
@@ -2583,7 +2616,7 @@ impl<'a> Em<'a> {
             } else { format!("({}/{})", self.sel_var, value) };
             let result = self.tv();
             self.stage(format!("{} ← {}‿{} AnoScat {}", result, self.sel_var, values, base));
-            self.add_commit(fx, i, result, b'=', field);
+            self.add_commit(fx, i, result, fam, field, steps);
         }
         if despawned {
             let dead = format!("(¬{})", alive);
@@ -2704,6 +2737,15 @@ impl<'a> Em<'a> {
                     _ => b'*',
                 };
                 let base = self.merge_base(fx, ei, col, fam, field, ef.line, col_name)?;
+                let steps = if field.is_none() && !rhs_v.pair && *op != AssignOp::Set
+                    && matches!(self.ent(ei).kind, RegEntryKind::Col { ty: ColType::Num, rng: None, .. })
+                {
+                    let operand = self.tv();
+                    let identity = if fam == b'+' { 0 } else { 1 };
+                    self.stage(format!("{} ← {}‿{} AnoScat ({}⥊{})", operand, sel_e, rv, self.fr_n(), identity));
+                    let glyph = match op { AssignOp::Add => '+', AssignOp::Sub => '-', AssignOp::Mul => '×', _ => '÷' };
+                    Some(vec![(glyph, operand)])
+                } else { None };
                 if *op != AssignOp::Set {
                     let opch = match op {
                         AssignOp::Add => "+",
@@ -2734,7 +2776,7 @@ impl<'a> Em<'a> {
                 };
                 let t = self.tv();
                 self.stage(format!("{} ← {}", t, newcol));
-                self.add_commit(fx, ei, t, fam, field.map(String::from));
+                self.add_commit(fx, ei, t, fam, field.map(String::from), steps);
                 self.sel_var = old_sel;
                 Ok(())
             }
@@ -2769,7 +2811,12 @@ impl<'a> Em<'a> {
                 } else {
                     self.stage(format!("{} ← {}∧¬{}", t, base, self.sel_var));
                 }
-                self.add_commit(fx, ei, t, fam, None);
+                let steps = if matches!(self.ent(ei).kind, RegEntryKind::Col { ty: ColType::Bool, .. }) {
+                    let operand = self.tv();
+                    self.stage(format!("{} ← {}{}", operand, if is_add { "" } else { "¬" }, self.sel_var));
+                    Some(vec![(if is_add { '∨' } else { '∧' }, operand)])
+                } else { None };
+                self.add_commit(fx, ei, t, fam, None, steps);
                 Ok(())
             }
             NodeKind::EDespawn => {
@@ -2803,7 +2850,7 @@ impl<'a> Em<'a> {
                                 let base = self.merge_base(fx, fi2, col, b'|', None, ef.line, self.rs(*ws))?;
                                 let t = self.tv();
                                 self.stage(format!("{} ← {}∨{}", t, base, self.sel_var));
-                                self.add_commit(fx, fi2, t, b'|', None);
+                                self.add_commit(fx, fi2, t, b'|', None, None);
                                 return Ok(());
                             }
                         }
@@ -2957,7 +3004,7 @@ impl<'a> Em<'a> {
             rendered.join(", ")
         ));
         if let Some(index) = target_index {
-            self.add_commit(fx, index, temporary, b'v', None);
+            self.add_commit(fx, index, temporary, b'v', None, None);
         }
         Ok(())
     }
@@ -3544,10 +3591,10 @@ impl<'a> Em<'a> {
             let mut all_str = true;
             let mut lst = String::from("⟨");
             for (k, w) in vals.iter().enumerate() {
-                let b0 = w.as_bytes().first().copied().unwrap_or(0);
-                let piece = if b0.is_ascii_digit() || b0 == b'-' || b0 == b'.' {
+                let (number, consumed) = crate::num::strtod(w);
+                let piece = if consumed == w.len() && consumed > 0 && !number.is_nan() {
                     all_str = false;
-                    if b0 == b'-' { format!("¯{}", &w[1..]) } else { w.clone() }
+                    num_lit(number)
                 } else {
                     all_num = false;
                     format!("\"{}\"", w)
@@ -3568,7 +3615,7 @@ impl<'a> Em<'a> {
             // evaluation whose association order may differ in the last bits
             if all_num {
                 self.stage(format!(
-                    "\"out q{}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩}} {}",
+                    "\"out q{}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´(𝕨=𝕩)∨(1e¯9≥|𝕨-𝕩)}} {}",
                     self.stmt, lst, ravel
                 ));
             } else if all_str {
@@ -3703,7 +3750,7 @@ impl<'a> Em<'a> {
                         let t = self.tv();
                         let cv = self.bqnv(ci);
                         self.stage(format!("{} ← {}∨{}", t, cv, side));
-                        self.add_commit(&mut fx, ci, t, b'|', None);
+                        self.add_commit(&mut fx, ci, t, b'|', None, None);
                         handled = true;
                     }
                 }
@@ -3894,10 +3941,12 @@ impl<'a> Em<'a> {
             for (k, w) in vals.iter().enumerate() {
                 let piece = if sym {
                     format!("\"{}\"", w)
-                } else if w.starts_with('-') {
-                    format!("¯{}", &w[1..])
                 } else {
-                    w.clone()
+                    let (number, consumed) = crate::num::strtod(w);
+                    if consumed != w.len() || consumed == 0 || number.is_nan() {
+                        return Err(Diag::refuse(format!("expect: invalid numeric value '{}' for '{}'", w, col)));
+                    }
+                    num_lit(number)
                 };
                 if k > 0 {
                     lst.push_str(", ");
@@ -3911,7 +3960,7 @@ impl<'a> Em<'a> {
                 self.out.push_str(&format!("\"expect {}\" ! {} ≡ {}\n", col, lst, rhs));
             } else {
                 self.out.push_str(&format!(
-                    "\"expect {}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´1e¯9≥|𝕨-𝕩}} {}\n",
+                    "\"expect {}\" ! {} {{(≠𝕨)≠≠𝕩 ? 0 ; ∧´(𝕨=𝕩)∨(1e¯9≥|𝕨-𝕩)}} {}\n",
                     col, lst, rhs
                 ));
             }
