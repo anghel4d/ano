@@ -370,7 +370,7 @@ fn children(nd: &Node) -> Vec<&Node> {
         Call { args, .. } | EVerb { args, .. } => args.iter().collect(),
         Fold { operand, .. } | ScanExpr { operand, .. } => vec![operand.as_ref()],
         ScanAlong { col, order, .. } => vec![col.as_ref(), order.as_ref()],
-        Shape(v) | Tuple(v) | Program(v) | EBatch(v) | ESequence(v) => v.iter().collect(),
+        Shape(v) | Tuple(v) | Program(v) | ETuple(v) | EBatch(v) | ESequence(v) => v.iter().collect(),
         To { shape, poured } => {
             let mut v = vec![shape.as_ref()];
             if let Some(p) = poured {
@@ -2644,8 +2644,47 @@ impl<'a> Em<'a> {
         out
     }
 
+    // Obtain a closed validity predicate without retaining probe reads or diagnostics.
+    fn effect_guard(&mut self, rhs: &Node, line: i32) -> R<Option<String>> {
+        let saved_pre = std::mem::take(&mut self.pre);
+        let saved_uses = self.plan.len();
+        let saved_effect = self.in_effect;
+        let probe_tmp = self.tmp;
+        self.in_effect = false;
+        let result = self.emit_val(rhs, Mode::World);
+        self.pre = saved_pre;
+        self.plan.truncate(saved_uses);
+        self.in_effect = saved_effect;
+        let probe = result?;
+        if let Some(guard) = &probe.g {
+            for temp in probe_tmp..self.tmp {
+                let name = format!("t{}", temp);
+                if mentions_bqn_name(guard, &name) {
+                    return Err(fail(line, format!("guard residual depends on discarded staging '{}'", name)));
+                }
+            }
+        }
+        Ok(probe.g)
+    }
+
     fn emit_effect_inner(&mut self, ef: &Node, fx: &mut Fx) -> R<()> {
         match &ef.kind {
+            NodeKind::ETuple(assignments) => {
+                let mut guard = None;
+                for assignment in assignments {
+                    let NodeKind::EAssign { rhs, .. } = &assignment.kind else { unreachable!("tuple component assignment") };
+                    guard = g_and(guard, self.effect_guard(rhs, assignment.line)?);
+                }
+                let original = self.sel_var.clone();
+                if let Some(guard) = guard {
+                    let selected = self.tv();
+                    self.stage(format!("{} ← {}∧{}", selected, original, guard));
+                    self.sel_var = selected;
+                }
+                let result = assignments.iter().try_for_each(|assignment| self.emit_effect(assignment, fx));
+                self.sel_var = original;
+                result
+            }
             NodeKind::EBatch(effects) => {
                 for effect in effects { self.emit_effect(effect, fx)?; }
                 Ok(())
@@ -2674,34 +2713,9 @@ impl<'a> Em<'a> {
                     return Err(fail(ef.line, format!("unique column '{}' is minted, never written", col_name)));
                 }
                 let col = self.bqnv(ei);
-                // Guards refine the mask before gathering. The probe's staging is discarded, so
-                // its residual must be a closed predicate over durable world variables.
-                let saved_pre = std::mem::take(&mut self.pre);
-                let saved_uses = self.plan.len();
-                let saved_effect = self.in_effect;
-                let probe_tmp = self.tmp;
-                self.in_effect = false;
-                let probe_res = self.emit_val(rhs, Mode::World);
-                self.pre = saved_pre;
-                self.plan.truncate(saved_uses);
-                self.in_effect = saved_effect;
-                let probe = probe_res?;
-                if let Some(guard) = &probe.g {
-                    for temp in probe_tmp..self.tmp {
-                        let name = format!("t{}", temp);
-                        if mentions_bqn_name(guard, &name) {
-                            return Err(fail(
-                                ef.line,
-                                format!(
-                                    "guard residual depends on discarded staging '{}'",
-                                    name
-                                ),
-                            ));
-                        }
-                    }
-                }
+                let guard = self.effect_guard(rhs, ef.line)?;
                 let old_sel = self.sel_var.clone();
-                let sel_e = if let Some(g) = &probe.g {
+                let sel_e = if let Some(g) = &guard {
                     let t = self.tv();
                     self.stage(format!("{} ← {}∧{}", t, old_sel, g));
                     t
@@ -6314,6 +6328,30 @@ mod normalize {
                         rhs: Box::new(rhs),
                     }
                 }
+                NodeKind::ETuple(assignments) => {
+                    let assignments = assignments.iter()
+                        .map(|assignment| self.normalize(assignment, Context::Neutral, TracePhase::Effect))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let mut targets = Vec::new();
+                    for assignment in &assignments {
+                        let NodeKind::EAssign { target, .. } = &assignment.kind else { unreachable!("tuple component assignment") };
+                        if let Some(entry) = self.target_entry(target) {
+                            if targets.contains(&entry) {
+                                return Err(super::fail(line, format!("tuple assignment repeats or overlaps target '{}'", self.reg.ents[entry].name)));
+                            }
+                            targets.push(entry);
+                        }
+                    }
+                    for assignment in &assignments {
+                        let NodeKind::EAssign { rhs, .. } = &assignment.kind else { unreachable!() };
+                        for entry in &targets {
+                            if self.scan_reads(rhs, *entry) {
+                                return Err(super::fail(line, format!("scan reads and writes '{}'; recurrence footprints must be disjoint", self.reg.ents[*entry].name)));
+                            }
+                        }
+                    }
+                    NodeKind::ETuple(assignments)
+                }
                 NodeKind::EBatch(effects) => NodeKind::EBatch(effects.iter()
                     .map(|effect| self.normalize(effect, Context::Neutral, TracePhase::Effect))
                     .collect::<Result<Vec<_>, _>>()?),
@@ -6361,7 +6399,7 @@ mod normalize {
                     let dynamic_selection = sel.is_none() && (*cont || *elided);
                     let mut pending: Vec<_> = effects.iter().collect();
                     while let Some(effect) = pending.pop() {
-                        if matches!(effect.kind, NodeKind::EBatch(_) | NodeKind::ESequence(_)) {
+                        if matches!(effect.kind, NodeKind::ETuple(_) | NodeKind::EBatch(_) | NodeKind::ESequence(_)) {
                             pending.extend(super::children(effect));
                         }
                         if let NodeKind::EAssign { target, rhs, .. } = &effect.kind {

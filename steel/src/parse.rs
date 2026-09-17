@@ -118,7 +118,7 @@ fn check_expr_depth(root: &Node) -> Result<(), Diag> {
                 push(shape);
                 if let Some(poured) = poured { push(poured); }
             }
-            Call { args, .. } | Tuple(args) | Shape(args) | EBatch(args) | ESequence(args) => {
+            Call { args, .. } | Tuple(args) | Shape(args) | ETuple(args) | EBatch(args) | ESequence(args) => {
                 for arg in args { push(arg); }
             }
             Pipe { src, stages } => {
@@ -310,6 +310,7 @@ impl P<'_, '_> {
             let mut els = vec![e];
             while self.pk() == TokKind::Comma {
                 self.adv();
+                if self.pk() == TokKind::Rp { break; }
                 els.push(self.parse_tupelem(5)?);
             }
             e = Node::new(NodeKind::Tuple(els), line);
@@ -758,10 +759,62 @@ impl P<'_, '_> {
         result
     }
 
+    // Parentheses followed by an assignment operator are a target pattern, not a batch.
+    fn paren_assignment(&self) -> Option<AssignOp> {
+        if self.pk() != TokKind::Lp { return None; }
+        let mut depth = 0usize;
+        for (offset, kind) in self.t.kind[self.i..].iter().copied().enumerate() {
+            match kind {
+                TokKind::Lp => depth += 1,
+                TokKind::Rp => {
+                    depth -= 1;
+                    if depth == 0 { return assignop(self.pk2(offset + 1)); }
+                }
+                TokKind::Eof => return None,
+                _ => {}
+            }
+        }
+        None
+    }
+
+    fn tuple_assignments(target: Node, rhs: Node, op: AssignOp, assignments: &mut Vec<Node>) -> Result<(), Diag> {
+        let line = target.line;
+        match (target.kind, rhs.kind) {
+            (NodeKind::Tuple(targets), NodeKind::Tuple(values)) => {
+                if targets.len() != values.len() {
+                    return Err(perr(line, format!("tuple assignment arity mismatch: {} targets, {} values", targets.len(), values.len())));
+                }
+                for (target, value) in targets.into_iter().zip(values) {
+                    Self::tuple_assignments(target, value, op, assignments)?;
+                }
+            }
+            (NodeKind::Tuple(_), _) | (_, NodeKind::Tuple(_)) => {
+                return Err(perr(line, "tuple assignment requires matching tuple shapes"));
+            }
+            (target, rhs_kind) => {
+                if !matches!(&target, NodeKind::Name(_)) {
+                    return Err(perr(line, "tuple assignment targets must name columns"));
+                }
+                assignments.push(Node::new(NodeKind::EAssign {
+                    op, target: Box::new(Node::new(target, line)), rhs: Box::new(Node::new(rhs_kind, rhs.line)),
+                }, line));
+            }
+        }
+        Ok(())
+    }
+
     fn parse_effect_inner(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         match self.pk() {
             TokKind::Lp => {
+                if let Some(op) = self.paren_assignment() {
+                    let target = self.parse_paren()?;
+                    self.adv();
+                    let rhs = self.parse_expr(4)?;
+                    let mut assignments = Vec::new();
+                    Self::tuple_assignments(target, rhs, op, &mut assignments)?;
+                    return Ok(Node::new(NodeKind::ETuple(assignments), line));
+                }
                 if self.depth >= MAX_EXPR_DEPTH {
                     return Err(perr(line, "expression nested too deeply"));
                 }
@@ -1118,7 +1171,8 @@ impl P<'_, '_> {
         let update = k == TokKind::Name
             && matches!(self.pk2(target_end),
                 TokKind::PlusEq | TokKind::MinusEq | TokKind::StarEq | TokKind::SlashEq);
-        if update || k == TokKind::Spawn
+        let tuple_update = self.paren_assignment().is_some_and(|op| op != AssignOp::Set);
+        if update || tuple_update || k == TokKind::Spawn
             || ((k == TokKind::Plus || k == TokKind::Minus)
                 && self.pk2(1) == TokKind::Name
                 && matches!(self.pk2(2), TokKind::Nl | TokKind::Semi | TokKind::PipeGt | TokKind::Eof))
@@ -1647,7 +1701,7 @@ mod tests {
                 sx_kids(b, rest, it);
                 b.push(')');
             }
-            EBatch(_) | ESequence(_) => {
+            ETuple(_) | EBatch(_) | ESequence(_) => {
                 let _ = write!(b, "{:?}", n.kind);
             }
             Program(ss) => {

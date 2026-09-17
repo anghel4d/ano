@@ -165,6 +165,30 @@ row  Race   TwoHanded  Gold
 Who on the left. What happens on the right. The world moved.
 
 
+### Several columns at once
+
+Suppose the world also registers Silver and Copper. We can give the Nords three balances in one effect:
+
+```haskell
+Race = :Nord , (Gold, Silver, Copper) = (4, 51, 13)
+```
+
+Each selected row gets all three values. The tuple can have as many members as we need; the two sides must have the same shape. Now rotate those balances:
+
+```haskell
+Race = :Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold)
+```
+
+Gold becomes 51, Silver becomes 13, and Copper becomes 4. Every member reads the same incoming row. Nobody sees another member's write halfway through.
+
+To display the result, put `show` after the tuple with `|>`:
+
+```haskell
+Race = :Nord , (Gold, Silver, Copper) = (4, 51, 13) |> show(Gold, Silver, Copper)
+```
+
+`|>` means this, then this: the display sees the new balances. With `;` instead, both effects would read the incoming world, so the display would show the old balances. The [assignment reference](docs/ano-language.md#8-assignment) covers nested tuples, mixed column types, updates, and absent members.
+
 ### `&` vs `@`
 
 For `Merchant @ Whiterun` versus `Merchant & Whiterun`: they aren't different.

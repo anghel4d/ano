@@ -1,0 +1,8 @@
+--! registry ../registries/145-tuple-assignment.reg
+--! expect Gold = 51 20 51
+--! expect Silver = 13 2 13
+--! expect Copper = 4 6 4
+--! expect-n 3
+
+Nord , (Gold, Silver, Copper) = (4, 51, 13)
+Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) |> show(Gold, Silver, Copper)

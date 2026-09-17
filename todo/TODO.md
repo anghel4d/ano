@@ -5,9 +5,12 @@ The [historical rulings](00-historical-rulings.md) preserve the author's decisio
 ## Open work
 
 1. [06: seeded fold and fallible traverse](06-seeded-fold-and-traverse.md). Obtain a ruling before extending grammar or the unseeded recurrence.
-2. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
+2. [07: tuple comprehensions and guards](07-tuple-comprehensions-and-guards.md). Explore Erlang-style bindings and pure guards for n-tuples; settle denotation and minimal grammar before implementation.
+3. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
 
 ## Completed non-spatial work
+
+[N-tuple assignments](../docs/ano-language.md#8-assignment) are implemented in Steel/Kore: arbitrary arity, matching nested shapes, mixed carriers, simultaneous reads, shared row validity, and composition with batches and pipelines.
 
 [Sequential composition](../docs/ano-language.md#10-simultaneous-and-sequential-effects) is implemented in Steel/Kore, including simultaneous branches, grouped stages, structural effects, and persisted session updates. Selection pipelines preserve row identities and copy counts through calls, `take`, and `expand`.
 

@@ -56,6 +56,8 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 
 Composition binds from loosest to tightest as hinge, `;`, `|>`, then individual effects and assignments. Parentheses can group a simultaneous batch into a sequence stage: `Nord , (Silver = Gold ; Gold = Silver) |> Gold += Silver`. Steel/Kore execute both forms; intermediate writes within a pipeline stay private to that branch until the enclosing batch commits.
 
+`Nord , (Gold, Silver, Copper) = (4, 51, 13)` assigns an n-tuple simultaneously. Matching nested tuples and componentwise update operators are supported; tuple members retain their own carriers. A trailing comma distinguishes a singleton tuple from grouping. See [assignment](ano-language.md#8-assignment) for shape, validity, and destination rules.
+
 A bare caret refuses. A fused head cannot contain interior whitespace. Division reduction uses `fold(/)`, not `//`.
 
 `--` begins a source comment. `--!` directives belong to the fixture runner, not the language grammar.

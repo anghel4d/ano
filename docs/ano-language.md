@@ -122,6 +122,33 @@ Bandit , Faction = :Hostile
 
 Assignment writes through the selected row domain. Validity guards can remove rows from a write. Product-valued results and mismatched scan witnesses cannot be assigned merely because their buffers have the same length.
 
+Several columns can be assigned together with an n-tuple. Arity is not restricted to two:
+
+```haskell
+Nord , (Gold, Silver, Copper) = (4, 51, 13)
+Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold)
+```
+
+The first statement gives each selected row Gold 4, Silver 51, and Copper 13. The second rotates those values: Gold becomes 51, Silver 13, and Copper 4. Every RHS member reads the same incoming state; the tuple publishes its component writes together. There is no right-to-left assignment chain.
+
+Targets and values must be explicit tuples of matching arity and nesting. Each target leaf names a distinct registered column; aliases for the same column count as the same destination. Each value leaf is an ordinary expression checked against its own destination carrier. Mixed carriers and nested tuples are allowed:
+
+```haskell
+Nord , (Gold, (Marked, Race), Copper) = (Silver + 1, (Gold > 20, :Rich), 13)
+Nord , (Gold, Silver, Copper) += (1, 2, 3)
+```
+
+The update operators `+=`, `-=`, `*=`, and `/=` apply componentwise, retaining each column's existing publication rules, including carrier/range projection. A missing RHS member removes that row from the whole tuple write; other selected rows can still receive the complete tuple. A type, shape, lineage, or runtime validity failure refuses the operation. An independently composed sibling effect retains its own validity mask.
+
+```haskell
+Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) ; Marked = Gold > 20
+Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) |> Marked = Gold > 20
+```
+
+With `;`, Marked reads the incoming Gold. With `|>`, it reads the rotated Gold. Tuple assignments are single effects in these compositions, and also work in standing rules, existing comprehensions, and continuations. An omitted-subject tuple update uses the same antecedent/`^cursor` rules as a scalar update; use an explicit subject or leading comma for tuple `=` assignments.
+
+A trailing comma is allowed, including the singleton tuple `(Gold,) = (4,)` in effect position; `(Gold)` is grouping. Empty tuples are not assignment targets. This form assigns columns from explicit matching tuple expressions; it does not introduce tuple-valued registry storage or tuple-returning function signatures. Erlang-style tuple comprehensions and guards are a separate [design exploration](../todo/07-tuple-comprehensions-and-guards.md). [Demo 145](../demos/2-effects/145-tuple-assignment.ano) is an executable example.
+
 ### 9. Structural effects
 
 ```haskell
@@ -376,6 +403,8 @@ The implemented token tables, parser, and AST are [lex.rs](../steel/src/lex.rs),
 The composition precedence, from loosest to tightest, is the `,` / `=>` hinge, `;`, `|>`, then individual effects and assignments. `|>` composes stages left to right and applies on both sides of the hinge. Thus `Nord , Silver = Gold |> Gold = Silver` has one selection and two sequential effects: the pipe composes the assignments, rather than becoming part of the first assignment's value expression.
 
 Within expressions, the main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms have their own grammatical context rather than being ordinary value operators.
+
+In effect position, parenthesized targets followed by an assignment operator form a tuple assignment; other parenthesized effects group a batch. Commas within those target/value parentheses separate tuple members and do not introduce another selection/effect hinge.
 
 The effect grammar parses semicolon-separated branches, each containing a left-to-right `|>` sequence of effects or parenthesized effect groups. The emitter evaluates each sequence from the enclosing batch's incoming state, commits each stage for the following stage's reads, then merges the branch's final writes at the enclosing barrier. Parallel branches still require compatible writes.
 

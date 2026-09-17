@@ -2761,6 +2761,60 @@ mod parser_session {
     }
 
     #[test]
+    fn tuple_assignments_persist_atomically_and_reopen() {
+        const CHILD: &str = "ANO_TUPLE_SESSION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let dir = std::env::temp_dir().join(format!("ano-kore-tuples-{}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let mut steel = std::env::current_exe().unwrap();
+            steel.pop(); steel.pop(); steel.push("steel");
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "world::parser_session::tuple_assignments_persist_atomically_and_reopen", "--nocapture"])
+                .env(CHILD, "1").env("STEEL", steel).current_dir(&dir).output().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(result.status.success(), "{}\n{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
+            return;
+        }
+        let path = std::env::current_dir().unwrap().join("world.reg");
+        std::fs::write(&path, "n 3\ncol Nord bool 1 0 1\ncol Gold num 10 20 30\ncol Silver num 1 2 3\ncol Copper nat 5 6 7\n").unwrap();
+        let observe = || {
+            let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
+            ["Gold", "Silver", "Copper"].map(|name| {
+                let entry = reg.ents.iter().find(|entry| entry.name == name).unwrap();
+                let steel::RegEntryKind::Col { nums, .. } = &entry.kind else { panic!("numeric column required") };
+                nums.clone()
+            })
+        };
+        let mut app = App::new();
+        app.mode = Mode::Reg;
+        app.world = world_load(path.to_str().unwrap()).unwrap();
+        for (source, expected) in [
+            ("Nord , (Gold, Silver, Copper) = (4, 51, 13)", [[4.0, 20.0, 4.0], [51.0, 2.0, 51.0], [13.0, 6.0, 13.0]]),
+            ("Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold)", [[51.0, 20.0, 51.0], [13.0, 2.0, 13.0], [4.0, 6.0, 4.0]]),
+        ] {
+            app.prompt = source.as_bytes().to_vec();
+            repl_submit(&mut app);
+            assert_eq!(observe(), expected.map(Vec::from), "{source}");
+        }
+        let before = observe();
+        for source in [
+            "Nord , (Gold, Silver, Copper) = (1, 2, :Wrong)",
+            "Nord , Gold = 0 |> (Gold, Silver, Copper) = (1, 2, Gold / Gold)",
+        ] {
+            app.prompt = source.as_bytes().to_vec();
+            repl_submit(&mut app);
+            assert_eq!(observe(), before, "refused tuple must not publish any slot or intermediate stage: {source}");
+        }
+        let mut reopened = App::new();
+        reopened.mode = Mode::Reg;
+        reopened.world = world_load(path.to_str().unwrap()).unwrap();
+        session_rehydrate(&mut reopened);
+        reopened.prompt = b"Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) |> Silver = Gold".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(observe(), [vec![13.0, 20.0, 13.0], vec![13.0, 2.0, 13.0], vec![51.0, 6.0, 51.0]]);
+    }
+
+    #[test]
     fn definitions_survive_whitespace_and_reload() {
         const CHILD: &str = "ANO_PARSER_SESSION_CHILD";
         if std::env::var_os(CHILD).is_none() {

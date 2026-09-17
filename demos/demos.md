@@ -7,7 +7,7 @@ The numbers in the quarantine block of `todo/TODO.md` are decommissioned. Their 
 ## Layout
 
 - `1-selection/`: live 001–015 cover masks, scopes, presence, predicates, functional and set hops, named selections, and the dynamic alias overlay in selection position.
-- `2-effects/`: live 016–027 cover value, assignment, structural, barrier, pre-state, post-despawn hop, and sequenced effects behind one frozen overlay snapshot.
+- `2-effects/`: live 016–027 cover value, assignment, structural, barrier, pre-state, post-despawn hop, and sequenced effects behind one frozen overlay snapshot; 145 covers n-tuple assignment and simultaneous rotation followed by display.
 - `3-fold-scan/`: live 028–032 cover reductions over live scopes, the ordered long forms, the running forms, along, and the mean machine; 038–040 cover boolean scans and registered-reducer spellings; 139–141 stress the accumulation order across magnitudes and 142 covers Greater and Lesser over glyphs.
 - `4-order/`: live 041–043 and 045 cover grade, rank, ordered top-k, and ties.
 - `5-generate/`: live 048–049 and 054 cover replication, expansion, and prototype spawn.
