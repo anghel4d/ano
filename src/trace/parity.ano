@@ -1,0 +1,15 @@
+-- The parity subject: a predicate hop, a gamma over a fiber in effect position, a fiber image
+-- in a predicate, a spawn, a standing rule and a query, all in one program. Enabling the trace
+-- must change none of it — not a value, not a row, not the query output, not the exit code.
+--! registry parity-world
+--! expect-n 8
+--! expect gold = 6 110 4 8 102 0 0 0
+--! expect tally = 109 0 0 7 0 0 0 0
+--! expect reach = 1 0 0 1 0 0 0 0
+
+Nord & mentor.Dead , Gold += 100
+Lead , Tally = max/ targets'.Gold
+|/ targets'.Rich , Reach += 1
+Lead , spawn Recruit
+def settle = Nord => Gold += 1
++/ Gold

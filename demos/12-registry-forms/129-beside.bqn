@@ -1,4 +1,3 @@
-# Registry beside the twin (bare-name form).
 # ano: Alive , Hp += 10
 # Semantics: heal every living entity by 10; the fixture 129-beside.reg sits in this directory.
 # Invariant: living rows gain exactly 10, the dead row is untouched.

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tersify"
+  short_description: "Tighten prose without changing meaning"
+  default_prompt: "Use $tersify to tighten the specified prose without changing its meaning."
+policy:
+  allow_implicit_invocation: false

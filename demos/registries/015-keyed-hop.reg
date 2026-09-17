@@ -1,4 +1,3 @@
-# s60 — keyed-hop fixture (mirrors demos/1-selection/015-keyed-hop.bqn)
 # The unique column declares injectivity (pairwise-distinct, checked at load); mentor and
 # targets are keyed to it, so every hop is rel;unique⁻¹ — one index-of, one found-guard.
 # The ids are primes: a positional read misses everywhere, so the routing is proven.

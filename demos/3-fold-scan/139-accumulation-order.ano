@@ -1,0 +1,27 @@
+-- Accumulation order is observable. Over 1, 1e100, -1e100 the left recurrence answers 0 and a right fold answers 1, so this column tells the two apart where tidy small numbers cannot.
+-- The last line of each pair is the law A13 exists to hold: the fold is the last element of its own scan. The mean is a prefix machine, and its finish accumulates in the machine's order for the same reason.
+--! registry ../registries/139-accumulation-order.reg
+
+--! out 0
++/ Drift
+
+--! out 1 1e100 0
++\ Drift
+
+--! out 0 0 1
+(+\ Drift) == (+/ Drift)
+
+--! out 0
+avg/ Drift
+
+--! out 1 5e99 0
+avg\ Drift
+
+--! out 0 0 1
+(avg\ Drift) == (avg/ Drift)
+
+--! out 1e100
+max/ Drift
+
+--! out -1e100
+min/ Drift

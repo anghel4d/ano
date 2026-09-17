@@ -1,0 +1,12 @@
+# Four bags of readings; the second and fourth are empty. A fold with a registered identity
+# answers an empty bag with that identity; the extrema have none, so those rows have no answer
+# at all and drop — the same law a predicate with no matches obeys.
+n 4
+col bag bool 1 1 1 1
+col total int -1 -1 -1 -1
+col peak int -1 -1 -1 -1
+srel readings 3 5 | | 2 4 9 |
+ja 袋 bag
+ja 合計 total
+ja 頂点 peak
+ja 測定 readings

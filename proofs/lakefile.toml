@@ -1,0 +1,6 @@
+name = "ano-proofs"
+version = "0.1.0"
+defaultTargets = ["Ano"]
+
+[[lean_lib]]
+name = "Ano"

@@ -1,7 +1,5 @@
-# w3-b — the interleaved wand (mirrors demos/11-noita/123-modifier-chain.bqn, the interleaved section)
 # Wand [DP, Triple, SB, DP, SB, SB]: one block; the shortcut dies here, the general binding is the evaluator.
 # binds: the order-derived srel — fiber of each projectile = the modifiers whose next-projectile-at-or-after
-# lands on it (the .bqn's NextP, inverted). Geometry from the slot ground, listed the way moore is.
 n 7
 col keys num 0 1 2 3 4 5 6
 col wand bool 1 0 0 0 0 0 0

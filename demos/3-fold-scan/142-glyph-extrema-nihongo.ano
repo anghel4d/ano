@@ -1,0 +1,41 @@
+--! registry ../registries/142-glyph-extrema.reg
+--! ja
+
+--! out sow
+"sat" か "cow"
+
+--! out cat
+"sat" と "cow"
+
+--! out n
+最大 印
+
+--! out e
+最小 印
+
+--! out n
+或 印
+
+--! out e
+皆 印
+
+--! out ggnnn
+累或 印
+
+--! out geeee
+累皆 印
+
+--! out ggnnn
+累大 印
+
+--! out geeee
+累小 印
+
+--! out 0 0 1 1 1
+( 累或 印 ) ( 最大 印 ) 同
+
+--! out i
+最大 印 生存 で
+
+--! out
+最大 印 不在 で

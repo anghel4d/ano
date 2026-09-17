@@ -1,6 +1,4 @@
--- Japanese dotted hop (ex41): の is the relationship gather feeding the predicate. Twin of 083-dotted-hop.bqn.
 -- 師匠の両手 is mentor.TwoHanded: the genitive particle is the hop, reading the master's skill from the student's row.
--- ASCII gloss: Nord & mentor.TwoHanded > 80 , Gold += 1000. All links valid; the dangling case is ex44.
 --! registry ../registries/083-dotted-hop.reg
 --! ja
 --! expect gold = 1000 1010 1020 30 40 50

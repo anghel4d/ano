@@ -1,0 +1,5 @@
+-- The 132 headers' standing claim, pinned: delete the `as` line and the program's Nord
+-- has no referent — the emit-time refusal, the name gate's outside face.
+-- expect: unregistered mask name 'Nord'
+--! registry save-unregistered-mask-world
+Nord & Gold > 50 , Gold += 500

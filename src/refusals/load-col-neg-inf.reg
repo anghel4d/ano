@@ -1,3 +1,4 @@
-# expect: registry line 3: bad number '-inf'
+# accept
+# The extended-real num carrier admits a hand-written negative infinity at load.
 n 2
 col gold num -inf 5

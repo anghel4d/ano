@@ -1,0 +1,5 @@
+--! registry ../registries/136-integer-domain.reg
+--! expect drift = -2 1 -1 0
+
+Alive , drift *= 2
+Alive , drift /= 4

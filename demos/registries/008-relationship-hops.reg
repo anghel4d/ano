@@ -1,4 +1,3 @@
-# ex08 — relationship hops fixture (mirrors demos/1-selection/008-relationship-hops.bqn)
 # mentor is nullable (-1 dangling: rows 1, 4); leader is total — rows 0..1 double as
 # leaders in the same id space. hasMentor is derived by the emitter from the sentinel.
 n 6

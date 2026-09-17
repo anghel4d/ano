@@ -1,4 +1,3 @@
--- Japanese conjugate of 077-farm-gamma-b (crops spread: masked +Planted gated by a gamma count over the neighbor fiber, one barrier step).
 --! registry ../registries/077-farm-gamma-b.reg
 --! ja
 --! expect planted = 0 0 0 0 0 0 1 1 1 0 0 1 1 1 0 0 1 1 1 0 0 0 0 0 0

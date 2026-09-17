@@ -1,4 +1,3 @@
-# w3 — the modifier chain (mirrors demos/11-noita/123-modifier-chain.bqn)
 # Wand [DP, DP, Triple, SB, SB, SB]: one cast block; both Damage Plus chain through the multicast onto its first bolt.
 n 7
 col keys num 0 1 2 3 4 5 6

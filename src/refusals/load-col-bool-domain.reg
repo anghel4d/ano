@@ -1,0 +1,5 @@
+# expect: registry line 5: col dead: value 2 outside bool
+# The load seal, refined columns: bool admits {0,1} at rest. The unique precedent —
+# distinctness refuses, it does not repair; the TUI is where a 2 clamps to 1 with a warning.
+n 2
+col dead bool 0 2

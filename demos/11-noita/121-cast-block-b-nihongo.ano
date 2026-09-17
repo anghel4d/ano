@@ -1,4 +1,3 @@
--- Japanese conjugate of w1-b (the recovery trap): membership is the running minimum's story, never the balance's.
 --! registry ../registries/121-cast-block-b.reg
 --! ja
 --! expect bal = 0 0 1 0 -1

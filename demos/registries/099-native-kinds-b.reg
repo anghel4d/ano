@@ -1,5 +1,3 @@
-# s53b — native Japanese generation world: vec column, point binding, spawn defaults.
-# 資金 carries `default 25` so minted rows witness the default under a mangled name.
 n 4
 col 生成器 bool 1 0 1 0
 col 手先 bool 0 0 0 0

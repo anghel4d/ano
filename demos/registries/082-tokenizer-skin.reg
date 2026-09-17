@@ -1,4 +1,3 @@
-# ex40 — Japanese tokenizer skin fixture (mirrors demos/9-nihongo/082-tokenizer-skin.bqn)
 # ja targets carry the ASCII surface spelling so --! same-tokens compares names byte-exactly.
 n 6
 col nord bool 1 1 0 1 1 0

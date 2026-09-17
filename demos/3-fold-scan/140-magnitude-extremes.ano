@@ -1,0 +1,27 @@
+-- Large beside large, small beside small, and one column wholly inside the subnormals. big cancels to 0 before the trailing 1 arrives, so the left recurrence answers 1 where a right fold answers 0; small loses its 1e-320 head into a normal neighbour, so the left recurrence answers exactly 0 where a right fold answers 1e-320.
+-- Below 1e-9 the --! out comparator is blind, so the small and grain claims are pinned as exact equality against a declared column rather than as a printed value.
+--! registry ../registries/140-magnitude-extremes.reg
+
+--! out 1
++/ Big
+
+--! out 1e300 3e300 0 1
++\ Big
+
+--! out 0 0 0 1
+(+\ Big) == (+/ Big)
+
+--! out 1 1 1 1
+(+/ Small) == Zero
+
+--! out 0 0 1 1
+(+\ Small) == Zero
+
+--! out 0 0 1 1
+(+\ Small) == (+/ Small)
+
+--! out 1 1 1 1
+(+/ Grain) == Unit
+
+--! out 0 0 1 1
+(+\ Grain) == (+/ Grain)

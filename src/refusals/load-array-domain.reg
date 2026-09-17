@@ -1,0 +1,4 @@
+# expect: registry line 4: unknown array domain 'drifting'
+# A resident array is scalar, entity-domain, or fixed-extent; equal lengths prove nothing.
+n 0
+array A id:0000000000000001 v:1 num drifting

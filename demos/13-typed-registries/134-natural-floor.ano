@@ -1,0 +1,5 @@
+--! registry ../registries/134-natural-floor.reg
+--! expect hp = 0 0 90 0
+
+Alive , hp -= 55
+Alive , hp -= 55

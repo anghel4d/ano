@@ -1,4 +1,3 @@
-# w2 — the wrap trick (mirrors demos/11-noita/122-wrap.bqn)
 # Wand [SB, DP], cast pointer at slot 1: the second block wraps — DP at the buffer's end binds the bolt at the front.
 # rot is the block's draw order as world rows (DP first, then the wrapped SB), the deck rotation the host's cast pointer supplies.
 n 3

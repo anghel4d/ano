@@ -1,4 +1,3 @@
--- Japanese conjugate of w3-c (interleaved wand: in-program bind column via reverse min-scan, the relation as value).
 --! registry ../registries/125-modifier-chain-c.reg
 --! ja
 --! expect bal = 0 1 3 2 2 1 0

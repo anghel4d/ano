@@ -1,0 +1,10 @@
+-- A formerly-live key. The hop before the despawn resolves and is silent; the same hop after
+-- it is DEAD twice, once per row that still names the departed id.
+--! registry despawned-world
+--! expect-n 4
+--! expect id = 7 13 17 19
+--! expect gold = 0 0 0 11
+
+mentor.Dead , Gold += 1
+Cursed , ~
+Nord & mentor.Dead , Gold += 10

@@ -1,7 +1,3 @@
-# ex20 — outer product comprehension fixture (mirrors demos/5-generate/046-outer-product-comprehension.bqn)
-# One entity world: rows 0-2 towers (tp), rows 3-6 creeps (cp), rows 7-10 bodies (bp).
-# pos holds tower/creep positions, span holds body lo/hi intervals; -1 -1 junk behind absent presence.
-# dist is euclidean (root of the .bqn's squared table) so the surface threshold 50 keeps ex20's strictness: (t2,c3) is at squared distance 2501, one over 2500.
 n 11
 col tower bool 1 1 1 0 0 0 0 0 0 0 0
 col creep bool 0 0 0 1 1 1 1 0 0 0 0

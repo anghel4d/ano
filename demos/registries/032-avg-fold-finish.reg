@@ -1,6 +1,10 @@
-# spec §12 (pre-renumbering §11) — avg fold+finish fixture (mirrors demos/3-fold-scan/032-avg-fold-finish.bqn)
+# The mean machine. cow scopes weight to 400 500 600 900, whose prefix means are integral on
+# purpose (the harness compares within 1e-9). none is the empty scope: the mean declares no
+# empty result and yields no row; the count declares 0.
 n 6
 col cow bool 1 1 0 1 1 0
+col none bool 0 0 0 0 0 0
 col weight num 400 500 50 600 900 70
 ja 牛 cow
+ja 無 none
 ja 重量 weight

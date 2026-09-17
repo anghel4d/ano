@@ -1,4 +1,3 @@
--- The all-quantifier and the empty fiber (decision record setHop; spec §5, §9). Split from 013-set-hop; twin of 012-empty-pen.bqn. (was s05c-empty-pen)
 -- Five animals, four pens, one id space: animals are rows 0-4, pens rows 5-8. penOf points each animal at its pen; livestock is the inverse read, each pen's fiber of animals. &/ livestock'.Healthy asks: all my animals healthy? Pen 8 holds no animals at all, and the empty fiber takes the fold's identity — &/ of nothing is true, so the empty pen IS Certified, vacuously; #/ of nothing is 0, so its Headcount says so.
 --! registry ../registries/012-empty-pen.reg
 --! expect certified = 0 0 0 0 0 1 0 1 1

@@ -1,0 +1,5 @@
+# expect: rel mentor row 1: relationship target inf is not finite
+# Infinity is a num value but never an entity endpoint; the relationship seal refuses it.
+n 3
+col hp num 1 2 3
+rel mentor 0 inf 1

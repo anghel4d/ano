@@ -1,4 +1,3 @@
--- Japanese twin of 034-fib-stencil-a: one zero-fill stencil step from the zero pre-state is all zeros (spec §21). prev is a shift, not a carry, so the Version A statement yields zeros — that is the assertion, not Fibonacci.
 --! registry ../registries/034-fib-stencil-a.reg
 --! ja
 --! expect offset = 0 0 0 0 0 0 0 0 0 0 0 0

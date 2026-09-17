@@ -1,5 +1,3 @@
-# ex35 replicate row (mirrors demos/7-tiers/064-two-habitats.bqn)
-# four sources; parent -1 = unspawned original; minted parents come from the registered parent column.
 n 4
 col unit bool 1 1 1 1
 col minion bool 0 0 0 0

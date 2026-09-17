@@ -1,4 +1,3 @@
-# s53c — native Japanese char column and a kanji-named fn with a verbatim BQN body.
 n 6
 col 印 char .#..#.
 col 得点 num 0 0 0 0 0 0

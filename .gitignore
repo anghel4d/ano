@@ -50,6 +50,10 @@ scratch/
 !.claude/skills/**
 !.claude/hooks/
 !.claude/hooks/**
+.claude/skills/coding-campaign/
+
+# Language tour (tracked)
+!tour.md
 
 # GNU APL repl history
 .apl.history
@@ -58,14 +62,11 @@ scratch/
 result
 result-*
 
-# anoc build output
-src/anoc
-src/*.o
+# Lean proof output
+proofs/.lake/
 
-# common build output
-common/*.o
-common/test_common
-
-# kore build output and scratch (the undo ring, play copies, repl program)
-kore/kore
+# Kore scratch (undo, play copies, and REPL programs)
 .kore/
+
+# steel (cargo) build output
+/target

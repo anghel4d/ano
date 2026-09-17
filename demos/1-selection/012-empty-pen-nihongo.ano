@@ -1,4 +1,3 @@
--- Japanese conjugate of s05c (the all-quantifier and the empty fiber). Twin of 012-empty-pen.ano.
 --! registry ../registries/012-empty-pen.reg
 --! ja
 --! expect certified = 0 0 0 0 0 1 0 1 1

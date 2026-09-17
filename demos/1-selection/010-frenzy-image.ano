@@ -1,4 +1,3 @@
--- The set-hop image and in-degree (decision record setHop; spec §5, §9). Split from 013-set-hop; twin of 010-frenzy-image.bqn. (was s05a-frenzy-image)
 -- A world of eight fighters. Two are frenzied, and each holds a target set: fighter 0 swings at {3,4}, fighter 1 at {4,5}. In source position Frenzy.targets' selects the image — the union of the fibers, a mask. A mask has no multiplicity: fighter 4, targeted by both, takes the ;-batch once. Health row 4 is 90, not 80 — the idempotent scatter.
 -- In-degree is a different quantity and lives in a different place: the gamma fold over the inverse fiber. attackers' is the preimage of targets, and Hits += #/ attackers' counts in-edges per target — hits row 4 says 2 where the scatter said once.
 --! registry ../registries/010-frenzy-image.reg

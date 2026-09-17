@@ -1,0 +1,5 @@
+# expect: registry line 5: unique id: value -5 outside nat
+# Constraints intersect: unique nat seals BOTH distinctness and the naturals at rest.
+# The carrier seals first — a negative key refuses before the distinctness pass.
+n 2
+unique id nat 3 -5

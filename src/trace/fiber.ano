@@ -1,0 +1,11 @@
+-- A set relationship with a dead member and empty fibers. The predicate crossing reports both
+-- dead members over X; the effect crossings report only the selected one; an empty fiber under
+-- an identityless gamma reports FIBER ... IS EMPTY; and the gamma in effect position reduces
+-- over the live members alone.
+--! registry fiber-world
+--! expect reach = 1 0 0 1 0
+--! expect tally = 9 0 0 7 0
+
+|/ targets'.Rich , Tally += 1
+Lead , Reach = #/ targets'
+Lead , Tally = max/ targets'.Gold
