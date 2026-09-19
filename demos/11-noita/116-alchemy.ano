@@ -5,4 +5,4 @@
 
 Oil & (x - 6) * (x - 6) + (y - 6) * (y - 6) <= 5 , +Fire
 Oil @ blast(5) at Firebolt.pos , +Fire
-def spread = Oil & !Fire & #/ (moore' & Fire) >= 1 => +Fire
+def spread = Oil & !Fire & #/ (moore & Fire) >= 1 => +Fire

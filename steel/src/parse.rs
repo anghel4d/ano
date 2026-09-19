@@ -104,7 +104,7 @@ fn check_expr_depth(root: &Node) -> Result<(), Diag> {
         let mut push = |child| pending.push((child, depth + 1));
         use NodeKind::*;
         match &node.kind {
-            Not(x) | IotaX(x) | Expand(x) | Grade { key: x, .. }
+            Not(x) | Prime(x) | Relation { source: x, .. } | IotaX(x) | Expand(x) | Grade { key: x, .. }
             | OrderBy { key: x, .. } | Top { inner: x, .. }
             | Fold { operand: x, .. } | ScanExpr { operand: x, .. } => push(x),
             And(l, r) | Or(l, r) | Cmp { l, r, .. } | Arith { l, r, .. }
@@ -316,6 +316,11 @@ impl P<'_, '_> {
             e = Node::new(NodeKind::Tuple(els), line);
         }
         self.expect(TokKind::Rp, "')'")?;
+        while self.pk() == TokKind::Tick {
+            self.adv();
+            e = Node::new(NodeKind::Prime(Box::new(e)), line);
+            check_expr_depth(&e)?;
+        }
         Ok(e)
     }
 
@@ -644,23 +649,13 @@ impl P<'_, '_> {
             }
             if k == TokKind::Tick {
                 self.adv();
-                let lline = l.line;
+                // In a.b', prime belongs to b. Use (a.b)' to converse the whole composition.
                 l = match l.kind {
-                    NodeKind::Name(rel) => Node::new(NodeKind::SetHop { rel }, lline),
-                    NodeKind::Hop { l: hl, r } if matches!(r.kind, NodeKind::Name(_)) => {
-                        let NodeKind::Name(rel) = r.kind else {
-                            unreachable!()
-                        };
-                        let s = Node::new(NodeKind::SetHop { rel }, r.line);
-                        Node::new(
-                            NodeKind::Hop {
-                                l: hl,
-                                r: Box::new(s),
-                            },
-                            lline,
-                        )
-                    }
-                    _ => return Err(perr(line, "tick after non-name")),
+                    NodeKind::Hop { l: base, r } => Node::new(NodeKind::Hop {
+                        l: base,
+                        r: Box::new(Node::new(NodeKind::Prime(r), line)),
+                    }, line),
+                    kind => Node::new(NodeKind::Prime(Box::new(Node::new(kind, l.line))), line),
                 };
                 continue;
             }
@@ -1532,10 +1527,8 @@ mod tests {
                 sx(b, r, it);
                 b.push(')');
             }
-            SetHop { rel } => {
-                let s = it.resolve(*rel);
-                let _ = write!(b, "(SETHOP {s} (NAME {s}))");
-            }
+            Prime(inner) => { b.push_str("(prime "); sx(b, inner, it); b.push(')'); }
+            Relation { .. } => { let _ = write!(b, "{:?}", n.kind); }
             Call { callee, args } => {
                 let _ = write!(b, "(CALL {}", it.resolve(*callee));
                 sx_kids(b, args, it);
@@ -1776,7 +1769,7 @@ mod tests {
                 tn!("Frenzied"),
                 tk!(Eof),
             ],
-            "(PROGRAM (STMT (HOP (NAME Frenzy) (SETHOP targets (NAME targets))) (EADD Frenzied)))",
+            "(PROGRAM (STMT (HOP (NAME Frenzy) (prime (NAME targets))) (EADD Frenzied)))",
         );
         // ^cursor , Knockback 5 ; Flash :Red ; -Shielded
         run_case(
@@ -1825,7 +1818,7 @@ mod tests {
                 tn!("Planted"),
                 tk!(Eof),
             ],
-            "(PROGRAM (STMT (AND (AND (NAME Plot) (NOT (NAME Planted))) (CMP g (FOLD # (AND (SETHOP neighbors (NAME neighbors)) (NAME Planted))) (NUM 2))) (EADD Planted)))",
+            "(PROGRAM (STMT (AND (AND (NAME Plot) (NOT (NAME Planted))) (CMP g (FOLD # (AND (prime (NAME neighbors)) (NAME Planted))) (NUM 2))) (EADD Planted)))",
         );
         // top 5 (grade desc Threat) , +Targeted
         run_case(
@@ -2274,7 +2267,7 @@ mod tests {
                 tn!("Moisture"),
                 tk!(Eof),
             ],
-            "(PROGRAM (STMT (NAME Plot) (EASSIGN = (NAME Moisture) (FOLD avg (HOP (SETHOP neighbors (NAME neighbors)) (NAME Moisture))))))",
+            "(PROGRAM (STMT (NAME Plot) (EASSIGN = (NAME Moisture) (FOLD avg (HOP (prime (NAME neighbors)) (NAME Moisture))))))",
         );
         // Knockback 5   — line-start juxtaposed verb, elided subject
         run_case(

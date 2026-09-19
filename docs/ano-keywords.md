@@ -42,7 +42,8 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 | `+=`, `-=`, `*=`, `/=` | Value updates |
 | `+`, `-`, `*`, `/`, `%` | Arithmetic or structural forms by context |
 | `@` | Scope; plain mask scope lowers to conjunction |
-| `.`, `'` | Functional hop/projection and set-fiber hop |
+| `.` | Projection, relationship traversal, selected image, or relation composition |
+| `'` | Prime: relational converse; repeated primes compose, with `R'' = R` |
 | `(`, `)` | Group, call, tuple |
 | `[`, `]`, `<-` | Comprehension and generators |
 | `~` | Despawn/continuation |
@@ -57,6 +58,8 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 Composition binds from loosest to tightest as hinge, `;`, `|>`, then individual effects and assignments. Parentheses can group a simultaneous batch into a sequence stage: `Nord , (Silver = Gold ; Gold = Silver) |> Gold += Silver`. Steel/Kore execute both forms; intermediate writes within a pipeline stay private to that branch until the enclosing batch commits.
 
 `Nord , (Gold, Silver, Copper) = (4, 51, 13)` assigns an n-tuple simultaneously. Matching nested tuples and componentwise update operators are supported; tuple members retain their own carriers. A trailing comma distinguishes a singleton tuple from grouping. See [assignment](ano-language.md#8-assignment) for shape, validity, and destination rules.
+
+Ordinary set-valued traversal needs no prime: `Selected.targets`, `#/ livestock`, and `+/ livestock.Health`. Prime reverses edges: `parent'` supplies each row's children; `A.B'` converses B, while `(A.B)'` converses the whole composition. This special relational algebra remains subject to a complete rework and review; [the current contract](ano-language.md#prime-relational-converse) is executable.
 
 A bare caret refuses. A fused head cannot contain interior whitespace. Division reduction uses `fold(/)`, not `//`.
 

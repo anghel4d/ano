@@ -9,9 +9,9 @@
 --! expect certified = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1
 --! expect headcount = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2 1 0
 
-Frenzy.targets' , +Frenzied ; Health -= 10
-Target , Hits += #/ attackers'
-Plot & |/ neighbors'.Planted , +Sprouting
-Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
-Pen & &/ livestock'.Healthy , +Certified
-Pen , Headcount = #/ livestock'
+Frenzy.targets , +Frenzied ; Health -= 10
+Target , Hits += #/ attackers
+Plot & |/ neighbors.Planted , +Sprouting
+Plot & !Planted & #/ (neighbors & Planted) >= 2 , +Planted
+Pen & &/ livestock.Healthy , +Certified
+Pen , Headcount = #/ livestock

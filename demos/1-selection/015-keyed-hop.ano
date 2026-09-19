@@ -12,5 +12,5 @@
 Nord & mentor.Dead , Gold += 100
 Cursed , ~
 Nord & mentor.Dead , -Trained
-Frenzy.targets' , +Frenzied
-Frenzy , Reach = #/ targets'
+Frenzy.targets , +Frenzied
+Frenzy , Reach = #/ targets

@@ -111,3 +111,5 @@ A typed signature controls which carriers a call accepts. Footprints identify th
 A migration must account for both declarations and live data. Preserving an ID across a rename preserves identity; changing its meaning requires an appropriate version change and revalidation. A stale cached plan or resident value cannot be made current by relabeling its schema fingerprint.
 
 The file transaction covers the registry and its managed sidecars. A host holding external resident arrays or constructed values must separately use the migration receipt before publishing those values. This distinction matters when a file migration succeeds but a host still holds an old handle.
+
+`inv children parent` declares a derived converse, equivalent to `parent'` under the [prime contract](ano-language.md#prime-relational-converse). Reads recompute from the current parent relationship; `children` needs no suffix for traversal or grouped reduction. An explicit `srel` stores its forward edges, so adding prime reverses them.

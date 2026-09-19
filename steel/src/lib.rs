@@ -347,8 +347,9 @@ pub enum NodeKind {
     CmpAny { name: Symbol }, // C N_CMP op '_', kids[0]=NAME — the presence-any tuple element (TwoHanded _)
     Arith { op: ArithOp, l: Box<Node>, r: Box<Node> },
     Scope { l: Box<Node>, r: Box<Node>, origin: Option<Box<Node>> }, // l @ r; origin = anchored-frame kids[2]
-    Hop { l: Box<Node>, r: Box<Node> }, // l . r; r is Name, SetHop (tick rewrite), or the chain nests in l
-    SetHop { rel: Symbol },             // name'; C kids[0] was the same N_NAME — the Symbol carries it
+    Hop { l: Box<Node>, r: Box<Node> }, // projection, traversal, or relational composition
+    Prime(Box<Node>), // relational converse; postfix on a relation expression
+    Relation { source: Box<Node>, inverse: bool }, // normalized world-row relation
     Call { callee: Symbol, args: Vec<Node> },
     // op carries the SURFACE spelling until normalize resolves the head against the operand
     // carrier and rebinds it to the descriptor's canonical spelling (reducer::resolve_head);
@@ -408,7 +409,8 @@ impl NodeKind {
             NodeKind::Arith { .. } => 11,
             NodeKind::Scope { .. } => 12,
             NodeKind::Hop { .. } => 13,
-            NodeKind::SetHop { .. } => 14,
+            NodeKind::Prime(..) => 14,
+            NodeKind::Relation { .. } => 48,
             NodeKind::Call { .. } => 15,
             NodeKind::Fold { .. } => 16,
             NodeKind::ScanExpr { .. } => 17,

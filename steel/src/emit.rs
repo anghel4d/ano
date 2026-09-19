@@ -347,17 +347,18 @@ fn def_body(d: &Node) -> &Node {
 fn fiber_sym(nd: &Node) -> Symbol {
     match &nd.kind {
         NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => *s,
-        NodeKind::SetHop { rel } => *rel,
+        NodeKind::Relation { source, .. } | NodeKind::Prime(source) => fiber_sym(source),
+        NodeKind::Hop { l, .. } => fiber_sym(l),
         _ => Symbol::EMPTY,
     }
 }
 
 // C kid order per node kind — the generic traversal for scanDespawn/containsIota/
-// findShapeScope; the phantom N_NAME kids of SetHop/CmpAny are handled at their use sites.
+// findShapeScope; the phantom N_NAME child of CmpAny is handled at its use sites.
 fn children(nd: &Node) -> Vec<&Node> {
     use NodeKind::*;
     match &nd.kind {
-        Not(a) | IotaX(a) | Expand(a) | Query(a) => vec![a.as_ref()],
+        Not(a) | Prime(a) | Relation { source: a, .. } | IotaX(a) | Expand(a) | Query(a) => vec![a.as_ref()],
         And(a, b) | Or(a, b) => vec![a.as_ref(), b.as_ref()],
         Cmp { l, r, .. } | Arith { l, r, .. } | Hop { l, r } => vec![l.as_ref(), r.as_ref()],
         Scope { l, r, origin } => {
@@ -482,12 +483,12 @@ fn scan_despawn(nd: &Node) -> bool {
     children(nd).into_iter().any(scan_despawn)
 }
 
-// Does this subtree start a gamma (a set hop at fold-operand level)?
+// Does this subtree denote per-source groups at fold-operand level?
 fn is_gamma_operand(nd: &Node) -> bool {
     match &nd.kind {
-        NodeKind::SetHop { .. } => true,
-        NodeKind::Hop { l, .. } => matches!(l.kind, NodeKind::SetHop { .. }),
-        NodeKind::And(l, _) => matches!(l.kind, NodeKind::SetHop { .. }),
+        NodeKind::Relation { .. } => true,
+        NodeKind::Hop { l, .. } => matches!(l.kind, NodeKind::Relation { .. }),
+        NodeKind::And(l, _) => matches!(l.kind, NodeKind::Relation { .. }),
         _ => false,
     }
 }
@@ -884,7 +885,7 @@ impl<'a> Em<'a> {
             NodeKind::Name(s) | NodeKind::Alias { look: s, .. } | NodeKind::Sym(s) | NodeKind::Str(s) => {
                 self.rs(*s)
             }
-            NodeKind::SetHop { rel } => self.rs(*rel),
+            NodeKind::Relation { source, .. } | NodeKind::Prime(source) => self.node_name(source),
             NodeKind::Call { callee, .. } => self.rs(*callee),
             NodeKind::CmpAny { name } => self.rs(*name),
             _ => "",
@@ -1295,95 +1296,140 @@ impl<'a> Em<'a> {
         }
     }
 
-    // Gamma fold: fold/ rel'.Comp | fold/ (rel' & pred) | fold/ rel' -> per-source column + guard.
-    fn emit_gamma(&mut self, op: &str, operand: &Node, m: Mode) -> R<Ev> {
-        let mut ev = Ev::default();
-        match &operand.kind {
-            NodeKind::SetHop { rel } => {
-                // #/ attackers'
-                let (mut fib, _raw) = self.fiber_var(*rel, operand.line)?;
-                self.fiber_rows(*rel, &mut fib, m, operand.line);
-                let body = format!("≠¨{}", fib);
-                if op != "#" {
-                    // other folds over bare fiber make no sense
-                    return Err(fail(operand.line, format!("bare rel' under {}/", op)));
-                }
-                ev.v = self.in_mode(format!("({})", body), m);
-                Ok(ev)
+    // Resolve a relation into closed expressions of current world-row sets. Guards must not
+    // depend on staging temporaries: assignment probes discard their emitted statements.
+    /// !TODO: Rework and review the special relational algebra as a whole; prime is converse.
+    fn relation_rows(&mut self, node: &Node, mode: Mode) -> R<String> {
+        match &node.kind {
+            NodeKind::Relation { source, inverse } => {
+                // Converse inspects incoming edges from the whole source domain, even when
+                // the resulting owners are selected. Keep diagnostics honest about that read.
+                let saved = if *inverse { Some(std::mem::take(&mut self.trace_sel)) } else { None };
+                let rows = self.relation_rows(source, mode);
+                if let Some(saved) = saved { self.trace_sel = saved; }
+                let rows = rows?;
+                if *inverse {
+                    self.need_declaration("AnoConverse ← {f←𝕩 ⋄ {i←𝕩 ⋄ /{0<+´i=𝕩}¨f}¨↕≠f}");
+                    Ok(format!("(AnoConverse {})", rows))
+                } else { Ok(rows) }
             }
-            NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => {
-                // fold/ rel'.Comp
-                let rel = fiber_sym(l);
-                let (mut fib, raw) = self.fiber_var(rel, l.line)?;
-                self.fiber_rows(rel, &mut fib, m, l.line);
-                let fb_name = self.rs(rel);
-                let nonempty = self.fiber_nonempty(rel, &raw);
-                let cv = self.emit_val(r, Mode::World)?;
-                // a machine and a registered head render nothing here, and register nothing
-                let call = self.render_fold(op, &format!("𝕩⊏{}", cv.v));
-                let t = self.tv();
-                if op == "avg" {
-                    self.trace_empty(fb_name, &fib, m, l.line);
-                    let mean = self.render_mean();
-                    self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {} 𝕩⊏{}}}¨{}", t, mean, cv.v, fib));
-                    ev.g = Some(nonempty);
-                    ev.gv = true;
-                } else if op == "#" {
-                    // the count machine's finish over the presence stream the normalizer wrapped
-                    // onto the component: a 0/1 mask sums exactly in either order, so this
-                    // reduction needs no reversal
-                    self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, cv.v, fib));
-                } else if let Some(call) = call {
-                    if fold_has_id(op) {
-                        self.stage(format!("{} ← {{{}}}¨{}", t, call, fib));
-                    } else {
-                        // max/min: no identity, guard empties
-                        self.trace_empty(fb_name, &fib, m, l.line);
-                        self.stage(format!("{} ← {{0=≠𝕩 ? 0 ; {}}}¨{}", t, call, fib));
-                        ev.g = Some(nonempty);
-                        ev.gv = true;
-                    }
-                } else {
-                    if let Some(ei) = self.find(op) {
-                        if matches!(self.ent(ei).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }) {
-                            return Err(fail(
-                                operand.line,
-                                format!("named reducer '{}' over fibers is not yet supported", op),
-                            ));
+            NodeKind::Hop { l, r } => {
+                let left = self.relation_rows(l, mode)?;
+                let saved = std::mem::take(&mut self.trace_sel);
+                let right = self.relation_rows(r, Mode::World);
+                self.trace_sel = saved;
+                let right = right?;
+                self.need_declaration("AnoCompose ← {b←𝕩 ⋄ {/(↕≠b)∊∾⟨⟨⟩⟩∾𝕩⊏b}¨𝕨}");
+                Ok(format!("({} AnoCompose {})", left, right))
+            }
+            NodeKind::Name(sym) | NodeKind::Alias { look: sym, .. } => {
+                let ei = self.find(self.rs(*sym)).ok_or_else(|| fail(node.line, "unknown relation"))?;
+                let name = self.ent(ei).name.clone();
+                let value = self.bqnv(ei);
+                match &self.ent(ei).kind {
+                    RegEntryKind::SRel { fib, inv_of, .. } => {
+                        if let Some(forward) = inv_of {
+                            let ri = self.find(forward).ok_or_else(|| fail(node.line, "inverse relation has no forward declaration"))?;
+                            let saved = std::mem::take(&mut self.trace_sel);
+                            let rows = self.functional_rows(ri, mode, node.line);
+                            self.trace_sel = saved;
+                            let rows = rows?;
+                            self.need_declaration("AnoConverse ← {f←𝕩 ⋄ {i←𝕩 ⋄ /{0<+´i=𝕩}¨f}¨↕≠f}");
+                            return Ok(format!("(AnoConverse {})", rows));
                         }
+                        if fib.len() != self.reg.n as usize {
+                            return Err(fail(node.line, "relation requires one group per world row"));
+                        }
+                        let key = self.rel_key(ei).unwrap_or_else(|| "(↕anoN)".to_string());
+                        if self.dirs.trace {
+                            let scoped = self.trace_scoped(mode);
+                            let usage = self.record_use(scoped, node.line, &name);
+                            let ids = self.trace_ids(&value);
+                            let (ids, src) = if scoped {
+                                (format!("({}/{})", self.trace_sel, ids), format!("({}/{})", self.trace_sel, value))
+                            } else { (ids, value.clone()) };
+                            self.stage(format!("{} {{m←(¯1≠𝕩)∧(≠{})≤{}⊐𝕩 ⋄ AnoTraceDead ⟨\"{}\", (+´m)⥊𝕨, m/𝕩, \"{}\"⟩}}¨ {}", ids, key, key, name, usage, src));
+                        }
+                        Ok(format!("({{k←{}⊐(¯1≠𝕩)/𝕩 ⋄ /(↕anoN)∊k}}¨{})", key, value))
                     }
-                    return Err(fail(operand.line, format!("unknown reducer '{}'", op)));
-                }
-                ev.v = self.in_mode(t, m);
-                Ok(ev)
-            }
-            NodeKind::And(l, r) if matches!(l.kind, NodeKind::SetHop { .. }) => {
-                // fold/ (rel' & pred)
-                let rel = fiber_sym(l);
-                let (mut fib, _raw) = self.fiber_var(rel, l.line)?;
-                self.fiber_rows(rel, &mut fib, m, l.line);
-                let pm = self.emit_mask(r)?;
-                let tp = self.tv();
-                self.stage(format!("{} ← {}", tp, pm));
-                let t = self.tv();
-                match op {
-                    // the count machine's finish: a 0/1 mask sums exactly in either order, so this
-                    // reduction needs no reversal — the operand is what makes it free, not the
-                    // machine, whose payload accumulations do carry the ordered recurrence
-                    "#" => self.stage(format!("{} ← {{+´𝕩⊏{}}}¨{}", t, tp, fib)),
-                    "|" | "&" => {
-                        let Some(call) = self.render_fold(op, &format!("𝕩⊏{}", tp)) else {
-                            return Err(fail(operand.line, format!("fold {}/ over filtered fiber", op)));
-                        };
-                        self.stage(format!("{} ← {{{}}}¨{}", t, call, fib));
+                    RegEntryKind::Rel { .. } | RegEntryKind::Col { ty: ColType::Num | ColType::Nat | ColType::Int, .. } => {
+                        self.functional_rows(ei, mode, node.line)
                     }
-                    _ => return Err(fail(operand.line, format!("fold {}/ over filtered fiber", op))),
+                    _ => Err(fail(node.line, "prime requires a declared relationship or numeric key column")),
                 }
-                ev.v = self.in_mode(t, m);
-                Ok(ev)
             }
-            _ => Err(fail(operand.line, "unsupported gamma operand")),
+            _ => Err(fail(node.line, "unsupported relational operand")),
         }
+    }
+
+    fn functional_rows(&mut self, ei: usize, mode: Mode, line: i32) -> R<String> {
+        let name = self.ent(ei).name.clone();
+        let value = self.bqnv(ei);
+        let numeric = matches!(self.ent(ei).kind, RegEntryKind::Col { .. });
+        let key = if numeric { self.id_col() } else { self.rel_key(ei).unwrap_or_else(|| "(↕anoN)".to_string()) };
+        let pres = self.pres_of(ei);
+        self.trace_dead(&name, Some(&key), &value, pres.as_deref(), mode, line);
+        let rows = format!("({{k←{}⊐⟨𝕩⟩ ⋄ ((¯1≠𝕩)∧k<≠{})/k}}¨{})", key, key, value);
+        Ok(match pres {
+            Some(pres) => format!("({} {{𝕨/𝕩}}¨{})", pres, rows),
+            None => rows,
+        })
+    }
+
+    // Group projections preserve source rows while filtering missing target values. The
+    // second expression describes the admitted row groups for identityless-fold guards.
+    fn group_values(&mut self, node: &Node, mode: Mode) -> R<(String, String, String)> {
+        match &node.kind {
+            NodeKind::Relation { .. } => {
+                let rows = self.relation_rows(node, mode)?;
+                Ok((format!("({{𝕩⊏{}}}¨{})", self.id_col(), rows), rows, self.rs(fiber_sym(node)).to_string()))
+            }
+            NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::Relation { .. }) => {
+                let mut rows = self.relation_rows(l, mode)?;
+                let value = self.emit_val(r, Mode::World)?;
+                if value.unit || value.pair {
+                    return Err(fail(node.line, "group projection requires a world-row column"));
+                }
+                if let Some(guard) = value.g {
+                    rows = format!("({{(𝕩⊏{})/𝕩}}¨{})", guard, rows);
+                }
+                Ok((format!("({{𝕩⊏{}}}¨{})", value.v, rows), rows, self.rs(fiber_sym(l)).to_string()))
+            }
+            NodeKind::And(l, r) if matches!(l.kind, NodeKind::Relation { .. }) => {
+                let rows = self.relation_rows(l, mode)?;
+                let mask = self.emit_mask(r)?;
+                Ok((format!("({{𝕩⊏{}}}¨{})", mask, rows), rows, self.rs(fiber_sym(l)).to_string()))
+            }
+            _ => Err(fail(node.line, "unsupported grouped operand")),
+        }
+    }
+
+    // Grouped folds yield one result per source; prime only determines edge direction.
+    fn emit_gamma(&mut self, op: &str, operand: &Node, m: Mode) -> R<Ev> {
+        if matches!(operand.kind, NodeKind::Relation { .. }) {
+            if op != "#" { return Err(fail(operand.line, "reduce a relation's projected values; use #/ for cardinality")); }
+            let rows = self.relation_rows(operand, m)?;
+            return Ok(Ev { v: self.in_mode(format!("(≠¨{})", rows), m), ..Ev::default() });
+        }
+        let (values, rows, name) = self.group_values(operand, m)?;
+        let mut ev = Ev::default();
+        let call = if op == "#" {
+            "+´𝕩".to_string()
+        } else if op == "avg" {
+            format!("{} 𝕩", self.render_mean())
+        } else {
+            self.render_fold(op, "𝕩").ok_or_else(|| fail(operand.line, format!("named reducer '{}' over groups is not yet supported", op)))?
+        };
+        let body = if op == "#" || fold_has_id(op) {
+            format!("({{{}}}¨{})", call, values)
+        } else {
+            self.trace_empty(&name, &rows, m, operand.line);
+            ev.g = Some(format!("(0<≠¨{})", rows));
+            ev.gv = true;
+            format!("({{0=≠𝕩 ? 0 ; {}}}¨{})", call, values)
+        };
+        ev.v = self.in_mode(body, m);
+        Ok(ev)
     }
 
     // Scoped-global fold -> scalar EV (unit), except gamma/@row columns.
@@ -1983,6 +2029,14 @@ impl<'a> Em<'a> {
                 ev.v = self.in_mode(msk, m);
                 Ok(ev)
             }
+            NodeKind::Hop { r, .. } if matches!(r.kind, NodeKind::Relation { .. }) => {
+                let mask = self.emit_mask(nd)?;
+                Ok(Ev { v: self.in_mode(mask, m), ..Ev::default() })
+            }
+            NodeKind::Hop { l, .. } if matches!(l.kind, NodeKind::Relation { .. }) => {
+                let (values, _, _) = self.group_values(nd, m)?;
+                Ok(Ev { v: self.in_mode(values, m), ..Ev::default() })
+            }
             NodeKind::Hop { .. } => self.emit_hop(nd, m),
             NodeKind::Call { callee, args } => self.emit_call(*callee, args, nd.line, m),
             NodeKind::Fold { op, operand } => self.emit_fold(*op, operand, nd.line, m),
@@ -2107,7 +2161,11 @@ impl<'a> Em<'a> {
                 ev.unit = true;
                 Ok(ev)
             }
-            NodeKind::SetHop { .. } => Err(fail(nd.line, "bare rel' outside fold/source position")),
+            NodeKind::Relation { .. } => {
+                let rows = self.relation_rows(nd, m)?;
+                Ok(Ev { v: self.in_mode(format!("({{𝕩⊏{}}}¨{})", self.id_col(), rows), m), ..Ev::default() })
+            }
+            NodeKind::Prime(_) => Err(fail(nd.line, "unnormalized prime")),
             k => Err(fail(nd.line, format!("unsupported value node {}", k.c_kind()))),
         }
     }
@@ -2238,49 +2296,20 @@ impl<'a> Em<'a> {
                 let b = self.emit_mask(r)?;
                 Ok(format!("({}∧{})", a, b))
             }
-            NodeKind::Hop { l, r } if matches!(r.kind, NodeKind::SetHop { .. }) => {
-                // image: Sel.rel' — union of the selected sources' fibers, membership by stable
-                // id; a keyed srel's fibers hold keys, so membership runs against its own key column
+            NodeKind::Hop { l, r } if matches!(r.kind, NodeKind::Relation { .. }) => {
                 let src = self.emit_mask(l)?;
-                let rel = fiber_sym(r);
-                let (fib, _raw) = self.fiber_var(rel, r.line)?;
-                let se = self.find(self.rs(rel));
-                let mut ids: Option<String> = None;
-                if let Some(si) = se {
-                    if let RegEntryKind::SRel { key_of: Some(k), .. } = &self.ent(si).kind {
-                        if let Some(kc) = self.find(k) {
-                            ids = Some(self.bqnv(kc));
-                        }
-                    }
-                }
-                let mcol = match ids {
-                    Some(i) => i,
-                    None => self.id_col(),
-                };
-                // --trace: a dead member is a dead link the image crosses; only stored
-                // entity-sided srel fibers can hold dead members
-                if self.dirs.trace {
-                    if let Some(si) = se {
-                        if let RegEntryKind::SRel { fib: fibers, .. } = &self.ent(si).kind {
-                            if fibers.len() == self.reg.n as usize {
-                                let sname = self.ent(si).name.as_str();
-                                let scoped = self.trace_scoped(Mode::World);
-                                let usage = self.record_use(scoped, nd.line, sname);
-                                let tids = self.trace_ids(&fib);
-                                let sel = if scoped {
-                                    format!("({}∧{})", self.trace_sel, src)
-                                } else {
-                                    src.clone()
-                                };
-                                self.stage(format!(
-                                    "({}/{}) {{m←(≠{})≤{}⊐𝕩 ⋄ AnoTraceDead ⟨\"{}\", (+´m)⥊𝕨, m/𝕩, \"{}\"⟩}}¨ ({}/{})",
-                                    sel, tids, mcol, mcol, sname, usage, sel, fib
-                                ));
-                            }
-                        }
-                    }
-                }
-                Ok(format!("({}‿{} AnoImage {})", src, fib, mcol))
+                let saved = std::mem::replace(&mut self.trace_sel, src.clone());
+                let rows = self.relation_rows(r, Mode::Sel);
+                self.trace_sel = saved;
+                let rows = rows?;
+                Ok(format!("({}‿{} AnoImage (↕anoN))", src, rows))
+            }
+            NodeKind::Relation { .. } => {
+                let rows = self.relation_rows(nd, Mode::World)?;
+                Ok(format!("(0<≠¨{})", rows))
+            }
+            NodeKind::Hop { l, .. } if matches!(l.kind, NodeKind::Relation { .. }) => {
+                Err(fail(nd.line, "grouped projection needs a reduction before use as a mask"))
             }
             NodeKind::Hop { .. } => {
                 let v = self.emit_hop(nd, Mode::World)?;
@@ -4050,13 +4079,19 @@ impl<'a> Em<'a> {
                     let ty = *ty;
                     self.save_colfield("field", i, ty, false, &v, &e.name);
                 }
-                RegEntryKind::Rel { .. } => {
+                RegEntryKind::Rel { key_of, .. } => {
+                    let v = if self.world_shifted && self.need_idx && key_of.is_none() {
+                        format!("({{k←anoIdx⊐𝕩 ⋄ (k<anoN){{𝕨 ? 𝕩 ; ¯1}}¨k}} {})", v)
+                    } else { v };
                     self.out.push_str(&format!("•Out anoSaveSep∾\"rel {}\"∾AnoSaveRow AnoSaveNum¨{}\n", e.name, v));
                 }
-                RegEntryKind::SRel { inv_of, .. } => {
+                RegEntryKind::SRel { inv_of, key_of, .. } => {
                     if inv_of.is_some() {
                         continue;
                     }
+                    let v = if self.world_shifted && self.need_idx && key_of.is_none() {
+                        format!("({{k←anoIdx⊐𝕩 ⋄ (k<anoN)/k}}¨{})", v)
+                    } else { v };
                     self.out.push_str(&format!(
                         "•Out anoSaveSep∾\"srel {}\"∾2↓∾{{\" |\"∾AnoSaveRow AnoSaveNum¨𝕩}}¨{}\n",
                         e.name, v
@@ -4120,30 +4155,14 @@ impl<'a> Em<'a> {
     }
 
     // 1 when the subtree reads through the idx key space: an unkeyed functional rel by name,
-    // or a set-hop over an unkeyed world-length srel / key column when the world has no id.
+    // or a relation expression that may use positional source or target identities.
     fn scan_idx_use(&self, nd: &Node, has_id: bool, depth: i32) -> bool {
         if depth > 16 {
             return false;
         }
         match &nd.kind {
             NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => return self.scan_idx_name(*s, has_id, depth),
-            NodeKind::SetHop { rel } => {
-                if !has_id {
-                    if let Some(ei) = self.find(self.rs(*rel)) {
-                        let hit = match &self.ent(ei).kind {
-                            RegEntryKind::SRel { key_of, fib, .. } => {
-                                key_of.is_none() && fib.len() == self.reg.n as usize
-                            }
-                            RegEntryKind::Col { .. } => true,
-                            _ => false,
-                        };
-                        if hit {
-                            return true;
-                        }
-                    }
-                }
-                return self.scan_idx_name(*rel, has_id, depth);
-            }
+            NodeKind::Relation { .. } | NodeKind::Prime(_) => return true,
             NodeKind::CmpAny { name } => return self.scan_idx_name(*name, has_id, depth),
             _ => {}
         }
@@ -4156,6 +4175,12 @@ impl<'a> Em<'a> {
         let any = kids.iter().any(|k| scan_despawn(k));
         if !any {
             return;
+        }
+        // Serialization also needs the old row identities when no later expression reads
+        // a positional edge. Live links rebase at save; links to removed rows disappear.
+        if self.reg.ents.iter().any(|e| matches!(e.kind,
+            RegEntryKind::Rel { key_of: None, .. } | RegEntryKind::SRel { key_of: None, .. })) {
+            self.need_idx = true;
         }
         // the same reg_role ladder idCol resolves through
         let mut ide = self.role("id");
@@ -4836,6 +4861,7 @@ mod normalize {
         synthetic: u32,
         /// Exact-byte program definitions and the carrier inferred from their normalized body.
         derived: BTreeMap<String, SemanticCarrier>,
+        relation_defs: BTreeMap<String, Node>,
         /// Every registry name minted during this emission.  Source may not spell one.
         generated: BTreeSet<String>,
     }
@@ -4858,6 +4884,7 @@ mod normalize {
                 extent_number: None,
                 synthetic: 0,
                 derived: BTreeMap::new(),
+                relation_defs: BTreeMap::new(),
                 generated: BTreeSet::new(),
             }
         }
@@ -4991,7 +5018,7 @@ mod normalize {
                     },
                     line,
                 ),
-                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => Node::new(
+                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::Relation { .. }) => Node::new(
                     NodeKind::Hop {
                         l,
                         r: Box::new(self.numeric_extent(*r)),
@@ -5037,7 +5064,7 @@ mod normalize {
                     NodeKind::Scope { l: Box::new(self.coerce(*l, to)), r, origin },
                     line,
                 ),
-                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => Node::new(
+                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::Relation { .. }) => Node::new(
                     NodeKind::Hop { l, r: Box::new(self.coerce(*r, to)) },
                     line,
                 ),
@@ -5128,6 +5155,37 @@ mod normalize {
                 | RegEntryKind::Field { ty: ColType::Sym, .. } => SemanticCarrier::Sym,
                 _ => SemanticCarrier::Other,
             }
+        }
+
+        fn declared_relation(&self, node: &Node) -> bool {
+            match &node.kind {
+                NodeKind::Relation { .. } => true,
+                NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => reg_find(&self.reg, self.spelling(*s))
+                    .is_some_and(|i| matches!(self.reg.ents[i].kind, RegEntryKind::Rel { .. } | RegEntryKind::SRel { .. })),
+                NodeKind::Hop { l, r } => self.declared_relation(l) && self.declared_relation(r),
+                _ => false,
+            }
+        }
+
+        fn prime_source(&self, node: &Node) -> bool {
+            self.declared_relation(node) || match &node.kind {
+                NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => reg_find(&self.reg, self.spelling(*s))
+                    .is_some_and(|i| matches!(&self.reg.ents[i].kind,
+                        RegEntryKind::Col { ty: ColType::Num | ColType::Nat | ColType::Int, nums, .. }
+                            if nums.len() == self.reg.n.max(0) as usize)),
+                _ => false,
+            }
+        }
+
+        fn relation_name(&self, node: Node) -> Node {
+            let line = node.line;
+            let entry = match &node.kind {
+                NodeKind::Name(s) | NodeKind::Alias { look: s, .. } => reg_find(&self.reg, self.spelling(*s)),
+                _ => None,
+            };
+            if entry.is_some_and(|i| matches!(self.reg.ents[i].kind, RegEntryKind::SRel { .. })) {
+                Node::new(NodeKind::Relation { source: Box::new(node), inverse: false }, line)
+            } else { node }
         }
 
         fn infer(&self, node: &Node) -> SemanticCarrier {
@@ -5346,7 +5404,6 @@ mod normalize {
                 | NodeKind::Alias { look: s, .. }
                 | NodeKind::Call { callee: s, .. }
                 | NodeKind::CmpAny { name: s }
-                | NodeKind::SetHop { rel: s }
                 | NodeKind::EAdd(s)
                 | NodeKind::EDel(s)
                 | NodeKind::EVerb { name: s, .. }
@@ -5404,7 +5461,7 @@ mod normalize {
         fn fiber_presence(node: Node) -> Node {
             let line = node.line;
             match node.kind {
-                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::SetHop { .. }) => {
+                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::Relation { .. }) => {
                     Node::new(NodeKind::Hop { l, r: Box::new(Self::presence(*r)) }, line)
                 }
                 kind => Node::new(kind, line),
@@ -5933,8 +5990,16 @@ mod normalize {
                 NodeKind::Sym(symbol) => NodeKind::Sym(*symbol),
                 NodeKind::Str(symbol) => NodeKind::Str(*symbol),
                 // bare lookup never touches the dynamic-alias overlay
-                NodeKind::Name(symbol) => NodeKind::Name(*symbol),
-                NodeKind::Alias { look: symbol, .. } => return self.resolve_alias_or_bare(*symbol, line),
+                NodeKind::Name(symbol) => {
+                    if let Some(body) = self.relation_defs.get(self.spelling(*symbol)) {
+                        return Ok(Node::new(body.kind.clone(), line));
+                    }
+                    return Ok(self.relation_name(node.clone()));
+                }
+                NodeKind::Alias { look: symbol, .. } => {
+                    let resolved = self.resolve_alias_or_bare(*symbol, line)?;
+                    return Ok(self.relation_name(resolved));
+                }
                 NodeKind::Wild => NodeKind::Wild,
                 NodeKind::Not(inner) => {
                     NodeKind::Not(Box::new(self.normalize(inner, Context::Mask, phase)?))
@@ -6019,6 +6084,9 @@ mod normalize {
                 NodeKind::Cmp { op, l, r } => {
                     let mut l = self.normalize(l, Context::Value, phase)?;
                     let mut r = self.normalize(r, Context::Value, phase)?;
+                    if super::is_gamma_operand(&l) || super::is_gamma_operand(&r) {
+                        return Err(super::fail(line, "relational groups need a reduction before a scalar operation"));
+                    }
                     let (lc, rc) = (self.infer(&l), self.infer(&r));
                     if lc == SemanticCarrier::Sym || rc == SemanticCarrier::Sym {
                         if lc != SemanticCarrier::Sym
@@ -6050,6 +6118,9 @@ mod normalize {
                 NodeKind::Arith { op, l, r } => {
                     let mut l = self.normalize(l, Context::Value, phase)?;
                     let mut r = self.normalize(r, Context::Value, phase)?;
+                    if super::is_gamma_operand(&l) || super::is_gamma_operand(&r) {
+                        return Err(super::fail(line, "relational groups need a reduction before a scalar operation"));
+                    }
                     for operand in [&mut l, &mut r] {
                         match self.infer(operand) {
                             SemanticCarrier::Number => {}
@@ -6074,17 +6145,43 @@ mod normalize {
                         None => None,
                     },
                 },
-                NodeKind::Hop { l, r } => NodeKind::Hop {
-                    l: Box::new(self.normalize(l, Context::Value, phase)?),
-                    r: Box::new(self.normalize(r, Context::Neutral, phase)?),
-                },
-                NodeKind::SetHop { rel } => NodeKind::SetHop { rel: *rel },
+                NodeKind::Hop { l, r } => {
+                    let l = self.normalize(l, Context::Value, phase)?;
+                    let mut r = self.normalize(r, Context::Neutral, phase)?;
+                    let left_relation = self.declared_relation(&l);
+                    let right_relation = self.declared_relation(&r);
+                    if !left_relation && right_relation && !matches!(r.kind, NodeKind::Relation { .. }) {
+                        r = Node::new(NodeKind::Relation { source: Box::new(r), inverse: false }, line);
+                    }
+                    let grouped = matches!(l.kind, NodeKind::Relation { .. }) || matches!(r.kind, NodeKind::Relation { .. });
+                    let hop = NodeKind::Hop { l: Box::new(l), r: Box::new(r) };
+                    if left_relation && right_relation && grouped {
+                        NodeKind::Relation { source: Box::new(Node::new(hop, line)), inverse: false }
+                    } else { hop }
+                }
+                // Prime has one meaning: converse. Cancel pairs only after validating the
+                // operand, so an invalid expression cannot acquire meaning through two primes.
+                NodeKind::Prime(inner) => {
+                    let inner = self.normalize(inner, Context::Neutral, phase)?;
+                    if !self.prime_source(&inner) {
+                        return Err(super::fail(line, "prime requires a declared relationship or numeric key column"));
+                    }
+                    match inner.kind {
+                        NodeKind::Relation { source, inverse: true } => return self.normalize(&source, context, phase),
+                        NodeKind::Relation { source, inverse: false } => NodeKind::Relation { source, inverse: true },
+                        kind => NodeKind::Relation { source: Box::new(Node::new(kind, inner.line)), inverse: true },
+                    }
+                }
+                NodeKind::Relation { source, inverse } => NodeKind::Relation { source: source.clone(), inverse: *inverse },
                 NodeKind::Call { callee, args } => {
                     let spelling = self.spelling(*callee).to_string();
                     let args = args
                         .iter()
                         .map(|arg| self.normalize(arg, Context::Value, phase))
                         .collect::<Result<Vec<_>, _>>()?;
+                    if args.iter().any(super::is_gamma_operand) {
+                        return Err(super::fail(line, "relational groups need a reduction before a scalar call"));
+                    }
                     self.validate_value_call(&spelling, &args, line)?;
                     NodeKind::Call { callee: *callee, args }
                 }
@@ -6266,9 +6363,15 @@ mod normalize {
                     source: Box::new(self.normalize(source, Context::Value, phase)?),
                 },
                 NodeKind::EAssign { op, target, rhs } => {
-                    let target =
-                        self.normalize(target, Context::Neutral, TracePhase::Effect)?;
+                    let target = match &target.kind {
+                        NodeKind::Name(_) => target.as_ref().clone(),
+                        NodeKind::Alias { look, .. } => self.resolve_alias_or_bare(*look, target.line)?,
+                        _ => self.normalize(target, Context::Neutral, TracePhase::Effect)?,
+                    };
                     let rhs = self.normalize(rhs, Context::Value, TracePhase::Effect)?;
+                    if super::is_gamma_operand(&rhs) {
+                        return Err(super::fail(line, "cannot assign relational groups to a scalar column; reduce the groups first"));
+                    }
                     if let Some(target_entry) = self.target_entry(&target) {
                         if self.has_product_lineage(&rhs) {
                             return Err(super::fail(
@@ -6444,6 +6547,11 @@ mod normalize {
                     if !matches!(body.kind, NodeKind::Stmt { .. }) {
                         let spelling = self.spelling(*name).to_string();
                         let carrier = self.infer(&body);
+                        if self.prime_source(&body) || super::is_gamma_operand(&body) {
+                            self.relation_defs.insert(spelling.clone(), body.clone());
+                        } else {
+                            self.relation_defs.remove(&spelling);
+                        }
                         self.derived.insert(spelling, carrier);
                     }
                     NodeKind::DefStmt {
@@ -6451,7 +6559,10 @@ mod normalize {
                         body: Box::new(body),
                     }
                 }
-                NodeKind::UndefStmt { name } => NodeKind::UndefStmt { name: *name },
+                NodeKind::UndefStmt { name } => {
+                    self.relation_defs.remove(&self.spelling(*name).to_string());
+                    NodeKind::UndefStmt { name: *name }
+                },
                 NodeKind::Query(inner) => NodeKind::Query(Box::new(self.normalize(
                     inner,
                     Context::Neutral,

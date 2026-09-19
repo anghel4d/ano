@@ -1,4 +1,4 @@
 --! registry ../registries/077-farm-gamma-b.reg
 --! expect planted = 0 0 0 0 0 0 1 1 1 0 0 1 1 1 0 0 1 1 1 0 0 0 0 0 0
 
-Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
+Plot & !Planted & #/ (neighbors & Planted) >= 2 , +Planted

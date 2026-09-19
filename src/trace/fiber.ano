@@ -6,6 +6,6 @@
 --! expect reach = 1 0 0 1 0
 --! expect tally = 9 0 0 7 0
 
-|/ targets'.Rich , Tally += 1
-Lead , Reach = #/ targets'
-Lead , Tally = max/ targets'.Gold
+|/ targets.Rich , Tally += 1
+Lead , Reach = #/ targets
+Lead , Tally = max/ targets.Gold

@@ -1,6 +1,6 @@
 --! registry ../registries/108-life-naru.reg
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
 
-def kin = #/ (moore' & Planted)
+def kin = #/ (moore & Planted)
 def bloom = Plot & !Planted & kin == 3 => +Planted
 def wither = Plot & Planted & kin != 2 & kin != 3 => -Planted

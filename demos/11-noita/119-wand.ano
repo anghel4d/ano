@@ -18,5 +18,5 @@ SparkBolt , pos = pos + (24, 0)
 [ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
 Enemy & Hit , Health -= +/ Damage @ SparkBolt
 Oil @ blast(5) at impact , +Fire
-Oil & !Fire & #/ (moore' & Fire) >= 1 , +Fire
+Oil & !Fire & #/ (moore & Fire) >= 1 , +Fire
 def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~

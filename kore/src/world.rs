@@ -2761,6 +2761,59 @@ mod parser_session {
     }
 
     #[test]
+    fn prime_relations_persist_and_recompute_after_reopening() {
+        const CHILD: &str = "ANO_PRIME_SESSION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let dir = std::env::temp_dir().join(format!("ano-kore-prime-{}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let mut steel = std::env::current_exe().unwrap();
+            steel.pop(); steel.pop(); steel.push("steel");
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "world::parser_session::prime_relations_persist_and_recompute_after_reopening", "--nocapture"])
+                .env(CHILD, "1").env("STEEL", steel).current_dir(&dir).output().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(result.status.success(), "{}
+{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
+            return;
+        }
+        let path = std::env::current_dir().unwrap().join("world.reg");
+        std::fs::write(&path, "n 4
+col All bool 1 1 1 1
+col Out num 0 0 0 0
+rel parent -1 0 0 1
+inv children parent
+").unwrap();
+        let observe = || {
+            let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
+            let entry = reg.ents.iter().find(|entry| entry.name == "Out").unwrap();
+            let steel::RegEntryKind::Col { nums, .. } = &entry.kind else { panic!("numeric column required") };
+            nums.clone()
+        };
+        let mut app = App::new();
+        app.mode = Mode::Reg;
+        app.world = world_load(path.to_str().unwrap()).unwrap();
+        for source in ["def incoming = parent'", "All , Out = #/ incoming"] {
+            app.prompt = source.as_bytes().to_vec();
+            repl_submit(&mut app);
+        }
+        assert_eq!(observe(), vec![2.0, 1.0, 0.0, 0.0]);
+        app.prompt = b"All , parent = 0 |> Out = #/ children".to_vec();
+        repl_submit(&mut app);
+        assert_eq!(observe(), vec![4.0, 0.0, 0.0, 0.0]);
+        let mut reopened = App::new();
+        reopened.mode = Mode::Reg;
+        reopened.world = world_load(path.to_str().unwrap()).unwrap();
+        session_rehydrate(&mut reopened);
+        reopened.prompt = b"All , parent = -1 |> Out = #/ incoming".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(observe(), vec![0.0, 0.0, 0.0, 0.0]);
+        let before = std::fs::read(&path).unwrap();
+        reopened.prompt = b"All , Out = 8 |> Out = All'".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(std::fs::read(&path).unwrap(), before, "invalid prime must not publish an earlier stage");
+    }
+
+    #[test]
     fn tuple_assignments_persist_atomically_and_reopen() {
         const CHILD: &str = "ANO_TUPLE_SESSION_CHILD";
         if std::env::var_os(CHILD).is_none() {

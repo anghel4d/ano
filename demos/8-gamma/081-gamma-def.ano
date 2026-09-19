@@ -8,9 +8,9 @@
 --! expect cAvg = -1 -1 -1 -1 -1 4 -1 5 -1
 --! expect cPick = -1 -1 -1 -1 -1 2 -1 3 -1
 
-Target , CCount = #/ r'            -- count: fiber sizes 2 0 3 0
-Target , CSum = +/ r'.V            -- sum: 3+5, 0, 2+4+9, 0
-Target , CAny = |/ r'.F            -- any: identity false on the empty fibers
-Target , CAll = &/ r'.F            -- all: identity true on the empty fibers
-Target , CAvg = avg/ r'.V          -- avg: no identity, empty-fiber rows drop, no write lands
-Target & Picked , CPick = #/ r'    -- subset selection: only the picked targets take the write
+Target , CCount = #/ r            -- count: fiber sizes 2 0 3 0
+Target , CSum = +/ r.V            -- sum: 3+5, 0, 2+4+9, 0
+Target , CAny = |/ r.F            -- any: identity false on the empty fibers
+Target , CAll = &/ r.F            -- all: identity true on the empty fibers
+Target , CAvg = avg/ r.V          -- avg: no identity, empty-fiber rows drop, no write lands
+Target & Picked , CPick = #/ r    -- subset selection: only the picked targets take the write

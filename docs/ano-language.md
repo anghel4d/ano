@@ -87,8 +87,8 @@ Gold > Health * 10 , +Greedy
 
 ```haskell
 Nord & mentor.TwoHanded > 80 , Gold += 1000
-Frenzy.targets' , +Frenzied
-Pen , Headcount = #/ (livestock' & Cattle)
+Frenzy.targets , +Frenzied
+Pen , Headcount = #/ (livestock & Cattle)
 ```
 
 `rel.Comp` follows a functional relationship and reads the target column. A bare relationship mask uses the same foundness test. `-1` is the silent no-link sentinel. An admissible missing target fails foundness; malformed endpoint carriers refuse.
@@ -97,7 +97,42 @@ Predicate conjunction does not short-circuit row by row. In `Enemy & Owner.Gold 
 
 A keyed relationship resolves against a declared unique column. An unkeyed relationship uses the legacy row-index key space. Unique means injective, not nonnegative; its declared carrier determines allowed values.
 
-The tick `'` exposes set-valued or inverse fibers. In a source image, reached targets are deduplicated into a mask. Under a fold, each source's fiber is reduced separately. A bare fiber cannot be used as an ordinary flat value.
+Declared set-valued relationships need no suffix. `Frenzy.targets` selects the union of the selected fighters' targets; a target reached more than once still receives the effect once. `livestock.Health` produces one group of animal health values per owner, and `+/ livestock.Health` reduces each group separately. A bare set-valued relationship can be queried as groups of entity identities; it cannot be scattered into a scalar column.
+
+#### Prime: relational converse
+
+Read the apostrophe `'` as **prime**, as in the notation `f'`. Its current meaning is relational converse: reverse every live edge. If `R` relates source `a` to target `b`, `R'` relates `b` to `a`. It is an expression-local relation, recomputed from the incoming state of its stage; it neither writes the world nor introduces a hidden stored column. This use of prime belongs to Ano's special relational algebra. It does not mean calculus differentiation.
+
+For a functional relationship `parent` with targets `-1 0 0 1 1`, the edges are `1→0, 2→0, 3→1, 4→1`. Its converse groups are `(1,2), (3,4), (), (), ()`: the children of each row. If the registry declares `inv children parent`, `children` and `parent'` denote the same relation and both observe later changes to parent.
+
+```haskell
+parent.Gold
+parent'
+Selected.parent
+Selected.parent'
+#/ parent'
++/ parent'.Gold
+def childrenOf = parent'
+Selected , Out = #/ childrenOf
+```
+
+The first expression reads each row's parent's Gold. The next queries the reverse groups. The two images select the selected rows' parents and children respectively. The folds count children and sum their Gold per parent. Every noun in these examples must have a registry declaration or an explicit definition.
+
+Prime composes: `R'' = R`, `R''' = R'`, and `R'''' = R` as relations. These are semantic equalities, not additional assignment or relationship-comparison syntax. Ordinary functional values retain their original scalar-key representation after a pair of primes; set-valued relationships retain their grouped representation. A malformed operand is still refused under two primes.
+
+A dot composes declared relations in traversal order. Prime binds to the immediately preceding leg: `A.B'` means follow A, then converse B. Parentheses select the whole composition: `(A.B)'` means converse the two-leg relation, equal as an edge set to `B'.A'`. Names, spelling aliases, dynamic aliases that resolve to relationships, and definitions of relational expressions admit prime. Both readers accept repeated primes; Japanese also accepts the space-separated form `辺 ' '`.
+
+Declared relations use their own endpoint key spaces. A numeric stored key column also admits prime: `Bind'` groups sources by matching their present Bind value to the world's canonical identity column (role id, then role keys, otherwise positional identities). This retains the existing computed-key inverse use. A numeric expression such as `(Gold + 1)'`, a Boolean mask, an ordinary callable result, and a projected value group are not declared relations and refuse prime. Numeric-column double prime restores that column's original value representation.
+
+Relational groups are sets of live edges: duplicate endpoints contribute once, dead targets contribute no edge, and projected absent values are omitted before reduction. Members are visited in current world-row order, giving ordered folds a deterministic traversal. Functional `-1` remains silent absence; malformed endpoints still refuse. Converse scans the original source domain for incoming edges, so its dead-link trace records retain SOURCE domain even when the resulting owners are selected by an effect.
+
+Unkeyed positional edges retain their original row identity within an execution after despawn. Saving rebases live positional endpoints into the saved world's row order, drops dead set members, and stores a dead functional endpoint as `-1`; reopening cannot reinterpret a removed row's offset as another survivor. Use a declared unique key when endpoint numbers must remain stable across saves.
+
+Grouped arithmetic, direct group assignment to a scalar column, grouped scans, and named reducers over groups are refused rather than implicitly flattened. Project an ordinary column and use a supported grouped fold to obtain a scalar value per owner.
+
+`/// !TODO: Rework and review the special relational algebra as a whole: relation carriers and domains, composition, grouping, ordering, callable boundaries, and its connection to expression-local tuples/generators/guards/comprehensions. The current executable contract is prime = converse, including R'' = R; this TODO does not suspend that contract.`
+
+Migration from the earlier implementation: remove primes that merely exposed an already declared set-valued relation, such as `targets'`, `neighbors'`, or `livestock'`. Those forms now reverse their relations. Keep `Bind'` when the intent is inverse lookup from a numeric key column. The active ASCII and Japanese examples use the new contract.
 
 ### 6. Named selections
 
@@ -276,13 +311,13 @@ There is no explicit seed argument. That remains an open decision in [task 06](.
 ### 13. Grouped fold
 
 ```haskell
-Pen , Headcount = #/ (livestock' & Cattle)
-Plot , Moisture = avg/ neighbors'.Moisture
+Pen , Headcount = #/ (livestock & Cattle)
+Plot , Moisture = avg/ neighbors.Moisture
 ```
 
-A fold over `rel'` reduces each fiber to a per-source result. Empty fibers use the operation's identity or lose their result row. Count counts admitted elements, not their numeric payload.
+A fold over a declared set-valued relation reduces each group to a per-source result; prime changes the edge direction rather than enabling grouping. Empty fibers use the operation's identity or lose their result row. Count counts admitted elements, not their numeric payload.
 
-`f/ col @ mask` is scoped-global. `f/ rel'.col` is per-source. The legacy `rel @ row` form has its own row-fiber lowering. Named reducers over fibers and per-fiber scans are currently refused.
+`f/ col @ mask` is scoped-global. `f/ rel.col` is per-source. The legacy `rel @ row` form has its own row-fiber lowering. Named reducers over fibers and per-fiber scans are currently refused.
 
 ### 14. Scan (`\`)
 
@@ -401,6 +436,8 @@ An admitted infinity is not an empty-extrema identity. A failed publication does
 The implemented token tables, parser, and AST are [lex.rs](../steel/src/lex.rs), [parse.rs](../steel/src/parse.rs), and [lib.rs](../steel/src/lib.rs). [ano-keywords.md](ano-keywords.md) lists tokens and context-sensitive forms. Missing parser support does not remove a form from the language contract.
 
 The composition precedence, from loosest to tightest, is the `,` / `=>` hinge, `;`, `|>`, then individual effects and assignments. `|>` composes stages left to right and applies on both sides of the hinge. Thus `Nord , Silver = Gold |> Gold = Silver` has one selection and two sequential effects: the pipe composes the assignments, rather than becoming part of the first assignment's value expression.
+
+Postfix prime repeats on a relationship operand. In a dotted chain it applies to the preceding leg; `(A.B)'` explicitly converses the whole composition.
 
 Within expressions, the main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms have their own grammatical context rather than being ordinary value operators.
 

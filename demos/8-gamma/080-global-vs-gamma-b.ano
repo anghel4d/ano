@@ -6,5 +6,5 @@
 
 #/ (Cattle)
 Pen , Headcount = #/ (Cattle)
-Pen , Headcount = #/ (livestock' & Cattle)   -- one value per selected pen; result arity is lexical
+Pen , Headcount = #/ (livestock & Cattle)   -- one value per selected pen; result arity is lexical
 +/ Headcount @ Pen                           -- conservation: the gamma column folds back to the global scalar 5

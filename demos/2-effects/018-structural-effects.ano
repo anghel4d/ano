@@ -8,5 +8,5 @@
 --! expect encumbered = 0 0 0 1 0 0
 
 Dead , ~
-Frenzy.targets' , +Frenzied
+Frenzy.targets , +Frenzied
 Burdened , -Encumbered

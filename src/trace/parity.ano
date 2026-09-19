@@ -8,8 +8,8 @@
 --! expect reach = 1 0 0 1 0 0 0 0
 
 Nord & mentor.Dead , Gold += 100
-Lead , Tally = max/ targets'.Gold
-|/ targets'.Rich , Reach += 1
+Lead , Tally = max/ targets.Gold
+|/ targets.Rich , Reach += 1
 Lead , spawn Recruit
 def settle = Nord => Gold += 1
 +/ Gold

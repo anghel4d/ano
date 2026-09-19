@@ -3,7 +3,7 @@
 --! out 5
 --! expect planted = 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 
-def kin = #/ (moore' & Planted)
+def kin = #/ (moore & Planted)
 #/ (Planted)
 Plot , Planted = kin == 3 | Planted & kin == 2
 Plot , Planted = kin == 3 | Planted & kin == 2

@@ -2,6 +2,6 @@
 --! expect kin = 0 0 0 0 0 1 2 3 2 1 1 1 2 1 1 1 2 3 2 1 0 0 0 0 0
 --! expect planted = 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0
 
-Plot , Kin = #/ (moore' & Planted)
+Plot , Kin = #/ (moore & Planted)
 Plot & !Planted & Kin == 3 , +Planted
 Plot & Planted & Kin != 2 & Kin != 3 , -Planted

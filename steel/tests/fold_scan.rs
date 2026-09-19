@@ -1,3 +1,4 @@
+mod support;
 // The todo/03 acceptance matrix: folds, scans, Greater/Lesser, and empty results.  Everything
 // runs in process through the public boundary (lex -> parse -> emit_with_aliases) with an
 // in-memory Registry — no BQN interpreter, no demo fixtures, no sidecar files.  CLAUDE.md rules
@@ -214,7 +215,7 @@ fn count_and_average_lower_as_prefix_machines() {
     // A 0/1 mask sums to the same value in either order, so the count's finish carries no
     // reversal — the operand buys that, not the machine.
     assert!(ok("#/ Gold @ Burning\n").contains("q1 ← (+´burning)"));
-    assert!(ok("#/ near'\n").contains("q1 ← (≠¨near)"));
+    support::Fixture::new("n 4\nsrel near 1 | | 0 3 | 2\n").accepts("--! out 1 0 2 1\n#/ near");
 }
 
 /* ---------- 2. bridges ---------- */
@@ -421,10 +422,9 @@ fn identityless_empty_fold_cannot_expose_its_placeholder() {
 // assignment path, which already drops those rows from the scatter mask.
 #[test]
 fn grouped_query_compresses_empty_fibers() {
-    for source in ["max/ near'.Gold\n", "min/ near'.Gold\n", "avg/ near'.Gold\n"] {
-        let text = ok(source);
-        assert!(text.contains("q1 ← ((0<≠¨near))/t0"), "{}: {}", source, text);
-        assert!(text.contains("\n•Show q1\n"), "{}: {}", source, text);
+    let fixture = support::Fixture::new("n 4\ncol Gold num 1 2 3 4\nsrel near 1 | | 0 3 | 2\n");
+    for (head, expected) in [("max", "2 4 3"), ("min", "2 1 3"), ("avg", "2 2.5 3")] {
+        fixture.accepts(&format!("--! out {expected}\n{head}/ near.Gold"));
     }
 }
 
@@ -455,16 +455,13 @@ fn row_fold_without_an_identity_drops_its_empty_rows() {
 // the hopped component in the presence reading, exactly as it does for the scan forms.
 #[test]
 fn count_over_a_fiber_hop_counts_rather_than_sums() {
-    let counted = body(&ok("#/ near'.Silver\n"));
-    assert!(counted.contains("t0 ← {+´𝕩⊏(¬(¬(1¨silver)))}¨near"), "{}", counted);
-    // the payload itself never reaches the reduction
-    assert!(!counted.contains("+´𝕩⊏silver"), "{}", counted);
-    // a bare fiber counts its members, and the hop through a total column agrees with it
-    assert!(body(&ok("#/ near'\n")).contains("(≠¨"), "{}", ok("#/ near'\n"));
-    // over a mask the machine advances on the true rows, which is the same presence stream
-    assert!(body(&ok("#/ near'.Burning\n")).contains("{+´𝕩⊏(¬(¬burning))}¨near"));
-    // the sum is still the sum: only count was ever meant to consume presence
-    assert!(body(&ok("+/ near'.Silver\n")).contains("{AnoLeftSum 𝕩⊏silver}¨near"));
+    let fixture = support::Fixture::new("n 4\ncol Silver num 4 3 2 1\ncol Burning bool 1 0 1 1\nsrel near 1 | | 0 3 | 2\n");
+    for (expression, expected) in [
+        ("#/ near.Silver", "1 0 2 1"), ("#/ near", "1 0 2 1"),
+        ("#/ near.Burning", "0 0 2 1"), ("+/ near.Silver", "3 0 5 2"),
+    ] {
+        fixture.accepts(&format!("--! out {expected}\n{expression}"));
+    }
 }
 
 // Assignment: the guard refines the selection before the gather, so a false guard writes
@@ -605,7 +602,7 @@ fn absent_surfaces_refuse() {
     // `>` stays comparison; `>/` is not a reducer spelling
     assert!(err(">/ Gold\n").contains("unexpected token"));
     // a per-fiber scan needs a ragged result representation that does not exist yet
-    assert!(err("+\\ near'.Gold\n").contains("scan over fibers is not yet supported"));
+    assert!(err("+\\ near.Gold\n").contains("scan over fibers is not yet supported"));
 }
 
 /* ---------- 5. properties against the descriptor semantics ---------- */
@@ -923,58 +920,8 @@ fn nihongo_refusals_match_their_ascii_twins() {
 // non-iota identity column therefore resolves every fiber member before the grouped gather.
 #[test]
 fn grouped_fold_resolves_non_iota_keyed_fibers_before_despawn() {
-    let column = |name: &str, uniq: bool, nums: Vec<f64>| RegEntry {
-        name: name.to_string(),
-        defval: 0.0,
-        kind: RegEntryKind::Col {
-            ty: ColType::Num,
-            uniq,
-            nums,
-            syms: Vec::new(),
-            pres: None,
-            rng: None,
-        },
-    };
-    let reg = Registry {
-        n: 3,
-        ents: vec![
-            column("Id", true, vec![11.0, 13.0, 17.0]),
-            column("Gold", false, vec![10.0, 20.0, 30.0]),
-            RegEntry {
-                name: "near".to_string(),
-                defval: 0.0,
-                kind: RegEntryKind::SRel {
-                    fib: vec![vec![13.0], vec![], vec![11.0, 17.0]],
-                    inv_of: None,
-                    key_of: Some("Id".to_string()),
-                },
-            },
-        ],
-        ..Registry::default()
-    };
-    let env = AliasEnvironment::for_registry(&reg);
-    let mut it = Interner::new();
-    let toks = lex(b"+/ near'.Gold\n", false, &mut it).unwrap();
-    let prog = parse(&toks, &mut it).unwrap();
-    let emitted = emit_with_aliases(
-        &prog,
-        &reg,
-        &Directives::default(),
-        &it,
-        env.snapshot(&reg).unwrap(),
-    )
-    .unwrap();
-
-    assert!(
-        emitted.contains("{k←id⊐𝕩 ⋄ (k<≠id)/k}¨near"),
-        "{}",
-        emitted
-    );
-    assert!(
-        !emitted.contains("{AnoLeftSum 𝕩⊏gold}¨near"),
-        "{}",
-        emitted
-    );
+    let fixture = support::Fixture::new("n 3\nunique Id num 11 13 17\ncol Gold num 10 20 30\nsrel Id near 13 | | 11 17\n");
+    fixture.accepts("--! out 20 0 40\n+/ near.Gold");
 }
 
 // Scan scatter checks row identity, not merely vector width. Simple nominal mismatches refuse

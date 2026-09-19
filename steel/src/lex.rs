@@ -210,7 +210,7 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             continue;
         }
         if nstart(c) {
-            let mut j = nspan(src, i + 1);
+            let j = nspan(src, i + 1);
             let nm = it.intern(&s[i..j]);
             let kk = kwkind(&s[i..j]);
             // reducer fold/scan: name/ name\ glued — max/ min/ avg/ or any reducer name,
@@ -234,10 +234,6 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             }
             let ix = b.push(t(TokKind::Name), line);
             b.name[ix] = nm;
-            if at(j) == b'\'' {
-                b.push(t(TokKind::Tick), line); // postfix tick
-                j += 1;
-            }
             i = j;
             continue;
         }
@@ -314,7 +310,7 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             if ublack(cp) {
                 return Err(lex_err(line, format!("unknown character U+{:04X}", cp)));
             }
-            let mut j = nspan(src, i + l);
+            let j = nspan(src, i + l);
             let nm = it.intern(&s[i..j]);
             // reducer fold/scan on a UTF-8 name: 脅威/ 脅威\ fuse exactly as ASCII names do
             if at(j) == b'/' && at(j + 1) != b'=' {
@@ -331,10 +327,6 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             }
             let ix = b.push(t(TokKind::Name), line);
             b.name[ix] = nm;
-            if at(j) == b'\'' {
-                b.push(t(TokKind::Tick), line); // postfix tick
-                j += 1;
-            }
             i = j;
             continue;
         }
@@ -542,7 +534,11 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                     return Err(lex_err(line, "'^' begins only the ^alias sigil"));
                 }
             }
-            b'\'' => return Err(lex_err(line, "stray tick: ' is postfix on a name")),
+            b'\'' => {
+                // Prime is a repeatable postfix operator, including after a grouped relation.
+                b.push(t(TokKind::Tick), line);
+                i += 1;
+            }
             b'\\' => {
                 return Err(lex_err(
                     line,
@@ -914,8 +910,10 @@ fn grab_primary(b: &TokBuf, j: i32) -> i32 {
         }
         return o;
     }
-    if kj == t(TokKind::Tick) && j > 0 && b.kind[(j - 1) as usize] == t(TokKind::Name) {
-        return j - 1;
+    if kj == t(TokKind::Tick) {
+        let mut end = j;
+        while end >= 0 && b.kind[end as usize] == t(TokKind::Tick) { end -= 1; }
+        return grab_primary(b, end);
     }
     j // single atom
 }
@@ -1046,6 +1044,18 @@ fn lex_ja(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 b.name[ix] = it.intern(rest);
                 continue;
             }
+        }
+        // Both attached and space-separated prime runs are legal on the Japanese surface.
+        let stem = w.trim_end_matches('\'');
+        let alias = stem.strip_prefix('^').filter(|name| word_name(name));
+        if stem.len() != w.len() && (stem.is_empty() || word_name(stem) || stem == ")" || alias.is_some()) {
+            if !stem.is_empty() {
+                let kind = if stem == ")" { TokKind::Rp } else if alias.is_some() { TokKind::Alias } else { TokKind::Name };
+                let ix = b.push(t(kind), line);
+                if stem != ")" { b.name[ix] = it.intern(alias.unwrap_or(stem)); }
+            }
+            for _ in stem.len()..w.len() { b.push(t(TokKind::Tick), line); }
+            continue;
         }
         if let Some(&(_, kind, post, nm)) = JATAB.iter().find(|r| r.0 == w) {
             let ix = b.push(kind, line);

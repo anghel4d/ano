@@ -4,6 +4,6 @@
 --! expect oil = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 
 Oil @ blast(5) at Firebolt.pos , +Fire
-def spread = Oil & !Fire & #/ (moore' & Fire) >= 1 => +Fire
+def spread = Oil & !Fire & #/ (moore & Fire) >= 1 => +Fire
 #/ Fire
 def consume = Fire & Oil => -Oil
