@@ -98,6 +98,7 @@ fn composition_prime_precedence_aliases_and_definitions() {
 --! expect Out = 8 32 32 2 2"));
     }
     assert_eq!(fixture.accepts("(links.links')'"), fixture.accepts("links.links'"));
+    assert_eq!(fixture.accepts("(links.parent)'"), fixture.accepts("parent'.links'"));
     for expression in ["Rel'", "^Rel'", "def reverse = links'
 reverse", "def forward = links''
 forward'", "--! ja
@@ -255,4 +256,27 @@ rel parent -1 99 0 0
     assert!(text.contains("parent 1 -> 99 IS DEAD"), "{text}");
     assert!(text.contains("EFFECT SOURCE"), "{text}");
     assert!(!text.contains("-> -1 IS DEAD"), "{text}");
+}
+
+#[test]
+fn selected_images_are_masks_and_show_reads_live_inverse_columns() {
+    let fixture = Fixture::new(&format!("{WORLD}fn show
+"));
+    fixture.accepts("All , Marked = Selected.links
+--! expect Marked = 0 1 1 0 0");
+    fixture.accepts("All , Marked = Selected.links'
+--! expect Marked = 0 0 0 0 1");
+    for selection in ["show(children)", "show()"] {
+        let table = fixture.accepts(&format!("All , parent = 0 |> {selection}"));
+        assert!(table.contains("0‿1‿2‿3‿4"), "{table}");
+    }
+    let table = fixture.accepts("Selected , parent = 0 ; show(children)");
+    assert!(table.contains("1‿2"), "{table}");
+    fixture.refuses("All , show(children')", "show arguments must name entity columns");
+    // Removing every row must save a genuinely empty relation, not one empty owner's group.
+    let saved = fixture.0.join("empty.reg");
+    let output = fixture.run("All , ~", &["--run", "--save", saved.to_str().unwrap()]);
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let empty = Fixture::new(&std::fs::read_to_string(saved).unwrap());
+    assert_eq!(empty.accepts("links'").trim(), "⟨⟩");
 }

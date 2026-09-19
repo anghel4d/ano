@@ -23,6 +23,12 @@ pub(crate) fn columns(reg: &Registry, names: &Interner, args: &[Node], line: i32
             .map(|(i, _)| i).collect());
     }
     args.iter().map(|arg| {
+        // Normalization marks a declared set-valued column as a forward relation.
+        // Display still accepts its declaration name, never an arbitrary relation expression.
+        let arg = match &arg.kind {
+            NodeKind::Relation { source, inverse: false } => source.as_ref(),
+            _ => arg,
+        };
         let NodeKind::Name(name) = arg.kind else {
             return Err(Diag::refuse(format!("emit: line {line}: show arguments must name entity columns")));
         };

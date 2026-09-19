@@ -1199,7 +1199,7 @@ impl<'a> Em<'a> {
 /* ---------- folds and scans ---------- */
 
 impl<'a> Em<'a> {
-    // The set-hop fiber expression for a rel name: srel var, or a key-valued CT_NUM column's
+    // Legacy @row fiber expression: stored groups, or a numeric key column's
     // inverse image over the stable-id column (staged).  Output: the iteration variable and a
     // DURABLE self-contained spelling of the same fibers — a guard may name only durable
     // variables, since the assignment probe discards every staged line.
@@ -2994,7 +2994,17 @@ impl<'a> Em<'a> {
         for i in columns {
             let entry = self.ent(i);
             names.push(format!("\"{}\"", entry.name.replace('"', "\"\"")));
-            values.push(format!("({}⊏{})", ids, self.bqnv(i)));
+            let value = if let RegEntryKind::SRel { inv_of: Some(forward), .. } = &entry.kind {
+                let ri = self.find(forward).ok_or_else(|| fail(line, "inverse relation has no forward declaration"))?;
+                let saved = std::mem::take(&mut self.trace_sel);
+                let rows = self.functional_rows(ri, Mode::World, line);
+                self.trace_sel = saved;
+                let rows = rows?;
+                self.need_declaration("AnoConverse ← {f←𝕩 ⋄ {i←𝕩 ⋄ /{0<+´i=𝕩}¨f}¨↕≠f}");
+                let key = self.rel_key(i).unwrap_or_else(|| "(↕anoN)".to_string());
+                format!("({{𝕩⊏{}}}¨(AnoConverse {}))", key, rows)
+            } else { self.bqnv(i) };
+            values.push(format!("({}⊏{})", ids, value));
             kinds.push(match col_ty(entry) {
                 Some(ColType::Sym) => "1".to_string(),
                 Some(ColType::Char) => "2".to_string(),
@@ -5250,6 +5260,7 @@ mod normalize {
                         SemanticCarrier::Number
                     }
                 }
+                NodeKind::Hop { r, .. } if matches!(r.kind, NodeKind::Relation { .. }) => SemanticCarrier::Mask,
                 NodeKind::Hop { r, .. } => self.infer(r),
                 NodeKind::Scope { l, .. } => self.infer(l),
                 // the Greater/Lesser call this normalizer minted keeps its operands' carrier
@@ -5573,6 +5584,7 @@ mod normalize {
                     Self::type_from_semantic(self.infer(node))
                 }
                 NodeKind::Scope { l, .. } => self.node_type(l),
+                NodeKind::Hop { r, .. } if matches!(r.kind, NodeKind::Relation { .. }) => Some(RegType::Mask),
                 NodeKind::Hop { r, .. } => self.node_type(r),
                 NodeKind::Call { callee, .. } => reg_find(&self.reg, self.spelling(*callee))
                     .and_then(|index| match &self.reg.ents[index].kind {

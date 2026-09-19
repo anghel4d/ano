@@ -255,7 +255,7 @@ Race = :Nord , show(Race, TwoHanded, Gold)
 
 `show()` displays every entity column in declaration order; named arguments select and reorder columns. Rows appear in table order with their current zero-based row indices. Scalar bindings, selection aliases, callable declarations, and lattice fields are not entity columns. Display changes no world values. An absent component displays `_`, and an empty selection still displays its headers.
 
-Display observes the same stage rules as other effects:
+Display observes the same stage rules as other effects. A named inverse relationship in `show(children)` or `show()` is recomputed from its current forward relationship; a preceding `|>` update is visible in that table:
 
 ```haskell
 Race = :Nord , Gold += 100 ; show(Gold)
