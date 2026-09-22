@@ -1,7 +1,3 @@
-# ex30 — space reductions fixture, 8 8 half (mirrors demos/6-space/058-space-reductions.bqn)
-# elevation 0..63 folds to 2016; threat's world max 9 sits outside the frontier (scoped max 7);
-# cost is the uniform ones field for the scan-vs-SAT pair; height is the ordered sightline ray.
-# eye is the 8-fold zero origin vec so Eye + iota n * north is the ray's id list 0..7.
 n 8
 col threat num 3 9 4 7 5 8 2 6
 col frontier bool 1 0 1 1 0 0 1 1

@@ -1,4 +1,3 @@
-# Ex40 — Japanese tokenizer skin: two readers, one token stream, one statement.
 # ano: 北 と 両手 六十 より 、 金 に 千 たす
 # ano: あの Nord & TwoHanded > 60 が Gold += 1000
 # ano: Nord & TwoHanded > 60 , Gold += 1000

@@ -1,4 +1,3 @@
-# Named selections (ex9).
 # ano: def master = Human & Nord & TwoHanded > 60
 # ano: def rich   = Gold > 10000
 # ano: master , Gold += 1000

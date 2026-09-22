@@ -1,4 +1,3 @@
-# s62 — ever-any fixture (mirrors demos/3-fold-scan/038-ever-any.bqn); decoy 1s sit behind !path (rows 4, 7)
 n 8
 col path bool 1 1 1 1 0 1 1 0
 col burning bool 0 0 1 0 1 0 0 1

@@ -1,4 +1,3 @@
--- Japanese conjugate of s58 (hop after despawn, the wrong-entity shape). Twin of 026-hop-after-despawn.ano.
 --! registry ../registries/026-hop-after-despawn.reg
 --! ja
 --! expect-n 5

@@ -1,4 +1,3 @@
-# w5 — the timeless ledger (mirrors demos/11-noita/127-ledger.bqn)
 # Wand [Add Mana, SB, SB, Chainsaw], all drawn: resources are columns, the cast block's cost is a fold; flavor integers, not the wiki's.
 n 5
 col keys num 0 1 2 3 4

@@ -1,0 +1,6 @@
+-- The same world and the same excluded row, crossed in the PREDICATE instead: the domain is
+-- X, so the excluded row reports even though it can never be selected.
+--! registry excluded-world
+--! expect gold = 5 9 3 7
+
+Flag & mentor.Gold = 99 , Gold += 1

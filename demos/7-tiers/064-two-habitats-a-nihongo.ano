@@ -1,32 +1,25 @@
--- Japanese conjugate of 064-two-habitats-a: rank-1 rows + the 3x2 lattice. で scope postfix; 沿 = along; 上位/格付/降順 for grade-topk; 前 の shift; 、 hinge with に…にする set.
 --! registry ../registries/064-two-habitats-a.reg
 --! ja
 --! expect g = 0 0 0 1 2 3
 
--- generator: the ground is minted by iota, rank 1
 --! out 0 1 2 3 4
 連番 5
 
--- reduce: scoped fold to one scalar, both habitats
 --! out 42
 総和 金 北 で
 --! out 21
 総和 標高 3 2 で
 
--- scan: entities scan along the graded view, space scans in lattice order
 --! out 1 3 6 10 15
 走査 ( + ) 損傷 沿 ( 格付 損傷 )
 --! out 1 1 1 2 2 2
 累和 費用 3 2 で
 
--- grade: top k by grading down (indices, descending value)
 --! out 1 3 4
 上位 3 ( 格付 降順 脅威 )
 --! out 5 4
 上位 2 ( 格付 降順 安全 3 2 で )
 
--- shift: prev is a parallel shift with fill, never an order-carried recurrence
 --! out 0 5 8 13 21
 前 の x
--- rank-2 prev shifts a whole zero ROW in along the leading axis
 3 2 、 g に ( 前 の g ) にする

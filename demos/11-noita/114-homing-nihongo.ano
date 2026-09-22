@@ -1,4 +1,3 @@
--- Japanese conjugate of n3 (homing: +Homing marker, installed steer rule, one masked gather-subtract per tick).
 --! registry ../registries/114-homing.reg
 --! ja
 --! expect velx = 21 6 0 0

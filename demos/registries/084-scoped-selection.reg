@@ -1,5 +1,3 @@
-# ex42 — Japanese scoped selection fixture (mirrors demos/9-nihongo/084-scoped-selection.bqn)
-# region codes; 1 = Whiterun. The Whiterun mask is the .bqn derivation region=1, pinned at fixture level.
 n 6
 col region num 1 1 0 1 2 1
 col merchant bool 1 0 1 1 0 1

@@ -1,0 +1,5 @@
+-- The derived tag is read-only as an effect target (132's claim, pinned): setting it true
+-- is determined, false is not — the write spells race = :Nord instead.
+-- expect: derived tag 'Nord' is not an effect target: write the carrier column 'race'
+--! registry save-tag-write-world
+Gold > 50 , Nord = 1

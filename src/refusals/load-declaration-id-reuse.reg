@@ -1,0 +1,5 @@
+# expect: registry line 5: declaration id 0000000000000001 is already owned by 'A'
+# Stable identities have one owner even when the declarations have equal contracts.
+n 0
+service A id:0000000000000001 v:1 input sig:unit->num trust:checked
+service B id:0000000000000001 v:1 input sig:unit->num trust:checked

@@ -1,4 +1,3 @@
-# Ex43 — Relative-clause selection: a full clause before a noun is the selector.
 # ano: 両手が六十を超える北に、金を千与える。
 # ano: Nord & TwoHanded > 60 , Gold += 1000
 # Semantics: attributive position is restriction — the clause 両手が六十を超える filters 北 by juxtaposition, no relativizer — and the mask is the same whichever side of & the clause sits on.

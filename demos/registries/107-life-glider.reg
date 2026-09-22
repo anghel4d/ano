@@ -1,5 +1,3 @@
-# c2 glider 8x8 (mirrors demos/10-conways/107-life-glider.bqn)
-# planted row-major: the glider seeded at rows 0-2, cols 0-2. moore: 8-stencil fibers, boundary shrunk (dead border), linear ids row*8+col, ascending.
 lattice 8 8
 field plot bool 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 field planted bool 0 1 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

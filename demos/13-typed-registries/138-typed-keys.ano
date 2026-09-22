@@ -1,0 +1,8 @@
+-- Spawn mints 1 + max(existing keys, -1): id becomes 6, and the all-negative slot column becomes 0.
+--! registry ../registries/138-typed-keys.reg
+--! expect-n 3
+--! expect id = 3 5 6
+--! expect slot = -5 -3 0
+--! expect grunt = 1 0 1
+
+Grunt , spawn Grunt

@@ -1,0 +1,5 @@
+# expect: registry line 5: range on bool column 'dead'
+# bool is already a range — {0,1} is the carrier set; a range rider on it is a category error.
+n 2
+col dead bool 0 1
+range dead 0 1

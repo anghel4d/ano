@@ -1,0 +1,16 @@
+--! registry ../registries/143-row-fold-empty.reg
+--! ja
+--! expect total = 8 0 15 0
+--! expect peak = 5 -1 9 -1
+
+--! out 8 0 15 0
+総和 測定 行 で
+
+--! out 5 9
+最大 測定 行 で
+
+--! out 3 2
+最小 測定 行 で
+
+袋 、 合計 に ( 総和 測定 行 で ) にする
+袋 、 頂点 に ( 最大 測定 行 で ) にする

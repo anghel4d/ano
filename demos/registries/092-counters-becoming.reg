@@ -1,4 +1,3 @@
-# ex47 — counters and becoming fixture (mirrors demos/9-nihongo/092-counters-becoming.bqn)
 # month unit; the counter check is unit consistency
 n 6
 bind mo num 1

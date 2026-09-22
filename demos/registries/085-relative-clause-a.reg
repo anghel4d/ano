@@ -1,4 +1,3 @@
-# ex43 — relative-clause fixture (mirrors demos/9-nihongo/085-relative-clause.bqn; shared by the -a and -b twins)
 n 6
 col nord bool 1 0 1 1 0 1
 col twoHanded num 61 75 30 90 55 60

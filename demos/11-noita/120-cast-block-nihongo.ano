@@ -1,4 +1,3 @@
--- Japanese conjugate of w1 (the cast block: Noita's draw algorithm is a scan). で scope, 累和/累大 scans, 前 の hop, か = |.
 --! registry ../registries/120-cast-block.reg
 --! ja
 --! expect bal = 0 2 1 0 -1 -1 -2

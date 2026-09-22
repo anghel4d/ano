@@ -1,4 +1,3 @@
-# ex09 — named selections fixture (mirrors demos/1-selection/009-named-selections.bqn)
 # entity 0 sits at 9500 gold: it crosses rich's 10000 threshold only via statement 1's scatter
 n 5
 col human bool 1 1 1 0 1

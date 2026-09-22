@@ -1,0 +1,8 @@
+# expect: rel mentor row 1: relationship target 1.5 is outside the declared key carrier
+# A keyed target follows the DECLARED key carrier, not the row-index carrier. On a nat key a
+# fraction names no id, so it refuses at rest — the Key arm of the seal, distinct from the
+# unkeyed row-index arm load-rel-fraction.reg pins.
+n 3
+unique id nat 10 20 30
+col hp num 1 2 3
+rel id mentor 10 1.5 20

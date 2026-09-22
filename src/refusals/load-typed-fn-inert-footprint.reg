@@ -1,0 +1,5 @@
+# expect: registry line 5: read footprint cannot name unreadable declaration 'A'
+# Host-resident arrays cross their sealing API; raw BQN cannot claim an unattached slot as a read.
+n 0
+array A id:0000000000000001 v:1 num scalar
+fn f id:0000000000000002 v:1 sig:num->num fx:read det:deterministic trust:trusted read:A write:- use:- = {𝕩}

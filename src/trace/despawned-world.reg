@@ -1,0 +1,9 @@
+# Five keyed rows. Rows 2 and 3 mentor id 11, which the second statement despawns: the same
+# spelling is a live link before the barrier and a dead one after it.
+n 5
+unique id nat 7 11 13 17 19
+rel id mentor -1 7 11 11 13
+col cursed bool 0 1 0 0 0
+col nord bool 1 1 1 1 1
+col dead bool 0 0 1 0 0
+col gold num 0 0 0 0 0

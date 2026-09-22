@@ -1,4 +1,3 @@
--- Japanese conjugate of 12 (structural effects: despawn, +Frenzied across the set-hop image, -Encumbered). Twin of 018-structural-effects.ano.
 --! registry ../registries/018-structural-effects.reg
 --! ja
 --! expect-n 6
@@ -7,5 +6,5 @@
 --! expect encumbered = 0 0 0 1 0 0
 
 死 、 消
-狂乱 の 標的群 ' 、 熱狂 付
+狂乱 の 標的群 、 熱狂 付
 重荷 、 荷重 除

@@ -1,0 +1,10 @@
+# The char carrier under A9's Greater and Lesser. rune is the glyph run the folds and scans
+# read; alive scopes it and gone empties it. Nothing here is numeric: a char extremum has no
+# identity, so the empty scope has no result row rather than a manufactured glyph.
+n 5
+col rune char genie
+col alive bool 1 1 0 1 1
+col gone bool 0 0 0 0 0
+ja 印 rune
+ja 生存 alive
+ja 不在 gone

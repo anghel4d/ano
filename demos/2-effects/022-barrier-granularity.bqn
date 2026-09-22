@@ -1,8 +1,6 @@
-# Barrier granularity across statements (decision record: barrier; ex13/ex49 ruling): every top-level statement is exactly one gather-effect-scatter barrier; a continuation is a new statement and a new barrier reusing the saved selection mask, not the pre-state.
 # ano: Nord & Dead , spawn Ghost
 #      ~
 # Semantics: barrier one gathers Nord & Dead, spawns one Ghost per selected row, and commits; barrier two's gather observes that commit, but the `~` despawn applies to the mask saved at barrier one's gather — never a re-gather — so ghost rows born after the gather are exempt even though they would match the predicate.
-# Invariant: the saved-mask despawn keeps both ghosts; a (wrong) re-gathered despawn kills them; the two results differ.
 
 id    ← 0‿1‿2‿3‿4‿5
 nord  ← 1‿1‿0‿1‿0‿0
@@ -28,9 +26,8 @@ idC‿nordC‿ghostC ← keep⊸/¨ id‿nord‿ghost
 ! idC    ≡ 1‿2‿4‿5‿6‿7
 ! nordC  ≡ 1‿0‿0‿0‿1‿1
 ! ghostC ≡ 0‿0‿0‿0‿1‿1
-! 2 ≡ +´ghostC               # the ghosts survive: the mask was saved at gather
+! 2 ≡ +´ghostC
 
-# the wrong reading: re-gather Nord & Dead at barrier two
 keepW ← ¬nord∧dead
 idW‿ghostW ← keepW⊸/¨ id‿ghost
 

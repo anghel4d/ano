@@ -1,4 +1,3 @@
-# ex45 — fold noun phrase fixture (mirrors demos/9-nihongo/088-fold-noun-phrase.bqn)
 n 6
 col nord bool 1 0 1 1 0 1
 col gold num 100 250 300 50 999 150

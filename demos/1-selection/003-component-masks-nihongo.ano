@@ -1,4 +1,3 @@
--- Japanese conjugate of 03 (component masks). Presence masks と/或/ない, :Bandit enum symbol, sequential barriers.
 --! registry ../registries/003-component-masks.reg
 --! ja
 --! expect gold = 110 20 130 40 150 60

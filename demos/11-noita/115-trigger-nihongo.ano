@@ -1,4 +1,3 @@
--- Japanese conjugate of n4 (the trigger: collision comprehension, barrier, standing rule).
 --! registry ../registries/115-trigger.reg
 --! ja
 --! expect-n 5

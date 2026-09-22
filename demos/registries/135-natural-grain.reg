@@ -1,0 +1,5 @@
+# fuel is nat: writes floor to the integer grid and the ceiling is 2^53, the last
+# contiguous integer of the double. Row 0 holds 2^52 so one multiply crosses it.
+n 3
+col alive bool 1 1 1
+col fuel nat 4503599627370496 10 7

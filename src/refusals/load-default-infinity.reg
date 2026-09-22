@@ -1,4 +1,5 @@
-# expect: registry line 4: bad number 'infinity'
+# accept
+# A num spawn default may be either signed infinity.
 n 1
 col gold num 100
 default gold infinity

@@ -1,0 +1,16 @@
+# The three alias mechanisms in one world: the ja rows are spelling aliases, `alias watch`
+# is a static alias-mask fixture, and the sidecar beside this file is the live overlay that
+# only ^name consults. The bare focus and cursor columns survive every overlay lifecycle.
+n 5
+col cursor bool 0 0 1 0 0
+col focus bool 1 0 0 0 1
+col health num 50 60 70 80 90
+col gold num 10 20 30 40 50
+col marked bool 0 0 0 0 0
+alias watch 0 1 0 0 0
+ja 照準 cursor
+ja 注視 focus
+ja 体力 health
+ja 金 gold
+ja 印 marked
+ja 見張 watch

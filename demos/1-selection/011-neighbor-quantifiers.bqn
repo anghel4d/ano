@@ -1,4 +1,3 @@
-# Quantifiers over the neighbor fiber (decision record setHop; spec §5, §9). Split from 013-set-hop.bqn.
 # ano: Plot & |/ neighbors'.Planted , +Sprouting
 # ano: Plot & !Planted & #/ (neighbors' & Planted) >= 2 , +Planted
 # Semantics: |/ over the fiber is the any-quantifier; #/ over the filtered fiber is the count. Both folds read the statement's pre-state: crops spread one ring per tick.

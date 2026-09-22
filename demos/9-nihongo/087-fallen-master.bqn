@@ -1,4 +1,3 @@
-# Ex44 — Fallen master: hop then structural removal, with the left-join-null rule.
 # ano: 師匠が死んだ北は、訓練を失う。
 # ano: Nord & mentor.Dead , -Trained
 # Semantics: gather Dead through the mentor hop; a dangling link (no mentor) fails the predicate per §5's left-join-null rule; -Trained clears the component's presence mask on the selection.

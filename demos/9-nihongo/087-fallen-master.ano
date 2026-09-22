@@ -1,6 +1,4 @@
--- Fallen master (ex44): hop then structural removal, left-join-null on the dangling mentor. Twin of 087-fallen-master.bqn.
 -- 師匠が死んだ北 — the Nord whose master has fallen. A dead master selects his students; a missing master selects no one.
--- Japanese surface: 師匠が死んだ北は、訓練を失う。 Entity 1 dangles (mentor -1) and fails the predicate, so it keeps Trained: the expect's second value pins the .bqn's dangling-hop assertion. -Trained clears the presence mask, modeled as the bool column itself.
 --! registry ../registries/087-fallen-master.reg
 --! expect trained = 0 1 0 0 0 1
 

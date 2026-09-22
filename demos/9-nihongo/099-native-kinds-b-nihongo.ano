@@ -1,4 +1,3 @@
--- Native world kinds, generation half (s53b): point binding into the vec column, then the replicate spawn — defaults fill under mangled names.
 --! registry ../registries/099-native-kinds-b.reg
 --! ja
 --! expect-n 9

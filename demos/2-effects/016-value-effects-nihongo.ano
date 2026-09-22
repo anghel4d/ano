@@ -1,4 +1,3 @@
--- Japanese conjugate of 10 (value effects): masked +=, -=, *=, /= down dense columns.
 --! registry ../registries/016-value-effects.reg
 --! ja
 --! expect gold = 1100 2400 300 400 1500 1200 700 1800
