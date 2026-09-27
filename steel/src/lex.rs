@@ -183,6 +183,23 @@ fn kwkind(nm: &str) -> Option<TokKind> {
 // Invariants: folds/scans fused with no interior whitespace; NAME+'/' and NAME+'\'
 // fuse for any non-keyword name (resolution at emit), never before '=';
 // ^ begins the alias sigil, @ is always T_AT.
+fn lex_reference(s: &str, at: usize, line: i32, b: &mut TokBuf, it: &mut Interner) -> Result<Option<usize>, Diag> {
+    let kind = if s[at..].starts_with("fun_\"") { TokKind::FunRef }
+        else if s[at..].starts_with("col_\"") { TokKind::ColRef }
+        else { return Ok(None); };
+    let start = at + 5;
+    let mut end = start;
+    while end < s.len() && s.as_bytes()[end] != b'"' && s.as_bytes()[end] != b'\n' { end += 1; }
+    if end == s.len() || s.as_bytes()[end] != b'"' { return Err(lex_err(line, "unterminated category reference")); }
+    if start == end { return Err(lex_err(line, "category reference needs a declaration name")); }
+    if end-start >= ANO_NAMESZ || s[start..end].chars().any(char::is_control) {
+        return Err(lex_err(line, "invalid declaration name in category reference"));
+    }
+    let ix = b.push(t(kind), line);
+    b.name[ix] = it.intern(&s[start..end]);
+    Ok(Some(end+1))
+}
+
 fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
     let src = s.as_bytes();
     let n = src.len();
@@ -209,6 +226,7 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             }
             continue;
         }
+        if let Some(end) = lex_reference(s, i, line, b, it)? { i = end; continue; }
         if nstart(c) {
             let j = nspan(src, i + 1);
             let nm = it.intern(&s[i..j]);
@@ -721,6 +739,7 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("と", t(TokKind::Amp), false, ""),
     ("か", t(TokKind::Bar), false, ""),
     ("の", t(TokKind::Dot), false, ""),
+    (".", t(TokKind::Dot), false, ""),
     ("で", t(TokKind::At), true, ""),
     ("、", t(TokKind::Comma), false, ""),
     ("が", t(TokKind::Comma), false, ""),
@@ -1001,6 +1020,7 @@ fn lex_ja(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
             }
             continue;
         }
+        if let Some(end) = lex_reference(s, i, line, b, it)? { i = end; continue; }
         if c == b'"' {
             // ASCII string, may hold spaces
             let mut j = i + 1;

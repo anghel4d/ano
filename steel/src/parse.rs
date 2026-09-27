@@ -3,7 +3,7 @@
 // continuations, queries, the eval splice. Diagnostics "line %d: %s"; FIRST error wins
 // (later errors dropped silently — model err as a set-once Option).
 
-use crate::{ArithOp, AssignOp, CmpOp, Diag, Interner, Node, NodeKind, Symbol, TokKind, Toks};
+use crate::{ArithOp, AssignOp, CmpOp, Diag, Interner, Node, NodeKind, RefCategory, Symbol, TokKind, Toks};
 
 /* ---------- diagnostics ---------- */
 
@@ -72,7 +72,7 @@ fn atomstart(k: TokKind) -> bool {
     use TokKind::*;
     matches!(
         k,
-        Name | Alias | Sym | Num | Counter | Str | Wild | Lp | Lb | Iota
+        Name | Alias | Sym | Num | Counter | Str | FunRef | ColRef | Wild | Lp | Lb | Iota
     )
 }
 
@@ -385,6 +385,12 @@ impl P<'_, '_> {
     fn parse_atom(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         match self.pk() {
+            TokKind::FunRef | TokKind::ColRef => {
+                let category = if self.pk() == TokKind::FunRef { RefCategory::Function } else { RefCategory::Column };
+                let node = Node::new(NodeKind::Reference { category, name: self.tname() }, line);
+                self.adv();
+                Ok(node)
+            }
             TokKind::Num => {
                 let n = Node::new(NodeKind::Num(self.tnum()), line);
                 self.adv();
@@ -595,6 +601,27 @@ impl P<'_, '_> {
                     ));
                 }
                 TokKind::FoldKw => {
+                    if self.pk2(1) == TokKind::Lp {
+                        let mut nesting = 0usize;
+                        let mut call_form = false;
+                        for token in &self.t.kind[self.i+2..] {
+                            match token {
+                                TokKind::Comma if nesting == 0 => { call_form = true; break; }
+                                TokKind::Rp if nesting == 0 => break,
+                                TokKind::Lp | TokKind::Lb => nesting += 1,
+                                TokKind::Rp | TokKind::Rb => nesting = nesting.saturating_sub(1),
+                                TokKind::Eof => break,
+                                _ => {}
+                            }
+                        }
+                        if call_form {
+                            self.adv();
+                            let callee = self.it.intern("fold");
+                            let args = self.parse_arguments()?;
+                            return Ok(Node::new(NodeKind::Call { callee, args }, line));
+                        }
+                    }
+
                     // fold(f): the long form of f/ — one node, Fold
                     self.adv();
                     self.expect(TokKind::Lp, "'(' after 'fold'")?;
@@ -610,6 +637,27 @@ impl P<'_, '_> {
                     ));
                 }
                 TokKind::ScanKw => {
+                    if self.pk2(1) == TokKind::Lp {
+                        let mut nesting = 0usize;
+                        let mut call_form = false;
+                        for token in &self.t.kind[self.i+2..] {
+                            match token {
+                                TokKind::Comma if nesting == 0 => { call_form = true; break; }
+                                TokKind::Rp if nesting == 0 => break,
+                                TokKind::Lp | TokKind::Lb => nesting += 1,
+                                TokKind::Rp | TokKind::Rb => nesting = nesting.saturating_sub(1),
+                                TokKind::Eof => break,
+                                _ => {}
+                            }
+                        }
+                        if call_form {
+                            self.adv();
+                            let callee = self.it.intern("scan");
+                            let args = self.parse_arguments()?;
+                            return Ok(Node::new(NodeKind::Call { callee, args }, line));
+                        }
+                    }
+
                     self.adv();
                     self.expect(TokKind::Lp, "'(' after 'scan'")?;
                     let op = self.parse_opname()?;
@@ -637,6 +685,13 @@ impl P<'_, '_> {
                     ));
                 }
                 TokKind::Cross => {
+                    if self.pk2(1) == TokKind::Lp {
+                        self.adv();
+                        let callee = self.it.intern("cross");
+                        let args = self.parse_arguments()?;
+                        return Ok(Node::new(NodeKind::Call { callee, args }, line));
+                    }
+
                     self.adv();
                     if self.pk() != TokKind::Name {
                         return Err(perr(self.tline(), "expected function after 'cross'"));
@@ -1480,7 +1535,7 @@ mod tests {
         use NodeKind::*;
         use std::fmt::Write;
         match &n.kind {
-            NodeKind::Range { .. } | NodeKind::Generate { .. } => unreachable!("construction behavior is covered through the public CLI"),
+            NodeKind::Reference { .. } | NodeKind::Range { .. } | NodeKind::Generate { .. } => unreachable!("construction behavior is covered through the public CLI"),
             Num(v) => {
                 let _ = write!(b, "(NUM {})", g(*v));
             }

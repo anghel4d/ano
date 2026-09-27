@@ -300,7 +300,7 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
             "",
             Carrier::Number,
             number("0"),
-            LawStatus::Holds,
+            LawStatus::DoesNotHold,
             LawStatus::Holds,
         ),
         "-" => homogeneous(
@@ -316,7 +316,7 @@ pub fn canonical(spelling: &str, form: Form) -> Option<OpDesc> {
             "",
             Carrier::Number,
             number("1"),
-            LawStatus::Holds,
+            LawStatus::DoesNotHold,
             LawStatus::Holds,
         ),
         "/" => homogeneous(
@@ -884,9 +884,14 @@ mod tests {
                 .unwrap_err()
                 .contains("prefix machine")
         );
-        let sum = head("+", Carrier::Number);
-        assert!(validate_strategy(&sum, Strategy::Regroup).is_ok());
-        assert!(validate_strategy(&sum, Strategy::Reorder).is_ok());
+        for spelling in ["+", "*"] {
+            let floating = head(spelling, Carrier::Number);
+            assert!(validate_strategy(&floating, Strategy::Regroup).is_err());
+            assert!(validate_strategy(&floating, Strategy::Reorder).is_err());
+        }
+        let maximum = head("max", Carrier::Number);
+        assert!(validate_strategy(&maximum, Strategy::Regroup).is_ok());
+        assert!(validate_strategy(&maximum, Strategy::Reorder).is_ok());
     }
 
     // A registered identity is typed, and a descriptor whose identity does not inhabit its

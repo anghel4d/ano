@@ -118,3 +118,9 @@ A migration must account for both declarations and live data. Preserving an ID a
 The file transaction covers the registry and its managed sidecars. A host holding external resident arrays or constructed values must separately use the migration receipt before publishing those values. This distinction matters when a file migration succeeds but a host still holds an old handle.
 
 `inv children parent` declares a derived converse, equivalent to `parent'` under the [prime contract](ano-language.md#prime-relational-converse). Reads recompute from the current parent relationship; `children` needs no suffix for traversal or grouped reduction. An explicit `srel` stores its forward edges, so adding prime reverses them.
+
+## Source reflection
+
+`col_"name"` and `fun_"name"` resolve declaration references against this schema. They do not read resident payloads or invoke bodies. Column metadata includes the declared carrier/domain and enforced range/uniqueness constraints; typed callable metadata includes the signature, effects, determinism, trust, and read/write column references. [The language reference](ano-language.md#declaration-reflection) lists the properties and executable examples.
+
+A source reference is scoped to the compiled schema snapshot; it is not a serialized resident-array handle or a capability to mutate schema. Kore persists reference-valued definitions as source and resolves them when the session is rehydrated. Legacy callables lack typed signature/footprint metadata; reflection refuses those properties rather than treating missing metadata as an empty declaration. Algebraic law fields remain `:undeclared` for registered bodies: no law annotation or proof format has been added to registry rows.

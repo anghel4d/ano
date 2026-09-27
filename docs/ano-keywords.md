@@ -52,6 +52,7 @@ Lexer keywords, loader-reserved spellings, and emitter built-ins are different s
 | `..` | Inclusive integer range inside brackets |
 | `~` | Despawn/continuation |
 | `_` | Wildcard or inferred axis |
+| `fun_"name"`, `col_"name"` | Callable and column declaration references |
 | `^name` | One dynamic-alias token |
 | `:Name` | Symbol literal |
 | `f/`, `f\` | Fused fold/scan head |
@@ -92,3 +93,5 @@ The two-name `as` form is a spelling alias; the other admitted `as` form constru
 Legacy stored-column carriers include `bool`, `nat`, `int`, `num`, `sym`, and `char`, with `vec` as a compatibility representation. Typed descriptors use `mask`, `nat`, `int`, `num`, `sym`, `char`, `entity`, and earlier enum/constructor names. `unit` has a signature role. These are not interchangeable spelling sets.
 
 [ano-registry.md](ano-registry.md) documents the declaration contracts. [ano_nihongo.md](ano_nihongo.md) documents the implemented Japanese reader.
+
+The adjacent forms `fun_"name"` and `col_"name"` are category casts, not calls or additional keywords. Bare `fun_` and `col_` remain ordinary names. Dot projects their [declaration metadata](ano-language.md#declaration-reflection). Both readers accept these casts; the space-delimited Japanese reader accepts `col_"金" . name` (or `の` for dot).

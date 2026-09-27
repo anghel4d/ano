@@ -456,6 +456,67 @@ A named expression can be reused in selections, queries, and effects where its c
 
 Arithmetic converts masks and chars to numbers. Greater/Lesser joins mask, number, and char upward. Comparisons use numeric values or code points and return masks; symbols have same-carrier equality/inequality. Typed signatures and storage destinations remain exact.
 
+#### Declaration reflection
+
+`col_"Gold"` denotes the Gold column declaration; `fun_"combine"` denotes the combine callable declaration without invoking it. These are explicit category casts of a literal declaration name. They resolve against the registry, including spelling aliases and ASCII case folding, and reject an unknown name or the wrong category. Ordinary `Gold` still reads values, `combine(a, b)` still calls, and `show(Gold)` still displays that column directly.
+
+The two reference categories are column and callable. An enum-valued column, a Boolean column, and a relationship are all column declarations; their carriers differ. An enum type declaration itself is not a column. A callable's effect contract determines where it can run; effectful callables do not introduce a third reference category.
+
+References are expression-local opaque values. They may be named with `def`, placed in tuples, passed through comprehensions, and compared for declaration equality; two spellings of the same declaration compare equal. They cannot be forged from ordinary strings, written into numeric world cells, or passed to `selection(...)` as entity references. Reflection does not require a resident column payload and does not execute callable bodies. It exposes the schema snapshot used by the execution; it cannot edit that schema or bypass a call's signature/effect checks.
+
+```haskell
+col_"Gold".name
+col_"Gold".type
+col_"Gold".domain
+fun_"combine".inputs
+fun_"combine".result
+fun_"combine".writes
+```
+
+Dot projects declaration metadata. The names below are properties, not new keywords. Symbol-valued metadata uses ordinary symbol equality, for example `c.type == :num`.
+
+| Column property | Result |
+|---|---|
+| `.name` | Canonical declaration name as text |
+| `.type` | Carrier symbol, including a nominal carrier's name |
+| `.domain` | Domain class: `:entity`, `:lattice`, `:scalar`, or `:fixed` |
+| `.range` | Declared inclusive numeric bounds `[lo, hi]`, or `[]` when none are declared |
+| `.unique` | Boolean: whether the declaration requires unique values |
+| `.constraints` | Enforced facts derivable from the declaration: `:integer`, `:finite`, `:nonnegative`, and/or `:unique` |
+
+Constraints describe admitted cells, not observations of today's data. A numeric column containing only positive numbers does not acquire a nonnegative constraint. Existing publication rules enforce these declarations: legacy column ranges project writes into their bounds; nominal range constructors validate finite inclusive bounds; unique columns cannot be directly assigned. `.constraints` is not an exhaustive theorem catalogue. `.domain` gives a domain class, not its current extent or a spatial lineage certificate.
+
+| Callable property | Result |
+|---|---|
+| `.name` | Canonical declaration name as text |
+| `.inputs` | Ordered tuple of declared input carrier symbols |
+| `.result` | Declared result carrier symbol; `:unit` for no value |
+| `.arity` | Explicit input count; `unit->T` has zero inputs |
+| `.reads`, `.writes` | Tuples of column declaration references |
+| `.effects` | Tuple containing declared `:read`, `:write`, and/or `:service`; pure gives `[]` |
+| `.determinism` | `:deterministic`, `:snapshot`, or `:nondeterministic` |
+| `.trust` | `:trusted` or `:checked` boundary |
+| `.associative`, `.commutative`, `.monotonic` | Law status: `:holds`, `:fails`, or `:undeclared` |
+
+Signature and footprint properties require a typed callable declaration. Requesting them from a legacy callable or an intrinsic without that metadata refuses; an unknown footprint is not an empty footprint. Inputs expose carrier positions, not parameter names: the registry does not declare parameter names. Algebraic statuses come from existing reducer contracts, not source-code inference or sampled data. Registered bodies have undeclared algebraic laws; monotonicity is currently undeclared because the registry has no monotonicity contract. Numeric `+` and `*` are commutative but not associative over actual float64 execution, so their reflected associativity is `:fails`. Reflection grants no reassociation permission.
+
+Given typed callables insert and cancel, their declared write footprints can be queried with ordinary constructions:
+
+```haskell
+[fun_"insert".writes -> c |=> c.name]
+[fun_"insert".writes -> a
+ & fun_"cancel".writes -> b
+ & a == b
+ |=> a.name]
+[[col_"Gold", col_"Race"] -> c & c.type == :num |=> c.name]
+```
+
+If insert declares writes to Gold and Marked, and cancel declares writes to Gold, the intersection produces `["Gold"]`. This queries declarations even if a callable's effect ABI is not executable by the current backend.
+
+Explicit callable references also supply the operation in `fold(fun_"combine", Gold)`, `scan(fun_"combine", Gold)`, `scan(fun_"combine", Gold, Path)`, and `cross(fun_"combine", A, B)`. A definition such as `def reducer = fun_"combine"` can supply that argument. These forms use the existing reducer/product semantics and restrictions. They do not add a generic callable-reference carrier to host signatures, dynamic invocation of a reference selected by a comprehension, or arbitrary reference-expression call syntax.
+
+`/// !TODO: Define declaration syntax and evidence requirements for additional callable laws and cell refinements, especially monotonicity relative to a specified order, commutativity on specified carriers, and dependencies between laws. Keep undeclared distinct from false; do not infer trusted algebra from arbitrary bodies. Extend typed host carriers and reference consumers explicitly.`
+
 ## Part IV: Current spatial boundary
 
 The code has a legacy singleton `lattice w h`, not a general registry of nominal habitats or frames. The following sections identify existing syntax without claiming task 99 is implemented. Quarantined spatial demos do not establish support.

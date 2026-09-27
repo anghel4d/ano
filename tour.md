@@ -298,3 +298,25 @@ Bottom line: `Merchant @ Whiterun` vs `Merchant & Whiterun` is one spelling diff
 A name's declaration says what it denotes. `Gold` reads a value. `f(Gold)` applies a registered callable, `f/ Gold` reduces with it, and `f\ Gold` scans with it. The signature decides which applications make sense: a unary function is not automatically a binary reducer.
 
 Ordinary calls always carry their argument parentheses, including `show()`. This also applies to effects and callable pipeline stages. A bare function name is not silently called; adding parentheses to a column name does not make that column callable. Columns and functions share the registry namespace, so use distinct names for a function and the column receiving its result.
+
+### Asking about a declaration
+
+`Gold` gives us Gold's values. Sometimes we want to ask about the column itself:
+
+```haskell
+col_"Gold".name
+col_"Gold".type
+col_"Gold".domain
+```
+
+For the tour's Gold column, those are `"Gold"`, `:num`, and `:entity`. Nothing was read from a character's purse. We asked what the column is.
+
+The same distinction applies to a callable. `combine(a, b)` runs it; `fun_"combine"` refers to its declaration. If the host registers its typed signature and footprints, we can inspect `.inputs`, `.result`, `.reads`, and `.writes`. Those last two return column references, so an ordinary comprehension can ask which columns a callable writes:
+
+```haskell
+[fun_"insert".writes -> c |=> c.name]
+```
+
+If insert declares writes to cmd and cmdTarget, this produces `["cmd", "cmdTarget"]`. It does not issue an order. We can filter the references, compare them, and combine them with other reflected footprints using the same brackets and guards we already have.
+
+Nothing changes about displaying values: `show(Gold)` already does that. Category casts are for asking about declarations. The [reflection reference](docs/ano-language.md#declaration-reflection) lists the metadata, callable-reference consumers, enforced cell constraints, and the distinction between known and undeclared algebraic laws.

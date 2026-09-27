@@ -2915,6 +2915,50 @@ inv children parent
     }
 
     #[test]
+    fn declaration_references_survive_session_reopen() {
+        const CHILD: &str = "ANO_REFLECTION_SESSION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let dir = std::env::temp_dir().join(format!("ano-kore-reflection-{}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let mut steel = std::env::current_exe().unwrap();
+            steel.pop(); steel.pop(); steel.push("steel");
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "world::parser_session::declaration_references_survive_session_reopen", "--nocapture"])
+                .env(CHILD, "1").env("STEEL", steel).current_dir(&dir).output().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(result.status.success(), "{}\n{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
+            return;
+        }
+        let path = std::env::current_dir().unwrap().join("world.reg");
+        std::fs::write(&path, "n 3\ncol All bool 1 1 1\ncol Gold num 1 2 3\n").unwrap();
+        let observe = || {
+            let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
+            let entry = reg.ents.iter().find(|entry| entry.name == "Gold").unwrap();
+            let steel::RegEntryKind::Col { nums, .. } = &entry.kind else { panic!("numeric column required") };
+            nums.clone()
+        };
+        let mut app = App::new();
+        app.mode = Mode::Reg;
+        app.world = world_load(path.to_str().unwrap()).unwrap();
+        for source in [r#"def reducer = fun_"+" "#, r#"def column = col_"Gold" "#, "All , Gold = fold(reducer, Gold)"] {
+            app.prompt = source.as_bytes().to_vec();
+            repl_submit(&mut app);
+        }
+        assert_eq!(observe(), vec![6.0; 3]);
+        let mut reopened = App::new();
+        reopened.mode = Mode::Reg;
+        reopened.world = world_load(path.to_str().unwrap()).unwrap();
+        session_rehydrate(&mut reopened);
+        reopened.prompt = b"All , Gold = fold(reducer, Gold)".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(observe(), vec![18.0; 3]);
+        let before = std::fs::read(&path).unwrap();
+        reopened.prompt = b"All , Gold = column".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(std::fs::read(&path).unwrap(), before, "declaration references cannot become stored cell values");
+    }
+
+    #[test]
     fn definitions_survive_whitespace_and_reload() {
         const CHILD: &str = "ANO_PARSER_SESSION_CHILD";
         if std::env::var_os(CHILD).is_none() {

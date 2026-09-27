@@ -9,7 +9,12 @@ The [historical rulings](00-historical-rulings.md) preserve the author's decisio
 3. Review and rework the special relational algebra as a whole. `/// !TODO`: preserve the implemented [prime = converse contract](../docs/ano-language.md#prime-relational-converse) while reviewing carriers, domains, composition, ordering, callable boundaries, and integration with task 07.
 4. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
 
+5. Extend [declaration reflection](../docs/ano-language.md#declaration-reflection) with explicit algebraic-law/refinement declarations and evidence requirements. Settle monotonicity orders, host reference carriers, and dynamic callable-reference application before implementing them; undeclared laws remain unknown.
+
 ## Completed non-spatial work
+
+Declaration reflection is implemented: `fun_"name"` and `col_"name"`, metadata projections, reference equality, footprint comprehensions, declared cell constraints, and callable references passed to existing fold/scan/cross operations.
+
 
 [Relational prime](../docs/ano-language.md#prime-relational-converse) is implemented in Steel/Kore: ordinary traversal without punctuation, converse, repeated primes, relation composition, live inverse reads, grouped queries/folds/images, and positional-edge save/reopen. The broader relational algebra still needs the review above.
 

@@ -13,6 +13,7 @@ pub mod parse;
 pub mod reducer;
 pub mod registry;
 pub mod relationship;
+mod reference;
 mod show;
 pub mod trace;
 
@@ -112,6 +113,8 @@ pub enum TokKind {
     Num,
     Counter,
     Str,
+    FunRef,
+    ColRef,
     Wild,
     // structure
     Comma,
@@ -186,6 +189,8 @@ impl TokKind {
             TokKind::Num => "T_NUM",
             TokKind::Counter => "T_COUNTER",
             TokKind::Str => "T_STR",
+            TokKind::FunRef => "T_FUNREF",
+            TokKind::ColRef => "T_COLREF",
             TokKind::Wild => "T_WILD",
             TokKind::Comma => "T_COMMA",
             TokKind::Arrow => "T_ARROW",
@@ -315,6 +320,9 @@ pub enum AssignOp {
     Div,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefCategory { Function, Column }
+
 // One AST node: kind + the 1-based source line of its head token (diagnostics).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node {
@@ -340,6 +348,7 @@ pub enum NodeKind {
     Sym(Symbol),                        // :Name, sigil stripped by lexer
     Str(Symbol),                        // body, no escapes
     Name(Symbol),                       // surface spelling, resolved at emit
+    Reference { category: RefCategory, name: Symbol },
     // ^name dynamic-alias request, sigil stripped. `look` is the name lowering resolves (the
     // stem on bare fallback, the target on an overlay hit); `req` is always the requested stem,
     // so a refusal can still spell `^req` after the overlay moved the lookup elsewhere.
@@ -407,6 +416,7 @@ impl NodeKind {
             NodeKind::Sym(..) => 2,
             NodeKind::Str(..) => 3,
             NodeKind::Name(..) => 4,
+            NodeKind::Reference { .. } => 51,
             NodeKind::Alias { .. } => 5,
             NodeKind::Wild => 6,
             NodeKind::Not(..) => 7,

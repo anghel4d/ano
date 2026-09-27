@@ -8,12 +8,13 @@ use crate::reducer;
 use crate::registry::{names_eq, reg_find, reg_role};
 use crate::{
     ArithOp, AssignOp, BindKind, CmpOp, ColType, Diag, Directives, Expect, Interner, Node,
-    NodeKind, RegEntry, RegEntryKind, Registry, Symbol,
+    NodeKind, RefCategory, RegEntry, RegEntryKind, Registry, Symbol,
 };
 
 type R<T> = Result<T, Diag>;
 
 mod construct;
+mod reflection;
 
 // Inputs: the stem the source requested, the resolver request it made. Output: the spelling to
 // print in a lookup refusal — `^name` keeps its sigil, so `^Nope` never reads back as `Nope`.
@@ -158,6 +159,7 @@ struct Em<'a> {
     // the byte offset the fixture reserved for them. rel_seals counts the relationship writes
     // this lowering staged, which the final assembly reconciles against the emitted text.
     decls: Vec<String>,
+    reference_values: Vec<(RefCategory, String, String)>,
     decl_at: usize,
     rel_seals: usize,
     // trace identity: plan collects one record per staged runtime crossing; in_effect is the
@@ -1941,7 +1943,11 @@ impl<'a> Em<'a> {
     // The value dispatch (C emitVal).
     fn emit_val(&mut self, nd: &Node, m: Mode) -> R<Ev> {
         let mut ev = Ev::default();
+        if self.is_reflection(nd, 0) {
+            return Ok(Ev { v: self.emit_construct(nd, &mut Vec::new(), 0)?, unit: true, temporary: true, ..Ev::default() });
+        }
         match &nd.kind {
+            NodeKind::Reference { .. } => Err(fail(nd.line, "declaration reference is not a column value; use a reference-taking operation")),
             NodeKind::Num(x) => {
                 ev.v = num_lit(*x);
                 ev.unit = true;
@@ -4312,6 +4318,7 @@ fn emit_lowered(
         out_idx: 0,
         stmt: 0,
         decls: Vec::new(),
+        reference_values: Vec::new(),
         decl_at: 0,
         rel_seals: 0,
         plan,
@@ -4808,7 +4815,7 @@ mod normalize {
     use crate::trace::{TracePhase, TracePlan};
     use crate::{
         ArithOp, AssignOp, BindKind, CallableDescriptor, ColType, Determinism, Diag, Directives,
-        EffectSet, Interner, Node, NodeKind, RegEntry, RegEntryKind, RegType, Registry,
+        EffectSet, Interner, Node, NodeKind, RefCategory, RegEntry, RegEntryKind, RegType, Registry,
         ServiceDirection, Symbol,
     };
     use std::collections::{BTreeMap, BTreeSet};
@@ -4896,6 +4903,7 @@ mod normalize {
         /// Exact-byte program definitions and the carrier inferred from their normalized body.
         derived: BTreeMap<String, SemanticCarrier>,
         relation_defs: BTreeMap<String, Node>,
+        reference_defs: BTreeMap<String, Node>,
         /// Every registry name minted during this emission.  Source may not spell one.
         generated: BTreeSet<String>,
     }
@@ -4919,6 +4927,7 @@ mod normalize {
                 synthetic: 0,
                 derived: BTreeMap::new(),
                 relation_defs: BTreeMap::new(),
+                reference_defs: BTreeMap::new(),
                 generated: BTreeSet::new(),
             }
         }
@@ -5284,6 +5293,19 @@ mod normalize {
                         SemanticCarrier::Number
                     }
                 }
+                NodeKind::Hop { l, r } if matches!(l.kind, NodeKind::Reference { .. }) => {
+                    match &r.kind {
+                        NodeKind::Name(property) => match self.spelling(*property) {
+                            "arity" => SemanticCarrier::Number,
+                            "unique" => SemanticCarrier::Mask,
+                            "name" => SemanticCarrier::Char,
+                            "type" | "domain" | "result" | "determinism" | "trust"
+                            | "associative" | "commutative" | "monotonic" => SemanticCarrier::Sym,
+                            _ => SemanticCarrier::Other,
+                        },
+                        _ => SemanticCarrier::Other,
+                    }
+                }
                 NodeKind::Hop { r, .. } if matches!(r.kind, NodeKind::Relation { .. }) => SemanticCarrier::Mask,
                 NodeKind::Hop { r, .. } => self.infer(r),
                 NodeKind::Scope { l, .. } => self.infer(l),
@@ -5443,6 +5465,7 @@ mod normalize {
                 | NodeKind::CmpAny { name: s }
                 | NodeKind::EAdd(s)
                 | NodeKind::EDel(s)
+                | NodeKind::Reference { name: s, .. }
                 | NodeKind::EVerb { name: s, .. }
                 | NodeKind::EVia { f: s, .. }
                 | NodeKind::Fold { op: s, .. }
@@ -6031,7 +6054,7 @@ mod normalize {
         fn normalize_construction(&mut self, node: &Node, phase: TracePhase) -> Result<Node, Diag> {
             use NodeKind::*;
             let kind = match &node.kind {
-                Alias { .. } => return self.normalize(node, Context::Neutral, phase),
+                Alias { .. } | Reference { .. } => return self.normalize(node, Context::Neutral, phase),
                 Tuple(items) => Tuple(items.iter().map(|x| self.normalize_construction(x, phase)).collect::<Result<_, _>>()?),
                 Range { start, end } => Range {
                     start: Box::new(self.normalize_construction(start, phase)?),
@@ -6042,6 +6065,7 @@ mod normalize {
                     body: Box::new(self.normalize_construction(body, phase)?),
                 },
                 Binder { name, source } => Binder { name: *name, source: Box::new(self.normalize_construction(source, phase)?) },
+                Hop { l, r } => Hop { l: Box::new(self.normalize_construction(l, phase)?), r: r.clone() },
                 Arith { op, l, r } => Arith { op: *op, l: Box::new(self.normalize_construction(l, phase)?), r: Box::new(self.normalize_construction(r, phase)?) },
                 Cmp { op, l, r } => Cmp { op: *op, l: Box::new(self.normalize_construction(l, phase)?), r: Box::new(self.normalize_construction(r, phase)?) },
                 And(l, r) => And(Box::new(self.normalize_construction(l, phase)?), Box::new(self.normalize_construction(r, phase)?)),
@@ -6065,12 +6089,18 @@ mod normalize {
         ) -> Result<Node, Diag> {
             let line = node.line;
             let kind = match &node.kind {
+                NodeKind::Reference { category, name } => {
+                    let spelling = self.spelling(*name).to_string();
+                    let canonical = crate::reference::resolve(&self.reg, &spelling, *category).map_err(|e| super::fail(line, e.msg))?;
+                    NodeKind::Reference { category: *category, name: self.intern(&canonical) }
+                }
                 NodeKind::Num(value) => NodeKind::Num(*value),
                 NodeKind::Counter { val, unit } => NodeKind::Counter { val: *val, unit: *unit },
                 NodeKind::Sym(symbol) => NodeKind::Sym(*symbol),
                 NodeKind::Str(symbol) => NodeKind::Str(*symbol),
                 // bare lookup never touches the dynamic-alias overlay
                 NodeKind::Name(symbol) => {
+                    if let Some(reference) = self.reference_defs.get(self.spelling(*symbol)) { return Ok(reference.clone()); }
                     if let Some(body) = self.relation_defs.get(self.spelling(*symbol)) {
                         return Ok(Node::new(body.kind.clone(), line));
                     }
@@ -6234,6 +6264,9 @@ mod normalize {
                 },
                 NodeKind::Hop { l, r } => {
                     let l = self.normalize(l, Context::Value, phase)?;
+                    if matches!(l.kind, NodeKind::Reference { .. }) {
+                        return Ok(Node::new(NodeKind::Hop { l: Box::new(l), r: r.clone() }, line));
+                    }
                     let mut r = self.normalize(r, Context::Neutral, phase)?;
                     let left_relation = self.declared_relation(&l);
                     let right_relation = self.declared_relation(&r);
@@ -6267,6 +6300,22 @@ mod normalize {
                         .iter()
                         .map(|arg| self.normalize(arg, arg_context, phase))
                         .collect::<Result<Vec<_>, _>>()?;
+                    if matches!(spelling.as_str(), "fold" | "scan" | "cross") && reg_find(&self.reg, &spelling).is_none() {
+                        if self.derived.contains_key(&spelling) { return Err(super::fail(line, format!("definition '{spelling}' is a value, not callable"))); }
+                        let arity = args.len();
+                        let valid = match spelling.as_str() { "fold" => arity == 2, "scan" => (2..=3).contains(&arity), _ => arity == 3 };
+                        if !valid { return Err(super::fail(line, format!("invalid argument count for {spelling}"))); }
+                        let NodeKind::Reference { category: RefCategory::Function, name: op } = args[0].kind else {
+                            return Err(super::fail(line, format!("{spelling} requires a fun_ reference as its first argument")));
+                        };
+                        let kind = match spelling.as_str() {
+                            "fold" => NodeKind::Fold { op, operand: Box::new(args[1].clone()) },
+                            "scan" if arity == 2 => NodeKind::ScanExpr { op, operand: Box::new(args[1].clone()) },
+                            "scan" => NodeKind::ScanAlong { op, col: Box::new(args[1].clone()), order: Box::new(args[2].clone()) },
+                            _ => NodeKind::CrossV { f: op, a: Box::new(args[1].clone()), b: Box::new(args[2].clone()) },
+                        };
+                        return self.normalize(&Node::new(kind, line), context, phase);
+                    }
                     if args.iter().any(super::is_gamma_operand) {
                         return Err(super::fail(line, "relational groups need a reduction before a scalar call"));
                     }
@@ -6631,6 +6680,8 @@ mod normalize {
                     if !matches!(body.kind, NodeKind::Stmt { .. }) {
                         let spelling = self.spelling(*name).to_string();
                         let carrier = self.infer(&body);
+                        if matches!(body.kind, NodeKind::Reference { .. }) { self.reference_defs.insert(spelling.clone(), body.clone()); }
+                        else { self.reference_defs.remove(&spelling); }
                         if self.prime_source(&body) || super::is_gamma_operand(&body) {
                             self.relation_defs.insert(spelling.clone(), body.clone());
                         } else {
@@ -6644,6 +6695,7 @@ mod normalize {
                     }
                 }
                 NodeKind::UndefStmt { name } => {
+                    self.reference_defs.remove(&self.spelling(*name).to_string());
                     self.relation_defs.remove(&self.spelling(*name).to_string());
                     NodeKind::UndefStmt { name: *name }
                 },

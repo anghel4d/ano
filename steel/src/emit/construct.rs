@@ -13,6 +13,19 @@ impl Em<'_> {
         }
         let next = depth + 1;
         match &node.kind {
+            NodeKind::Reference { category, name } => self.emit_reference(*category, self.rs(*name).to_string().as_str(), node.line),
+            NodeKind::Hop { l, r } => {
+                let NodeKind::Name(property) = r.kind else { return Err(fail(node.line, "reflection property must be a name")); };
+                let property = self.rs(property).to_string();
+                if !matches!(property.as_str(), "name" | "type" | "domain" | "inputs" | "result" | "reads" | "writes" | "arity" | "effects" | "determinism" | "trust" | "associative" | "commutative" | "monotonic" | "range" | "unique" | "constraints") {
+                    return Err(fail(node.line, format!("unknown reflection property '{property}'")));
+                }
+                if let NodeKind::Reference { category, name } = l.kind {
+                    self.check_reference_property(category, self.rs(name), &property, node.line)?;
+                }
+                let value = self.emit_construct(l, bindings, next)?;
+                Ok(format!("({value}).{property}"))
+            }
             NodeKind::Tuple(items) => {
                 let items = items
                     .iter()
