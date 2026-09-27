@@ -67,9 +67,9 @@ Spelling aliases (`as`, `ja`), stored registry `alias` masks, and the dynamic ov
 ### 3. Pattern-match selectors
 
 ```haskell
-(Nord, TwoHanded > 60) , Gold += 1000
-(Nord, TwoHanded _) , +Trained
-(Nord, !TwoHanded) , +Untrained
+[Nord, TwoHanded > 60] , Gold += 1000
+[Nord, TwoHanded _] , +Trained
+[Nord, !TwoHanded] , +Untrained
 ```
 
 These select a present constrained value, any present value, or an absent component. Absence is not a numeric or symbol value.
@@ -103,7 +103,7 @@ Declared set-valued relationships need no suffix. `Frenzy.targets` selects the u
 
 Read the apostrophe `'` as **prime**, as in the notation `f'`. Its current meaning is relational converse: reverse every live edge. If `R` relates source `a` to target `b`, `R'` relates `b` to `a`. It is an expression-local relation, recomputed from the incoming state of its stage; it neither writes the world nor introduces a hidden stored column. This use of prime belongs to Ano's special relational algebra. It does not mean calculus differentiation.
 
-For a functional relationship `parent` with targets `-1 0 0 1 1`, the edges are `1→0, 2→0, 3→1, 4→1`. Its converse groups are `(1,2), (3,4), (), (), ()`: the children of each row. If the registry declares `inv children parent`, `children` and `parent'` denote the same relation and both observe later changes to parent.
+For a functional relationship `parent` with targets `-1 0 0 1 1`, the edges are `1→0, 2→0, 3→1, 4→1`. Its converse groups are `[1,2], [3,4], (), (), ()`: the children of each row. If the registry declares `inv children parent`, `children` and `parent'` denote the same relation and both observe later changes to parent.
 
 ```haskell
 parent.Gold
@@ -160,8 +160,8 @@ Assignment writes through the selected row domain. Validity guards can remove ro
 Several columns can be assigned together with an n-tuple. Arity is not restricted to two:
 
 ```haskell
-Nord , (Gold, Silver, Copper) = (4, 51, 13)
-Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold)
+Nord , [Gold, Silver, Copper] = [4, 51, 13]
+Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold]
 ```
 
 The first statement gives each selected row Gold 4, Silver 51, and Copper 13. The second rotates those values: Gold becomes 51, Silver 13, and Copper 4. Every RHS member reads the same incoming state; the tuple publishes its component writes together. There is no right-to-left assignment chain.
@@ -169,20 +169,50 @@ The first statement gives each selected row Gold 4, Silver 51, and Copper 13. Th
 Targets and values must be explicit tuples of matching arity and nesting. Each target leaf names a distinct registered column; aliases for the same column count as the same destination. Each value leaf is an ordinary expression checked against its own destination carrier. Mixed carriers and nested tuples are allowed:
 
 ```haskell
-Nord , (Gold, (Marked, Race), Copper) = (Silver + 1, (Gold > 20, :Rich), 13)
-Nord , (Gold, Silver, Copper) += (1, 2, 3)
+Nord , [Gold, [Marked, Race], Copper] = [Silver + 1, [Gold > 20, :Rich], 13]
+Nord , [Gold, Silver, Copper] += [1, 2, 3]
 ```
 
 The update operators `+=`, `-=`, `*=`, and `/=` apply componentwise, retaining each column's existing publication rules, including carrier/range projection. A missing RHS member removes that row from the whole tuple write; other selected rows can still receive the complete tuple. A type, shape, lineage, or runtime validity failure refuses the operation. An independently composed sibling effect retains its own validity mask.
 
 ```haskell
-Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) ; Marked = Gold > 20
-Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) |> Marked = Gold > 20
+Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold] ; Marked = Gold > 20
+Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold] |> Marked = Gold > 20
 ```
 
-With `;`, Marked reads the incoming Gold. With `|>`, it reads the rotated Gold. Tuple assignments are single effects in these compositions, and also work in standing rules, existing comprehensions, and continuations. An omitted-subject tuple update uses the same antecedent/`^cursor` rules as a scalar update; use an explicit subject or leading comma for tuple `=` assignments.
+With `;`, Marked reads the incoming Gold. With `|>`, it reads the rotated Gold. Tuple assignments are single effects in these compositions, and also work in standing rules and continuations. An omitted-subject tuple update uses the same antecedent/`^cursor` rules as a scalar update; use an explicit subject or leading comma for tuple `=` assignments.
 
-A trailing comma is allowed, including the singleton tuple `(Gold,) = (4,)` in effect position; `(Gold)` is grouping. Empty tuples are not assignment targets. This form assigns columns from explicit matching tuple expressions; it does not introduce tuple-valued registry storage or tuple-returning function signatures. Erlang-style tuple comprehensions and guards are a separate [design exploration](../todo/07-tuple-comprehensions-and-guards.md). [Demo 145](../demos/2-effects/145-tuple-assignment.ano) is an executable example.
+A trailing comma is allowed. `[Gold] = [4]` and `[Gold,] = [4,]` are singleton tuple assignments; `(Gold)` is ordinary grouping. Empty tuples are values but are not assignment targets. This form assigns columns from explicit matching tuple expressions; it does not introduce tuple-valued registry storage or tuple-returning registered signatures. [Demo 145](../demos/2-effects/145-tuple-assignment.ano) is an executable example.
+
+#### Temporary constructions
+
+Brackets construct expression-local values. Parentheses group ordinary expressions or enclose call arguments; redundant grouping has no effect. The old effectful `[selection , effect | bindings]` syntax is retired, with its parser and backend preserved as commented code for review.
+
+```haskell
+[4, 51, 13]
+[]
+[4]
+[1..5]
+[[1..5] -> x |=> x * x]
+[[1..5] -> x |=> [x, x * x]]
+```
+
+The last two expressions produce `[1, 4, 9, 16, 25]` and `[[1, 1], [2, 4], [3, 9], [4, 16], [5, 25]]`. `source -> name` binds each member in source order; `|=> expression` yields one result for each binding. Repeated members remain repeated, empty sources produce empty tuples, and nested results remain nested. Only the forward arrows are accepted. `=>` still introduces a standing rule, and `|>` still sequences stages.
+
+Ranges `[start..end]` use finite integer bounds, include both endpoints, and advance by one. When end is below start the range is empty. Stepped and unbounded ranges remain future work. A generator source is a tuple or column, not a scalar. Column sources enumerate present values in world-row order. Binding names have exact spelling, are scoped to their comprehension body, may shadow an outer name, and never escape. A nested comprehension can read outer bindings; a named definition does not capture a caller's local bindings.
+
+```haskell
+[Gold -> amount |=> amount * 2]
+[[1..3] -> x |=> [[1..x] -> y |=> [x, y]]]
+```
+
+Constructing a value neither updates the world nor gives a temporary collection an entity-row assignment witness. `[Gold, Silver] = [Silver, Gold]` in effect position remains explicit simultaneous tuple assignment. Assigning a generated collection to a scalar world column refuses; equal lengths do not establish row identity. Construction bodies admit nested constructors, literals, lexical bindings, column values, scalar arithmetic/comparisons, and supported pure value calls. Unsupported operations refuse explicitly. Multiple binding clauses, destructuring, and Erlang-style guards still need their own grammar ruling; neither comma nor `|` is a qualifier separator.
+
+Construction is eager. The intended `lazy(construction)` wrapper remains documented for future implementation: its boundary must defer all enclosed construction, without eager exceptions.
+
+<!-- /// !TODO: Implement lazy(...) as a fully enclosing evaluation boundary. Do not disguise eager execution as lazy(), or add an eager exception for nested constructions. Settle forcing, snapshots, and lifetime before enabling it. -->
+
+`lazy(...)` has no built-in implementation yet. [Task 07](../todo/07-tuple-comprehensions-and-guards.md) tracks guards, comprehension extensions, and deferred construction.
 
 ### 9. Structural effects
 
@@ -232,7 +262,7 @@ The first stage swaps the values; the second adds the new Silver to the new Gold
 
 The selection supplies the subject for the whole effect expression. Changing a selected row's values does not re-run the predicate. Spawned rows are visible to subsequent reads, but do not automatically join that subject; despawn removes selected rows from later stages and continuations. Each stage applies the carrier/range checks before the next stage reads its result.
 
-These forms run in Steel and Kore, including standing rules, comprehensions, and continuations. Kore saves the resulting world after successful execution; a refused later stage does not save an intermediate state. The [worked examples](ano-examples.md#simultaneous-and-sequential-effects) include a complete registry.
+These forms run in Steel and Kore, including standing rules and continuations. Kore saves the resulting world after successful execution; a refused later stage does not save an intermediate state. The [worked examples](ano-examples.md#simultaneous-and-sequential-effects) include a complete registry.
 
 ```haskell
 Nord , Gold += 1000 ; +Blessed
@@ -351,10 +381,11 @@ A scalar ordering key ties every admitted row and preserves the incoming order. 
 
 ```haskell
 cross dist Tower Creep
-[ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
+-- Retired effect comprehension (preserved for review):
+-- [ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
 ```
 
-`cross` materializes a rank-2 product value. Its product lineage does not become entity lineage through a pure wrapper, so world-column assignment refuses. The double-generator comprehension selects pair rows and applies effects to the admitted image.
+`cross` materializes a rank-2 product value. Its product lineage does not become entity lineage through a pure wrapper, so world-column assignment refuses. The former double-generator effect comprehension is disabled. Temporary bracket comprehensions are described in section 8 and do not implicitly apply world effects.
 
 The callable and every name must be declared. This syntax does not provide a generic distance function.
 
@@ -450,11 +481,11 @@ Postfix prime repeats on a relationship operand. In a dotted chain it applies to
 
 Within expressions, the main precedence order is mask OR, mask AND, negation, comparison, fold/scan prefixes, addition/subtraction, multiplication/division/modulo, scope, then hops/atoms. Parenthesize compound fold scopes. Assignment and control forms have their own grammatical context rather than being ordinary value operators.
 
-In effect position, parenthesized targets followed by an assignment operator form a tuple assignment; other parenthesized effects group a batch. Commas within those target/value parentheses separate tuple members and do not introduce another selection/effect hinge.
+In effect position, bracketed targets followed by an assignment operator form a tuple assignment. Parentheses group effects just as they group other expressions. Commas within brackets separate tuple members; commas within call parentheses separate arguments. Neither introduces another selection/effect hinge.
 
 The effect grammar parses semicolon-separated branches, each containing a left-to-right `|>` sequence of effects or parenthesized effect groups. The emitter evaluates each sequence from the enclosing batch's incoming state, commits each stage for the following stage's reads, then merges the branch's final writes at the enclosing barrier. Parallel branches still require compatible writes.
 
-Unary minus negates a numeric value; repeated mask negation composes normally. Newlines inside parentheses or comprehension brackets, and after a hinge, effect separator, or unfinished operator, continue the same statement. A newline after a complete statement remains a barrier. Within a comprehension effect, the unparenthesized `|` begins the generator list; put value-level `|` expressions in parentheses or call arguments.
+Unary minus negates a numeric value; repeated mask negation composes normally. Newlines inside parentheses or comprehension brackets, and after a hinge, effect separator, or unfinished operator, continue the same statement. A newline after a complete statement remains a barrier. Inside brackets, `->` binds a source member and `|=>` separates that binding from its result expression. `..` is a distinct token from projection dot and decimal punctuation.
 
 The parser rejects excessive expression nesting with a diagnostic before recursive descent or downstream expression traversal can exhaust the stack. Parenthesis, parser-recursion, operator-chain, and expression-tree depth each have a conservative 64-level ceiling; a program may still contain arbitrarily many separate statements.
 

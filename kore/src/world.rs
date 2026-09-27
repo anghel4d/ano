@@ -2842,8 +2842,8 @@ inv children parent
         app.mode = Mode::Reg;
         app.world = world_load(path.to_str().unwrap()).unwrap();
         for (source, expected) in [
-            ("Nord , (Gold, Silver, Copper) = (4, 51, 13)", [[4.0, 20.0, 4.0], [51.0, 2.0, 51.0], [13.0, 6.0, 13.0]]),
-            ("Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold)", [[51.0, 20.0, 51.0], [13.0, 2.0, 13.0], [4.0, 6.0, 4.0]]),
+            ("Nord , [Gold, Silver, Copper] = [4, 51, 13]", [[4.0, 20.0, 4.0], [51.0, 2.0, 51.0], [13.0, 6.0, 13.0]]),
+            ("Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold]", [[51.0, 20.0, 51.0], [13.0, 2.0, 13.0], [4.0, 6.0, 4.0]]),
         ] {
             app.prompt = source.as_bytes().to_vec();
             repl_submit(&mut app);
@@ -2851,8 +2851,8 @@ inv children parent
         }
         let before = observe();
         for source in [
-            "Nord , (Gold, Silver, Copper) = (1, 2, :Wrong)",
-            "Nord , Gold = 0 |> (Gold, Silver, Copper) = (1, 2, Gold / Gold)",
+            "Nord , [Gold, Silver, Copper] = [1, 2, :Wrong]",
+            "Nord , Gold = 0 |> [Gold, Silver, Copper] = [1, 2, Gold / Gold]",
         ] {
             app.prompt = source.as_bytes().to_vec();
             repl_submit(&mut app);
@@ -2862,7 +2862,7 @@ inv children parent
         reopened.mode = Mode::Reg;
         reopened.world = world_load(path.to_str().unwrap()).unwrap();
         session_rehydrate(&mut reopened);
-        reopened.prompt = b"Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) |> Silver = Gold".to_vec();
+        reopened.prompt = b"Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold] |> Silver = Gold".to_vec();
         repl_submit(&mut reopened);
         assert_eq!(observe(), [vec![13.0, 20.0, 13.0], vec![13.0, 2.0, 13.0], vec![51.0, 6.0, 51.0]]);
     }

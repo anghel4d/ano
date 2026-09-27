@@ -5,7 +5,7 @@ The [historical rulings](00-historical-rulings.md) preserve the author's decisio
 ## Open work
 
 1. [06: seeded fold and fallible traverse](06-seeded-fold-and-traverse.md). Obtain a ruling before extending grammar or the unseeded recurrence.
-2. [07: tuple comprehensions and guards](07-tuple-comprehensions-and-guards.md). Explore Erlang-style bindings and pure guards for n-tuples; settle denotation and minimal grammar before implementation.
+2. [07: tuple comprehensions and guards](07-tuple-comprehensions-and-guards.md). Forward bracket constructions are implemented. Explore Erlang-style guards, multiple generators, destructuring, and a fully enclosing `lazy(...)` wrapper; settle their remaining grammar and denotation before extending implementation.
 3. Review and rework the special relational algebra as a whole. `/// !TODO`: preserve the implemented [prime = converse contract](../docs/ano-language.md#prime-relational-converse) while reviewing carriers, domains, composition, ordering, callable boundaries, and integration with task 07.
 4. [99: spatial lattice](99-spatial-lattice.md). Decide the implementation path and establish nominal domains, lineage, placement, persistence, and matching Kore behavior. Do not bake unresolved task-06 choices into it.
 

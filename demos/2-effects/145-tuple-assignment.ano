@@ -4,5 +4,5 @@
 --! expect Copper = 4 6 4
 --! expect-n 3
 
-Nord , (Gold, Silver, Copper) = (4, 51, 13)
-Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold) |> show(Gold, Silver, Copper)
+Nord , [Gold, Silver, Copper] = [4, 51, 13]
+Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold] |> show(Gold, Silver, Copper)

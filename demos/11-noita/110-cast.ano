@@ -7,6 +7,6 @@
 --! expect mana = 50 0 0 0 0 0 0
 --! expect pos = 5 5 17 5 17 5 9 5 5 -7 17 5 5 17
 
-Wand , spawn SparkBolt at pos + (12, 0) ; Mana -= 5
-Wand , spawn SparkBolt at pos + (12, 0) ; spawn Bomb at pos + (4, 0) ; Mana -= 30
+Wand , spawn SparkBolt at pos + [12, 0] ; Mana -= 5
+Wand , spawn SparkBolt at pos + [12, 0] ; spawn Bomb at pos + [4, 0] ; Mana -= 30
 Wand , spawn SparkBolt * 3 at pos + polar(12, (index - 1) * 90) ; Mana -= 15

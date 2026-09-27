@@ -12,10 +12,10 @@
 --! expect pos = 5 5 40 5 0 0 41 3 41 7
 --! expect fire = 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 
-Wand , spawn SparkBolt * 2 at pos + (12, index * 4 - 2) ; Mana -= 25
+Wand , spawn SparkBolt * 2 at pos + [12, index * 4 - 2] ; Mana -= 25
 SparkBolt , Damage += 10 ; +Trigger
-SparkBolt , pos = pos + (24, 0)
-[ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
+SparkBolt , pos = pos + [24, 0]
+-- Retired effect comprehension: [ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
 Enemy & Hit , Health -= +/ Damage @ SparkBolt
 Oil @ blast(5) at impact , +Fire
 Oil & !Fire & #/ (moore & Fire) >= 1 , +Fire

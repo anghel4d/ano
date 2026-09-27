@@ -1,25 +1,20 @@
 # 07: Tuple comprehensions and guards
 
-Explore Erlang-style comprehensions and guards for Ano's n-tuples. The intended surface is one expression-local `()` family for tuples, generators, guards, and comprehensions: Ano is already a language of mutable array columns, so this form denotes values that exist within an expression and are not implicitly written to the world store. The goal is a powerful addition with a small, coherent grammar and a clear denotation. This is a design task; no new syntax is accepted by this TODO.
+The accepted surface is one expression-local `[]` family: tuples `[a, b]`, inclusive integer ranges `[a..b]`, and forward comprehensions `[source -> name |=> result]`. Parentheses retain ordinary grouping and callable argument lists. Steel/Kore execute these constructors eagerly; explicit n-tuple assignments now use brackets. The old effectful bracket comprehension is disabled and preserved as commented code.
 
-## Starting point
+## Remaining work
 
-Steel/Kore implement explicit, matching n-tuple assignments, including nested shapes and mixed leaf carriers. Their members read one incoming state and share row validity. Existing effect comprehensions remain available; `;` and `|>` retain simultaneous and sequential composition respectively.
-
-## Questions to resolve
-
-- Decide what a comprehension ranges over and produces: tuples within one row, streams of tuple values, or row domains carrying tuples. Keep these distinct from entity selections and spatial product domains.
-- Explore tuple binding/destructuring and pure guards together. Specify name scope, repeated bindings, nesting, empty inputs, and whether tuple shapes are statically fixed.
-- Define whether a shape mismatch, absent member, or failed guard filters an element or refuses the expression. Separate these from type errors and runtime failures.
-- Establish ordering, multiplicity, and lineage before lowering. State how a resulting tuple can feed a column assignment without treating equal buffer lengths as proof of domain agreement.
-- Decide which expressions guards admit, how they consume foundness, and when they read world state. Keep side effects out of guards; any effectful comprehension must retain explicit composition and publication boundaries.
-- Develop the unified `()` grammar alongside existing grouping, calls, scope, and comma syntax; account explicitly for migration from legacy `[... | ... <- ...]` comprehensions. Specify ambiguity and precedence, including nested comprehensions, before choosing a spelling.
-- Settle evaluation timing: eager, lazy, or eager by default with a fully enclosing `lazy(...)` boundary. Haskell-style range notation remains a candidate, not accepted syntax.
+- Explore Erlang-style comprehensions and pure guards as a powerful, minimal addition to this construction family. Settle one qualifier grammar before implementation; comma is tuple/hinge structure and `|` is OR, not a qualifier separator.
+- Specify multiple generators, dependent sources, Cartesian versus zipped traversal, binding/destructuring patterns, and failed-pattern behavior. Current nesting preserves result nesting and is not an implicit flattening operation.
+- Specify presence-aware guards without importing side effects into local construction. Existing presence checks inform the design but do not settle its grammar.
+- Add stepped and unbounded ranges only after their evaluation and resource contracts are established.
+- Preserve `lazy(construction)` as the intended optional wrapper: every enclosed construction is deferred, without eager exceptions. Decide forcing, world snapshot timing, lifetime, and errors before implementing it.
+- Extend local callable carrier checking to nominal and symbol signatures without erasing registry identity or checking only buffer shape.
+- Specify how generated tuples can feed explicit assignment or destructuring while retaining row identity. Equal buffer lengths never establish world-row lineage.
 - Review the relationship to prime's special relational algebra without confusing converse with tuple construction or differentiation.
-- Determine whether named tuple values, tuple-returning callables, or a registry tuple carrier are needed. Add only the machinery required by the chosen denotation.
 
-## Evidence before implementation
+<!-- /// !TODO: lazy(...) is intentionally retained in the design. Its entire enclosed construction must be lazy; current execution is eager and must not expose a pretend lazy wrapper. -->
 
-Work through transferring three different currencies, filtering tuples by a balance guard, destructuring nested mixed-carrier tuples, preserving duplicates, and consuming a guarded result in a simultaneous assignment followed by a sequential stage. Give each example explicit inputs, result shape/domain, output values, and refusal or absence behavior.
+## Evidence
 
-Obtain a ruling on the chosen grammar and denotation before implementing them. Then align the language reference, Steel/Kore, persistence, and public behavior tests.
+Public CLI tests cover range results, order, multiplicity, nesting, lexical binding, empty inputs, column reads, tuple publication, and refusal of retired syntax. Extend these contracts as the remaining design questions receive rulings. The historical rulings remain read-only.

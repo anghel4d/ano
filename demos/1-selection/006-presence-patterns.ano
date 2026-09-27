@@ -4,6 +4,6 @@
 --! expect trained = 1 1 0 0 1 0
 --! expect untrained = 0 0 1 0 0 1
 
-(Nord, TwoHanded > 60) , Gold += 1000
-(Nord, TwoHanded _) , +Trained
-(Nord, !TwoHanded) , +Untrained
+[Nord, TwoHanded > 60] , Gold += 1000
+[Nord, TwoHanded _] , +Trained
+[Nord, !TwoHanded] , +Untrained

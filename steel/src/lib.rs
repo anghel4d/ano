@@ -144,7 +144,10 @@ pub enum TokKind {
     Rp,
     Lb,
     Rb,
-    LArrow, // <-
+    LArrow, // <- (retired comprehension syntax)
+    RArrow, // -> binding
+    Yield,  // |=> construction result
+    Range,  // .. inclusive range
     Tilde,
     Fold,   // +/  (name column carries the op spelling)
     ScanOp, // +\  (name column carries the op spelling)
@@ -215,6 +218,9 @@ impl TokKind {
             TokKind::Lb => "T_LB",
             TokKind::Rb => "T_RB",
             TokKind::LArrow => "T_LARROW",
+            TokKind::RArrow => "T_RARROW",
+            TokKind::Yield => "T_YIELD",
+            TokKind::Range => "T_RANGE",
             TokKind::Tilde => "T_TILDE",
             TokKind::Fold => "T_FOLD",
             TokKind::ScanOp => "T_SCANOP",
@@ -359,7 +365,9 @@ pub enum NodeKind {
     ScanAlong { op: Symbol, col: Box<Node>, order: Box<Node> },
     IotaX(Box<Node>),  // til expr
     Shape(Vec<Node>),  // 1-2 dims, each Num or Wild
-    Tuple(Vec<Node>),  // presence tuple or point literal; context decides at emit
+    Tuple(Vec<Node>), // expression-local bracket construction
+    Range { start: Box<Node>, end: Box<Node> },
+    Generate { source: Box<Node>, name: Symbol, body: Box<Node> },
     To { shape: Box<Node>, poured: Option<Box<Node>> }, // to shape; poured = board-literal Str
     Grade { key: Box<Node>, desc: bool },
     Top { k: f64, inner: Box<Node> },
@@ -418,6 +426,8 @@ impl NodeKind {
             NodeKind::IotaX(..) => 19,
             NodeKind::Shape(..) => 20,
             NodeKind::Tuple(..) => 21,
+            NodeKind::Range { .. } => 49,
+            NodeKind::Generate { .. } => 50,
             NodeKind::To { .. } => 22,
             NodeKind::Grade { .. } => 23,
             NodeKind::Top { .. } => 24,

@@ -13,6 +13,8 @@ use crate::{
 
 type R<T> = Result<T, Diag>;
 
+mod construct;
+
 // Inputs: the stem the source requested, the resolver request it made. Output: the spelling to
 // print in a lookup refusal — `^name` keeps its sigil, so `^Nope` never reads back as `Nope`.
 fn spelled(req: &str, lm: LookupMode) -> String {
@@ -75,6 +77,7 @@ struct Ev {
     g: Option<String>,
     gv: bool,
     pair: bool,
+    temporary: bool, // expression-local collection, never an entity-row witness
     unit: bool,
     sym: bool,
     along: Option<String>,
@@ -359,7 +362,8 @@ fn children(nd: &Node) -> Vec<&Node> {
     use NodeKind::*;
     match &nd.kind {
         Not(a) | Prime(a) | Relation { source: a, .. } | IotaX(a) | Expand(a) | Query(a) => vec![a.as_ref()],
-        And(a, b) | Or(a, b) => vec![a.as_ref(), b.as_ref()],
+        Range { start: a, end: b } | Generate { source: a, body: b, .. }
+        | And(a, b) | Or(a, b) => vec![a.as_ref(), b.as_ref()],
         Cmp { l, r, .. } | Arith { l, r, .. } | Hop { l, r } => vec![l.as_ref(), r.as_ref()],
         Scope { l, r, origin } => {
             let mut v = vec![l.as_ref(), r.as_ref()];
@@ -1586,6 +1590,8 @@ impl<'a> Em<'a> {
             }
         };
         let xv = self.emit_val(x, Mode::World)?;
+        ev.temporary = xv.temporary;
+        if xv.temporary && scope.is_some() { return Err(fail(line, "temporary scan cannot acquire a world-row scope")); }
         if let Some(sc) = scope {
             if let NodeKind::Shape(dims) = &sc.kind {
                 let w = dims.first().map(num_of).unwrap_or(0.0) as i32;
@@ -1653,6 +1659,7 @@ impl<'a> Em<'a> {
         if name == "rank" && self.find(name).is_none() {
             if let Some(a0) = args.first() {
                 let a = self.emit_val(a0, m)?;
+                ev.temporary = a.temporary;
                 ev.v = format!("(AnoRank {})", a.v);
                 return Ok(ev);
             }
@@ -1678,6 +1685,7 @@ impl<'a> Em<'a> {
                 ev.g = a.g;
                 ev.gv = a.gv;
                 ev.unit = a.unit;
+                ev.temporary = a.temporary;
                 ev.along = a.along;
                 ev.domain = a.domain;
                 ev.v = format!("({}¨{})", fnn, a.v);
@@ -1692,6 +1700,7 @@ impl<'a> Em<'a> {
                 ev.g = g_and(a.g, b.g);
                 ev.gv = a.gv || b.gv;
                 ev.unit = a.unit && b.unit;
+                ev.temporary = a.temporary || b.temporary;
                 ev.v = format!("({} {}¨{})", a.v, fnn, b.v);
                 Ok(ev)
             }
@@ -1962,10 +1971,12 @@ impl<'a> Em<'a> {
             NodeKind::Arith { op, l, r } => {
                 let a = self.emit_val(l, m)?;
                 let b = self.emit_val(r, m)?;
+                if a.temporary || b.temporary { return Err(fail(nd.line, "temporary collections require an explicit comprehension")); }
                 ev.g = g_and(a.g.clone(), b.g.clone());
                 ev.gv = a.gv || b.gv;
                 ev.pair = a.pair || b.pair;
                 ev.unit = a.unit && b.unit;
+                ev.temporary = a.temporary || b.temporary;
                 // Pointwise scalar extension preserves a scan's row domain and traversal order.
                 let implicit = self.mode_domain(m);
                 ev.domain = scan_domain_join(&a, &b, implicit.as_deref(), nd.line)?;
@@ -1988,6 +1999,7 @@ impl<'a> Em<'a> {
             NodeKind::Cmp { op, l, r } => {
                 let a = self.emit_val(l, m)?;
                 let b = self.emit_val(r, m)?;
+                if a.temporary || b.temporary { return Err(fail(nd.line, "compare temporary members inside an explicit comprehension")); }
                 let implicit = self.mode_domain(m);
                 ev.domain = scan_domain_join(&a, &b, implicit.as_deref(), nd.line)?;
                 ev.along = scan_order_join(&a, &b, nd.line)?;
@@ -2061,22 +2073,9 @@ impl<'a> Em<'a> {
                 ev.v = format!("(↕{})", n.v);
                 Ok(ev)
             }
-            NodeKind::Tuple(kids) => {
-                if kids.len() != 2 {
-                    return Err(fail(nd.line, format!("value tuple arity {}", kids.len())));
-                }
-                let a = self.emit_val(&kids[0], m)?;
-                let b = self.emit_val(&kids[1], m)?;
-                ev.pair = true;
-                ev.g = g_and(a.g, b.g);
-                ev.gv = a.gv || b.gv;
-                if a.unit && b.unit {
-                    ev.unit = true;
-                    ev.v = format!("(<{}‿{})", a.v, b.v);
-                    return Ok(ev);
-                }
-                ev.v = format!("({}⋈¨{})", a.v, b.v);
-                Ok(ev)
+            NodeKind::Tuple(_) | NodeKind::Range { .. } | NodeKind::Generate { .. } => {
+                let v = self.emit_construct(nd, &mut Vec::new(), 0)?;
+                Ok(Ev { v, unit: true, temporary: true, ..Ev::default() })
             }
             NodeKind::To { shape, .. } => {
                 // reshape rhs: exactly count-of-selection positions, in selection space
@@ -2747,6 +2746,9 @@ impl<'a> Em<'a> {
                 };
                 self.sel_var = sel_e.clone();
                 let rhs_v = self.emit_val(rhs, Mode::Sel)?;
+                if rhs_v.temporary {
+                    return Err(fail(ef.line, "temporary collection has no world-row assignment lineage; use explicit tuple assignment"));
+                }
                 let mut rv = rhs_v.v.clone();
                 if rhs_v.unit {
                     rv = format!("((+´{})⥊{})", sel_e, rv);
@@ -3726,155 +3728,157 @@ impl<'a> Em<'a> {
         Ok(())
     }
 
-    // Comprehension: theta-join over two generators with filters; effects tag both sides.
-    fn emit_compr(&mut self, st: &Node) -> R<()> {
-        let NodeKind::Compr { effect, rest, .. } = &st.kind else {
-            return Ok(());
-        };
-        self.stmt += 1;
-        self.site_kind = 'c';
-        self.pre.clear();
-        self.out.push_str(&format!("\n# c{}\n", self.stmt));
-        self.fr.kind = FrameKind::Ent;
-        let mut binders: Vec<&Node> = Vec::new();
-        let mut filters: Vec<&Node> = Vec::new();
-        for k in rest {
-            if matches!(k.kind, NodeKind::Binder { .. }) {
-                if binders.len() < 2 {
-                    binders.push(k);
-                }
-            } else {
-                filters.push(k);
-            }
-        }
-        if binders.len() != 2 {
-            return Err(fail(st.line, "comprehension needs two generators"));
-        }
-        let (b0name, b0src) = if let NodeKind::Binder { name, source } = &binders[0].kind {
-            (*name, source.as_ref())
-        } else {
-            (Symbol::EMPTY, binders[0])
-        };
-        let (b1name, b1src) = if let NodeKind::Binder { name, source } = &binders[1].kind {
-            (*name, source.as_ref())
-        } else {
-            (Symbol::EMPTY, binders[1])
-        };
-        let am = self.emit_mask(b0src)?;
-        let bm = self.emit_mask(b1src)?;
-        let a_i = self.tv();
-        let b_i = self.tv();
-        self.stage(format!("{} ← /{}", a_i, am));
-        self.stage(format!("{} ← /{}", b_i, bm));
-        // pair filter matrix, all-ones then AND each filter in
-        let mm = self.tv();
-        self.stage(format!("{} ← (≠{})‿(≠{})⥊1", mm, a_i, b_i));
-        for f in &filters {
-            let call = match &f.kind {
-                NodeKind::Call { .. } => Some(*f),
-                NodeKind::Cmp { l, .. } if matches!(l.kind, NodeKind::Call { .. }) => Some(l.as_ref()),
-                _ => None,
-            };
-            if let Some(Node { kind: NodeKind::Call { args, .. }, .. }) = call {
-                if args.len() != 2
-                    || !matches!(args[0].kind, NodeKind::Name(s) if s == b0name)
-                    || !matches!(args[1].kind, NodeKind::Name(s) if s == b1name)
-                {
-                    return Err(fail(f.line, "comprehension callable requires its two generator bindings in order"));
-                }
-            }
-            match &f.kind {
-                NodeKind::Cmp { op, l, r }
-                    if matches!(&l.kind, NodeKind::Name(s) if *s == b0name)
-                        && matches!(&r.kind, NodeKind::Name(s) if *s == b1name) =>
-                {
-                    let opg = match op {
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                        CmpOp::Eq => "=",
-                        _ => "≠",
-                    };
-                    self.stage(format!("{} ↩ {}∧{}{}⌜{}", mm, mm, a_i, opg, b_i));
-                }
-                NodeKind::Cmp { op, l, r } if matches!(l.kind, NodeKind::Call { .. }) => {
-                    let NodeKind::Call { callee, .. } = &l.kind else {
-                        return Err(fail(f.line, "unsupported comprehension filter"));
-                    };
-                    let cn = self.rs(*callee);
-                    let Some(ei) = self.find(cn) else {
-                        return Err(fail(f.line, format!("unregistered '{}' in comprehension filter", cn)));
-                    };
-                    let rv = self.emit_val(r, Mode::World)?;
-                    let opg = match op {
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                        CmpOp::Le => "≤",
-                        _ => "≥",
-                    };
-                    let fv = self.fnv(ei);
-                    self.stage(format!("{} ↩ {}∧(({} {}⌜ {}){}{})", mm, mm, a_i, fv, b_i, opg, rv.v));
-                }
-                NodeKind::Call { callee, .. } => {
-                    let cn = self.rs(*callee);
-                    let Some(ei) = self.find(cn) else {
-                        return Err(fail(f.line, format!("unregistered '{}' in comprehension filter", cn)));
-                    };
-                    let fv = self.fnv(ei);
-                    self.stage(format!("{} ↩ {}∧({} {}⌜ {})", mm, mm, a_i, fv, b_i));
-                }
-                _ => return Err(fail(f.line, "unsupported comprehension filter")),
-            }
-        }
-        // A comprehension's image is a set; generator copy counts do not feed its effects.
-        self.pipe_expand.clear();
-        // effect over both sides: rows/cols with any surviving pair
-        let a_any = self.tv();
-        let b_any = self.tv();
-        self.stage(format!("{} ← ∨´˘{}", a_any, mm));
-        self.stage(format!("{} ← ∨´˘⍉{}", b_any, mm));
-        let side = self.tv();
-        self.stage(format!(
-            "{} ← ((↕anoN)∊{}/{})∨((↕anoN)∊{}/{})",
-            side, a_any, a_i, b_any, b_i
-        ));
-        self.sel_var = side.clone();
-        self.trace_sel = side.clone();
-        let mut fx = Fx::default();
-        // bare verb tag (Collide): treat as +Name when a bool col exists
-        let mut handled = false;
-        if let NodeKind::EVerb { name, args } = &effect.kind {
-            if args.is_empty() {
-                if let Some(ci) = self.find(self.rs(*name)) {
-                    if matches!(self.ent(ci).kind, RegEntryKind::Col { ty: ColType::Bool, .. }) {
-                        let t = self.tv();
-                        let cv = self.bqnv(ci);
-                        self.stage(format!("{} ← {}∨{}", t, cv, side));
-                        self.add_commit(&mut fx, ci, t, b'|', None, None);
-                        handled = true;
-                    }
-                }
-            }
-        }
-        if !handled {
-            self.emit_effect(effect, &mut fx)?;
-        }
-        self.stage(format!("anoSel ↩ {}", side));
-        self.saved_fr = self.fr.clone();
-        self.have_saved = true;
-        self.commit_stmt(&fx, false)?;
-        if fx.despawn {
-            self.world_shifted = true;
-        }
-        let pre = std::mem::take(&mut self.pre);
-        self.out.push_str(&pre);
-        Ok(())
-    }
-}
+    // Retired effect comprehension backend: retained for review, not executable.
+    //     // Comprehension: theta-join over two generators with filters; effects tag both sides.
+    //     fn emit_compr(&mut self, st: &Node) -> R<()> {
+    //         let NodeKind::Compr { effect, rest, .. } = &st.kind else {
+    //             return Ok(());
+    //         };
+    //         self.stmt += 1;
+    //         self.site_kind = 'c';
+    //         self.pre.clear();
+    //         self.out.push_str(&format!("\n# c{}\n", self.stmt));
+    //         self.fr.kind = FrameKind::Ent;
+    //         let mut binders: Vec<&Node> = Vec::new();
+    //         let mut filters: Vec<&Node> = Vec::new();
+    //         for k in rest {
+    //             if matches!(k.kind, NodeKind::Binder { .. }) {
+    //                 if binders.len() < 2 {
+    //                     binders.push(k);
+    //                 }
+    //             } else {
+    //                 filters.push(k);
+    //             }
+    //         }
+    //         if binders.len() != 2 {
+    //             return Err(fail(st.line, "comprehension needs two generators"));
+    //         }
+    //         let (b0name, b0src) = if let NodeKind::Binder { name, source } = &binders[0].kind {
+    //             (*name, source.as_ref())
+    //         } else {
+    //             (Symbol::EMPTY, binders[0])
+    //         };
+    //         let (b1name, b1src) = if let NodeKind::Binder { name, source } = &binders[1].kind {
+    //             (*name, source.as_ref())
+    //         } else {
+    //             (Symbol::EMPTY, binders[1])
+    //         };
+    //         let am = self.emit_mask(b0src)?;
+    //         let bm = self.emit_mask(b1src)?;
+    //         let a_i = self.tv();
+    //         let b_i = self.tv();
+    //         self.stage(format!("{} ← /{}", a_i, am));
+    //         self.stage(format!("{} ← /{}", b_i, bm));
+    //         // pair filter matrix, all-ones then AND each filter in
+    //         let mm = self.tv();
+    //         self.stage(format!("{} ← (≠{})‿(≠{})⥊1", mm, a_i, b_i));
+    //         for f in &filters {
+    //             let call = match &f.kind {
+    //                 NodeKind::Call { .. } => Some(*f),
+    //                 NodeKind::Cmp { l, .. } if matches!(l.kind, NodeKind::Call { .. }) => Some(l.as_ref()),
+    //                 _ => None,
+    //             };
+    //             if let Some(Node { kind: NodeKind::Call { args, .. }, .. }) = call {
+    //                 if args.len() != 2
+    //                     || !matches!(args[0].kind, NodeKind::Name(s) if s == b0name)
+    //                     || !matches!(args[1].kind, NodeKind::Name(s) if s == b1name)
+    //                 {
+    //                     return Err(fail(f.line, "comprehension callable requires its two generator bindings in order"));
+    //                 }
+    //             }
+    //             match &f.kind {
+    //                 NodeKind::Cmp { op, l, r }
+    //                     if matches!(&l.kind, NodeKind::Name(s) if *s == b0name)
+    //                         && matches!(&r.kind, NodeKind::Name(s) if *s == b1name) =>
+    //                 {
+    //                     let opg = match op {
+    //                         CmpOp::Lt => "<",
+    //                         CmpOp::Gt => ">",
+    //                         CmpOp::Eq => "=",
+    //                         _ => "≠",
+    //                     };
+    //                     self.stage(format!("{} ↩ {}∧{}{}⌜{}", mm, mm, a_i, opg, b_i));
+    //                 }
+    //                 NodeKind::Cmp { op, l, r } if matches!(l.kind, NodeKind::Call { .. }) => {
+    //                     let NodeKind::Call { callee, .. } = &l.kind else {
+    //                         return Err(fail(f.line, "unsupported comprehension filter"));
+    //                     };
+    //                     let cn = self.rs(*callee);
+    //                     let Some(ei) = self.find(cn) else {
+    //                         return Err(fail(f.line, format!("unregistered '{}' in comprehension filter", cn)));
+    //                     };
+    //                     let rv = self.emit_val(r, Mode::World)?;
+    //                     let opg = match op {
+    //                         CmpOp::Lt => "<",
+    //                         CmpOp::Gt => ">",
+    //                         CmpOp::Le => "≤",
+    //                         _ => "≥",
+    //                     };
+    //                     let fv = self.fnv(ei);
+    //                     self.stage(format!("{} ↩ {}∧(({} {}⌜ {}){}{})", mm, mm, a_i, fv, b_i, opg, rv.v));
+    //                 }
+    //                 NodeKind::Call { callee, .. } => {
+    //                     let cn = self.rs(*callee);
+    //                     let Some(ei) = self.find(cn) else {
+    //                         return Err(fail(f.line, format!("unregistered '{}' in comprehension filter", cn)));
+    //                     };
+    //                     let fv = self.fnv(ei);
+    //                     self.stage(format!("{} ↩ {}∧({} {}⌜ {})", mm, mm, a_i, fv, b_i));
+    //                 }
+    //                 _ => return Err(fail(f.line, "unsupported comprehension filter")),
+    //             }
+    //         }
+    //         // A comprehension's image is a set; generator copy counts do not feed its effects.
+    //         self.pipe_expand.clear();
+    //         // effect over both sides: rows/cols with any surviving pair
+    //         let a_any = self.tv();
+    //         let b_any = self.tv();
+    //         self.stage(format!("{} ← ∨´˘{}", a_any, mm));
+    //         self.stage(format!("{} ← ∨´˘⍉{}", b_any, mm));
+    //         let side = self.tv();
+    //         self.stage(format!(
+    //             "{} ← ((↕anoN)∊{}/{})∨((↕anoN)∊{}/{})",
+    //             side, a_any, a_i, b_any, b_i
+    //         ));
+    //         self.sel_var = side.clone();
+    //         self.trace_sel = side.clone();
+    //         let mut fx = Fx::default();
+    //         // bare verb tag (Collide): treat as +Name when a bool col exists
+    //         let mut handled = false;
+    //         if let NodeKind::EVerb { name, args } = &effect.kind {
+    //             if args.is_empty() {
+    //                 if let Some(ci) = self.find(self.rs(*name)) {
+    //                     if matches!(self.ent(ci).kind, RegEntryKind::Col { ty: ColType::Bool, .. }) {
+    //                         let t = self.tv();
+    //                         let cv = self.bqnv(ci);
+    //                         self.stage(format!("{} ← {}∨{}", t, cv, side));
+    //                         self.add_commit(&mut fx, ci, t, b'|', None, None);
+    //                         handled = true;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         if !handled {
+    //             self.emit_effect(effect, &mut fx)?;
+    //         }
+    //         self.stage(format!("anoSel ↩ {}", side));
+    //         self.saved_fr = self.fr.clone();
+    //         self.have_saved = true;
+    //         self.commit_stmt(&fx, false)?;
+    //         if fx.despawn {
+    //             self.world_shifted = true;
+    //         }
+    //         let pre = std::mem::take(&mut self.pre);
+    //         self.out.push_str(&pre);
+    //         Ok(())
+    //     }
+    // }
+    //
+    // /* ---------- fixture, expectations, save ---------- */
+    //
+    // impl<'a> Em<'a> {
+    //     // One column/field fixture line (+ presence), pair detection seeding is_pair.
 
-/* ---------- fixture, expectations, save ---------- */
-
-impl<'a> Em<'a> {
-    // One column/field fixture line (+ presence), pair detection seeding is_pair.
     fn fixture_colfield(&mut self, i: usize, ty: ColType, nums: &[f64], syms: &[String], pres: Option<&[f64]>, nlen: i32, cm: &str) {
         let v = self.bqnv(i);
         match ty {
@@ -4380,7 +4384,7 @@ fn emit_lowered(
         match &st.kind {
             NodeKind::Stmt { .. } => em.emit_stmt(st)?,
             NodeKind::Query(_) => em.emit_query(st)?,
-            NodeKind::Compr { .. } => em.emit_compr(st)?,
+            NodeKind::Compr { .. } => return Err(fail(st.line, "legacy effect comprehensions are retired")),
             k => return Err(Diag::refuse(format!("emit: unexpected top-level node {}", k.c_kind()))),
         }
     }
@@ -6348,12 +6352,8 @@ mod normalize {
                         .map(|item| self.normalize(item, Context::Value, phase))
                         .collect::<Result<Vec<_>, _>>()?,
                 ),
-                NodeKind::Tuple(items) => NodeKind::Tuple(
-                    items
-                        .iter()
-                        .map(|item| self.normalize(item, Context::Value, phase))
-                        .collect::<Result<Vec<_>, _>>()?,
-                ),
+                // Construction has lexical bindings and validates through its dedicated pure lowering.
+                NodeKind::Tuple(_) | NodeKind::Range { .. } | NodeKind::Generate { .. } => node.kind.clone(),
                 NodeKind::To { shape, poured } => NodeKind::To {
                     shape: Box::new(self.normalize(shape, Context::Value, phase)?),
                     poured: match poured {

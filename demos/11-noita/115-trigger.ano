@@ -9,7 +9,7 @@
 --! expect parent = -1 -1 -1 -1 0
 --! expect pos = 20 30 40 6 61 5 0 0 40 5
 
-[ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
+-- Retired effect comprehension: [ b & e , +Hit | b <- SparkBolt, e <- Enemy, dist(b, e) < 8 ]
 Enemy & Hit , Health -= 3
 SparkBolt & Hit & !Trigger , ~
 def payload = SparkBolt & Trigger & Hit => spawn Firebolt at pos ; ~

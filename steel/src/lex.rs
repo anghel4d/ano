@@ -361,8 +361,8 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 i += 1;
             }
             b'.' => {
-                b.push(t(TokKind::Dot), line);
-                i += 1;
+                b.push(t(if d == b'.' { TokKind::Range } else { TokKind::Dot }), line);
+                i += if d == b'.' { 2 } else { 1 };
             }
             b'%' => {
                 b.push(t(TokKind::Pct), line);
@@ -411,7 +411,10 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 }
             }
             b'|' => {
-                if d == b'>' {
+                if d == b'=' && at(i + 2) == b'>' {
+                    b.push(t(TokKind::Yield), line);
+                    i += 3;
+                } else if d == b'>' {
                     b.push(t(TokKind::PipeGt), line);
                     i += 2;
                 } else if d == b'/' {
@@ -459,7 +462,10 @@ fn lex_ascii(s: &str, b: &mut TokBuf, it: &mut Interner) -> Result<(), Diag> {
                 }
             }
             b'-' => {
-                if d == b'=' {
+                if d == b'>' {
+                    b.push(t(TokKind::RArrow), line);
+                    i += 2;
+                } else if d == b'=' {
                     b.push(t(TokKind::MinusEq), line);
                     i += 2;
                 } else if d == b'/' {
@@ -791,6 +797,9 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("]", t(TokKind::Rb), false, ""),
     (";", t(TokKind::Semi), false, ""),
     ("<-", t(TokKind::LArrow), false, ""),
+    ("->", t(TokKind::RArrow), false, ""),
+    ("|=>", t(TokKind::Yield), false, ""),
+    ("..", t(TokKind::Range), false, ""),
     ("|>", t(TokKind::PipeGt), false, ""),
     ("'", t(TokKind::Tick), false, ""),
     ("_", t(TokKind::Wild), false, ""),

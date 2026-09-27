@@ -170,13 +170,13 @@ Who on the left. What happens on the right. The world moved.
 Suppose the world also registers Silver and Copper. We can give the Nords three balances in one effect:
 
 ```haskell
-Race = :Nord , (Gold, Silver, Copper) = (4, 51, 13)
+Race = :Nord , [Gold, Silver, Copper] = [4, 51, 13]
 ```
 
 Each selected row gets all three values. The tuple can have as many members as we need; the two sides must have the same shape. Now rotate those balances:
 
 ```haskell
-Race = :Nord , (Gold, Silver, Copper) = (Silver, Copper, Gold)
+Race = :Nord , [Gold, Silver, Copper] = [Silver, Copper, Gold]
 ```
 
 Gold becomes 51, Silver becomes 13, and Copper becomes 4. Every member reads the same incoming row. Nobody sees another member's write halfway through.
@@ -184,10 +184,23 @@ Gold becomes 51, Silver becomes 13, and Copper becomes 4. Every member reads the
 To display the result, put `show` after the tuple with `|>`:
 
 ```haskell
-Race = :Nord , (Gold, Silver, Copper) = (4, 51, 13) |> show(Gold, Silver, Copper)
+Race = :Nord , [Gold, Silver, Copper] = [4, 51, 13] |> show(Gold, Silver, Copper)
 ```
 
 `|>` means this, then this: the display sees the new balances. With `;` instead, both effects would read the incoming world, so the display would show the old balances. The [assignment reference](docs/ano-language.md#8-assignment) covers nested tuples, mixed column types, updates, and absent members.
+
+We can also construct something temporarily, without writing any columns:
+
+```haskell
+[[1..5] -> x |=> [x, x * x]]
+```
+
+This produces `[[1, 1], [2, 4], [3, 9], [4, 16], [5, 25]]`. The range supplies the values, `-> x` names each one, and `|=>` yields the result. Brackets preserve nested tuple structure; parentheses remain ordinary grouping and function arguments.
+
+Construction is eager for now. The planned `lazy(...)` function will wrap an entire construction and defer everything enclosed.
+
+<!-- /// !TODO: Keep lazy(...) as a fully enclosing deferred-construction boundary, with no eager exceptions. It is documented but not implemented yet. -->
+
 
 ### `&` vs `@`
 

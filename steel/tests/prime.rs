@@ -189,7 +189,7 @@ All , Out = +/ parent'.Gold
 #[test]
 fn invalid_operands_and_group_scatter_refuse_before_execution() {
     let fixture = Fixture::new(WORLD);
-    for source in ["All'", "1'", "(Gold + 1)'", "(links.Gold)'", "(Gold, Gold)'", "(1)''"] {
+    for source in ["All'", "1'", "(Gold + 1)'", "(links.Gold)'", "[Gold, Gold]'", "(1)''"] {
         fixture.refuses(source, "prime requires");
     }
     for source in ["All , Out = links", "All , Out = links'", "All , Out = links.Gold", "def grouped = links'.Gold
