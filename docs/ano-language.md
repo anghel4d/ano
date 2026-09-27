@@ -513,9 +513,18 @@ Given typed callables insert and cancel, their declared write footprints can be 
 
 If insert declares writes to Gold and Marked, and cancel declares writes to Gold, the intersection produces `["Gold"]`. This queries declarations even if a callable's effect ABI is not executable by the current backend.
 
-Explicit callable references also supply the operation in `fold(fun_"combine", Gold)`, `scan(fun_"combine", Gold)`, `scan(fun_"combine", Gold, Path)`, and `cross(fun_"combine", A, B)`. A definition such as `def reducer = fun_"combine"` can supply that argument. These forms use the existing reducer/product semantics and restrictions. They do not add a generic callable-reference carrier to host signatures, dynamic invocation of a reference selected by a comprehension, or arbitrary reference-expression call syntax.
+Reflection does not introduce application forms. Existing names, masks, calls, and fold/scan heads retain their meanings; `fold(fun_"combine", Gold)`, `scan(fun_"combine", Gold)`, and `cross(fun_"combine", A, B)` are not accepted. Use the established operation spellings. A reference-valued definition names a declaration value for inspection, not an implicit callable alias.
 
-`/// !TODO: Define declaration syntax and evidence requirements for additional callable laws and cell refinements, especially monotonicity relative to a specified order, commutativity on specified carriers, and dependencies between laws. Keep undeclared distinct from false; do not infer trusted algebra from arbitrary bodies. Extend typed host carriers and reference consumers explicitly.`
+Metadata values participate according to their result types. A numeric `.arity` can enter existing arithmetic, a symbolic `.type` can enter comparisons or symbol assignments, and a Boolean `.unique` can enter masks. Tuples such as `.writes` remain temporary collections consumed by existing comprehensions. Declaration references themselves admit equality/inequality with declaration references, not arithmetic, ordering, or implicit column reads.
+
+```haskell
+Gold + fun_"combine".arity
+Nord & col_"Gold".type == :num , Gold += 1
+```
+
+These expressions require the indicated column and typed callable declarations. Metadata scalar extension follows the existing value and mask rules; it does not give reference collections row lineage.
+
+The scope of reflection is inspection of existing declarations. `:undeclared` is a complete answer when a law has no declared evidence; it is neither a false claim nor a promise to infer one. New law annotations, proof formats, indirect column access, and invocation through reference values are outside this feature. They require a separate explicit language decision.
 
 ## Part IV: Current spatial boundary
 

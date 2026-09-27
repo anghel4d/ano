@@ -1943,8 +1943,11 @@ impl<'a> Em<'a> {
     // The value dispatch (C emitVal).
     fn emit_val(&mut self, nd: &Node, m: Mode) -> R<Ev> {
         let mut ev = Ev::default();
-        if self.is_reflection(nd, 0) {
-            return Ok(Ev { v: self.emit_construct(nd, &mut Vec::new(), 0)?, unit: true, temporary: true, ..Ev::default() });
+        if self.is_reflection(nd, 0) && matches!(nd.kind, NodeKind::Reference { .. } | NodeKind::Hop { .. } | NodeKind::Name(_)) {
+            let property = self.reflection_property(nd, 0);
+            let scalar = matches!(property.as_deref(), Some("name" | "type" | "domain" | "result" | "arity" | "unique" | "determinism" | "trust" | "associative" | "commutative" | "monotonic"));
+            let sym = matches!(property.as_deref(), Some("type" | "domain" | "result" | "determinism" | "trust" | "associative" | "commutative" | "monotonic"));
+            return Ok(Ev { v: self.emit_construct(nd, &mut Vec::new(), 0)?, unit: true, sym, temporary: !scalar, ..Ev::default() });
         }
         match &nd.kind {
             NodeKind::Reference { .. } => Err(fail(nd.line, "declaration reference is not a column value; use a reference-taking operation")),
@@ -2009,9 +2012,18 @@ impl<'a> Em<'a> {
                 Ok(ev)
             }
             NodeKind::Cmp { op, l, r } => {
+                let left_ref = self.reference_category(l, 0);
+                let right_ref = self.reference_category(r, 0);
+                if left_ref.is_some() || right_ref.is_some() {
+                    if left_ref.is_none() || right_ref.is_none() || !matches!(op, CmpOp::Eq | CmpOp::Ne) {
+                        return Err(fail(nd.line, "declaration references admit only equality with declaration references"));
+                    }
+                    return Ok(Ev { v: self.emit_construct(nd, &mut Vec::new(), 0)?, unit: true, ..Ev::default() });
+                }
                 let a = self.emit_val(l, m)?;
                 let b = self.emit_val(r, m)?;
                 if a.temporary || b.temporary { return Err(fail(nd.line, "compare temporary members inside an explicit comprehension")); }
+                ev.unit = self.is_reflection(nd, 0) && a.unit && b.unit;
                 let implicit = self.mode_domain(m);
                 ev.domain = scan_domain_join(&a, &b, implicit.as_deref(), nd.line)?;
                 ev.along = scan_order_join(&a, &b, nd.line)?;
@@ -2198,6 +2210,10 @@ impl<'a> Em<'a> {
 
     // Mask emission: full frame-length boolean vector, all guards folded in.
     fn emit_mask(&mut self, nd: &Node) -> R<String> {
+        if self.reflection_property(nd, 0).as_deref() == Some("unique") {
+            let value = self.emit_val(nd, Mode::World)?;
+            return Ok(format!("({}⥊{})", self.fr_n(), value.v));
+        }
         match &nd.kind {
             NodeKind::Name(s) => self.emit_name_mask(*s, *s, nd.line, LookupMode::Bare),
             NodeKind::Alias { look, req } => {
@@ -2243,6 +2259,7 @@ impl<'a> Em<'a> {
             NodeKind::Cmp { .. } => {
                 let v = self.emit_val(nd, Mode::World)?;
                 if v.temporary { return Err(fail(nd.line, "temporary collections need explicit selection() before world effects")); }
+                if v.unit && self.is_reflection(nd, 0) { return Ok(format!("({}⥊{})", self.fr_n(), v.v)); }
                 Ok(match v.g {
                     Some(g) => format!("(({})∧{})", v.v, g),
                     None => v.v,
@@ -4815,7 +4832,7 @@ mod normalize {
     use crate::trace::{TracePhase, TracePlan};
     use crate::{
         ArithOp, AssignOp, BindKind, CallableDescriptor, ColType, Determinism, Diag, Directives,
-        EffectSet, Interner, Node, NodeKind, RefCategory, RegEntry, RegEntryKind, RegType, Registry,
+        EffectSet, Interner, Node, NodeKind, RegEntry, RegEntryKind, RegType, Registry,
         ServiceDirection, Symbol,
     };
     use std::collections::{BTreeMap, BTreeSet};
@@ -6300,22 +6317,6 @@ mod normalize {
                         .iter()
                         .map(|arg| self.normalize(arg, arg_context, phase))
                         .collect::<Result<Vec<_>, _>>()?;
-                    if matches!(spelling.as_str(), "fold" | "scan" | "cross") && reg_find(&self.reg, &spelling).is_none() {
-                        if self.derived.contains_key(&spelling) { return Err(super::fail(line, format!("definition '{spelling}' is a value, not callable"))); }
-                        let arity = args.len();
-                        let valid = match spelling.as_str() { "fold" => arity == 2, "scan" => (2..=3).contains(&arity), _ => arity == 3 };
-                        if !valid { return Err(super::fail(line, format!("invalid argument count for {spelling}"))); }
-                        let NodeKind::Reference { category: RefCategory::Function, name: op } = args[0].kind else {
-                            return Err(super::fail(line, format!("{spelling} requires a fun_ reference as its first argument")));
-                        };
-                        let kind = match spelling.as_str() {
-                            "fold" => NodeKind::Fold { op, operand: Box::new(args[1].clone()) },
-                            "scan" if arity == 2 => NodeKind::ScanExpr { op, operand: Box::new(args[1].clone()) },
-                            "scan" => NodeKind::ScanAlong { op, col: Box::new(args[1].clone()), order: Box::new(args[2].clone()) },
-                            _ => NodeKind::CrossV { f: op, a: Box::new(args[1].clone()), b: Box::new(args[2].clone()) },
-                        };
-                        return self.normalize(&Node::new(kind, line), context, phase);
-                    }
                     if args.iter().any(super::is_gamma_operand) {
                         return Err(super::fail(line, "relational groups need a reduction before a scalar call"));
                     }

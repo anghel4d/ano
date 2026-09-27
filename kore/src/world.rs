@@ -2940,18 +2940,18 @@ inv children parent
         let mut app = App::new();
         app.mode = Mode::Reg;
         app.world = world_load(path.to_str().unwrap()).unwrap();
-        for source in [r#"def reducer = fun_"+" "#, r#"def column = col_"Gold" "#, "All , Gold = fold(reducer, Gold)"] {
+        for source in [r#"def column = col_"Gold" "#, r#"def operation = fun_"+" "#, r#"All & column.type == :num & operation.commutative == :holds , Gold += 1"#] {
             app.prompt = source.as_bytes().to_vec();
             repl_submit(&mut app);
         }
-        assert_eq!(observe(), vec![6.0; 3]);
+        assert_eq!(observe(), vec![2.0, 3.0, 4.0]);
         let mut reopened = App::new();
         reopened.mode = Mode::Reg;
         reopened.world = world_load(path.to_str().unwrap()).unwrap();
         session_rehydrate(&mut reopened);
-        reopened.prompt = b"All , Gold = fold(reducer, Gold)".to_vec();
+        reopened.prompt = b"All & column.type == :num & operation.commutative == :holds , Gold += 1".to_vec();
         repl_submit(&mut reopened);
-        assert_eq!(observe(), vec![18.0; 3]);
+        assert_eq!(observe(), vec![3.0, 4.0, 5.0]);
         let before = std::fs::read(&path).unwrap();
         reopened.prompt = b"All , Gold = column".to_vec();
         repl_submit(&mut reopened);

@@ -70,26 +70,20 @@ fun_"add".writes
 }
 
 #[test]
-fn explicit_callable_references_feed_existing_reducer_contracts() {
+fn reflection_does_not_add_application_forms() {
     let f = Fixture::new(WORLD);
-    f.accepts(
-        r#"fold(fun_"add", Gold)
---! out 6
-scan(fun_"add", Gold)
---! out 1 3 6
-def reducer = fun_"add"
-scan(reducer, Gold)
---! out 1 3 6
-fold(fun_"max", Gold)
---! out 3
-scan(fun_"add", Gold, Path)
---! out 3 4 6
-cross(fun_"pair", All, All)
---! out 0 1 2 1 2 3 2 3 4
-"#,
-    );
-    f.refuses(r#"scan(col_"Gold", Gold)"#, "requires a fun_");
-    f.refuses(r#"scan(fun_"insert", Gold)"#, "reducer");
+    for source in [
+        r#"fold(fun_"add", Gold)"#,
+        r#"scan(fun_"add", Gold)"#,
+        r#"cross(fun_"pair", All, All)"#,
+    ] {
+        let result = f.run(source, &["--emit"]);
+        assert!(
+            !result.status.success(),
+            "unexpected application syntax accepted: {source}"
+        );
+    }
+    f.accepts("add/ Gold\n--! out 6\nadd\\ Gold\n--! out 1 3 6\nfold(add) Gold\n--! out 6\nscan(add) Gold\n--! out 1 3 6");
     f.refuses(
         r#"show(col_"Gold")"#,
         "show arguments must name entity columns",
@@ -165,4 +159,47 @@ fun_"add".monotonic
 --! out 0
 "#,
     );
+}
+
+#[test]
+fn metadata_scalars_use_existing_value_and_mask_operations() {
+    let f = Fixture::new(WORLD);
+    f.accepts(
+        r#"Gold + fun_"add".arity
+--! out 3 4 5
+All & col_"Gold".type == :num , Gold += fun_"add".arity
+--! expect Gold = 3 4 5
+All , Race = col_"Gold".type
+--! expect Race = num num num
+col_"Gold".unique , +Marked
+--! expect Marked = 0 0 0
+"#,
+    );
+    f.refuses(r#"col_"Gold" < col_"Marked""#, "only equality");
+    f.refuses(r#"col_"Gold" == 1"#, "only equality");
+}
+
+#[test]
+fn declarations_keep_their_category_through_local_bindings() {
+    let f = Fixture::new(WORLD);
+    f.accepts(
+        r#"[[col_"Money", col_"Gold", col_"Marked"] -> c & c == col_"Gold" |=> c.name]
+--! out Gold Gold
+[[fun_"add", fun_"cancel"] -> f & f.arity == 2 |=> f.name]
+--! out add
+"#,
+    );
+    for source in [
+        r#"[[col_"Gold"] -> c |=> c < c]"#,
+        r#"[[col_"Gold"] -> c |=> c == 1]"#,
+        r#"[[1] -> c |=> c.name]"#,
+    ] {
+        let result = f.run(source, &["--run"]);
+        assert!(
+            !result.status.success(),
+            "invalid declaration operation accepted: {source}"
+        );
+        let error = String::from_utf8_lossy(&result.stderr);
+        assert!(error.contains("declaration reference"), "{source}: {error}");
+    }
 }

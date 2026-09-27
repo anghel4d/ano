@@ -319,4 +319,4 @@ The same distinction applies to a callable. `combine(a, b)` runs it; `fun_"combi
 
 If insert declares writes to cmd and cmdTarget, this produces `["cmd", "cmdTarget"]`. It does not issue an order. We can filter the references, compare them, and combine them with other reflected footprints using the same brackets and guards we already have.
 
-Nothing changes about displaying values: `show(Gold)` already does that. Category casts are for asking about declarations. The [reflection reference](docs/ano-language.md#declaration-reflection) lists the metadata, callable-reference consumers, enforced cell constraints, and the distinction between known and undeclared algebraic laws.
+Nothing changes about displaying values: `show(Gold)` already does that. Category casts are for asking about declarations. The [reflection reference](docs/ano-language.md#declaration-reflection) lists the metadata, enforced cell constraints, and the distinction between known and undeclared algebraic laws.

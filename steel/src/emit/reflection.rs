@@ -40,6 +40,35 @@ impl Em<'_> {
         }
     }
 
+    pub(super) fn reference_category(&self, node: &Node, depth: usize) -> Option<RefCategory> {
+        if depth >= 64 {
+            return None;
+        }
+        match &node.kind {
+            NodeKind::Reference { category, .. } => Some(*category),
+            NodeKind::Name(name) => self
+                .find_def(*name)
+                .and_then(|def| self.reference_category(def_body(def), depth + 1)),
+            _ => None,
+        }
+    }
+
+    pub(super) fn reflection_property(&self, node: &Node, depth: usize) -> Option<String> {
+        if depth >= 64 {
+            return None;
+        }
+        match &node.kind {
+            NodeKind::Hop { l, r } if self.is_reflection(l, depth + 1) => match r.kind {
+                NodeKind::Name(property) => Some(self.rs(property).to_string()),
+                _ => None,
+            },
+            NodeKind::Name(name) => self
+                .find_def(*name)
+                .and_then(|def| self.reflection_property(def_body(def), depth + 1)),
+            _ => None,
+        }
+    }
+
     pub(super) fn check_reference_property(
         &self,
         category: RefCategory,

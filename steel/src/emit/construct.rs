@@ -24,7 +24,7 @@ impl Em<'_> {
                     self.check_reference_property(category, self.rs(name), &property, node.line)?;
                 }
                 let value = self.emit_construct(l, bindings, next)?;
-                Ok(format!("({value}).{property}"))
+                Ok(format!(r#"({{"reflection property requires a declaration reference" ! 6=•Type 𝕩 ⋄ 𝕩.{property}}} {value})"#))
             }
             NodeKind::Tuple(items) => {
                 let items = items
@@ -112,7 +112,8 @@ impl Em<'_> {
                     CmpOp::Le => "≤",
                     CmpOp::Ge => "≥",
                 };
-                Ok(format!("({a}{op}{b})"))
+                let reference_comparison = matches!(&node.kind, NodeKind::Cmp { op: CmpOp::Eq | CmpOp::Ne, .. });
+                Ok(format!(r#"({{a‿b←𝕩 ⋄ refs←(6=•Type a)∨6=•Type b ⋄ "declaration references admit only equality with declaration references" ! (¬refs)∨({allowed}∧(6=•Type a)∧6=•Type b) ⋄ a{op}b}} ⟨{a}, {b}⟩)"#, allowed = u8::from(reference_comparison)))
             }
             NodeKind::Not(inner) => {
                 if self.entity_value(inner, bindings, next)? {

@@ -601,27 +601,6 @@ impl P<'_, '_> {
                     ));
                 }
                 TokKind::FoldKw => {
-                    if self.pk2(1) == TokKind::Lp {
-                        let mut nesting = 0usize;
-                        let mut call_form = false;
-                        for token in &self.t.kind[self.i+2..] {
-                            match token {
-                                TokKind::Comma if nesting == 0 => { call_form = true; break; }
-                                TokKind::Rp if nesting == 0 => break,
-                                TokKind::Lp | TokKind::Lb => nesting += 1,
-                                TokKind::Rp | TokKind::Rb => nesting = nesting.saturating_sub(1),
-                                TokKind::Eof => break,
-                                _ => {}
-                            }
-                        }
-                        if call_form {
-                            self.adv();
-                            let callee = self.it.intern("fold");
-                            let args = self.parse_arguments()?;
-                            return Ok(Node::new(NodeKind::Call { callee, args }, line));
-                        }
-                    }
-
                     // fold(f): the long form of f/ — one node, Fold
                     self.adv();
                     self.expect(TokKind::Lp, "'(' after 'fold'")?;
@@ -637,27 +616,6 @@ impl P<'_, '_> {
                     ));
                 }
                 TokKind::ScanKw => {
-                    if self.pk2(1) == TokKind::Lp {
-                        let mut nesting = 0usize;
-                        let mut call_form = false;
-                        for token in &self.t.kind[self.i+2..] {
-                            match token {
-                                TokKind::Comma if nesting == 0 => { call_form = true; break; }
-                                TokKind::Rp if nesting == 0 => break,
-                                TokKind::Lp | TokKind::Lb => nesting += 1,
-                                TokKind::Rp | TokKind::Rb => nesting = nesting.saturating_sub(1),
-                                TokKind::Eof => break,
-                                _ => {}
-                            }
-                        }
-                        if call_form {
-                            self.adv();
-                            let callee = self.it.intern("scan");
-                            let args = self.parse_arguments()?;
-                            return Ok(Node::new(NodeKind::Call { callee, args }, line));
-                        }
-                    }
-
                     self.adv();
                     self.expect(TokKind::Lp, "'(' after 'scan'")?;
                     let op = self.parse_opname()?;
@@ -685,13 +643,6 @@ impl P<'_, '_> {
                     ));
                 }
                 TokKind::Cross => {
-                    if self.pk2(1) == TokKind::Lp {
-                        self.adv();
-                        let callee = self.it.intern("cross");
-                        let args = self.parse_arguments()?;
-                        return Ok(Node::new(NodeKind::Call { callee, args }, line));
-                    }
-
                     self.adv();
                     if self.pk() != TokKind::Name {
                         return Err(perr(self.tline(), "expected function after 'cross'"));
