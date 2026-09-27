@@ -67,6 +67,9 @@ A bare caret refuses. A fused head cannot contain interior whitespace. Division 
 
 ## Numbers and names
 
+`Gold` reads a value; `f(Gold)`, `f/ Gold`, and `f\ Gold` explicitly apply a callable. Ordinary calls require their argument list in value, effect, and pipeline positions: `f()` for no explicit arguments. Neither whitespace nor enclosing an entire phrase in parentheses implies function application. A declaration's kind and signature govern acceptance; capitalization does not classify a name as a column or function.
+
+
 The ASCII reader admits numeric literals and counter forms such as `3mo`. The Japanese reader additionally recognizes kanji numerals and its counter table. A counter spelling is not a nominal affine-frame type.
 
 Registry nouns can use UTF-8. Name lookup and symbol payload equality have different rules: source name matching can fold ASCII case, while symbol values retain their spelling.

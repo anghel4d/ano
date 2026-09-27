@@ -1,4 +1,4 @@
 --! registry ../registries/075-ties.reg
---! expect rank = 1 1 0
+--! expect slot = 1 1 0
 
-Unit , Rank = rank(Gold)
+Unit , Slot = rank(Gold)

@@ -262,3 +262,10 @@ Some(sc) => {
 Also precedence: `@` is tighter than `&`, so `Cheese @ cellar & Aged > 3mo` parses as `(Cheese @ cellar) & (Aged > 3mo)`.
 
 Bottom line: `Merchant @ Whiterun` vs `Merchant & Whiterun` is one spelling difference, zero semantic difference in the current compiler. `@` only becomes a different machine when it scopes a fold, a lattice shape, or an anchored frame.
+
+
+### Values and applications
+
+A name's declaration says what it denotes. `Gold` reads a value. `f(Gold)` applies a registered callable, `f/ Gold` reduces with it, and `f\ Gold` scans with it. The signature decides which applications make sense: a unary function is not automatically a binary reducer.
+
+Ordinary calls always carry their argument parentheses, including `show()`. This also applies to effects and callable pipeline stages. A bare function name is not silently called; adding parentheses to a column name does not make that column callable. Columns and functions share the registry namespace, so use distinct names for a function and the column receiving its result.

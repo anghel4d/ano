@@ -281,8 +281,8 @@ impl P<'_, '_> {
         Ok(e)
     }
 
-    // Input: cursor at T_LP. Output: parenthesized expr, Tuple on top-level comma, or
-    // juxtaposed Call when a bare name is followed by atoms ((pieceOf char)).
+    // Input: cursor at T_LP. Output: a grouped expression or a comma-separated tuple.
+    // Calls own an argument list after their callee; grouping never implies application.
     fn parse_paren(&mut self) -> Result<Node, Diag> {
         let boundary = std::mem::replace(&mut self.bar_boundary, false);
         let result = self.parse_paren_inner();
@@ -294,16 +294,8 @@ impl P<'_, '_> {
         let line = self.tline();
         self.adv();
         let mut e = self.parse_tupelem(2)?;
-        if let NodeKind::Name(callee) = e.kind {
-            if atomstart(self.pk()) {
-                // juxtaposed call
-                let eline = e.line;
-                let mut args = Vec::new();
-                while atomstart(self.pk()) {
-                    args.push(self.parse_expr(10)?);
-                }
-                e = Node::new(NodeKind::Call { callee, args }, eline);
-            }
+        if matches!(e.kind, NodeKind::Name(_)) && atomstart(self.pk()) {
+            return Err(perr(line, "callable requires an argument list after its name: use f(...)"));
         }
         if self.pk() == TokKind::Comma {
             // tuple
@@ -408,7 +400,7 @@ impl P<'_, '_> {
     }
 
     // Input: cursor at a pipeline stage head. Output: stage node
-    // (OrderBy | Take | Expand | juxtaposed Call).
+    // (OrderBy | Take | Expand | parenthesized Call).
     fn parse_stage(&mut self) -> Result<Node, Diag> {
         let line = self.tline();
         match self.pk() {
@@ -434,15 +426,10 @@ impl P<'_, '_> {
             TokKind::Name => {
                 let callee = self.tname();
                 self.adv();
-                let args = if self.pk() == TokKind::Lp {
-                    self.parse_arguments()?
-                } else {
-                    let mut args = Vec::new();
-                    while atomstart(self.pk()) {
-                        args.push(self.parse_expr(10)?);
-                    }
-                    args
-                };
+                if self.pk() != TokKind::Lp {
+                    return Err(perr(line, "pipeline callable requires an argument list: use f(...)"));
+                }
+                let args = self.parse_arguments()?;
                 Ok(Node::new(NodeKind::Call { callee, args }, line))
             }
             _ => Err(perr(line, "expected pipeline stage")),
@@ -924,16 +911,10 @@ impl P<'_, '_> {
                     ));
                 }
                 if let NodeKind::Name(name) = tgt.kind {
-                    // registered verb
-                    let args = if self.pk() == TokKind::Lp {
-                        self.parse_arguments()?
-                    } else {
-                        let mut args = Vec::new();
-                        while atomstart(self.pk()) {
-                            args.push(self.parse_expr(10)?);
-                        }
-                        args
-                    };
+                    if self.pk() != TokKind::Lp {
+                        return Err(perr(line, "effect callable requires an argument list: use f(...)"));
+                    }
+                    let args = self.parse_arguments()?;
                     return Ok(Node::new(NodeKind::EVerb { name, args }, line));
                 }
                 Err(perr(self.tline(), "expected assignment after target"))
@@ -1238,31 +1219,8 @@ impl P<'_, '_> {
         if matches!(self.pk(), TokKind::Nl | TokKind::Eof) {
             return Ok(Node::new(NodeKind::Query(Box::new(sel)), line));
         }
-        if let NodeKind::Name(name) = sel.kind {
-            if atomstart(self.pk()) {
-                // juxtaposed verb: elided EVerb
-                let vline = sel.line;
-                let mut args = Vec::new();
-                while atomstart(self.pk()) {
-                    args.push(self.parse_expr(10)?);
-                }
-                let first = Node::new(NodeKind::EVerb { name, args }, vline);
-                let mut effects = vec![self.parse_effect_sequence(first)?];
-                if self.pk() == TokKind::Semi {
-                    self.adv();
-                    self.parse_effects(&mut effects)?;
-                }
-                return Ok(Node::new(
-                    NodeKind::Stmt {
-                        sel: None,
-                        effects,
-                        rule: false,
-                        cont: false,
-                        elided: true,
-                    },
-                    line,
-                ));
-            }
+        if matches!(sel.kind, NodeKind::Name(_)) && atomstart(self.pk()) {
+            return Err(perr(sel.line, "callable requires an argument list: use f(...)"));
         }
         Err(perr(self.tline(), "unexpected token after selection"))
     }
@@ -1771,24 +1729,6 @@ mod tests {
             ],
             "(PROGRAM (STMT (HOP (NAME Frenzy) (prime (NAME targets))) (EADD Frenzied)))",
         );
-        // ^cursor , Knockback 5 ; Flash :Red ; -Shielded
-        run_case(
-            "verb-batch",
-            &[
-                tkn!(Alias, "cursor"),
-                tk!(Comma),
-                tn!("Knockback"),
-                tv!(5),
-                tk!(Semi),
-                tn!("Flash"),
-                tsy!("Red"),
-                tk!(Semi),
-                tk!(Minus),
-                tn!("Shielded"),
-                tk!(Eof),
-            ],
-            "(PROGRAM (STMT (ALIAS cursor) (EVERB Knockback (NUM 5)) (EVERB Flash (SYM Red)) (EDEL Shielded)))",
-        );
         // +/ Gold @ Nord
         run_case(
             "fold-scope",
@@ -1968,25 +1908,6 @@ mod tests {
                 tk!(Eof),
             ],
             "(PROGRAM (STMT (AND (SHAPE (NUM 8) (NUM 8)) (CMP = (ARITH % (ARITH + (NAME x) (NAME y)) (NUM 2)) (NUM 0))) (ESPAWN (NAME Wheat) () ())))",
-        );
-        // "RNBQ" \n to 8 8 , spawn (pieceOf char)   — exercises the NL-before-to splice
-        run_case(
-            "board-splice",
-            &[
-                tkn!(Str, "RNBQ"),
-                tk!(Nl),
-                tk!(To),
-                tv!(8),
-                tv!(8),
-                tk!(Comma),
-                tk!(Spawn),
-                tk!(Lp),
-                tn!("pieceOf"),
-                tn!("char"),
-                tk!(Rp),
-                tk!(Eof),
-            ],
-            "(PROGRAM (STMT (TO (SHAPE (NUM 8) (NUM 8)) (STR RNBQ)) (ESPAWN (CALL pieceOf (NAME char)) () ())))",
         );
         // Nord & Dead , spawn Ghost \n ~
         run_case(
@@ -2233,25 +2154,6 @@ mod tests {
             ],
             "(PROGRAM (QUERY (FOLD threat (SCOPE (NAME Damage) (NAME Enemies)))))",
         );
-        // +\ Weight @ (til steps |> route A B)
-        run_case(
-            "iota-pipe",
-            &[
-                tkn!(ScanOp, "+"),
-                tn!("Weight"),
-                tk!(At),
-                tk!(Lp),
-                tk!(Iota),
-                tn!("steps"),
-                tk!(PipeGt),
-                tn!("route"),
-                tn!("A"),
-                tn!("B"),
-                tk!(Rp),
-                tk!(Eof),
-            ],
-            "(PROGRAM (QUERY (SCANEXPR + (SCOPE (NAME Weight) (PIPE (IOTAX (NAME steps)) (CALL route (NAME A) (NAME B)))))))",
-        );
         // Plot , Moisture = avg/ neighbors'.Moisture
         run_case(
             "sethop-gather",
@@ -2268,12 +2170,6 @@ mod tests {
                 tk!(Eof),
             ],
             "(PROGRAM (STMT (NAME Plot) (EASSIGN = (NAME Moisture) (FOLD avg (HOP (prime (NAME neighbors)) (NAME Moisture))))))",
-        );
-        // Knockback 5   — line-start juxtaposed verb, elided subject
-        run_case(
-            "verb-line",
-            &[tn!("Knockback"), tv!(5), tk!(Eof)],
-            "(PROGRAM (STMT:ELIDED () (EVERB Knockback (NUM 5))))",
         );
         // cross dist Tower Creep
         run_case(

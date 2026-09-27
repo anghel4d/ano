@@ -89,7 +89,7 @@ fn display_requires_registration_and_entity_column_arguments() {
     assert_eq!(cells(&fixture.output("Selected , display(Gold)")), vec![vec!["row", "Gold"], vec!["0", "10"]]);
     fixture.refuses("Selected , show(Gold + 1)", "show arguments must name entity columns");
     fixture.refuses("Selected , show(Missing)", "unknown column");
-    fixture.refuses("Selected , show(show)", "not an entity column");
+    fixture.refuses("Selected , show(show)", "explicit application");
     fixture.refuses("Selected , Gold = show()", "show is an output effect");
     fixture.refuses("Selected |> show()", "show is an output effect");
     Fixture::new("n 1\ncol Selected bool 1\n").refuses("Selected , show()", "needs a registered fn");

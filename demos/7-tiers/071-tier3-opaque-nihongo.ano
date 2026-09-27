@@ -5,4 +5,4 @@
 
 節点 、 出次数 に ( 総和 隣接 行 で ) にする
 敵対 、 shortestPath 経由 隣接
-^cursor 、 runBehaviorTree
+^cursor 、 runBehaviorTree ( )

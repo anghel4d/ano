@@ -1,5 +1,5 @@
 --! registry ../registries/073-conjugation.reg
 --! ja
---! expect rank = 3 0 2 1 4
+--! expect slot = 3 0 2 1 4
 
 部隊 、 順位 に rank ( 金 ) にする

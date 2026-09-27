@@ -1,5 +1,5 @@
 --! registry ../registries/045-rank-ties.reg
 --! ja
---! expect rank = 1 1 0
+--! expect slot = 1 1 0
 
 部隊 、 順位 に rank ( 金 ) にする

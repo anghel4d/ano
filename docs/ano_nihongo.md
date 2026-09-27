@@ -28,6 +28,8 @@ Registry nouns may be UTF-8. Exact declaration names resolve before optional `ja
 
 に marks a target. Postfix rewriting consumes one primary: an atom, matched group, hop chain, or shape run. Parenthesize a wider operand, as in `金 に ( 千 + 三 ) たす`.
 
+Registered ordinary calls use argument parentheses on both surfaces: ASCII `heal(Health)` corresponds to spaced `heal ( 体力 )`, with the noun supplied by the registry's aliases. An empty call is `show ( )`. Bare names and juxtaposed words do not implicitly invoke a function. Fold/scan particles remain explicit operator forms.
+
 ## Folds and scans
 
 総和, 総積, 総数, 最大, 最小, 平均, 皆, and 或 select sum, product, count, maximum, minimum, average, all, and any folds.

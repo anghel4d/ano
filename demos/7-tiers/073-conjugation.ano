@@ -1,4 +1,4 @@
 --! registry ../registries/073-conjugation.reg
---! expect rank = 3 0 2 1 4
+--! expect slot = 3 0 2 1 4
 
-Unit , Rank = rank(Gold)
+Unit , Slot = rank(Gold)

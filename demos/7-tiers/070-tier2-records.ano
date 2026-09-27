@@ -1,10 +1,10 @@
 --! registry ../registries/070-tier2-records.reg
 --! expect gold = 1100 250 40 1010 520 1305
---! expect rank = 4 1 0 3 2 5
+--! expect slot = 4 1 0 3 2 5
 
 Nord & TwoHanded > 60 , Gold += 1000
 
 --! out 3665
 +/ Gold @ Nord
 
-Unit , Rank = rank(Gold)
+Unit , Slot = rank(Gold)

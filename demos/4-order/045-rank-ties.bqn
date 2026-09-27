@@ -1,4 +1,4 @@
-# ano: Unit , Rank = rank(Gold)
+# ano: Unit , Slot = rank(Gold)
 # invariant: on gold 5 5 3, ordinal rank is 1 2 0 (tie split by position) and dense rank is 1 1 0 (tie shared); permuting the tied pair leaves the column bitwise identical, yet ordinal rank fails w(c∘σ) ≡ w(c)∘σ while dense rank satisfies it.
 
 # world: 3 units, all selected

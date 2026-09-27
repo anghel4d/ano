@@ -1,6 +1,6 @@
 -- Three units, two purses tied at 5. Equal values must take equal ranks — rank is a function of the value, not of the row that happens to hold it.
 -- On gold 5 5 3 the tied pair shares a rank: 1 1 0 (value-only; the ¯1 sentinel init is fully overwritten — all rows are Unit).
 --! registry ../registries/045-rank-ties.reg
---! expect rank = 1 1 0
+--! expect slot = 1 1 0
 
-Unit , Rank = rank(Gold)
+Unit , Slot = rank(Gold)

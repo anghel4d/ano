@@ -67,6 +67,11 @@ Fields are separated by tabs and the record ends in LF. Numeric payloads preserv
 
 ## Callables
 
+A bare name reads a value. A callable is applied explicitly with `f(...)`, a fold/scan head, or another dedicated application form. Effect calls and callable pipeline stages require `()` even with no explicit arguments. Parentheses request application; the resolved declaration and signature decide whether it is valid. Bare callable reads and presence checks refuse.
+
+Data and callable declarations share one namespace; ASCII case differences do not distinguish them. A same-named data declaration blocks an intrinsic function fallback. Value definitions also remain values in call and reducer positions. See [the application rule](ano-language.md#19-named-column-transforms).
+
+
 Typed callables declare their signature, effect set, determinism, trust, read/write footprints, and service use. Empty footprints are `-`. `fx:pure` has no effects; otherwise the corresponding `read`, `write`, and `service` bits must agree with the named footprints.
 
 `det:deterministic` has no service use. `det:snapshot` may use frozen input services. `det:nondeterministic` requires an output service. Raw BQN bodies are admitted under `trust:trusted`; this is not a machine-checked purity proof.

@@ -3,4 +3,4 @@
 --! expect collide = 0 0 0 0 0 0 0 1 1 1 1
 
 [ t & c , +InRange | t <- Tower, c <- Creep, dist(t, c) < 50 ]
-[ a & b , Collide  | a <- Body,  b <- Body,  a < b, overlap(a, b) ]
+[ a & b , +Collide | a <- Body,  b <- Body,  a < b, overlap(a, b) ]

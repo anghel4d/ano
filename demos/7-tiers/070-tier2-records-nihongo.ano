@@ -1,7 +1,7 @@
 --! registry ../registries/070-tier2-records.reg
 --! ja
 --! expect gold = 1100 250 40 1010 520 1305
---! expect rank = 4 1 0 3 2 5
+--! expect slot = 4 1 0 3 2 5
 
 北 と 両手 六十 より 、 金 に 千 たす
 

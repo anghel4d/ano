@@ -1,8 +1,8 @@
 n 3
 col unit bool 1 1 1
 col gold nat 5 5 3
-col rank int -1 -1 -1
+col slot int -1 -1 -1
 bind p vec 1 0 2
 ja 部隊 unit
 ja 金 gold
-ja 順位 rank
+ja 順位 slot

@@ -172,12 +172,12 @@ fn selection_pipelines_preserve_rows_order_and_copy_counts() {
         fixture.accepts(&format!("--! out {expected}\nNord |> take {k}"));
         fixture.accepts(&format!("--! out\n(Nord & !Nord) |> take {k}"));
     }
-    fixture.accepts("--! out 2 0\nNord |> order by Gold desc |> keep");
+    fixture.accepts("--! out 2 0\nNord |> order by Gold desc |> keep()");
     fixture.accepts("--! out 2\n(Nord |> order by Gold desc) |> take 1");
     fixture.accepts("--! out 2 2 2 2\nNord |> order by Gold desc |> take 1 |> expand Count");
     fixture.accepts("--! out 4\nNord |> order by Gold desc |> take 1 |> expand Count , spawn Minion\n#/ Minion");
     fixture.accepts("--! out 3\nNord |> expand Count |> take 3 , spawn Minion\n#/ Minion");
-    fixture.accepts("--! out 1\nNord |> expand Count |> take 1 |> keep , spawn Minion\n#/ Minion");
+    fixture.accepts("--! out 1\nNord |> expand Count |> take 1 |> keep() , spawn Minion\n#/ Minion");
     fixture.refuses("Nord |> take 1.5", "take count must be a finite nonnegative integer");
 }
 

@@ -519,15 +519,6 @@ fn verb_target(raw: &str) -> String {
     String::from_utf8_lossy(&b[start..i]).into_owned()
 }
 
-fn claims_call_namespace(kind: &RegEntryKind) -> bool {
-    matches!(
-        kind,
-        RegEntryKind::Fn { .. }
-            | RegEntryKind::TypedFn { .. }
-            | RegEntryKind::Ctor { .. }
-    )
-}
-
 /* ---------- Em infrastructure ---------- */
 
 impl<'a> Em<'a> {
@@ -1659,7 +1650,7 @@ impl<'a> Em<'a> {
     fn emit_call(&mut self, callee: Symbol, args: &[Node], line: i32, m: Mode) -> R<Ev> {
         let name = self.rs(callee);
         let mut ev = Ev::default();
-        if name == "rank" && self.find(name).is_none_or(|index| !claims_call_namespace(&self.ent(index).kind)) {
+        if name == "rank" && self.find(name).is_none() {
             if let Some(a0) = args.first() {
                 let a = self.emit_val(a0, m)?;
                 ev.v = format!("(AnoRank {})", a.v);
@@ -1747,7 +1738,7 @@ impl<'a> Em<'a> {
             ev.v = self.in_mode(sh, m);
             return Ok(ev);
         }
-        if matches!(&b.kind, NodeKind::Name(s) if self.rs(*s).starts_with("neighbor"))
+        if matches!(&b.kind, NodeKind::Name(s) if self.rs(*s) == "neighbor")
             && self.find("neighbor").is_none()
         {
             let cv = self.emit_val(field, Mode::World)?;
@@ -1759,7 +1750,7 @@ impl<'a> Em<'a> {
             ev.v = self.in_mode(sh, m);
             return Ok(ev);
         }
-        if matches!(&b.kind, NodeKind::Call { callee, .. } if self.rs(*callee).starts_with("neighbor")) {
+        if matches!(&b.kind, NodeKind::Call { callee, .. } if self.rs(*callee) == "neighbor" && self.find("neighbor").is_none()) {
             let cv = self.emit_val(field, Mode::World)?;
             let sh = format!("(⥊AnoNbrClamp({}‿{}⥊{}))", self.fr.h, self.fr.w, cv.v);
             ev.v = self.in_mode(sh, m);
@@ -2229,6 +2220,9 @@ impl<'a> Em<'a> {
                 let Some(ei) = self.find(n) else {
                     return Err(fail(nd.line, format!("unregistered '{} _'", n)));
                 };
+                if matches!(self.ent(ei).kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }) {
+                    return Err(fail(nd.line, format!("name '{}' (fn) in presence position; use an explicit application", n)));
+                }
                 Ok(if has_pres(self.ent(ei)) {
                     self.presv(ei)
                 } else {
@@ -2912,7 +2906,7 @@ impl<'a> Em<'a> {
                 } else if !self.pipe_expand.is_empty() {
                     format!("({}/{})", self.sel_var, self.pipe_expand)
                 } else if matches!(what.kind, NodeKind::Call { .. }) {
-                    // spawn (pieceOf char): an empty sym spawns nothing for that cell (ex34)
+                    // spawn pieceOf(char): an empty sym spawns nothing for that cell (ex34)
                     let pv = self.emit_val(what, Mode::Sel)?;
                     let ps = self.tv();
                     self.stage(format!("{} ← {}", ps, pv.v));
@@ -3776,6 +3770,19 @@ impl<'a> Em<'a> {
         let mm = self.tv();
         self.stage(format!("{} ← (≠{})‿(≠{})⥊1", mm, a_i, b_i));
         for f in &filters {
+            let call = match &f.kind {
+                NodeKind::Call { .. } => Some(*f),
+                NodeKind::Cmp { l, .. } if matches!(l.kind, NodeKind::Call { .. }) => Some(l.as_ref()),
+                _ => None,
+            };
+            if let Some(Node { kind: NodeKind::Call { args, .. }, .. }) = call {
+                if args.len() != 2
+                    || !matches!(args[0].kind, NodeKind::Name(s) if s == b0name)
+                    || !matches!(args[1].kind, NodeKind::Name(s) if s == b1name)
+                {
+                    return Err(fail(f.line, "comprehension callable requires its two generator bindings in order"));
+                }
+            }
             match &f.kind {
                 NodeKind::Cmp { op, l, r }
                     if matches!(&l.kind, NodeKind::Name(s) if *s == b0name)
@@ -5713,14 +5720,16 @@ mod normalize {
             args: &[Node],
             line: i32,
         ) -> Result<(), Diag> {
-            if spelling == "rank"
-                && reg_find(&self.reg, spelling)
-                    .is_none_or(|index| !super::claims_call_namespace(&self.reg.ents[index].kind))
+            if self.derived.contains_key(spelling) {
+                return Err(super::fail(line, format!("definition '{}' is a value, not callable", spelling)));
+            }
+            if matches!(spelling, "rank" | "abs" | "sin")
+                && reg_find(&self.reg, spelling).is_none()
             {
                 if args.len() != 1 {
                     return Err(super::fail(
                         line,
-                        format!("rank expects 1 argument, got {}", args.len()),
+                        format!("{} expects 1 argument, got {}", spelling, args.len()),
                     ));
                 }
                 return Ok(());
@@ -5776,6 +5785,9 @@ mod normalize {
             }
         }
         fn validate_cross_call(&self, spelling: &str, line: i32) -> Result<(), Diag> {
+            if self.derived.contains_key(spelling) {
+                return Err(super::fail(line, format!("definition '{}' is a value, not callable", spelling)));
+            }
             let Some(index) = reg_find(&self.reg, spelling) else {
                 return Err(super::fail(line, "cross needs a registered fn"));
             };
@@ -5818,6 +5830,9 @@ mod normalize {
             args: &[Node],
             line: i32,
         ) -> Result<(), Diag> {
+            if self.derived.contains_key(spelling) {
+                return Err(super::fail(line, format!("definition '{}' is a value, not callable", spelling)));
+            }
             let Some(index) = reg_find(&self.reg, spelling) else {
                 return Err(super::fail(
                     line,
@@ -5892,6 +5907,9 @@ mod normalize {
             line: i32,
             operand: &Node,
         ) -> Result<Option<Carrier>, Diag> {
+            if self.derived.contains_key(spelling) {
+                return Err(super::fail(line, format!("definition '{}' is a value, not callable", spelling)));
+            }
             let Some(index) = reg_find(&self.reg, spelling) else {
                 return Ok(None);
             };
@@ -5945,7 +5963,7 @@ mod normalize {
                     };
                     Ok(Some(carrier))
                 }
-                _ => Ok(None),
+                _ => Err(super::fail(line, format!("declaration '{}' is not callable", spelling))),
             }
         }
 
@@ -6005,6 +6023,13 @@ mod normalize {
                 NodeKind::Name(symbol) => {
                     if let Some(body) = self.relation_defs.get(self.spelling(*symbol)) {
                         return Ok(Node::new(body.kind.clone(), line));
+                    }
+                    if !self.derived.contains_key(self.spelling(*symbol)) {
+                        if let Some(index) = reg_find(&self.reg, self.spelling(*symbol)) {
+                            if matches!(self.reg.ents[index].kind, RegEntryKind::Fn { .. } | RegEntryKind::TypedFn { .. }) {
+                                return Err(super::fail(line, format!("name '{}' (fn) in value position; use an explicit application", self.spelling(*symbol))));
+                            }
+                        }
                     }
                     return Ok(self.relation_name(node.clone()));
                 }

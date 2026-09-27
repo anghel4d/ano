@@ -607,16 +607,11 @@ fn typed_planning_uses_signatures_effects_and_backend_abi() {
         "rank-collision",
         "n 2\ncol Health num 1 2\ncol Rank nat 0 0\n",
     );
-    let rank = plan("rank(Health)\n", &rank_registry).unwrap();
-    assert!(rank.contains("AnoRank"), "{}", rank);
-    let rank_arity = plan("rank(Health, Health)\n", &rank_registry)
-        .unwrap_err()
-        .msg;
-    assert!(
-        rank_arity.contains("rank expects 1 argument"),
-        "{}",
-        rank_arity
-    );
+    let rank = plan("rank(Health)\n", &rank_registry).unwrap_err().msg;
+    assert!(rank.contains("declaration 'rank' is not callable"), "{}", rank);
+    let intrinsic_registry = load("intrinsic-rank", "n 2\ncol Health num 1 2\n");
+    let rank_arity = plan("rank(Health, Health)\n", &intrinsic_registry).unwrap_err().msg;
+    assert!(rank_arity.contains("rank expects 1 argument"), "{}", rank_arity);
     let callable_rank_registry = load(
         "callable-rank",
         "n 2\ncol Health num 1 2\nfn rank id:0000000000000011 v:1 sig:num->num fx:pure det:deterministic trust:trusted read:- write:- use:- = {≠⥊𝕩}\n",
@@ -649,11 +644,11 @@ fn typed_planning_uses_signatures_effects_and_backend_abi() {
     let cross = plan("cross both (Health > 0) (Health > 0)\n", &registry).unwrap();
     assert!(cross.contains("Fn_both"), "{}", cross);
 
-    let effect = plan("Health , heal Health\n", &registry).unwrap();
+    let effect = plan("Health , heal(Health)\n", &registry).unwrap();
     assert!(effect.contains("Fn_heal"), "{}", effect);
     assert!(effect.contains("health ↩"), "{}", effect);
 
-    let output = plan("Health , announce :Ping\n", &registry).unwrap();
+    let output = plan("Health , announce(:Ping)\n", &registry).unwrap();
     assert!(output.contains("Fn_announce"), "{}", output);
     assert!(!output.contains("health ↩"), "{}", output);
 
@@ -683,7 +678,7 @@ fn typed_planning_uses_signatures_effects_and_backend_abi() {
         attachment
     );
 
-    let pipeline = plan("Health |> choose Health Health\n", &registry)
+    let pipeline = plan("Health |> choose(Health, Health)\n", &registry)
         .unwrap_err()
         .msg;
     assert!(

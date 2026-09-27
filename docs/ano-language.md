@@ -242,7 +242,7 @@ Nord & Dead , spawn Ghost
 
 A subsequent statement is another barrier. A leading comma, lone `~`, or omitted-subject effect can reuse the saved antecedent mask. It reuses the selection, not the old world. A cold omitted-subject effect uses `^cursor`; a cold explicit continuation refuses.
 
-Augmented assignments such as `Gold += 100` admit the same omitted subject. Bare `Gold = 100` remains a comparison query; use `, Gold = 100` to assign through a saved antecedent. Registered verbs accept ordinary argument lists, including `verb()` and `verb(a, b)`; the registry still supplies their signatures and effects. They also admit omitted subjects: `verb() |> Gold += 1` uses the saved subject in the current program, or `^cursor` when cold. Registry declarations distinguish these effect calls from value-returning query calls. Each Kore submission is a new program, so an omitted subject in a later submission starts cold.
+Augmented assignments such as `Gold += 100` admit the same omitted subject. Bare `Gold = 100` remains a comparison query; use `, Gold = 100` to assign through a saved antecedent. Registered verbs require ordinary argument lists, including `verb()` and `verb(a, b)`; the registry still supplies their signatures and effects. They also admit omitted subjects: `verb() |> Gold += 1` uses the saved subject in the current program, or `^cursor` when cold. Registry declarations distinguish these effect calls from value-returning query calls. Each Kore submission is a new program, so an omitted subject in a later submission starts cold.
 
 #### Displaying selected rows
 
@@ -372,6 +372,15 @@ Each selected source contributes its copy count. A copy retains its source and a
 The current `pos = to shape` operation pours coordinates into a legacy position column. It is not a general first-class value reshape or proof of a nominal spatial frame. Shape and spatial compatibility remain limited by the current emitter.
 
 ### 19. Named column transforms
+
+The registry declares whether a name denotes a value or a callable; the surrounding syntax chooses its use. `Gold` reads a value, `f(Gold)` applies f, `f/ Gold` reduces with f, and `f\ Gold` scans with f. A callable needs an explicit application form. A bare callable is neither an implicit zero-argument call nor a first-class function value.
+
+Ordinary value calls, effect calls, and callable pipeline stages require argument parentheses, including an empty argument list: `show()`, `heal(Health)`, and `Selected |> keep()`. Whitespace application such as `heal Health`, parenthesized juxtaposition such as `(f Gold)`, and bare effect/stage names refuse. Dedicated forms such as `fold(f)`, `scan(f)`, `cross f A B`, and `f via Col` explicitly select their application operation and retain their own grammar.
+
+Call signatures determine the permitted arguments and result; effect contracts determine the permitted position. A unary callable cannot be used as a binary reducer. Named homogeneous folds and scans require a pure deterministic `A,A->A` signature. Backend limitations remain explicit refusals; syntax never overrides a declaration's kind.
+
+Columns and registered callables share one registry namespace, with ASCII case-insensitive matching. A column named `Rank` therefore prevents the intrinsic `rank(...)` fallback; use a distinct destination such as `Slot`. Registered declarations and visible value definitions take precedence over intrinsic spellings. Calling a value refuses. A `def` expression is read as a value and cannot become callable merely by adding parentheses.
+
 
 ```haskell
 def threat = Damage * Speed

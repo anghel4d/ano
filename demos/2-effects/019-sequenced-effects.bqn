@@ -1,4 +1,4 @@
-# ano: ^cursor , Knockback 5 ; Flash :Red ; -Shielded, followed by a bare cursor effect
+# ano: ^cursor , Knockback(5) ; Flash(:Red) ; -Shielded, followed by a bare cursor effect
 # Semantics: every gather and effect in one statement sees one frozen (world, overlay, host-input) triple. A host rebind becomes visible only at the next statement barrier, and the bare binding is independent.
 
 sNone‿sRed ← 0‿1
