@@ -1,9 +1,20 @@
--- Japanese conjugate of 17 (scan along). で postfix; 沿 = along.
 --! registry ../registries/031-scan-along.reg
 --! ja
+
 --! out 2 5 9 10
-走査 ( + ) 重量 沿 pathCells
+走査 ( + ) 重量 沿 経路群
+
+--! out 2 -1 -5 -6
+走査 ( - ) 重量 沿 経路群
+
+--! out 2 2 2 1
+走査 ( min ) 重量 沿 経路群
+
+--! out 2 2.5 3 2.5
+走査 ( avg ) 重量 沿 経路群
+
 --! out 1 4 6 10
 累和 重量 面 で
+
 --! out 10
 総和 重量 面 で

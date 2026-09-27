@@ -1,0 +1,7 @@
+-- The first write computes 2 1 3 0, then the barrier retracts positives to 1. The second computes -4 under its mask, then retracts it to 0.
+-- The retraction is a property of the barrier, not the write: off-mask cells pass through it too, and on a sealed column that pass is the identity.
+--! registry ../registries/133-bool-domain.reg
+--! expect alarm = 1 1 0 0
+
+Alive , alarm = alarm + trips
+Trips > 2 , alarm = alarm - 5

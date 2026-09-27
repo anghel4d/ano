@@ -1,7 +1,4 @@
--- Assignment scatter, the corrected idiom (spec §8). Twin of 014-masked-scatter.bqn. (was s08-masked-scatter)
 -- Six citizens, rows 1, 3, 4 bandits, one assignment: the bandits turn Hostile.
--- Only the corrected behavior has ano surface; the .bqn's bug half (APL's faction[bandit] misread, mask as index list) is an implementation decision record. This fixture's post-state distinguishes the two: the correct scatter writes rows 1, 3, 4; the misread writes rows 0 and 1 only — so rows 0, 3, 4 of the expect are the witness.
--- Left to the .bqn twin: the index-list witness `1‿3‿4 ≡ /bandit`, the compress-under vs index-under spelling equivalence, and the bug post-state itself.
 --! registry ../registries/014-masked-scatter.reg
 --! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly
 

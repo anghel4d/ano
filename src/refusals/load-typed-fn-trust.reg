@@ -1,0 +1,4 @@
+# expect: registry line 4: fn f: raw BQN requires trust:trusted
+# A checked boundary cannot make an opaque raw dfn checked by assertion.
+n 0
+fn f id:0000000000000001 v:1 sig:num->num fx:pure det:deterministic trust:checked read:- write:- use:- = {𝕩}

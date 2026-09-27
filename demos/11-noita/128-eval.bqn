@@ -1,4 +1,3 @@
-# Quotation (w6): eval of a quoted statement equals the statement written directly.
 # Ano: SparkBolt , Damage += 10
 #      eval "SparkBolt , Damage += 10"
 # Semantics: the quotation is a literal, so it resolves at compile time — a splice, not an interpreter — and the spliced statement's footprint stays visible to §11's static conflict check. That is the constrained ⍎: reflection over program text priced the same as program text. The dynamic form (a string built at runtime) has an opaque footprint and waits on the interpreter; the analyzable middle — templates with holes, the koto nominalizer — stays open.

@@ -1,4 +1,3 @@
--- Japanese conjugate of 19 (pipeline top-k).
 --! registry ../registries/042-pipeline-topk.reg
 --! ja
 --! out 6 3 4 0 7

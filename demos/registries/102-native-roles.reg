@@ -1,7 +1,3 @@
-# s54 — native role routing: a kanji 位置 column declared the pos role receives spawn
-# `at` positions, and a kanji 鍵 column declared the keys role mints ids — the routing
-# an English world gets for free from the literal names pos/keys, a native world gets by
-# `role`. 資金 carries default 25 so the minted row witnesses the default under a mangled name.
 n 2
 col 生成器 bool 0 1
 col 手先 bool 0 0

@@ -1,0 +1,11 @@
+n 3
+col Nord bool 1 0 1
+col Gold num 10 20 30
+col Silver num 1 2 3
+col Copper num 5 6 7
+fn show
+ja 北人 Nord
+ja 金 Gold
+ja 銀 Silver
+ja 銅 Copper
+ja 表示 show

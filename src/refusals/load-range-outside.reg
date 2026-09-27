@@ -1,0 +1,5 @@
+# expect: registry line 5: range hp: value 200 outside 0..100
+# Declared bounds seal rest data: a value outside the range refuses at the range line.
+n 2
+col hp num 50 200
+range hp 0 100

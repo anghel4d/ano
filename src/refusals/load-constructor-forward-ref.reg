@@ -1,0 +1,4 @@
+# expect: registry line 4: ctor ColorValue: no enum 'Color'
+# Nominal references are backward and canonical so declaration order is reloadable.
+n 0
+ctor ColorValue id:0000000000000001 v:1 enum:Color

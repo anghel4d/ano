@@ -1,0 +1,7 @@
+# 132-derived-tag-b's world with the `as nord race Nord` line (and its ja alias) deleted:
+# race still carries the value, but nothing names the equality mask.
+n 5
+col race sym Nord Khajiit Nord Nord Orc
+col gold num 400 600 200 150 221
+rel master 2 -1 -1 4 -1
+ja 金 gold

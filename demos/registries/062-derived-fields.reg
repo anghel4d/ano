@@ -1,7 +1,3 @@
-# ex33 — derived fields fixture (mirrors demos/6-space/062-derived-fields.bqn)
-# 8x8 window with frame origin -4 -4: x is the ROW coordinate, y the COLUMN, both spanning
-# -4..3 (0-based coords would empty the basin). water pre-state is all sevens; height is
-# row-constant 0 10 20 30 80 90 100 110; cliff starts clear. Entity world starts empty.
 n 0
 col peak bool
 col pos num

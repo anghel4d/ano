@@ -1,5 +1,3 @@
-# ex04 — scoped selection fixture (mirrors demos/1-selection/004-scoped-selection.bqn)
-# The .bqn derives the scope mask: whiterun <- region = symWhiterun. The .reg format has
 # no derived columns, so the membership mask ships as a bind (region = Whiterun rows).
 n 6
 col merchant bool 1 1 0 1 0 1

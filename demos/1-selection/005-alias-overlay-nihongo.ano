@@ -1,0 +1,20 @@
+--! registry ../registries/005-alias-overlay.reg
+--! ja
+--! expect marked = 0 0 0 0 1
+--! expect health = 50 0 1 0 90
+--! expect gold = 15 99 30 40 55
+
+印 付
+^focus 、 体力 に 0 にする
+注視 、 金 に 5 たす
+^focus ない と 注視 ない 、 体力 に 1 にする
+^watch 、 金 に 99 にする
+
+--! out 2
+総数 ^focus
+
+--! out 2
+総数 注視
+
+--! out 0
+総数 ( ^focus と 注視 )

@@ -1,4 +1,3 @@
--- Japanese fold noun phrase (ex45): a pure noun phrase names a scoped-global fold. Twin of 088-fold-noun-phrase.ano.
 --! registry ../registries/088-fold-noun-phrase.reg
 --! ja
 --! out 600

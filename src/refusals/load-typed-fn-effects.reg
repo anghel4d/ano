@@ -1,0 +1,5 @@
+# expect: registry line 5: fn f: fx:write and write footprint disagree
+# Effect rows and concrete footprints are one redundant integrity check, not two stories.
+n 0
+col X num
+fn f id:0000000000000001 v:1 sig:num->unit fx:pure det:deterministic trust:trusted read:- write:X use:- = {𝕩}

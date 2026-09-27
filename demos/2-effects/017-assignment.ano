@@ -1,6 +1,4 @@
--- Assignment (ex11): masked overwrite with a backtick-symbol constant. Twin of 017-assignment.bqn.
 -- Six citizens, two enum columns: Faction is who they side with, Loot what they carry. Assignment under a mask overwrites the selected cells with the :Name constant and leaves the rest alone.
--- The .bqn's enum codes map to sym-column names: faction 0/1/2 = Friendly/Bandit/Hostile, loot 0/1/2 = Empty/Coins/Gems.
 -- Faction and Loot are distinct enum spaces that share codes numerically; sym columns keep the name spaces separate.
 --! registry ../registries/017-assignment.reg
 --! expect faction = Friendly Hostile Friendly Hostile Hostile Friendly

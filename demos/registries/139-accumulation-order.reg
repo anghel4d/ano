@@ -1,0 +1,5 @@
+# One magnitude swamps its neighbour. Left to right, the 1 vanishes into 1e100 and the pair
+# then cancels to 0; a right fold would cancel first and keep the 1. Ano means 0.
+n 3
+col drift num 1 1e100 -1e100
+ja 漂流 drift

@@ -1,4 +1,3 @@
--- Japanese conjugate of 111-modifiers-a (wand order A: Damage Plus then Heavy Shot).
 --! registry ../registries/111-modifiers.reg
 --! ja
 --! expect damage = 0 26 26 26 8

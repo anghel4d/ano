@@ -1,4 +1,3 @@
-# c3 blinker 5x5 (mirrors demos/10-conways/108-life-naru.bqn, one-rule section); same world as 105-life-step-a.
 lattice 5 5
 field plot bool 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 field planted bool 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0

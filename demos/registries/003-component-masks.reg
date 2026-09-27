@@ -1,5 +1,3 @@
-# ex03 — component masks fixture (mirrors demos/1-selection/003-component-masks.bqn)
-# faction sym values stand in for the .bqn's symNone/symBandit/symFriendly enum codes
 n 6
 col nord bool 1 0 1 0 1 0
 col dragon bool 0 1 0 0 1 0

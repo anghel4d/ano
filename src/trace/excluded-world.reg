@@ -1,0 +1,7 @@
+# Row 3 alone carries the dead link, and row 3 alone is outside Flag. The two programs beside
+# this world differ only in which phase crosses mentor.
+n 4
+unique id nat 7 11 13 17
+rel id mentor -1 7 7 99
+col flag bool 1 1 1 0
+col gold num 5 9 3 7

@@ -1,4 +1,3 @@
--- Japanese conjugate of n6 (the assembled wand: cast, join, scoped damage fold, detonation, spread ring, trigger rule).
 --! registry ../registries/119-wand.reg
 --! ja
 --! expect-n 5
@@ -20,5 +19,5 @@
 [ b と e 、 命中 付 | b <- 火花弾 、 e <- 敵 、 dist ( b 、 e ) 8 未満 ]
 敵 と 命中 、 体力 に ( 総和 損傷 火花弾 で ) ひく
 油 blast ( 5 ) で 於 着弾 、 火 付
-油 と 火 ない と 総数 ( 近傍 ' と 火 ) 1 以上 、 火 付
+油 と 火 ない と 総数 ( 近傍 と 火 ) 1 以上 、 火 付
 定義 payload = 火花弾 と 起爆 と 命中 なる 生成 火炎弾 於 位置 て 消

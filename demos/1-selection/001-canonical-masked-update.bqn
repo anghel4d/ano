@@ -1,4 +1,3 @@
-# Canonical masked update (ex1).
 # ano: Nord & TwoHanded > 60 , Gold += 1000
 # Semantics: the selection mask Nord ∧ TwoHanded>60 gates a masked add down the Gold column.
 # Invariant: selected rows gain exactly 1000, unselected rows are untouched.

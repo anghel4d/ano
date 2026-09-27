@@ -1,4 +1,3 @@
-# Derived columns (ex25): def names a column expression, reused as effect source, predicate, fold, and ordering key.
 # ano: def threat = Damage * Speed / Range
 #      def dps    = Damage / Cooldown
 #      Enemy , Priority = threat

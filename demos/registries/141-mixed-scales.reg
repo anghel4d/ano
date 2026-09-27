@@ -1,0 +1,7 @@
+# Integers beside fractions in one column: every prefix carries a rounding, so the accumulation
+# order is visible in the last bits. The left sum is 6.6000000000000005 and a right fold gives
+# 6.6 — a difference of one ulp, far under the 1e-9 the --! out comparator resolves, so the
+# order claim is carried by the fold-equals-last-prefix pin rather than by a printed value.
+n 6
+col mix num 1 0.1 2 0.2 3 0.3
+ja 混成 mix

@@ -1,7 +1,6 @@
--- The wrap (w2): the deck is a ring; wrapping is modular index arithmetic, and no row ever moves. Twin of 122-wrap.bqn. (was w2-wrap)
 -- The classic trick: hang a modifier at the deck's end to catch the first slot. The deck is a ring, the rotation is arithmetic, and no card ever changes rows.
 -- Wand [SB, DP] with the cast pointer at slot 1: the block draws DP, needs one more, and wraps to the front — the classic trick that hangs a modifier at the buffer's end to catch the first slot.
--- drawPos is the rotation as position math (Tier 1: the slot ground is regenerable, the rotation is a projection); the balance runs along the rotation via scan-along, whose write-back conjugates through the order's grade (sort, act, unsort — the Tier-2 law); the modifier's payload is the bolt drawn AFTER it, which is the wand's FIRST slot.
+-- DrawPos is modular position arithmetic. Bal scans in the tie-free draw order and scatters back by inverse grade. The modifier at the end then binds to the first slot.
 --! registry ../registries/122-wrap.reg
 --! expect drawPos = 0 1 0
 --! expect bal = 0 0 1

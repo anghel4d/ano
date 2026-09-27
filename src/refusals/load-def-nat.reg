@@ -1,0 +1,5 @@
+# expect: registry line 5: def Marine: value -5 outside nat for 'hp'
+# A proto value is spawn fill layer one: it must sit in the carrier set of its column.
+n 2
+col hp nat 60 10
+def Marine hp=-5

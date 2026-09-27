@@ -1,4 +1,3 @@
-# Presence patterns (ex6).
 # ano: (Nord, TwoHanded > 60) , Gold += 1000
 # ano: (Nord, TwoHanded _) , +Trained
 # ano: (Nord, !TwoHanded) , +Untrained

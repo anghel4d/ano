@@ -1,4 +1,3 @@
-# n2 — the flight group (mirrors demos/11-noita/111-modifiers.bqn; shared by the -a and -b twins)
 # Rows 1-3 spark bolts in flight (base damage 3, speed 6), row 4 a bomb bystander the cards never touch, row 0 the wand.
 n 5
 col keys num 0 1 2 3 4

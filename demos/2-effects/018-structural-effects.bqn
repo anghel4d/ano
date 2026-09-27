@@ -1,4 +1,3 @@
-# Structural effects (ex12): despawn, add a component across the set-hop image, remove a component.
 # ano: Dead , ~
 #      Frenzy.targets' , +Frenzied
 #      Burdened , -Encumbered

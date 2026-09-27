@@ -1,4 +1,3 @@
-# s63 — still-all &\: the ∧-scan latch along a march order (the column intact up to here).
 # ano:  &\ Alive @ MarchOrder
 # Semantics: &\ accumulates AND along the scope's declared order (index order here), one running value per selected cell — the still-all latch: 1 while every soldier so far is alive, 0 from the first casualty on.
 # Invariant: the scan equals the hand-computed latch, is monotone non-increasing (once off, never on), and has the length of its selection; the &/ fold is the latch's last value.

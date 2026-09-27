@@ -1,0 +1,10 @@
+--! registry ../registries/144-show.reg
+--! expect Gold = 100 200 300 400 500 600 150 350 90 520
+--! expect-n 10
+
+IsHostile , show()
+IsHostile & TwoHanded > 60 , show()
+IsHostile & TwoHanded > 60 & Gold >= 300 , show()
+IsHostile & TwoHanded > 60 & Gold >= 300 & Race = :Nord , show()
+Race = :Nord , show(Race, TwoHanded, Gold)
+Race = :Nord & TwoHanded > 60 , show(Race, TwoHanded, Gold)

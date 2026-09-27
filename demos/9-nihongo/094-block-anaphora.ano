@@ -1,6 +1,4 @@
--- Block-local anaphora (ex49): ~ is a new barrier over the saved mask. Twin of 094-block-anaphora.bqn.
 -- 死んだ北が、幽霊を生み、消える — the dead Nords spawn ghosts and vanish. The ~ despawns over the mask saved at the gather, so the newborn ghosts, dead Nords by every tag, survive it.
--- Japanese surface: 死んだ北が、幽霊を生み、消える。 World layout: the .bqn type strings carry the archetypes; here bool columns nord/imperial/khajiit/ghost pin survivor identity and order (the type sym column keeps the .bqn's initial strings; spawned sym rows take the "" spawn default, which no expect can spell). The saved mask is zero-padded over the minted rows, so the ghosts survive the despawn; expect-n plus the all-zero dead column pin the remaining .bqn assertions.
 --! registry ../registries/094-block-anaphora.reg
 --! expect-n 6
 --! expect nord = 1 0 1 0 0 0
@@ -8,6 +6,7 @@
 --! expect ghost = 0 0 0 0 1 1
 --! expect imperial = 0 1 0 0 0 0
 --! expect khajiit = 0 0 0 1 0 0
+--! expect type = nord imperial nord khajiit ghost ghost
 
-Nord & Dead , spawn Ghost
+Nord & Dead , spawn Wraith
 ~

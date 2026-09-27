@@ -1,0 +1,6 @@
+-- Row 0 holds 2^52: one multiply crosses the ceiling and clamps; the division after is exact. Row 2's 28/8 = 3.5 floors to 3 — naturals stay natural.
+--! registry ../registries/135-natural-grain.reg
+--! expect fuel = 1125899906842624 5 3
+
+Alive , fuel *= 4
+Alive , fuel /= 8

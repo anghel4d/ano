@@ -1,0 +1,5 @@
+# expect: fn forge: nominal outputs require a checked constructor
+# Raw BQN may consume a nominal carrier but cannot fabricate one as a numeric coincidence.
+n 0
+enum Color id:0000000000000001 v:1 Red=1 reserve:-
+fn forge id:0000000000000002 v:1 sig:num->Color fx:pure det:deterministic trust:trusted read:- write:- use:- = {𝕩}

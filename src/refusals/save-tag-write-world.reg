@@ -1,0 +1,9 @@
+# 132-derived-tag-b's world verbatim: `as nord race Nord` names the equality mask over
+# the live race column — a value the program may read anywhere and write nowhere.
+n 5
+col race sym Nord Khajiit Nord Nord Orc
+col gold num 400 600 200 150 221
+rel master 2 -1 -1 4 -1
+as nord race Nord
+ja 北 nord
+ja 金 gold

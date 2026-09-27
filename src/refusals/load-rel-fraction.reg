@@ -1,0 +1,5 @@
+# expect: rel mentor row 1: relationship target 1.5 is not an exact row index
+# An unkeyed target is a row index: exact by carrier. A fraction cannot name a row.
+n 3
+col hp num 1 2 3
+rel mentor 0 1.5 1

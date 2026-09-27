@@ -1,4 +1,3 @@
--- Japanese twin of 035-fib-stencil-b: one stencil step from the fib seed 1 1 0... is the shift-add column 0 1 2 1 0..., not the fib prefix (spec §21). The comma is gather-effect-scatter, every read observes pre-state, so prev shifts and no carry forms; fib is the untouched reference column.
 --! registry ../registries/035-fib-stencil-b.reg
 --! ja
 --! expect offset = 0 1 2 1 0 0 0 0 0 0 0 0

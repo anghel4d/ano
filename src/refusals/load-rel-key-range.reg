@@ -1,0 +1,10 @@
+# expect: registry line 8: range on unique column 'id'
+# The declared key RANGE arm of the seal has no registry surface: range refuses on a unique
+# column, so no keyed rel can carry declared bounds today. The arm itself is pinned by the
+# validate_target unit tests; this fixture pins that the world refuses rather than loading a
+# rel whose key range was silently dropped.
+n 3
+unique id nat 10 20 30
+range id 10 30
+col hp num 1 2 3
+rel id mentor 10 20 20

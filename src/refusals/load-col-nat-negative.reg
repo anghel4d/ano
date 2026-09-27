@@ -1,0 +1,4 @@
+# expect: registry line 4: col hp: value -45 outside nat
+# nat is the naturals: no negative sits at rest. Writes clamp at the barrier; rest data refuses.
+n 2
+col hp nat 60 -45

@@ -1,0 +1,13 @@
+# The ten fighters from tour.md. show is a registered display effect.
+n 10
+col Race sym Nord Breton Khajiit Nord Imperial Redguard Argonian Nord Breton Khajiit
+col IsHostile bool 1 1 0 0 0 1 0 1 0 1
+col TwoHanded num 80 55 70 55 90 60 45 72 40 88
+col Archery num 40 70 85 30 50 75 60 55 65 90
+col Gold num 100 200 300 400 500 600 150 350 90 520
+fn show
+ja 敵 IsHostile
+ja 種族 Race
+ja 両手 TwoHanded
+ja 金 Gold
+ja 表示 show

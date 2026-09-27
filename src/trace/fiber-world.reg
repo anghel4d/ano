@@ -1,0 +1,11 @@
+# Five keyed rows. targets: row 0 names a live member and a never-existed key, row 2 names only
+# a never-existed key and sits OUTSIDE Lead, row 3 names a live member, rows 1 and 4 are empty.
+# Row 2 is the effect-side scoping witness; row 1 is the empty-fiber witness.
+n 5
+unique id nat 7 11 13 17 19
+srel id targets 11 99 | | 98 | 17 |
+col lead bool 1 1 0 1 0
+col rich bool 0 1 0 1 0
+col gold num 5 9 3 7 1
+col reach num 0 0 0 0 0
+col tally num 0 0 0 0 0

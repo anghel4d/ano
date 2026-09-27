@@ -1,0 +1,4 @@
+# expect: registry line 4: service emit: an output service must return unit
+# Output services cross the barrier for effects; they do not smuggle values back into a query.
+n 0
+service emit id:0000000000000001 v:1 output sig:sym->sym trust:trusted

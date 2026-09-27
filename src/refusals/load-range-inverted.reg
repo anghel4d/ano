@@ -1,0 +1,5 @@
+# expect: registry line 5: range hp: lo 100 above hi 0
+# An empty interval admits nothing: inverted bounds refuse before any value is checked.
+n 2
+col hp num 50 60
+range hp 100 0

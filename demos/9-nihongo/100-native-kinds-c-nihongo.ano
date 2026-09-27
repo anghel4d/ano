@@ -1,4 +1,3 @@
--- Native world kinds, char half (s53c): the glyph predicate 刻印 gates the add — a kanji fn over a kanji char column.
 --! registry ../registries/100-native-kinds-c.reg
 --! ja
 --! expect 得点 = 0 1 0 0 1 0

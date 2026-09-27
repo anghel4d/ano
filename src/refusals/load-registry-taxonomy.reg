@@ -1,0 +1,13 @@
+# accept
+# One canonical witness for every implemented non-spatial high-integrity declaration.
+n 2
+col Health num 10 20
+service input.entity id:0000000000000001 v:3 input sig:unit->entity trust:checked
+service telemetry.emit id:0000000000000002 v:2 output sig:sym->unit trust:trusted
+enum Faction id:0000000000000003 v:1 Bandit=1 Player=2 reserve:7
+ctor HitPoints id:0000000000000004 v:1 range:0..100
+ctor FactionValue id:0000000000000005 v:1 enum:Faction
+array Scores id:0000000000000006 v:1 num entity
+array Factions id:0000000000000007 v:1 Faction fixed:2
+fn choose id:0000000000000008 v:1 sig:num,num->num fx:pure det:deterministic trust:trusted read:- write:- use:- = {𝕨⌈𝕩}
+fn heal id:0000000000000009 v:1 sig:num->unit fx:write det:deterministic trust:trusted read:- write:Health use:- = {𝕩}

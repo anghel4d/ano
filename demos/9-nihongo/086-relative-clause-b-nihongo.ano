@@ -1,4 +1,3 @@
--- Japanese conjugate of 43 relative-clause-b (commute witness: clause & nord parses same as nord & clause). Comparison binds tighter than &, so 両手 六十 より と 北 groups as (TwoHanded > 60) & Nord.
 --! registry ../registries/085-relative-clause-a.reg
 --! ja
 --! expect gold = 1005 5 5 1005 5 5

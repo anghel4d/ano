@@ -1,37 +1,17 @@
-# CLAUDE.md
+# Ano
 
-## What this is
-Ano (あの). A programming language design. An embedded ECS query-and-command engine that addresses entities by description: the selection predicate is the entity reference. FP / APL lineage, ASCII surface, SQL/Datalog/production-rules class — the FP/array sibling of Lua, to the game world what q is to kdb+; beside a Lua-class host the split is coroutines versus triggers. The name is the Japanese distal demonstrative ("that one over there"). Read ano-language.md for the full spec.
+The spec is `docs/ano-language.md`; current work and demo quarantine are in `todo/TODO.md`. Read relevant directory guidance before editing, and read the spec before changing it.
 
-The spec is `ano-language.md`; satellite working notes orbit it (`ano-ecs.md` the world store, `ano-time.md` time and missions, `ano-sky.md` purity, the Sky Registry, and the machine-as-world hypothesis). The compiler `anoc` lives in `src/`. Work here is design, spec writing, and the differential-tested compiler.
+The Pious Hierarchy: The Mathematics > The Denotation > the domain-and-lineage IR > The Grammar > The Surface > lowering and backend details.
 
-## The shape
-One form governs the static layer:
+Steel and Kore are the Rust reference implementation. The bytecode VM and JIT target stay fixed. CBQN executes Steel's backend; BQN witnesses are not semantic or differential oracles.
 
-```
-source & predicate , effect
-```
+`todo/00-historical-rulings.md` is read-only; preserve the author's rulings. Use live tasks and code for current implementation status. Never resolve an open design question silently.
 
-Selection on the left, effect on the right, comma between. `source` defaults to the live world. Selection is relational algebra (σ by predicate, ⋈ by the dotted relationship hop, π by component access); column effects are the array calculus (reduce, scan, grade, outer product, replicate, reshape). A column store unifies them.
+No heavyweight dependencies or frameworks.
 
-## Conventions
-- The Pious Hierarchy: The Mathematics > The Semantics > The Grammar > The Syntax > keywords, pipelining, implementation details.
-- The spec borrows surface flavor across languages: APL/BQN/J/k, Haskell, Erlang, q/kdb+, SQL, Datalog, Lisp. Keep each example idiomatic to the language it cites.
-- Read `ano-language.md` before editing it. Match its part/section numbering and the canonical-task addendum already in place.
-- Open design questions live under "Open Questions, Next Steps". Never resolve one silently in prose; surface the tradeoff.
-- Bootstrap is ruled (2026-07-10): the language is drafted and its spec forged in Steel — the Rust reference implementation and standalone launcher; Cano, the embedded C implementation, derives from verified Steel, never the inverse. The bytecode VM and JIT target stay fixed.
-- No heavyweight deps. No frameworks.
-- Work tracking: TODO.md is a laundry list of current tasks. Crossed off items go under `## Closed` and get a green checkmark emoji or other relevant depending on whether resolved, cancelled, etc.
-- PATCHES.md is the ledger of big patches as they get merged to main, in the style of Notch's early Minecraft Patch notes (intellectual property-safe).
+Carry authorized work through to a reviewable result. Make routine implementation choices from context; ask when an answer changes scope or settles an open design decision. User instructions take precedence over skill guidelines. Run checks proportionate to the change, and broaden them only for a failure or unresolved concern.
 
-## Writing Style
-- Comments should follow the existing convention and generally be constrained to the top of functions: Inputs and their types, outputs and their types, invariants.
-- Commments inside of functions should be extraordilarily terse and to the point.
-- Write markdown the same way: flat, terse prose with no decorative bolding. Bold only academically and selectively for load-bearing terms.
-- One long line per paragraph or list item. Let the editor soft-wrap. Do not hard-wrap prose at a column.
-- Preserve the author's voice and his own comments verbatim. Tighten, don't rewrite.
+Keep prose clear and economical, one source line per paragraph or list item. Include enough explanation, examples, and qualifications to preserve meaning. Preserve the author's voice and comments, spec numbering, and idiomatic examples. Keep function comments focused on inputs, outputs, and invariants; inline comments should be terse.
 
-## Constraints
-- ALWAYS check if a directory you're working in has a .md file. If it does, read it and follow its guidance.
-- Do NOT add yourself as a contributor.
-- Do not `git commit` or `git push` without explicit per-commit approval. Show the diff and let the author commit.
+Never credit an agent or AI tool as an author, coauthor, or contributor, or add AI/tool attribution or contributor trailers. As soon as any usable in-scope checkpoint is ready and its relevant verification is complete, commit it and push the current branch immediately unless the user explicitly instructs otherwise. Repeat at each usable checkpoint; do not wait until the entire workflow ends, pile up completed uncommitted work, or request redundant per-commit approval.

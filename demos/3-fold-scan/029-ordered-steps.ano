@@ -1,0 +1,24 @@
+-- fold(f) and scan(f) admit every compatible operator and registered reducer (A13): fold(+) is valid and names the same descriptor as +/. Subtraction is admitted exactly because execution is the ordered left recurrence, and drain is a registered step with no declared laws, so exact left order is the only strategy the registry can prove — regrouping is refused, and 12 5 0 0 is the one admissible carry.
+-- The fold is the last element of its own scan, for the operator and the registered step alike.
+--! registry ../registries/029-ordered-steps.reg
+
+--! out 58
+fold(+) Damage @ Enemies
+
+--! out 58
++/ Damage @ Enemies
+
+--! out -34
+-/ Damage @ Enemies
+
+--! out 12 5 0 0
+drain\ Damage @ Enemies
+
+--! out 0
+drain/ Damage @ Enemies
+
+--! out 30
+fold(threat) Damage @ Enemies
+
+--! out 12 12 30 30
+threat\ Damage @ Enemies

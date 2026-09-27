@@ -1,4 +1,3 @@
--- Native Japanese registry (s50): the kanji nouns ARE the columns — no ja aliases exist to consult. Nouns resolve by entry name, identically from either surface.
 --! registry ../registries/095-native-registry.reg
 --! ja
 --! expect 金 = 1100 200 300 1400 500 600

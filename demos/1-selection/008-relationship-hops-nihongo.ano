@@ -1,4 +1,3 @@
--- Japanese conjugate of 08 (relationship hops). の is the guarded relationship gather; -除 drops the tag; per-hop left-join nulls keep dangling rows untouched.
 --! registry ../registries/008-relationship-hops.reg
 --! ja
 --! expect gold = 1000 0 1000 1000 0 0

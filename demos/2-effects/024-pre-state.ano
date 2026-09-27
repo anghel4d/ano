@@ -1,4 +1,3 @@
--- One barrier, one pre-state (spec §10): batched effects swap Gold and Silver. Twin of 024-pre-state.bqn. (was s10-pre-state)
 -- ; is not 'then', it's 'and', in the same breath: Gold = Silver ; Silver = Gold is the swap, no temporary needed, no third statement.
 -- Both `;`-batched effects read the statement's gathered pre-state, so the pair swaps on-mask; rows 0 and 3 are untouched.
 -- The naive-sequential half (silverN reads goldN's write, losing the swap) is a BQN-only counterexample unreachable from ano semantics.

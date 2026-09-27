@@ -1,0 +1,5 @@
+# expect: registry line 5: unique id: unsupported kind 'bool' (num nat int)
+# A key column carries a numeric refinement or none: bool cannot key past n=2 and
+# sym/char are not minted — the kind slot admits exactly num, nat, int.
+n 2
+unique id bool 0 1

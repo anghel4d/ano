@@ -1,4 +1,3 @@
--- Japanese conjugate of 26 (fold over ordered top-k). で postfix; folded operand wrapped before the parenthesized scope.
 --! registry ../registries/043-fold-ordered-topk.reg
 --! ja
 --! out 226

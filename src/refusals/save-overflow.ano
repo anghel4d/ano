@@ -1,5 +1,4 @@
--- Refused save, the overflow face (todo/09): gold doubles past DBL_MAX, CBQN spells the
--- post-state value '∞', and the pipe-back refuses the tick — exit 2, no world written.
--- expect: save: col gold: bad number '∞'
+-- Overflow reaches admitted positive infinity, saves canonically, and reloads.
+-- accept: col gold num inf
 --! registry save-overflow-world
 Rich , Gold *= 2

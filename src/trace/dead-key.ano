@@ -1,0 +1,8 @@
+-- Never-existed keys. The predicate crossing reports over X, so the Flag-excluded row 3 is
+-- still reported; the effect crossing reports over S, so row 3 is not. The live link still
+-- delivers its value and the dead one simply drops.
+--! registry dead-key-world
+--! expect gold = 5 5 3 7
+
+Flag & mentor.Dead , Gold += 1
+Flag , Gold = mentor.Gold

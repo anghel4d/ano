@@ -1,0 +1,42 @@
+-- A9 adopts q/kdb+'s Greater and Lesser over the carriers Ano admits, and Ano admits char, so the char instances are a derivation and not a new glyph: | is the greater rune, & the lesser, and max/min bridge to them exactly as they do over numbers.
+-- The order is the code-point order. It has no greatest or least rune, so an empty scope has no result row: the last query prints nothing rather than a code-point zero.
+--! registry ../registries/142-glyph-extrema.reg
+
+--! out sow
+"sat" | "cow"
+
+--! out cat
+"sat" & "cow"
+
+--! out n
+max/ Rune
+
+--! out e
+min/ Rune
+
+--! out n
+|/ Rune
+
+--! out e
+&/ Rune
+
+--! out ggnnn
+|\ Rune
+
+--! out geeee
+&\ Rune
+
+--! out ggnnn
+max\ Rune
+
+--! out geeee
+min\ Rune
+
+--! out 0 0 1 1 1
+(|\ Rune) == (max/ Rune)
+
+--! out i
+max/ Rune @ Alive
+
+--! out
+max/ Rune @ Gone

@@ -1,0 +1,9 @@
+--! registry ../registries/145-tuple-assignment.reg
+--! ja
+--! expect Gold = 51 20 51
+--! expect Silver = 13 2 13
+--! expect Copper = 4 6 4
+--! expect-n 3
+
+北人 、 ( 金 、 銀 、 銅 ) = ( 4 、 51 、 13 )
+北人 、 ( 金 、 銀 、 銅 ) = ( 銀 、 銅 、 金 ) |> 表示 ( 金 、 銀 、 銅 )

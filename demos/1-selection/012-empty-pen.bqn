@@ -1,4 +1,3 @@
-# The all-quantifier and the empty fiber (decision record setHop; spec §5, §9). Split from 013-set-hop.bqn.
 # ano: Pen & &/ livestock'.Healthy , +Certified
 # ano: Pen , Headcount = #/ livestock'
 # Semantics: &/ over the fiber is the all-quantifier; |/ &/ #/ over an empty fiber give the registered identities 0, 1, 0 — a pen with no livestock is vacuously certified.

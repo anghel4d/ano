@@ -1,4 +1,3 @@
--- Native role routing (s54): 生成 … 於 spawns at the point binding; the position lands in 位置, the id in 鍵, and the carrier row in 親 through their declared roles, defaults fill the rest under mangled names.
 --! registry ../registries/102-native-roles.reg
 --! ja
 --! expect-n 3

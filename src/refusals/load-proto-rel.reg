@@ -1,0 +1,7 @@
+# expect: def recruit field mentor: relationship target 1.5 is not an exact row index
+# The prototype is spawn fill layer one: a rel field carries a target and is sealed exactly
+# like the column it fills, so the bad link never reaches a spawned row.
+n 3
+col hp num 1 2 3
+rel mentor 0 1 1
+def recruit hp=5 mentor=1.5

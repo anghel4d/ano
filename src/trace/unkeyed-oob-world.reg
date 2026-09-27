@@ -1,0 +1,8 @@
+# Unkeyed: mentor holds row indices and row 2 stores 9, past the end of the world. That is an
+# exact nonnegative index — carrier-valid, never resolvable — so it is a dead link and not
+# malformed storage, and the gather that reads it must be bounded rather than faulting.
+n 4
+rel mentor -1 0 9 1
+col nord bool 1 1 1 1
+col dead bool 1 0 0 0
+col gold num 0 0 0 0

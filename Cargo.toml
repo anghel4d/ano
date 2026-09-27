@@ -1,0 +1,6 @@
+[workspace]
+members = ["steel", "kore"]
+resolver = "2"
+
+[profile.release]
+lto = true

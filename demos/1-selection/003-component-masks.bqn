@@ -1,4 +1,3 @@
-# Component masks (ex3).
 # ano: Nord , Gold += 100
 # ano: Dragon , Health = 0
 # ano: Bandit & !Dead & Faction == :Bandit , Faction = :Hostile

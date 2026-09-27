@@ -1,6 +1,5 @@
--- Scoped selection (ex4). Twin of 004-scoped-selection.bqn.
 -- Six townsfolk across two cities, some of them merchants. @ is the locative: where the selection stands, not what it is.
--- @ Whiterun is the locative scope: AND with the region's membership mask (region = :Whiterun, shipped as a bind mask — the .reg format has no derived column). Row 2 is inside Whiterun but no merchant; rows 1, 5 are merchants but in Riften.
+-- Merchant @ Whiterun and Merchant & Whiterun are the same mask: both lower to merchant ∧ Whiterun. @ only becomes a different machine as fold scope (+/ Gold @ Nord), a lattice shape (pred @ 8 8), or an anchored frame (Oil @ blast(5) at p). Whiterun ships as a bind mask (region = :Whiterun; the .reg format has no derived column). Row 2 is inside Whiterun but no merchant; rows 1, 5 are merchants but in Riften.
 --! registry ../registries/004-scoped-selection.reg
 --! expect gold = 5100 100 100 5100 100 100
 

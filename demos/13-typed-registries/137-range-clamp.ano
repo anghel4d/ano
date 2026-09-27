@@ -1,0 +1,6 @@
+-- The second statement reads the first's post-state: the two rows capped at 100 are exactly the ones the overkill then floors.
+--! registry ../registries/137-range-clamp.reg
+--! expect hp = 80.5 0 50 0
+
+Alive , hp += 30
+Hp > 99 , hp -= 200
