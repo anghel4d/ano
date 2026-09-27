@@ -367,7 +367,7 @@ pub enum NodeKind {
     Shape(Vec<Node>),  // 1-2 dims, each Num or Wild
     Tuple(Vec<Node>), // expression-local bracket construction
     Range { start: Box<Node>, end: Box<Node> },
-    Generate { source: Box<Node>, name: Symbol, body: Box<Node> },
+    Generate { clauses: Vec<Node>, body: Box<Node> },
     To { shape: Box<Node>, poured: Option<Box<Node>> }, // to shape; poured = board-literal Str
     Grade { key: Box<Node>, desc: bool },
     Top { k: f64, inner: Box<Node> },

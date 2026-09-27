@@ -2868,6 +2868,53 @@ inv children parent
     }
 
     #[test]
+    fn guarded_entity_comprehensions_persist_and_reopen() {
+        const CHILD: &str = "ANO_CONSTRUCTION_SESSION_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let dir = std::env::temp_dir().join(format!("ano-kore-constructions-{}", std::process::id()));
+            std::fs::create_dir(&dir).unwrap();
+            let mut steel = std::env::current_exe().unwrap();
+            steel.pop(); steel.pop(); steel.push("steel");
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "world::parser_session::guarded_entity_comprehensions_persist_and_reopen", "--nocapture"])
+                .env(CHILD, "1").env("STEEL", steel).current_dir(&dir).output().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            assert!(result.status.success(), "{}\n{}", String::from_utf8_lossy(&result.stdout), String::from_utf8_lossy(&result.stderr));
+            return;
+        }
+        let path = std::env::current_dir().unwrap().join("world.reg");
+        std::fs::write(&path, "n 3\ncol All bool 1 1 1\ncol Gold num 0 0 0\n").unwrap();
+        let observe = || {
+            let reg = steel::registry::reg_load(path.to_str().unwrap()).unwrap();
+            let entry = reg.ents.iter().find(|entry| entry.name == "Gold").unwrap();
+            let steel::RegEntryKind::Col { nums, .. } = &entry.kind else { panic!("numeric column required") };
+            nums.clone()
+        };
+        let mut app = App::new();
+        app.mode = Mode::Reg;
+        app.world = world_load(path.to_str().unwrap()).unwrap();
+        for source in [
+            "def participants = [entities(All) -> a & entities(All) -> b & a != b |=> a]",
+            "selection(participants) , Gold += 1",
+        ] {
+            app.prompt = source.as_bytes().to_vec();
+            repl_submit(&mut app);
+        }
+        assert_eq!(observe(), vec![1.0, 1.0, 1.0]);
+        let mut reopened = App::new();
+        reopened.mode = Mode::Reg;
+        reopened.world = world_load(path.to_str().unwrap()).unwrap();
+        session_rehydrate(&mut reopened);
+        reopened.prompt = b"selection(participants) , Gold += 1".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(observe(), vec![2.0, 2.0, 2.0]);
+        let before = std::fs::read(&path).unwrap();
+        reopened.prompt = b"All , Gold = 99\nselection([0, 1]) , Gold += 1".to_vec();
+        repl_submit(&mut reopened);
+        assert_eq!(std::fs::read(&path).unwrap(), before, "forged references must not publish an earlier statement");
+    }
+
+    #[test]
     fn definitions_survive_whitespace_and_reload() {
         const CHILD: &str = "ANO_PARSER_SESSION_CHILD";
         if std::env::var_os(CHILD).is_none() {

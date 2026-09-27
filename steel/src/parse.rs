@@ -107,7 +107,7 @@ fn check_expr_depth(root: &Node) -> Result<(), Diag> {
             Not(x) | Prime(x) | Relation { source: x, .. } | IotaX(x) | Expand(x) | Grade { key: x, .. }
             | OrderBy { key: x, .. } | Top { inner: x, .. }
             | Fold { operand: x, .. } | ScanExpr { operand: x, .. } => push(x),
-            Range { start: l, end: r } | Generate { source: l, body: r, .. }
+            Range { start: l, end: r }
             | And(l, r) | Or(l, r) | Cmp { l, r, .. } | Arith { l, r, .. }
             | Hop { l, r } | CrossV { a: l, b: r, .. }
             | ScanAlong { col: l, order: r, .. } => { push(l); push(r); }
@@ -122,6 +122,11 @@ fn check_expr_depth(root: &Node) -> Result<(), Diag> {
             Call { args, .. } | Tuple(args) | Shape(args) | ETuple(args) | EBatch(args) | ESequence(args) => {
                 for arg in args { push(arg); }
             }
+            Generate { clauses, body } => {
+                for clause in clauses { push(clause); }
+                push(body);
+            }
+            Binder { source, .. } => push(source),
             Pipe { src, stages } => {
                 push(src);
                 for stage in stages { push(stage); }
@@ -318,23 +323,49 @@ impl P<'_, '_> {
             self.adv();
             return Ok(Node::new(NodeKind::Tuple(Vec::new()), line));
         }
-        let first = self.parse_tupelem(5)?;
-        let kind = match self.pk() {
-            TokKind::Range => {
+        // Only top-level arrows select qualifier grammar; nested constructors own theirs.
+        let mut nesting = 0usize;
+        let mut comprehension = false;
+        for token in &self.t.kind[self.i..] {
+            match token {
+                TokKind::RArrow if nesting == 0 => { comprehension = true; break; }
+                TokKind::Rb if nesting == 0 => break,
+                TokKind::Lp | TokKind::Lb => nesting += 1,
+                TokKind::Rp | TokKind::Rb => nesting = nesting.saturating_sub(1),
+                TokKind::Eof => break,
+                _ => {}
+            }
+        }
+        let kind = if comprehension {
+            let mut clauses = Vec::new();
+            let mut names = Vec::new();
+            loop {
+                let expr = self.parse_expr(7)?;
+                if self.pk() == TokKind::RArrow {
+                    self.adv();
+                    if self.pk() != TokKind::Name { return Err(perr(self.tline(), "expected binding name after '->'")); }
+                    let name = self.tname();
+                    if names.contains(&name) { return Err(perr(self.tline(), "duplicate binding in comprehension")); }
+                    names.push(name);
+                    self.adv();
+                    clauses.push(Node::new(NodeKind::Binder { name, source: Box::new(expr) }, line));
+                } else {
+                    if names.is_empty() { return Err(perr(line, "comprehension must begin with a binding")); }
+                    clauses.push(expr);
+                }
+                if self.pk() != TokKind::Amp { break; }
+                self.adv();
+            }
+            self.expect(TokKind::Yield, "'|=>' after construction qualifiers")?;
+            let body = self.parse_expr(5)?;
+            NodeKind::Generate { clauses, body: Box::new(body) }
+        } else {
+            let first = self.parse_tupelem(5)?;
+            if self.pk() == TokKind::Range {
                 self.adv();
                 let end = self.parse_expr(5)?;
                 NodeKind::Range { start: Box::new(first), end: Box::new(end) }
-            }
-            TokKind::RArrow => {
-                self.adv();
-                if self.pk() != TokKind::Name { return Err(perr(self.tline(), "expected binding name after '->'")); }
-                let name = self.tname();
-                self.adv();
-                self.expect(TokKind::Yield, "'|=>' after construction binding")?;
-                let body = self.parse_expr(5)?;
-                NodeKind::Generate { source: Box::new(first), name, body: Box::new(body) }
-            }
-            _ => {
+            } else {
                 let mut items = vec![first];
                 while self.pk() == TokKind::Comma {
                     self.adv();

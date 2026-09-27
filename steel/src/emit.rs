@@ -362,7 +362,7 @@ fn children(nd: &Node) -> Vec<&Node> {
     use NodeKind::*;
     match &nd.kind {
         Not(a) | Prime(a) | Relation { source: a, .. } | IotaX(a) | Expand(a) | Query(a) => vec![a.as_ref()],
-        Range { start: a, end: b } | Generate { source: a, body: b, .. }
+        Range { start: a, end: b }
         | And(a, b) | Or(a, b) => vec![a.as_ref(), b.as_ref()],
         Cmp { l, r, .. } | Arith { l, r, .. } | Hop { l, r } => vec![l.as_ref(), r.as_ref()],
         Scope { l, r, origin } => {
@@ -393,6 +393,7 @@ fn children(nd: &Node) -> Vec<&Node> {
         OrderBy { key, .. } => vec![key.as_ref()],
         CrossV { a, b, .. } => vec![a.as_ref(), b.as_ref()],
         Binder { source, .. } => vec![source.as_ref()],
+        Generate { clauses, body } => clauses.iter().chain(std::iter::once(body.as_ref())).collect(),
         EAssign { target, rhs, .. } => vec![target.as_ref(), rhs.as_ref()],
         ESpawn { what, count, at } => {
             let mut v = vec![what.as_ref()];
@@ -1655,6 +1656,11 @@ impl<'a> Em<'a> {
 
     fn emit_call(&mut self, callee: Symbol, args: &[Node], line: i32, m: Mode) -> R<Ev> {
         let name = self.rs(callee);
+        if matches!(name, "entities" | "selection") && self.find(name).is_none() && self.find_def(callee).is_none() {
+            if args.len() != 1 { return Err(fail(line, format!("{name} expects 1 argument"))); }
+            let v = if name == "entities" { self.emit_entities(&args[0])? } else { self.emit_selection(&args[0])? };
+            return Ok(Ev { v: if name == "selection" { self.in_mode(v, m) } else { v }, temporary: name == "entities", unit: name == "entities", ..Ev::default() });
+        }
         let mut ev = Ev::default();
         if name == "rank" && self.find(name).is_none() {
             if let Some(a0) = args.first() {
@@ -2230,6 +2236,7 @@ impl<'a> Em<'a> {
             }
             NodeKind::Cmp { .. } => {
                 let v = self.emit_val(nd, Mode::World)?;
+                if v.temporary { return Err(fail(nd.line, "temporary collections need explicit selection() before world effects")); }
                 Ok(match v.g {
                     Some(g) => format!("(({})∧{})", v.v, g),
                     None => v.v,
@@ -2341,6 +2348,7 @@ impl<'a> Em<'a> {
             }
             _ => {
                 let v = self.emit_val(nd, Mode::World)?;
+                if v.temporary { return Err(fail(nd.line, "temporary collections need explicit selection() before world effects")); }
                 Ok(match v.g {
                     Some(g) => format!("(({})∧{})", v.v, g),
                     None => v.v,
@@ -4193,6 +4201,11 @@ impl<'a> Em<'a> {
     // Whole-program pre-scan arming anoIdx: statements strictly after the first
     // despawn-carrying barrier count; once any despawn exists every installed rule counts.
     fn scan_need_idx(&mut self, kids: &'a [Node]) {
+        fn uses_entities(node: &Node, it: &Interner) -> bool {
+            matches!(&node.kind, NodeKind::Call { callee, .. } if it.resolve(*callee) == "entities")
+                || children(node).iter().any(|child| uses_entities(child, it))
+        }
+        self.need_idx |= kids.iter().any(|node| uses_entities(node, self.it));
         let any = kids.iter().any(|k| scan_despawn(k));
         if !any {
             return;
@@ -5276,7 +5289,9 @@ mod normalize {
                 NodeKind::Scope { l, .. } => self.infer(l),
                 // the Greater/Lesser call this normalizer minted keeps its operands' carrier
                 NodeKind::Call { callee, .. } => {
-                    if Some(*callee) == self.char_greater
+                    if self.spelling(*callee) == "selection" && reg_find(&self.reg, "selection").is_none() {
+                        SemanticCarrier::Mask
+                    } else if Some(*callee) == self.char_greater
                         || Some(*callee) == self.char_lesser
                         || Some(*callee) == self.code_char
                     {
@@ -5727,7 +5742,7 @@ mod normalize {
             if self.derived.contains_key(spelling) {
                 return Err(super::fail(line, format!("definition '{}' is a value, not callable", spelling)));
             }
-            if matches!(spelling, "rank" | "abs" | "sin")
+            if matches!(spelling, "rank" | "abs" | "sin" | "entities" | "selection")
                 && reg_find(&self.reg, spelling).is_none()
             {
                 if args.len() != 1 {
@@ -6011,6 +6026,37 @@ mod normalize {
             .map_err(|message| super::fail(line, message))
         }
 
+        // Resolve world aliases inside constructors without mistaking lexical names for
+        // registry names. Local callable carriers are checked by construction lowering.
+        fn normalize_construction(&mut self, node: &Node, phase: TracePhase) -> Result<Node, Diag> {
+            use NodeKind::*;
+            let kind = match &node.kind {
+                Alias { .. } => return self.normalize(node, Context::Neutral, phase),
+                Tuple(items) => Tuple(items.iter().map(|x| self.normalize_construction(x, phase)).collect::<Result<_, _>>()?),
+                Range { start, end } => Range {
+                    start: Box::new(self.normalize_construction(start, phase)?),
+                    end: Box::new(self.normalize_construction(end, phase)?),
+                },
+                Generate { clauses, body } => Generate {
+                    clauses: clauses.iter().map(|x| self.normalize_construction(x, phase)).collect::<Result<_, _>>()?,
+                    body: Box::new(self.normalize_construction(body, phase)?),
+                },
+                Binder { name, source } => Binder { name: *name, source: Box::new(self.normalize_construction(source, phase)?) },
+                Arith { op, l, r } => Arith { op: *op, l: Box::new(self.normalize_construction(l, phase)?), r: Box::new(self.normalize_construction(r, phase)?) },
+                Cmp { op, l, r } => Cmp { op: *op, l: Box::new(self.normalize_construction(l, phase)?), r: Box::new(self.normalize_construction(r, phase)?) },
+                And(l, r) => And(Box::new(self.normalize_construction(l, phase)?), Box::new(self.normalize_construction(r, phase)?)),
+                Or(l, r) => Or(Box::new(self.normalize_construction(l, phase)?), Box::new(self.normalize_construction(r, phase)?)),
+                Not(x) => Not(Box::new(self.normalize_construction(x, phase)?)),
+                Call { callee, args } => {
+                    let world_mask = self.spelling(*callee) == "entities" && reg_find(&self.reg, "entities").is_none();
+                    let args = args.iter().map(|x| if world_mask { self.normalize(x, Context::Mask, phase) } else { self.normalize_construction(x, phase) }).collect::<Result<_, _>>()?;
+                    Call { callee: *callee, args }
+                }
+                _ => node.kind.clone(),
+            };
+            Ok(Node::new(kind, node.line))
+        }
+
         fn normalize(
             &mut self,
             node: &Node,
@@ -6216,9 +6262,10 @@ mod normalize {
                 NodeKind::Relation { source, inverse } => NodeKind::Relation { source: source.clone(), inverse: *inverse },
                 NodeKind::Call { callee, args } => {
                     let spelling = self.spelling(*callee).to_string();
+                    let arg_context = if spelling == "entities" && reg_find(&self.reg, &spelling).is_none() { Context::Mask } else { Context::Value };
                     let args = args
                         .iter()
-                        .map(|arg| self.normalize(arg, Context::Value, phase))
+                        .map(|arg| self.normalize(arg, arg_context, phase))
                         .collect::<Result<Vec<_>, _>>()?;
                     if args.iter().any(super::is_gamma_operand) {
                         return Err(super::fail(line, "relational groups need a reduction before a scalar call"));
@@ -6353,7 +6400,7 @@ mod normalize {
                         .collect::<Result<Vec<_>, _>>()?,
                 ),
                 // Construction has lexical bindings and validates through its dedicated pure lowering.
-                NodeKind::Tuple(_) | NodeKind::Range { .. } | NodeKind::Generate { .. } => node.kind.clone(),
+                NodeKind::Tuple(_) | NodeKind::Range { .. } | NodeKind::Generate { .. } => self.normalize_construction(node, phase)?.kind,
                 NodeKind::To { shape, poured } => NodeKind::To {
                     shape: Box::new(self.normalize(shape, Context::Value, phase)?),
                     poured: match poured {

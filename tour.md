@@ -197,6 +197,22 @@ We can also construct something temporarily, without writing any columns:
 
 This produces `[[1, 1], [2, 4], [3, 9], [4, 16], [5, 25]]`. The range supplies the values, `-> x` names each one, and `|=>` yields the result. Brackets preserve nested tuple structure; parentheses remain ordinary grouping and function arguments.
 
+Multiple sources and guards fit before the same yield arrow:
+
+```haskell
+[[1..3] -> a & [1..3] -> b & a < b |=> [a, b]]
+```
+
+This produces `[[1, 2], [1, 3], [2, 3]]`. Yielding only `a` would produce `[1, 1, 2]`: repeated matches remain repeated.
+
+For world effects, `entities(Nord)` supplies entity references instead of the Nord column's Boolean values. `selection(...)` turns a flat collection of those references back into a selection, deduplicating repeated entities:
+
+```haskell
+selection([entities(Nord) -> person |=> person]) , Gold += 1
+```
+
+The brackets construct the references; the ordinary comma applies the effect. The [reference](docs/ano-language.md#entity-references-and-explicit-targeting) covers multiple sources and host predicates.
+
 Construction is eager for now. The planned `lazy(...)` function will wrap an entire construction and defer everything enclosed.
 
 <!-- /// !TODO: Keep lazy(...) as a fully enclosing deferred-construction boundary, with no eager exceptions. It is documented but not implemented yet. -->

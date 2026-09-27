@@ -811,6 +811,7 @@ const JATAB: &[(&str, BK, bool, &str)] = &[
     ("#", t(TokKind::Count), false, ""),
     ("=", t(TokKind::Eq), false, ""),
     ("|", t(TokKind::Bar), false, ""),
+    ("&", t(TokKind::Amp), false, ""),
 ];
 
 // Inputs: a whole word. Output: true when the closed grammar owns it on either surface —

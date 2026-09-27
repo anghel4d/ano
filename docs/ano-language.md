@@ -199,20 +199,53 @@ Brackets construct expression-local values. Parentheses group ordinary expressio
 
 The last two expressions produce `[1, 4, 9, 16, 25]` and `[[1, 1], [2, 4], [3, 9], [4, 16], [5, 25]]`. `source -> name` binds each member in source order; `|=> expression` yields one result for each binding. Repeated members remain repeated, empty sources produce empty tuples, and nested results remain nested. Only the forward arrows are accepted. `=>` still introduces a standing rule, and `|>` still sequences stages.
 
-Ranges `[start..end]` use finite integer bounds, include both endpoints, and advance by one. When end is below start the range is empty. Stepped and unbounded ranges remain future work. A generator source is a tuple or column, not a scalar. Column sources enumerate present values in world-row order. Binding names have exact spelling, are scoped to their comprehension body, may shadow an outer name, and never escape. A nested comprehension can read outer bindings; a named definition does not capture a caller's local bindings.
+Ranges `[start..end]` use finite integer bounds, include both endpoints, and advance by one. When end is below start the range is empty. Stepped and unbounded ranges remain future work. A generator source is a tuple or column, not a scalar. Column sources enumerate present values in world-row order. Binding names have exact spelling, are visible to later qualifiers and the result expression, may shadow an outer comprehension name, and never escape. Repeating a binding name within one qualifier list refuses. A nested comprehension can read outer bindings; a named definition does not capture a caller's local bindings.
 
 ```haskell
 [Gold -> amount |=> amount * 2]
 [[1..3] -> x |=> [[1..x] -> y |=> [x, y]]]
 ```
 
-Constructing a value neither updates the world nor gives a temporary collection an entity-row assignment witness. `[Gold, Silver] = [Silver, Gold]` in effect position remains explicit simultaneous tuple assignment. Assigning a generated collection to a scalar world column refuses; equal lengths do not establish row identity. Construction bodies admit nested constructors, literals, lexical bindings, column values, scalar arithmetic/comparisons, and supported pure value calls. Unsupported operations refuse explicitly. Multiple binding clauses, destructuring, and Erlang-style guards still need their own grammar ruling; neither comma nor `|` is a qualifier separator.
+Constructing a value neither updates the world nor gives a temporary collection an entity-row assignment witness. `[Gold, Silver] = [Silver, Gold]` in effect position remains explicit simultaneous tuple assignment. Assigning a generated collection to a scalar world column refuses; equal lengths do not establish row identity. Construction bodies admit nested constructors, literals, lexical bindings, column values, scalar arithmetic/comparisons, and supported pure value calls. Unsupported operations refuse explicitly. Multiple binding clauses and pure guards use `&` before `|=>`; neither comma nor `|` is a qualifier separator. Destructuring remains future work.
+
+Multiple sources form a Cartesian product in source order, with the first binding changing slowest. Later sources may depend on earlier bindings. A guard must produce a scalar Boolean (0 or 1); false drops the current combination before evaluating later sources or the result. Invalid guard types and runtime errors refuse rather than silently becoming false. Compile-time checks still apply to the whole expression. Use parentheses around a compound source or guard containing `&` or `|`; within those parentheses they retain their ordinary expression meanings.
+
+```haskell
+[[1..2] -> a & [10..12] -> b |=> [a, b]]
+[[1..3] -> a & [1..3] -> b & a < b |=> [a, b]]
+[[1..3] -> a & [1..3] -> b & a < b |=> a]
+[[1..3] -> a & [1..a] -> b |=> [a, b]]
+```
+
+The guarded pair result is `[[1, 2], [1, 3], [2, 3]]`; yielding only `a` produces `[1, 1, 2]`. Qualifier expansion collects one result per admitted combination without flattening a tuple yielded by the body. Guards and bodies permit read-only deterministic or snapshot registered value calls; write effects, services, and nondeterministic typed calls refuse. Legacy function bodies remain trusted host code and must be value functions, not registered effect bodies.
+
+#### Entity references and explicit targeting
+
+`entities(predicate)` enumerates the selected entity references in world-row order. It differs from a bare column source, which enumerates that column's values. The intrinsic is available when no same-named declaration or value definition shadows it. Its argument is a world selection independent of local comprehension bindings; dependent local sources can use tuples and ranges instead.
+
+`selection(references)` converts a flat collection of entity references to a world mask, deduplicating repeated references. It is the explicit bridge from a temporary result to Ano's ordinary selection/effect comma. Numeric lists, nested pairs, and numbers returned by ordinary callables cannot masquerade as entity references. An empty literal tuple is an empty selection.
+
+```haskell
+def participants =
+    [entities(Body) -> a
+     & entities(Body) -> b
+     & a != b
+     |=> a]
+
+selection(participants) , +Marked
+```
+
+Here Body and Marked are registered Boolean columns. With at least two bodies, every body appears in the temporary result once for each other body, but receives `+Marked` only once. Adding a registered `overlap(a, b)` guard restricts participation to overlapping pairs; the language does not invent that host function or implement spatial overlap itself. Yielding `[a, b]` instead preserves pairs as data and cannot be passed directly to `selection(...)`.
+
+References preserve provenance through bindings, literal tuples, definitions, and comprehensions. They admit equality/inequality against other references, not arithmetic or arbitrary ordering. A typed host callable may accept an `entity` argument; substituting a number refuses. The current ABI supplies the canonical identity column (role id, then role keys), or execution-local positional identity when neither exists. Identity values must be unique. Positional identities survive structural row shifts within an execution. These local values do not establish a persistent cross-session handle type or authorize unchecked callable entity results.
+
+Definitions remain derived expressions: a later use recomputes its entity selection against that stage's incoming world. Existing effects, sequences, saved antecedents, and Kore save/reopen behavior apply after `selection(...)` has formed the target mask.
 
 Construction is eager. The intended `lazy(construction)` wrapper remains documented for future implementation: its boundary must defer all enclosed construction, without eager exceptions.
 
 <!-- /// !TODO: Implement lazy(...) as a fully enclosing evaluation boundary. Do not disguise eager execution as lazy(), or add an eager exception for nested constructions. Settle forcing, snapshots, and lifetime before enabling it. -->
 
-`lazy(...)` has no built-in implementation yet. [Task 07](../todo/07-tuple-comprehensions-and-guards.md) tracks guards, comprehension extensions, and deferred construction.
+`lazy(...)` has no built-in implementation yet. [Task 07](../todo/07-tuple-comprehensions-and-guards.md) tracks pattern and presence-guard extensions, callable carrier work, and deferred construction.
 
 ### 9. Structural effects
 
