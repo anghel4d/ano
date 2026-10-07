@@ -31,7 +31,7 @@ The only honest citation is negative: the n log n conjecture is false in the mul
 
 κ = 2⁻¹⁸² is about 2×10⁻⁵⁵. Write the time as O(n log n / (log n)^κ). The saving factor is (log n)^κ = exp(κ ln log n) ≈ 1 + κ ln log n until κ ln log n is no longer tiny.
 
-For κ ln log n to reach even 0.01 (a 1% saving in the log factor), one needs ln log n ≈ 0.01 × 2¹⁸², so log n is exp(Θ(2¹⁸²)) and n is a double exponential of a 55-digit tower. Every integer that fits in memory, or in the universe, sees (log n)^κ = 1 for all practical purposes.
+For κ ln log n to reach even 0.01 (a 1% saving in the log factor), one needs ln log n ≈ 0.01 × 2¹⁸², so log n is exp(Θ(2¹⁸²)) and n is exp(exp(Θ(2¹⁸²))). Every integer that fits in memory, or in the universe, sees (log n)^κ = 1 for all practical purposes.
 
 The model is a multitape Turing machine, not a RAM, not a word machine, and not IEEE arithmetic. Constants hidden by the O(·) are unspecified. The result is a disproof of an optimality conjecture, not a candidate implementation.
 
